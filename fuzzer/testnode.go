@@ -1,29 +1,33 @@
 package fuzzer
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	core "github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+	"medusa/compilation/types"
+	"strings"
 )
 
 type TestNode struct {
 	chain *core.BlockChain
-	db *ethdb.Database
-	signer *types.HomesteadSigner
+	kvstore *memorydb.Database
+	db ethdb.Database
+	signer *coreTypes.HomesteadSigner
 
-	pendingBlock *types.Block
+	pendingBlock *coreTypes.Block
 	pendingState *state.StateDB
 }
 
@@ -32,7 +36,8 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	chainConfig := params.TestChainConfig
 
 	// Create an in-memory database
-	db := rawdb.NewMemoryDatabase()
+	kvstore := memorydb.New()
+	db := rawdb.NewDatabase(kvstore)
 
 	// Create our genesis block
 	genesisDefinition := &core.Genesis{
@@ -63,8 +68,9 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	// Create our instance
 	g := &TestNode{
 		chain:        chain,
-		db:           &db,
-		signer:       new(types.HomesteadSigner),
+		kvstore:      kvstore,
+		db:           db,
+		signer:       new(coreTypes.HomesteadSigner),
 		pendingBlock: chain.CurrentBlock(),
 		pendingState: pendingState,
 	}
@@ -72,15 +78,18 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	return g, nil
 }
 
-func (t *TestNode) Stop() error {
-	// Stop the underlying chain's update loop
-	t.chain.Stop()
-	return nil
+func (t *TestNode) GetMemoryUsage() int {
+	return t.kvstore.Len()
 }
 
-func (t *TestNode) SendTransaction(tx *types.Transaction) (*types.Block, *types.Receipts, error) {
+func (t *TestNode) Stop() {
+	// Stop the underlying chain's update loop
+	t.chain.Stop()
+}
+
+func (t *TestNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
 	// Create our blocks.
-	blocks, receipts := core.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), *t.db, 1, func(i int, b *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *core.BlockGen) {
 		// Set the coinbase and difficulty
 		b.SetCoinbase(common.Address{1})
 		b.SetDifficulty(big.NewInt(1))
@@ -106,13 +115,13 @@ func (t *TestNode) SendTransaction(tx *types.Transaction) (*types.Block, *types.
 
 func (t *TestNode) Commit() {
 	// Insert our pending block into the chain.
-	_, err := t.chain.InsertChain([]*types.Block{t.pendingBlock})
+	_, err := t.chain.InsertChain([]*coreTypes.Block{t.pendingBlock})
 	if err != nil {
 		panic("failed to insert pending block into chain.")
 	}
 }
 
-func (t *TestNode) CallContract(call ethereum.CallMsg) ([]byte, error) {
+func (t *TestNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
 	// Obtain our snapshot
 	snapshot := t.pendingState.Snapshot()
 
@@ -122,22 +131,11 @@ func (t *TestNode) CallContract(call ethereum.CallMsg) ([]byte, error) {
 	// Revert to our snapshot to undo any changes.
 	t.pendingState.RevertToSnapshot(snapshot)
 
-	if err != nil {
-		return nil, err
-	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(res.Revert()) > 0 {
-		reason, errUnpack := abi.UnpackRevert(res.Revert())
-		if errUnpack == nil {
-			err = fmt.Errorf("execution reverted: %v", reason)
-		}
-		return nil, errors.New("execution reverted")
-	}
-	return res.Return(), res.Err
+	return res, err
 }
 
 // Copied from go-ethereum/accounts/abi/bind/backends/simulated.go
-func (t *TestNode) callContract(call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+func (t *TestNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -192,6 +190,51 @@ func (t *TestNode) callContract(call ethereum.CallMsg, block *types.Block, state
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
+func (t *TestNode) deployContract(contract types.CompiledContract, deployer fuzzerAccount) (common.Address, error) {
+	// Obtain the byte code as a byte array
+	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
+	if err != nil {
+		panic("could not convert compiled contract bytecode from hex string to byte code")
+	}
+
+	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
+	// contracts.
+
+	// Create a transaction to represent our contract deployment.
+	tx := &coreTypes.LegacyTx{
+		Nonce: t.pendingState.GetNonce(deployer.address),
+		GasPrice: big.NewInt(params.InitialBaseFee),
+		Gas: t.pendingBlock.GasLimit(),
+		To: nil,
+		Value: big.NewInt(0),
+		Data: b,
+	}
+
+	// Sign the transaction
+	signedTx, err := coreTypes.SignNewTx(deployer.key, t.signer, tx)
+	if err != nil {
+		return common.Address{0}, fmt.Errorf("could not sign tx to deploy contract due to an error when signing: %s", err.Error())
+	}
+
+	// Send our deployment transaction
+	_, receipts, err := t.SendTransaction(signedTx)
+	if err != nil {
+		return common.Address{0}, err
+	}
+
+	// Ensure our transaction succeeded
+	if (*receipts)[0].Status != coreTypes.ReceiptStatusSuccessful {
+		return common.Address{0}, fmt.Errorf("contract deployment tx returned a failed status")
+	}
+
+	// Commit our state immediately so our pending state can access
+	t.Commit()
+
+	// Return the address for the deployed contract.
+	return (*receipts)[0].ContractAddress, nil
+}
+
+
 // callMsg implements core.Message to allow passing it as a transaction simulator.
 type callMsg struct {
 	ethereum.CallMsg
@@ -207,4 +250,4 @@ func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
 func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
 func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
-func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
+func (m callMsg) AccessList() coreTypes.AccessList { return m.CallMsg.AccessList }
