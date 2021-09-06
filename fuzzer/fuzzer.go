@@ -1,35 +1,42 @@
 package fuzzer
 
 import (
+	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 	"medusa/compilation"
 	"medusa/compilation/types"
 	"medusa/configs"
-	"strings"
 )
 
-type FuzzerAccount struct {
-	key *ecdsa.PrivateKey
-	address common.Address
+type Fuzzer struct {
+	// config describes the project configuration which the fuzzer is targeting.
+	config   configs.ProjectConfig
+	// accounts describes a set of account keys derived from config, for use in fuzzing campaigns.
+	accounts []fuzzerAccount
+
+
+	// ctx describes the context for the fuzzer run, used to cancel running operations.
+	ctx context.Context
+	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
+	ctxCancelFunc context.CancelFunc
+	// compilations describes the compiled targets produced by the last Start call for the Fuzzer to target.
+	compilations []types.Compilation
+
 }
 
-type Fuzzer struct {
-	config   configs.ProjectConfig
-	accounts []FuzzerAccount
+type fuzzerAccount struct {
+	// key describes the ecdsa private key of an account used a Fuzzer instance.
+	key *ecdsa.PrivateKey
+	// address represents the ethereum address which corresponds to key.
+	address common.Address
 }
 
 func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	// Create our accounts based on our configs
-	accounts := make([]FuzzerAccount, 0)
+	accounts := make([]fuzzerAccount, 0)
 
 	// Generate new accounts as requested.
 	for i := 0; i < config.Accounts.Generate; i++ {
@@ -40,14 +47,14 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		}
 
 		// Add it to our account list
-		acc := FuzzerAccount{
+		acc := fuzzerAccount{
 			key: key,
 			address: crypto.PubkeyToAddress(key.PublicKey),
 		}
 		accounts = append(accounts, acc)
 	}
 
-	// Set all existing accounts as requested
+	// Set up accounts for provided keys
 	for i := 0; i < len(config.Accounts.Keys); i++ {
 		// Parse our provided key string
 		keyStr := config.Accounts.Keys[i]
@@ -57,7 +64,7 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		}
 
 		// Add it to our account list
-		acc := FuzzerAccount{
+		acc := fuzzerAccount{
 			key: key,
 			address: crypto.PubkeyToAddress(key.PublicKey),
 		}
@@ -75,108 +82,43 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	return fuzzer, nil
 }
 
-func (t *TestNode) deployContract(contract types.CompiledContract, deployer FuzzerAccount) (common.Address, error) {
-	// Obtain the byte code as a byte array
-	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
-	if err != nil {
-		panic("could not convert compiled contract bytecode from hex string to byte code")
-	}
-
-	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
-	// contracts.
-
-	// Create a transaction to represent our contract deployment.
-	tx := &coreTypes.LegacyTx{
-		Nonce: t.pendingState.GetNonce(deployer.address),
-		GasPrice: big.NewInt(params.InitialBaseFee),
-		Gas: 300000,
-		To: nil,
-		Value: big.NewInt(0),
-		Data: b,
-	}
-
-	// Sign the transaction
-	signedTx, err := coreTypes.SignNewTx(deployer.key, t.signer, tx)
-	if err != nil {
-		return common.Address{0}, fmt.Errorf("could not sign tx to deploy contract due to an error when signing: %s", err.Error())
-	}
-
-	// Send our deployment transaction
-	_, receipts, err := t.SendTransaction(signedTx)
-	if err != nil {
-		return common.Address{0}, err
-	}
-
-	// Ensure our transaction succeeded
-	if (*receipts)[0].Status != coreTypes.ReceiptStatusSuccessful {
-		return common.Address{0}, fmt.Errorf("contract deployment tx returned a failed status")
-	}
-
-	// Commit our state immediately so our pending state can access
-	t.Commit()
-
-	// Return the address for the deployed contract.
-	return (*receipts)[0].ContractAddress, nil
-}
-
 func (f *Fuzzer) Start() error {
+	// Create our running context
+	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+
 	// Compile our targets
+	var err error
 	fmt.Printf("Compiling targets (platform '%s') ...\n", f.config.Compilation.Platform)
-	compilations, err := compilation.Compile(f.config.Compilation)
+	f.compilations, err = compilation.Compile(f.config.Compilation)
 	if err != nil {
 		return err
 	}
 
-	// Create our genesis allocations
-	genesisAlloc := make(core.GenesisAlloc)
-
-	// Fund all of our users in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
-	for i := 0; i < len(f.accounts); i++ {
-		genesisAlloc[f.accounts[i].address] = core.GenesisAccount{
-			Balance: initBalance, // we'll avoid uint256 in case we trigger some arithmetic error
-		}
-	}
-
 	// Create a test node for each thread we intend to create.
 	fmt.Printf("Creating %d test node threads ...\n", f.config.ThreadCount)
-	testNodes := make([]*TestNode, 0)
-	for i := 0; i < f.config.ThreadCount; i++ {
-		// Create a test node
-		t, err := NewTestNode(genesisAlloc)
-		if err != nil {
-			return err
-		}
+	threadReserveChannel := make(chan struct{}, f.config.ThreadCount)
+	for err == nil {
+		// Send an item into our channel to queue up a spot
+		threadReserveChannel <- struct{}{}
 
-		// Add our test node to the list
-		testNodes = append(testNodes, t)
+		// Run our goroutine. This should take our queued struct out of the channel once it's done,
+		// keeping us at our desired thread capacity.
+		go func() {
+			// Create a new worker for this fuzzer and run it.
+			worker := newFuzzWorker(f)
+			err = worker.run()
+
+			// Free up a thread in our reserved thread channel.
+			<- threadReserveChannel
+		}()
 	}
+	return err
+}
 
-	// For each test node, deploy every compatible contract.
-	deployedContracts := make(map[common.Address]types.CompiledContract)
-	fmt.Printf("Deploying compiled contracts ...\n")
-	for _, testNode := range testNodes {
-		// Loop for each contract in each compilation
-		for _, compilation :=  range compilations {
-			for _, source := range compilation.Sources {
-				for _, contract := range source.Contracts {
-					// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-					if len(contract.Abi.Constructor.Inputs) == 0 {
-						deployedAddress, err := testNode.deployContract(contract, f.accounts[0])
-						if err != nil {
-							return err
-						}
-
-						// Set our deployed contract address in our lookup so we can reference it.
-						deployedContracts[deployedAddress] = contract
-					}
-				}
-			}
-		}
+// Stop stops all working goroutines in the Fuzzer
+func (f *Fuzzer) Stop() {
+	// Call the cancel function on our running context to stop all working goroutines
+	if f.ctxCancelFunc != nil {
+		f.ctxCancelFunc()
 	}
-
-	// TODO:
-	fmt.Printf("Fuzzing %d contract(s) across %d nodes ...\n", len(deployedContracts), len(testNodes))
-
-	return nil
 }

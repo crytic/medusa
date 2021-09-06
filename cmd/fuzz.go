@@ -5,6 +5,7 @@ import (
 	"medusa/configs"
 	"medusa/fuzzer"
 	"os"
+	"os/signal"
 	"path"
 )
 
@@ -56,7 +57,15 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Start the fuzzing process
+	// Stop our fuzzer on keyboard interrupts
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fuzzer.Stop()
+	}()
+
+	// Start the fuzzing process with our cancellable context.
 	err = fuzzer.Start()
 
 	return err
