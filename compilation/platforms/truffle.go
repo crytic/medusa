@@ -3,8 +3,8 @@ package platforms
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/trailofbits/medusa/compilation/types"
 	"io/ioutil"
-	"medusa/compilation/types"
 	"os/exec"
 	"path"
 	"path/filepath"

@@ -38,6 +38,14 @@ type FuzzingConfig struct {
 	// Workers describes the amount of threads to use in fuzzing campaigns.
 	Workers int `json:"workers"`
 
+	// WorkerDatabaseEntryLimit describes an upper bound on the amount of entries that can exist in a worker database
+	// before it is pruned and recreated.
+	WorkerDatabaseEntryLimit int `json:"worker_database_entry_limit"`
+
+	// Timeout describes a time in seconds for which the fuzzing operation should run. Providing negative or zero value
+	// will result in no timeout.
+	Timeout int `json:"timeout"`
+
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
 }

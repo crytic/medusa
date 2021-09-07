@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"medusa/compilation"
-	"medusa/compilation/types"
-	"medusa/configs"
+	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/configs"
 	"sync"
 	"time"
 )
@@ -99,7 +99,12 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 // Returns an error if one is encountered.
 func (f *Fuzzer) Start() error {
 	// Create our running context
-	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	if f.config.Fuzzing.Timeout > 0 {
+		fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
+		f.ctx, f.ctxCancelFunc = context.WithTimeout(context.Background(), time.Duration(f.config.Fuzzing.Timeout) * time.Second)
+	} else {
+		f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	}
 
 	// Compile our targets
 	var err error
@@ -126,7 +131,8 @@ func (f *Fuzzer) Start() error {
 	// If we encounter any errors, we stop.
 	f.workers = make([]*fuzzerWorker, f.config.Fuzzing.Workers)
 	threadReserveChannel := make(chan struct{}, f.config.Fuzzing.Workers)
-	for err == nil {
+	ctxAlive := true
+	for err == nil && ctxAlive {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
 		// slot is freed up.
 		threadReserveChannel <- struct{}{}
@@ -140,10 +146,16 @@ func (f *Fuzzer) Start() error {
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
 		// keeping us at our desired thread capacity.
 		go func(workerIndex int) {
-			// Create a new worker for this fuzzer and run it.
+			// Create a new worker for this fuzzer.
 			worker := newFuzzerWorker(workerIndex, f)
 			f.workers[workerIndex] = worker
-			err = worker.run()
+
+			// Run the fuzz worker and set our result such that errors or a ctx cancellation will exit the loop.
+			ctxCancelled, workerErr := worker.run()
+			if workerErr != nil {
+				err = workerErr
+			}
+			ctxAlive = ctxAlive && !ctxCancelled
 
 			// Free our worker id before unblocking our channel, as a free one will be expected.
 			availableWorkerIndexedLock.Lock()
@@ -171,16 +183,18 @@ func (f *Fuzzer) Stop() {
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
 func (f *Fuzzer) runMetricsPrintLoop() {
 	// Define cached variables for our metrics to calculate deltas.
-	var lastTransactionsTested, lastSequencesTested uint64
+	var lastTransactionsTested, lastSequencesTested, lastWorkerStartupCount uint64
 	for {
 		// Obtain our metrics
 		transactionsTested := f.metrics.TransactionsTested()
 		sequencesTested := f.metrics.SequencesTested()
+		workerStartupCount := f.metrics.WorkerStartupCount()
 
 		// Print a metrics update
 		fmt.Printf(
-			"workers: %d, tx/s: %d, seq/s: %d\n",
+			"workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
 			len(f.metrics.workerMetrics),
+			workerStartupCount - lastWorkerStartupCount,
 			transactionsTested - lastTransactionsTested,
 			sequencesTested - lastSequencesTested,
 			)
@@ -188,6 +202,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		// Update our delta tracking metrics
 		lastTransactionsTested = transactionsTested
 		lastSequencesTested = sequencesTested
+		lastWorkerStartupCount = workerStartupCount
 
 		// Sleep for two seconds
 		time.Sleep(time.Second)

@@ -1,4 +1,4 @@
-module medusa
+module github.com/trailofbits/medusa
 
 go 1.17
 
