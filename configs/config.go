@@ -10,8 +10,8 @@ type ProjectConfig struct {
 	// Accounts offers configurable options for how many accounts to generate and allows user to provide existing keys.
 	Accounts AccountConfig `json:"accounts"`
 
-	// ThreadCount describes the amount of threads to use in fuzzing campaigns.
-	ThreadCount int `json:"threads"`
+	// Fuzzing describes the configuration used in fuzzing campaigns.
+	Fuzzing FuzzingConfig `json:"fuzzing"`
 
 	// CompilationSettings describes the configuration used to compile the underlying project.
 	Compilation CompilationConfig `json:"compilation"`
@@ -33,6 +33,15 @@ type CompilationConfig struct {
 	// PlatformConfig describes the Platform-specific configuration needed to compile.
 	PlatformConfig *json.RawMessage `json:"platform_config"`
 }
+
+type FuzzingConfig struct {
+	// Workers describes the amount of threads to use in fuzzing campaigns.
+	Workers int `json:"workers"`
+
+	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
+	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
+}
+
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
