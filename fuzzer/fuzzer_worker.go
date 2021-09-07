@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"medusa/compilation/types"
 	"strings"
@@ -14,11 +16,14 @@ import (
 // fuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
 // Fuzzer-generated transaction sequences.
 type fuzzerWorker struct {
+	// workerIndex describes the index of the worker spun up by the fuzzer.
+	workerIndex int
+
 	// fuzzer describes the Fuzzer instance which this worker belongs to.
 	fuzzer *Fuzzer
 
-	// testNode describes a TestNode created by the fuzzerWorker to run tests against.
-	testNode *TestNode
+	// testNode describes a testNode created by the fuzzerWorker to run tests against.
+	testNode *testNode
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
 	deployedContracts map[common.Address]types.CompiledContract
@@ -46,15 +51,23 @@ type deployedMethod struct {
 	method abi.Method
 }
 
-func newFuzzWorker(fuzzer *Fuzzer) *fuzzerWorker {
+// newFuzzerWorker creates a new fuzzerWorker, assigning it the provided worker index/id and associating it to the
+// Fuzzer instance supplied.
+func newFuzzerWorker(workerIndex int, fuzzer *Fuzzer) *fuzzerWorker {
 	// Create a fuzzer worker struct, referencing our parent fuzzer.
 	worker := fuzzerWorker{
+		workerIndex: workerIndex,
 		fuzzer: fuzzer,
 		deployedContracts: make(map[common.Address]types.CompiledContract),
 		propertyTests: make([]deployedMethod, 0),
 		stateChangingMethods: make([]deployedMethod, 0),
 	}
 	return &worker
+}
+
+// metrics represents the FuzzerWorkerMetrics for this worker.
+func (fw *fuzzerWorker) metrics() *fuzzerWorkerMetrics {
+	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
 func (fw *fuzzerWorker) trackDeployedContract(deployedAddress common.Address, contract types.CompiledContract) {
@@ -100,7 +113,10 @@ func (fw *fuzzerWorker) deployAndTrackCompiledContracts() error {
 	return nil
 }
 
-func (fw *fuzzerWorker) checkViolatedPropertyTests() *deployedMethod {
+func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
+	// Create a list of violated properties
+	violatedProperties := make([]deployedMethod, 0)
+
 	// Loop through all property tests methods
 	for _, propertyTest := range fw.propertyTests {
 		// Generate our ABI input data for the call (just the method ID, no args)
@@ -153,15 +169,54 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() *deployedMethod {
 			}
 
 			// Handle `false` property assertion result
-			return &propertyTest
+			violatedProperties = append(violatedProperties, propertyTest)
+			continue
 		}
 
 		// Handle revert/failed tx result
-		return &propertyTest
+		violatedProperties = append(violatedProperties, propertyTest)
+		continue
 	}
 
-	// We did not fail any property tests.
-	return nil
+	// Return our violated properties.
+	return violatedProperties
+}
+
+func (fw *fuzzerWorker) generateFuzzedTransactionAndSender() (*coreTypes.LegacyTx, *fuzzerAccount, error) {
+	// Select a method and sender
+	selectedMethod := fw.fuzzer.generator.chooseMethod(fw)
+	selectedSender := fw.fuzzer.generator.chooseSender(fw)
+
+	// Generate fuzzed parameters for the function call
+	args := make([]interface{}, len(selectedMethod.method.Inputs))
+	for i := 0; i < len(args); i++ {
+		// TODO: Actually create fuzzed parameters.
+		input := selectedMethod.method.Inputs[i]
+		if input.Type.T == abi.AddressTy {
+			args[i] = fw.fuzzer.generator.generateAddress(fw)
+		} else if input.Type.T == abi.UintTy {
+			args[i] = fw.fuzzer.generator.generateUint(fw)
+		} else {
+			args[i] = nil
+		}
+	}
+
+	// Encode our parameters.
+	data, err := selectedMethod.contract.Abi.Pack(selectedMethod.method.Name, args...)
+	if err != nil {
+		panic("could not generate tx due to error: " + err.Error())
+	}
+
+	// Create a new transaction and return it
+	tx := &coreTypes.LegacyTx{
+		Nonce: fw.testNode.pendingState.GetNonce(selectedSender.address),
+		GasPrice: big.NewInt(params.InitialBaseFee),
+		Gas: fw.testNode.pendingBlock.GasLimit(),
+		To: &selectedMethod.address,
+		Value: big.NewInt(0),
+		Data: data,
+	}
+	return tx, selectedSender, nil
 }
 
 func (fw *fuzzerWorker) run() error {
@@ -170,10 +225,10 @@ func (fw *fuzzerWorker) run() error {
 	genesisAlloc := make(core.GenesisAlloc)
 
 	// Fund all of our users in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
+	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))  // TODO: make this configurable
 	for i := 0; i < len(fw.fuzzer.accounts); i++ {
 		genesisAlloc[fw.fuzzer.accounts[i].address] = core.GenesisAccount{
-			Balance: initBalance, // we'll avoid uint256 in case we trigger some arithmetic error
+			Balance: initBalance,
 		}
 	}
 
@@ -187,6 +242,9 @@ func (fw *fuzzerWorker) run() error {
 	// When exiting this function, stop the test node
 	defer fw.testNode.Stop()
 
+	// Increase our generation metric as we successfully generated a test node
+	fw.metrics().workerStartupCount++
+
 	// Deploy and track all compiled contracts
 	err = fw.deployAndTrackCompiledContracts()
 	if err != nil {
@@ -195,23 +253,48 @@ func (fw *fuzzerWorker) run() error {
 
 	// Enter the main fuzzing loop, restricting our memory
 	// TODO: temporarily set at 1GB per thread, make this configurable
+	txSequence := make([]*coreTypes.LegacyTx, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
 	for fw.testNode.GetMemoryUsage() <= 1024*1024*1024 {
-		// TODO: Generate fuzzed tx sequence
+		// Loop for each transaction to execute
+		for i := 0; i < len(txSequence); i++ {
+			// Generate fuzzed tx
+			tx, sender, err := fw.generateFuzzedTransactionAndSender()
+			txSequence[i] = tx
+			if err != nil {
+				return err
+			}
 
-		// Look for a violated property test
-		failedPropertyTest := fw.checkViolatedPropertyTests()
-		if failedPropertyTest != nil {
-			// TODO: Handle violated property test
-			panic("PROPERTY TEST FAILED: " + failedPropertyTest.method.Name)
+			// Send our transaction
+			blocks, receipts, err := fw.testNode.sendLegacyTransaction(tx, *sender)
+			if err != nil {
+				return err
+			}
+			_ = blocks
+			_ = receipts
+
+			// Check if any property tests failed
+			violatesPropertyTests := fw.checkViolatedPropertyTests()
+			if len(violatesPropertyTests) > 0 {
+				// TODO: Handle violated property test
+				panic("PROPERTY TEST FAILED")
+			}
+
+			// Increase our transaction tested metric
+			fw.metrics().transactionsTested++
+
+			// If our context signalled to close the operation, exit accordingly, otherwise continue.
+			select {
+			case <-fw.fuzzer.ctx.Done():
+				return fw.fuzzer.ctx.Err()
+			default:
+				break // note: breaks out of the select to continue processing
+			}
 		}
 
-		// If our context signalled that we're done, quit, otherwise we'll continue.
-		select {
-		case <- fw.fuzzer.ctx.Done():
-			return fw.fuzzer.ctx.Err()
-		default:
-			break
-		}
+		// TODO: Rollback our pending block/transaction.
+
+		// Increase our transaction sequence tested metric
+		fw.metrics().sequencesTested++
 	}
 	return nil
 }

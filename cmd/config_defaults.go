@@ -17,9 +17,12 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &configs.ProjectConfig{
 		Accounts: configs.AccountConfig{
-			Generate: 10,
+			Generate: 5,
 		},
-		ThreadCount: 10,
+		Fuzzing: configs.FuzzingConfig{
+			Workers: 10,
+			MaxTxSequenceLength: 10,
+		},
 		Compilation: *compilationConfig,
 	}
 

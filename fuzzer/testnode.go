@@ -21,7 +21,7 @@ import (
 	"strings"
 )
 
-type TestNode struct {
+type testNode struct {
 	chain *core.BlockChain
 	kvstore *memorydb.Database
 	db ethdb.Database
@@ -31,7 +31,7 @@ type TestNode struct {
 	pendingState *state.StateDB
 }
 
-func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
+func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Define our chain configuration
 	chainConfig := params.TestChainConfig
 
@@ -66,7 +66,7 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	}
 
 	// Create our instance
-	g := &TestNode{
+	g := &testNode{
 		chain:        chain,
 		kvstore:      kvstore,
 		db:           db,
@@ -78,16 +78,16 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	return g, nil
 }
 
-func (t *TestNode) GetMemoryUsage() int {
+func (t *testNode) GetMemoryUsage() int {
 	return t.kvstore.Len()
 }
 
-func (t *TestNode) Stop() {
+func (t *testNode) Stop() {
 	// Stop the underlying chain's update loop
 	t.chain.Stop()
 }
 
-func (t *TestNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
+func (t *testNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
 	// Create our blocks.
 	blocks, receipts := core.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *core.BlockGen) {
 		// Set the coinbase and difficulty
@@ -113,7 +113,7 @@ func (t *TestNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block,
 	return blocks[0], &receipts[0], nil
 }
 
-func (t *TestNode) Commit() {
+func (t *testNode) Commit() {
 	// Insert our pending block into the chain.
 	_, err := t.chain.InsertChain([]*coreTypes.Block{t.pendingBlock})
 	if err != nil {
@@ -121,7 +121,7 @@ func (t *TestNode) Commit() {
 	}
 }
 
-func (t *TestNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
+func (t *testNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
 	// Obtain our snapshot
 	snapshot := t.pendingState.Snapshot()
 
@@ -135,7 +135,7 @@ func (t *TestNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, e
 }
 
 // Copied from go-ethereum/accounts/abi/bind/backends/simulated.go
-func (t *TestNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -190,7 +190,18 @@ func (t *TestNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, s
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
-func (t *TestNode) deployContract(contract types.CompiledContract, deployer fuzzerAccount) (common.Address, error) {
+func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, account fuzzerAccount) (*coreTypes.Block, *coreTypes.Receipts, error) {
+	// Sign the transaction
+	signedTx, err := coreTypes.SignNewTx(account.key, t.signer, tx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not sign tx due to an error when signing: %s", err.Error())
+	}
+
+	// Send our deployment transaction
+	return t.SendTransaction(signedTx)
+}
+
+func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzzerAccount) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
@@ -210,14 +221,8 @@ func (t *TestNode) deployContract(contract types.CompiledContract, deployer fuzz
 		Data: b,
 	}
 
-	// Sign the transaction
-	signedTx, err := coreTypes.SignNewTx(deployer.key, t.signer, tx)
-	if err != nil {
-		return common.Address{0}, fmt.Errorf("could not sign tx to deploy contract due to an error when signing: %s", err.Error())
-	}
-
 	// Send our deployment transaction
-	_, receipts, err := t.SendTransaction(signedTx)
+	_, receipts, err := t.sendLegacyTransaction(tx, deployer)
 	if err != nil {
 		return common.Address{0}, err
 	}

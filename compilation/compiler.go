@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"medusa/compilation/platforms"
 	"medusa/compilation/types"
-	types2 "medusa/configs"
+	"medusa/configs"
 )
 
 var supportedCompilationPlatforms = []string {
@@ -27,7 +27,7 @@ func IsSupportedCompilationPlatform(platform string) bool {
 	return false
 }
 
-func GetDefaultCompilationConfig(platform string) (*types2.CompilationConfig, error) {
+func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(platform) {
 		return nil, fmt.Errorf("could not get default compilation configs: platform '%s' is unsupported", platform)
@@ -52,10 +52,10 @@ func GetDefaultCompilationConfig(platform string) (*types2.CompilationConfig, er
 	}
 
 	// Return the compilation configs containing our platform-specific configs
-	return &types2.CompilationConfig{Platform: platform, PlatformConfig: platformConfig}, nil
+	return &configs.CompilationConfig{Platform: platform, PlatformConfig: platformConfig}, nil
 }
 
-func Compile(config types2.CompilationConfig) ([]types.Compilation, error) {
+func Compile(config configs.CompilationConfig) ([]types.Compilation, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(config.Platform) {
 		return nil, fmt.Errorf("could not compile from configs: platform '%s' is unsupported", config.Platform)
