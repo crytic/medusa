@@ -8,8 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/trailofbits/medusa/compilation/types"
 	"math/big"
-	"medusa/compilation/types"
 	"strings"
 )
 
@@ -219,7 +219,10 @@ func (fw *fuzzerWorker) generateFuzzedTransactionAndSender() (*coreTypes.LegacyT
 	return tx, selectedSender, nil
 }
 
-func (fw *fuzzerWorker) run() error {
+// run sets up a testNode and begins executing fuzzed transaction calls and asserting properties are upheld.
+// This runs until Fuzzer.ctx cancels the operation.
+// Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
+func (fw *fuzzerWorker) run() (bool, error) {
 	// Create our genesis allocations.
 	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
 	genesisAlloc := make(core.GenesisAlloc)
@@ -236,7 +239,7 @@ func (fw *fuzzerWorker) run() error {
 	var err error
 	fw.testNode, err = NewTestNode(genesisAlloc)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// When exiting this function, stop the test node
@@ -248,26 +251,27 @@ func (fw *fuzzerWorker) run() error {
 	// Deploy and track all compiled contracts
 	err = fw.deployAndTrackCompiledContracts()
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	// Enter the main fuzzing loop, restricting our memory
-	// TODO: temporarily set at 1GB per thread, make this configurable
+	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
+	// When the limit is reached, we exit this method gracefully, which will cause the fuzzer to recreate
+	// this worker with a fresh memory database.
 	txSequence := make([]*coreTypes.LegacyTx, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
-	for fw.testNode.GetMemoryUsage() <= 1024*1024*1024 {
+	for fw.testNode.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
 		// Loop for each transaction to execute
 		for i := 0; i < len(txSequence); i++ {
 			// Generate fuzzed tx
 			tx, sender, err := fw.generateFuzzedTransactionAndSender()
 			txSequence[i] = tx
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			// Send our transaction
 			blocks, receipts, err := fw.testNode.sendLegacyTransaction(tx, *sender)
 			if err != nil {
-				return err
+				return false, err
 			}
 			_ = blocks
 			_ = receipts
@@ -285,7 +289,7 @@ func (fw *fuzzerWorker) run() error {
 			// If our context signalled to close the operation, exit accordingly, otherwise continue.
 			select {
 			case <-fw.fuzzer.ctx.Done():
-				return fw.fuzzer.ctx.Err()
+				return true, nil
 			default:
 				break // note: breaks out of the select to continue processing
 			}
@@ -296,5 +300,7 @@ func (fw *fuzzerWorker) run() error {
 		// Increase our transaction sequence tested metric
 		fw.metrics().sequencesTested++
 	}
-	return nil
+
+	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
+	return false, nil
 }

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"medusa/compilation"
-	"medusa/configs"
+	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/configs"
 )
 
 const DefaultProjectConfigFilename = "medusa.json"
@@ -21,6 +21,8 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 		},
 		Fuzzing: configs.FuzzingConfig{
 			Workers: 10,
+			WorkerDatabaseEntryLimit: 1000,
+			Timeout: 0,
 			MaxTxSequenceLength: 10,
 		},
 		Compilation: *compilationConfig,

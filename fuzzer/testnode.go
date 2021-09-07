@@ -16,8 +16,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/trailofbits/medusa/compilation/types"
 	"math/big"
-	"medusa/compilation/types"
 	"strings"
 )
 
@@ -78,7 +78,7 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	return g, nil
 }
 
-func (t *testNode) GetMemoryUsage() int {
+func (t *testNode) MemoryDatabaseEntryCount() int {
 	return t.kvstore.Len()
 }
 

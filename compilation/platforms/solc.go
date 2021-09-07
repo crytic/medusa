@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/Masterminds/semver"
 	"github.com/ethereum/go-ethereum/common/compiler"
-	"medusa/compilation/types"
+	"github.com/trailofbits/medusa/compilation/types"
 	"os/exec"
 	"regexp"
 	"strings"

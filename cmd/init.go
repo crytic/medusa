@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"medusa/compilation"
+	"github.com/trailofbits/medusa/compilation"
 	"os"
 	"path"
 	"path/filepath"

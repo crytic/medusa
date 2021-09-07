@@ -1,6 +1,6 @@
 package main
 
-import "medusa/cmd"
+import "github.com/trailofbits/medusa/cmd"
 
 func main() {
 	// Run our root command, which will do all underlying parsing and invocation.

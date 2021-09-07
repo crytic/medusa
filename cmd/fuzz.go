@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"medusa/configs"
-	"medusa/fuzzer"
+	"github.com/trailofbits/medusa/configs"
+	"github.com/trailofbits/medusa/fuzzer"
 	"os"
 	"os/signal"
 	"path"

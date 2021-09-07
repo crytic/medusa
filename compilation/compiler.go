@@ -3,9 +3,9 @@ package compilation
 import (
 	"encoding/json"
 	"fmt"
-	"medusa/compilation/platforms"
-	"medusa/compilation/types"
-	"medusa/configs"
+	"github.com/trailofbits/medusa/compilation/platforms"
+	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/configs"
 )
 
 var supportedCompilationPlatforms = []string {
