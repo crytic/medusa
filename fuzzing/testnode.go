@@ -1,4 +1,4 @@
-package fuzzer
+package fuzzing
 
 import (
 	"encoding/hex"
@@ -44,8 +44,9 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 		Config: chainConfig,
 		Alloc: genesisAlloc,
 		ExtraData: []byte {
-			0x74, 0x72, 0x61, 0x73, 0x68, 0x20, 0x70, 0x61, 0x6E, 0x64, 0x61, 0x73, 0x20, 0x6E, 0x65, 0x65,
-			0x64, 0x20, 0x6C, 0x6F, 0x76, 0x65, 0x20, 0x74, 0x6F, 0x6F, 0x2E, 0x20, 0x2D, 0x58, 0x39,
+			0x63, 0x75, 0x72, 0x69, 0x6F, 0x75, 0x73, 0x69,
+			0x74, 0x79, 0x2C, 0x20, 0x65, 0x68, 0x3F, 0x20,
+			0x6C, 0x6F, 0x6C, 0x20, 0x2D, 0x44, 0x50,
 		},
 	}
 
@@ -119,6 +120,19 @@ func (t *testNode) Commit() {
 	if err != nil {
 		panic("failed to insert pending block into chain.")
 	}
+}
+
+func (t *testNode) RevertUncommittedChanges() error {
+	// Reset our pending block to our chain's current block
+	t.pendingBlock = t.chain.CurrentBlock()
+
+	// Reset our pending state to our chain's current state.
+	var err error
+	t.pendingState, err = t.chain.State()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (t *testNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {

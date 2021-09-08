@@ -5,6 +5,7 @@ import (
 	"github.com/trailofbits/medusa/configs"
 )
 
+// DefaultProjectConfigFilename describes the default config filename for a given project folder.
 const DefaultProjectConfigFilename = "medusa.json"
 
 // GetDefaultProjectConfig obtains a default configuration for a project, given a platform.
