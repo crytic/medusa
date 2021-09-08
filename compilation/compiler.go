@@ -55,10 +55,10 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 	return &configs.CompilationConfig{Platform: platform, PlatformConfig: platformConfig}, nil
 }
 
-func Compile(config configs.CompilationConfig) ([]types.Compilation, error) {
+func Compile(config configs.CompilationConfig) ([]types.Compilation, string, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(config.Platform) {
-		return nil, fmt.Errorf("could not compile from configs: platform '%s' is unsupported", config.Platform)
+		return nil, "", fmt.Errorf("could not compile from configs: platform '%s' is unsupported", config.Platform)
 	}
 
 	// Switch on our platform to deserialize our platform compilation configs
@@ -67,7 +67,7 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, error) {
 		solcConfig := platforms.SolcCompilationConfig{}
 		err := json.Unmarshal(*config.PlatformConfig, &solcConfig)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Compile using our solc configs
@@ -77,7 +77,7 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, error) {
 		truffleConfig := platforms.TruffleCompilationConfig{}
 		err := json.Unmarshal(*config.PlatformConfig, &truffleConfig)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Compile using our solc configs
