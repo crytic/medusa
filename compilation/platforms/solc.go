@@ -40,11 +40,11 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 	return semver.NewVersion(versionStr)
 }
 
-func (s *SolcCompilationConfig) Compile() ([]types.Compilation, error) {
+func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Obtain our solc version string
 	v, err := GetSystemSolcVersion()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Determine which compiler options we need.
@@ -58,14 +58,14 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, error) {
 	// Execute solc to compile our target.
 	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
 
 	// Our compilation succeeded, load the JSON
 	var results map[string]interface{}
 	err = json.Unmarshal(out, &results)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Create a compilation unit out of this.
@@ -111,5 +111,5 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, error) {
 		}
 	}
 
-	return []types.Compilation{*compilation}, nil
+	return []types.Compilation{*compilation}, "", nil
 }

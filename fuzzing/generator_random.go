@@ -56,6 +56,10 @@ func (g *txGeneratorRandom) generateAddress(worker *fuzzerWorker) common.Address
 	return common.BytesToAddress(addressBytes)
 }
 
+func (g *txGeneratorRandom) generateArrayLength(worker *fuzzerWorker) int {
+	return int(g.generateUint16(worker) % 100)  // TODO: Right now we only generate 0-100 elements, make this configurable.
+}
+
 func (g *txGeneratorRandom) generateBool(worker *fuzzerWorker) bool {
 	g.randomProviderLock.Lock()
 	defer g.randomProviderLock.Unlock()

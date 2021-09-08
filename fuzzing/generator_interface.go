@@ -9,6 +9,7 @@ type txGenerator interface {
 	chooseMethod(worker *fuzzerWorker) *deployedMethod
 	chooseSender(worker *fuzzerWorker) *fuzzerAccount
 	generateAddress(worker *fuzzerWorker) common.Address
+	generateArrayLength(worker *fuzzerWorker) int
 	generateBool(worker *fuzzerWorker) bool
 	generateBytes(worker *fuzzerWorker) []byte
 	generateFixedBytes(worker *fuzzerWorker, length int) []byte

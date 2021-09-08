@@ -191,59 +191,67 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 	return violatedProperties
 }
 
-func (fw *fuzzerWorker) generateFuzzedTxInput(input *abi.Argument) interface{} {
+// generateFuzzedAbiValue generates a value of the provided abi.Type.
+// Returns the generated value.
+func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} {
 	//
-	if input.Type.T == abi.AddressTy {
+	if inputType.T == abi.AddressTy {
 		return fw.fuzzer.generator.generateAddress(fw)
-	} else if input.Type.T == abi.UintTy {
-		if input.Type.Size == 64 {
+	} else if inputType.T == abi.UintTy {
+		if inputType.Size == 64 {
 			return fw.fuzzer.generator.generateUint64(fw)
-		} else if input.Type.Size == 32 {
+		} else if inputType.Size == 32 {
 			return fw.fuzzer.generator.generateUint32(fw)
-		} else if input.Type.Size == 16 {
+		} else if inputType.Size == 16 {
 			return fw.fuzzer.generator.generateUint16(fw)
-		} else if input.Type.Size == 8 {
+		} else if inputType.Size == 8 {
 			return fw.fuzzer.generator.generateUint8(fw)
 		} else {
-			return fw.fuzzer.generator.generateArbitraryUint(fw, input.Type.Size)
+			return fw.fuzzer.generator.generateArbitraryUint(fw, inputType.Size)
 		}
-	} else if input.Type.T == abi.IntTy {
-		if input.Type.Size == 64 {
+	} else if inputType.T == abi.IntTy {
+		if inputType.Size == 64 {
 			return fw.fuzzer.generator.generateInt64(fw)
-		} else if input.Type.Size == 32 {
+		} else if inputType.Size == 32 {
 			return fw.fuzzer.generator.generateInt32(fw)
-		} else if input.Type.Size == 16 {
+		} else if inputType.Size == 16 {
 			return fw.fuzzer.generator.generateInt16(fw)
-		} else if input.Type.Size == 8 {
+		} else if inputType.Size == 8 {
 			return fw.fuzzer.generator.generateInt8(fw)
 		} else {
-			return fw.fuzzer.generator.generateArbitraryInt(fw, input.Type.Size)
+			return fw.fuzzer.generator.generateArbitraryInt(fw, inputType.Size)
 		}
-	} else if input.Type.T == abi.BoolTy {
+	} else if inputType.T == abi.BoolTy {
 		return fw.fuzzer.generator.generateBool(fw)
-	} else if input.Type.T == abi.StringTy {
+	} else if inputType.T == abi.StringTy {
 		return fw.fuzzer.generator.generateString(fw)
-	} else if input.Type.T == abi.BytesTy {
+	} else if inputType.T == abi.BytesTy {
 		return fw.fuzzer.generator.generateBytes(fw)
-	} else if input.Type.T == abi.FixedBytesTy {
+	} else if inputType.T == abi.FixedBytesTy {
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
-		array := reflect.Indirect(reflect.New(reflect.ArrayOf(input.Type.Size, input.Type.GetType()))).Index(0)
-		bytes := reflect.ValueOf(fw.fuzzer.generator.generateFixedBytes(fw, input.Type.Size))
+		array := reflect.Indirect(reflect.New(reflect.ArrayOf(inputType.Size, inputType.GetType()))).Index(0)
+		bytes := reflect.ValueOf(fw.fuzzer.generator.generateFixedBytes(fw, inputType.Size))
 		for i := 0; i < array.Len(); i++ {
 			array.Index(i).Set(bytes.Index(i))
 		}
 		return array.Interface()
-	} else if input.Type.T == abi.ArrayTy {
-		// TODO: This needs to be an array type, not a slice, so we need to convert it.
-		panic("TODO: fixed array types are unsupported")
-	} else if input.Type.T == abi.SliceTy {
-		// TODO: Slice types
-		panic("TODO: dynamic array types are unsupported")
-	} else if input.Type.T == abi.FixedPointTy {
-		// TODO: Fixed point types
-		panic("TODO: fixed point types are unsupported")
-	} else if input.Type.T == abi.TupleTy {
+	} else if inputType.T == abi.ArrayTy {
+		// Read notes for fixed bytes to understand the need to create this array through reflection.
+		array := reflect.Indirect(reflect.New(reflect.ArrayOf(inputType.Size, inputType.GetType()))).Index(0)
+		for i := 0; i < array.Len(); i++ {
+			array.Index(i).Set(reflect.ValueOf(fw.generateFuzzedAbiValue(inputType.Elem)))
+		}
+		return array.Interface()
+	} else if inputType.T == abi.SliceTy {
+		// Dynamic sized arrays are represented as slices.
+		sliceSize := fw.fuzzer.generator.generateArrayLength(fw)
+		slice := reflect.MakeSlice(inputType.GetType(), sliceSize, sliceSize)
+		for i := 0; i < slice.Len(); i++ {
+			slice.Index(i).Set(reflect.ValueOf(fw.generateFuzzedAbiValue(inputType.Elem)))
+		}
+		return slice.Interface()
+	} else if inputType.T == abi.TupleTy {
 		// TODO: Tuple types
 		panic("TODO: tuple types are unsupported")
 	}
@@ -251,7 +259,8 @@ func (fw *fuzzerWorker) generateFuzzedTxInput(input *abi.Argument) interface{} {
 	// Unexpected types will result in a panic as we should support these values as soon as possible:
 	// - Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
 	//	 see cases of it unless Solidity was updated in the future.
-	panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", input.Type.String()))
+	// - FixedPoint types are currently unsupported.
+	panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
 }
 
 // generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
@@ -267,7 +276,7 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*coreTypes.LegacyTx, *fuzzerAccount,
 	for i := 0; i < len(args); i++ {
 		// Create our fuzzed parameters.
 		input := selectedMethod.method.Inputs[i]
-		args[i] = fw.generateFuzzedTxInput(&input)
+		args[i] = fw.generateFuzzedAbiValue(&input.Type)
 	}
 
 	// Encode our parameters.

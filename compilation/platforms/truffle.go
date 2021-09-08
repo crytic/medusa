@@ -26,7 +26,7 @@ func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
 	}
 }
 
-func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, error) {
+func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Determine the base command to use.
 	var baseCommandStr = "truffle"
 	if s.Command != "" {
@@ -43,7 +43,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, error) {
 	cmd.Dir = s.Target
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error while executing truffle:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", fmt.Errorf("error while executing truffle:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
 
 	// Create a compilation unit out of this.
@@ -57,7 +57,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, error) {
 	}
 	matches, err := filepath.Glob(path.Join(buildDirectory, "*.json"))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Define our truffle structure to parse
@@ -78,14 +78,14 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, error) {
 		// Read the compiled JSON file data
 		b, err := ioutil.ReadFile(matches[i])
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Parse the JSON
 		var compiledJson TruffleCompiledJson
 		err = json.Unmarshal(b, &compiledJson)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Convert the abi structure to our parsed abi type
@@ -112,5 +112,5 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, error) {
 		}
 	}
 
-	return []types.Compilation{*compilation}, nil
+	return []types.Compilation{*compilation}, string(out), nil
 }

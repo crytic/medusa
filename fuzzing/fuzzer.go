@@ -109,12 +109,13 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Compile our targets
-	var err error
 	fmt.Printf("Compiling targets (platform '%s') ...\n", f.config.Compilation.Platform)
-	f.compilations, err = compilation.Compile(f.config.Compilation)
+	compilations, compilationOutput, err := compilation.Compile(f.config.Compilation)
+	f.compilations = compilations
 	if err != nil {
 		return err
 	}
+	fmt.Printf(compilationOutput)
 
 	// Create a test node for each thread we intend to create. Fuzzer workers can stop if they hit some resource
 	// limit such as a memory limit, at which point we'll recreate them here, putting them into the same index.
