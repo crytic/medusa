@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/configs"
-	"github.com/trailofbits/medusa/fuzzer"
+	"github.com/trailofbits/medusa/fuzzing"
 	"os"
 	"os/signal"
 	"path"
@@ -51,13 +51,13 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create our fuzzer
-	fuzzer, err := fuzzer.NewFuzzer(*projectConfig)
+	// Create our fuzzing
+	fuzzer, err := fuzzing.NewFuzzer(*projectConfig)
 	if err != nil {
 		return err
 	}
 
-	// Stop our fuzzer on keyboard interrupts
+	// Stop our fuzzing on keyboard interrupts
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {

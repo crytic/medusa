@@ -1,4 +1,4 @@
-package fuzzer
+package fuzzing
 
 import (
 	"context"
@@ -15,13 +15,13 @@ import (
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
 type Fuzzer struct {
-	// config describes the project configuration which the fuzzer is targeting.
+	// config describes the project configuration which the fuzzing is targeting.
 	config configs.ProjectConfig
 	// accounts describes a set of account keys derived from config, for use in fuzzing campaigns.
 	accounts []fuzzerAccount
 
 
-	// ctx describes the context for the fuzzer run, used to cancel running operations.
+	// ctx describes the context for the fuzzing run, used to cancel running operations.
 	ctx context.Context
 	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
 	ctxCancelFunc context.CancelFunc
@@ -34,6 +34,8 @@ type Fuzzer struct {
 	workers []*fuzzerWorker
 	// metrics represents the metrics for the fuzzing campaign.
 	metrics *FuzzerMetrics
+	// results describes the results we track during our fuzzing campaign, such as failed property tests.
+	results *FuzzerResults
 }
 
 // fuzzerAccount represents a single keypair generated or derived from settings provided in the Fuzzer.config.
@@ -86,7 +88,7 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	// Print some output
 	fmt.Printf("Account keys loaded (%d generated, %d pre-defined) ...\n", config.Accounts.Generate, len(config.Accounts.Keys))
 
-	// Create and return our fuzzer instance.
+	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config: config,
 		accounts: accounts,
@@ -122,7 +124,8 @@ func (f *Fuzzer) Start() error {
 	availableWorkerIndexedLock := sync.Mutex{}
 	for i := 0; i < len(availableWorkerIndexes); i++ { availableWorkerIndexes[i] = i }
 
-	// Next, initialize our metrics and generator
+	// Next, initialize our generator, results, and metrics providers.
+	f.results = NewFuzzerResults()
 	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
 	f.generator = newTxGeneratorRandom() // TODO: make this configurable after adding more options
@@ -146,7 +149,7 @@ func (f *Fuzzer) Start() error {
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
 		// keeping us at our desired thread capacity.
 		go func(workerIndex int) {
-			// Create a new worker for this fuzzer.
+			// Create a new worker for this fuzzing.
 			worker := newFuzzerWorker(workerIndex, f)
 			f.workers[workerIndex] = worker
 
@@ -192,7 +195,8 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
+			"tx num: %d, workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
+			transactionsTested,
 			len(f.metrics.workerMetrics),
 			workerStartupCount - lastWorkerStartupCount,
 			transactionsTested - lastTransactionsTested,

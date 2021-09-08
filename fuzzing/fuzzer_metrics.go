@@ -1,4 +1,4 @@
-package fuzzer
+package fuzzing
 
 // FuzzerMetrics represents a struct tracking metrics for a Fuzzer run.
 type FuzzerMetrics struct {

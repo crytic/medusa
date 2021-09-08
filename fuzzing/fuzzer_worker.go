@@ -1,4 +1,4 @@
-package fuzzer
+package fuzzing
 
 import (
 	"fmt"
@@ -53,8 +53,9 @@ type deployedMethod struct {
 
 // newFuzzerWorker creates a new fuzzerWorker, assigning it the provided worker index/id and associating it to the
 // Fuzzer instance supplied.
+// Returns the new fuzzerWorker
 func newFuzzerWorker(workerIndex int, fuzzer *Fuzzer) *fuzzerWorker {
-	// Create a fuzzer worker struct, referencing our parent fuzzer.
+	// Create a fuzzing worker struct, referencing our parent fuzzing.
 	worker := fuzzerWorker{
 		workerIndex: workerIndex,
 		fuzzer: fuzzer,
@@ -65,12 +66,14 @@ func newFuzzerWorker(workerIndex int, fuzzer *Fuzzer) *fuzzerWorker {
 	return &worker
 }
 
-// metrics represents the FuzzerWorkerMetrics for this worker.
+// metrics returns the fuzzerWorkerMetrics for this worker.
 func (fw *fuzzerWorker) metrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
-func (fw *fuzzerWorker) trackDeployedContract(deployedAddress common.Address, contract types.CompiledContract) {
+// registerDeployedContract registers an address with a compiled contract descriptor for it to be tracked by the
+// fuzzerWorker, both as methods of changing state and for properties to assert.
+func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address, contract types.CompiledContract) {
 	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
 	fw.deployedContracts[deployedAddress] = contract
 
@@ -89,7 +92,10 @@ func (fw *fuzzerWorker) trackDeployedContract(deployedAddress common.Address, co
 	}
 }
 
-func (fw *fuzzerWorker) deployAndTrackCompiledContracts() error {
+// deployAndRegisterCompiledContracts deploys all contracts in the parent Fuzzer.compilations to a test node and
+// registers their addresses to be tracked by the fuzzerWorker.
+// Returns an error if one is encountered.
+func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 	// Loop for each contract in each compilation and deploy it to the test node.
 	for _, comp :=  range fw.fuzzer.compilations {
 		for _, source := range comp.Sources {
@@ -104,7 +110,7 @@ func (fw *fuzzerWorker) deployAndTrackCompiledContracts() error {
 					}
 
 					// Ensure our worker tracks the deployed contract and any property tests
-					fw.trackDeployedContract(deployedAddress, contract)
+					fw.registerDeployedContract(deployedAddress, contract)
 				}
 			}
 		}
@@ -113,6 +119,8 @@ func (fw *fuzzerWorker) deployAndTrackCompiledContracts() error {
 	return nil
 }
 
+// checkViolatedPropertyTests executes all property tests in deployed contracts in this fuzzerWorker's testNode.
+// Returns deployedMethod references for all failed property test results.
 func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 	// Create a list of violated properties
 	violatedProperties := make([]deployedMethod, 0)
@@ -182,7 +190,10 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 	return violatedProperties
 }
 
-func (fw *fuzzerWorker) generateFuzzedTransactionAndSender() (*coreTypes.LegacyTx, *fuzzerAccount, error) {
+// generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
+// testNode.
+// Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
+func (fw *fuzzerWorker) generateFuzzedTx() (*coreTypes.LegacyTx, *fuzzerAccount, error) {
 	// Select a method and sender
 	selectedMethod := fw.fuzzer.generator.chooseMethod(fw)
 	selectedSender := fw.fuzzer.generator.chooseSender(fw)
@@ -195,7 +206,52 @@ func (fw *fuzzerWorker) generateFuzzedTransactionAndSender() (*coreTypes.LegacyT
 		if input.Type.T == abi.AddressTy {
 			args[i] = fw.fuzzer.generator.generateAddress(fw)
 		} else if input.Type.T == abi.UintTy {
-			args[i] = fw.fuzzer.generator.generateUint(fw)
+			if input.Type.Size == 64 {
+				args[i] = fw.fuzzer.generator.generateUint64(fw)
+			} else if input.Type.Size == 32 {
+				args[i] = fw.fuzzer.generator.generateUint32(fw)
+			} else if input.Type.Size == 16 {
+				args[i] = fw.fuzzer.generator.generateUint16(fw)
+			} else if input.Type.Size == 8 {
+				args[i] = fw.fuzzer.generator.generateUint8(fw)
+			} else {
+				args[i] = fw.fuzzer.generator.generateArbitraryUint(fw, input.Type.Size)
+			}
+		} else if input.Type.T == abi.IntTy {
+			if input.Type.Size == 64 {
+				args[i] = fw.fuzzer.generator.generateInt64(fw)
+			} else if input.Type.Size == 32 {
+				args[i] = fw.fuzzer.generator.generateInt32(fw)
+			} else if input.Type.Size == 16 {
+				args[i] = fw.fuzzer.generator.generateInt16(fw)
+			} else if input.Type.Size == 8 {
+				args[i] = fw.fuzzer.generator.generateInt8(fw)
+			} else {
+				args[i] = fw.fuzzer.generator.generateArbitraryInt(fw, input.Type.Size)
+			}
+		} else if input.Type.T == abi.BoolTy {
+			args[i] = fw.fuzzer.generator.generateBool(fw)
+		} else if input.Type.T == abi.StringTy {
+			args[i] = fw.fuzzer.generator.generateString(fw)
+		} else if input.Type.T == abi.BytesTy {
+			args[i] = fw.fuzzer.generator.generateBytes(fw)
+		} else if input.Type.T == abi.FixedBytesTy {
+			// TODO: This needs to be an array type, not a slice, so we need to convert it.
+			panic("TODO: fixed byte array types are unsupported")
+		} else if input.Type.T == abi.ArrayTy {
+			// TODO: This needs to be an array type, not a slice, so we need to convert it.
+			panic("TODO: fixed array types are unsupported")
+		} else if input.Type.T == abi.SliceTy {
+			// TODO: This is a slice type.
+			panic("TODO: dynamic array types are unsupported")
+		} else if input.Type.T == abi.FixedPointTy {
+			panic("TODO: fixed point types are unsupported")
+		} else if input.Type.T == abi.TupleTy {
+			panic("TODO: tuple types are unsupported")
+		} else if input.Type.T == abi.HashTy {
+			// Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
+			// see cases of it unless Solidity was updated in the future.
+			panic("unexpected attempt to fuzz a function argument which was a mapping type")
 		} else {
 			args[i] = nil
 		}
@@ -249,38 +305,46 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	fw.metrics().workerStartupCount++
 
 	// Deploy and track all compiled contracts
-	err = fw.deployAndTrackCompiledContracts()
+	err = fw.deployAndRegisterCompiledContracts()
 	if err != nil {
 		return false, err
 	}
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
-	// When the limit is reached, we exit this method gracefully, which will cause the fuzzer to recreate
+	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
 	// this worker with a fresh memory database.
 	txSequence := make([]*coreTypes.LegacyTx, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
 	for fw.testNode.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
 		// Loop for each transaction to execute
 		for i := 0; i < len(txSequence); i++ {
 			// Generate fuzzed tx
-			tx, sender, err := fw.generateFuzzedTransactionAndSender()
+			tx, sender, err := fw.generateFuzzedTx()
 			txSequence[i] = tx
 			if err != nil {
 				return false, err
 			}
 
 			// Send our transaction
-			blocks, receipts, err := fw.testNode.sendLegacyTransaction(tx, *sender)
+			_, _, err = fw.testNode.sendLegacyTransaction(tx, *sender)
 			if err != nil {
 				return false, err
 			}
-			_ = blocks
-			_ = receipts
 
-			// Check if any property tests failed
-			violatesPropertyTests := fw.checkViolatedPropertyTests()
-			if len(violatesPropertyTests) > 0 {
-				// TODO: Handle violated property test
-				panic("PROPERTY TEST FAILED")
+			// Record any violated property tests.
+			violatedPropertyTests := fw.checkViolatedPropertyTests()
+			if len(violatedPropertyTests) > 0 {
+				// Create our struct to track tx sequence information for our failed test.
+				txInfoSeq := make([]FuzzerResultFailedTestTx, i + 1)
+				for x := 0; x < len(txInfoSeq); x++ {
+					contract := fw.deployedContracts[*tx.To]
+					txInfoSeq[x] = *NewFuzzerResultFailedTestTx(&contract, txSequence[x])
+				}
+				fw.fuzzer.results.addFailedTest(NewFuzzerResultFailedTest(txInfoSeq, violatedPropertyTests))
+
+				// TODO: For now we'll stop our fuzzer and print our results but we should add a toggle to allow
+				//  for continued execution to find more property violations.
+				fmt.Printf("%s\n", fw.fuzzer.results.GetFailedTests()[0].String())
+				fw.fuzzer.Stop()
 			}
 
 			// Increase our transaction tested metric
@@ -295,7 +359,11 @@ func (fw *fuzzerWorker) run() (bool, error) {
 			}
 		}
 
-		// TODO: Rollback our pending block/transaction.
+		// Rollback our pending blocks/transactions we generated.
+		err = fw.testNode.RevertUncommittedChanges()
+		if err != nil {
+			return false, err
+		}
 
 		// Increase our transaction sequence tested metric
 		fw.metrics().sequencesTested++
