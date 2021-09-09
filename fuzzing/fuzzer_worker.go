@@ -230,7 +230,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 	} else if inputType.T == abi.FixedBytesTy {
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
-		array := reflect.Indirect(reflect.New(reflect.ArrayOf(inputType.Size, inputType.GetType()))).Index(0)
+		array := reflect.Indirect(reflect.New(inputType.GetType()))
 		bytes := reflect.ValueOf(fw.fuzzer.generator.generateFixedBytes(fw, inputType.Size))
 		for i := 0; i < array.Len(); i++ {
 			array.Index(i).Set(bytes.Index(i))
@@ -238,7 +238,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 		return array.Interface()
 	} else if inputType.T == abi.ArrayTy {
 		// Read notes for fixed bytes to understand the need to create this array through reflection.
-		array := reflect.Indirect(reflect.New(reflect.ArrayOf(inputType.Size, inputType.GetType()))).Index(0)
+		array := reflect.Indirect(reflect.New(inputType.GetType()))
 		for i := 0; i < array.Len(); i++ {
 			array.Index(i).Set(reflect.ValueOf(fw.generateFuzzedAbiValue(inputType.Elem)))
 		}
@@ -252,8 +252,13 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 		}
 		return slice.Interface()
 	} else if inputType.T == abi.TupleTy {
-		// TODO: Tuple types
-		panic("TODO: tuple types are unsupported")
+		// Tuples are used to represent structs. For go-ethereum's ABI provider, we're intended to supply matching
+		// struct implementations, so we create and populate them through reflection.
+		st := reflect.Indirect(reflect.New(inputType.GetType()))
+		for i := 0; i < len(inputType.TupleElems); i++ {
+			st.Field(i).Set(reflect.ValueOf(fw.generateFuzzedAbiValue(inputType.TupleElems[i])))
+		}
+		return st.Interface()
 	}
 
 	// Unexpected types will result in a panic as we should support these values as soon as possible:
