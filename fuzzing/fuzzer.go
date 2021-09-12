@@ -28,6 +28,8 @@ type Fuzzer struct {
 	// compilations describes the compiled targets produced by the last Start call for the Fuzzer to target.
 	compilations []types.Compilation
 
+	// corpus represents a corpus containing input values for our fuzz tests.
+	corpus *Corpus
 	// generator defines our fuzzing approach to generate transactions.
 	generator txGenerator
 	// workers represents the work threads created by this Fuzzer when Start invokes a fuzz operation.
@@ -117,15 +119,24 @@ func (f *Fuzzer) Start() error {
 	}
 	fmt.Printf(compilationOutput)
 
-	// Create a test node for each thread we intend to create. Fuzzer workers can stop if they hit some resource
-	// limit such as a memory limit, at which point we'll recreate them here, putting them into the same index.
-	// First, create the available index queue.
+	// We create a test node for each thread we intend to create. Fuzzer workers can stop if they hit some resource
+	// limit such as a memory limit, at which point we'll recreate them in our loop, putting them into the same index.
+	// For now, we create our available index queue before initializing some providers and entering our main loop.
 	fmt.Printf("Creating %d workers ...\n", f.config.Fuzzing.Workers)
 	availableWorkerIndexes := make([]int, f.config.Fuzzing.Workers)
 	availableWorkerIndexedLock := sync.Mutex{}
 	for i := 0; i < len(availableWorkerIndexes); i++ { availableWorkerIndexes[i] = i }
 
-	// Next, initialize our generator, results, and metrics providers.
+	// Initialize our corpus and seed it from values derived from ASTs
+	f.corpus = NewCorpus()
+	for _, c := range f.compilations {
+		for _, source := range c.Sources {
+			f.corpus.seedFromAst(source.Ast)
+		}
+	}
+
+
+	// Initialize , generator, results, and metrics providers.
 	f.results = NewFuzzerResults()
 	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
