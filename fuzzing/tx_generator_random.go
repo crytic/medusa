@@ -2,12 +2,15 @@ package fuzzing
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"math/rand"
 	"sync"
 	"time"
 )
 
+// txGeneratorRandom represents an interface for a provider used to generate transaction fields and call arguments
+// using a random provider. As such it may not be accurate in many test results with tightly-bound pre-conditions.
 type txGeneratorRandom struct {
 	// randomProvider offers a source of random data.
 	randomProvider *rand.Rand
@@ -15,6 +18,7 @@ type txGeneratorRandom struct {
 	randomProviderLock sync.Mutex
 }
 
+// newTxGeneratorRandom creates a new txGeneratorRandom with a new random provider.
 func newTxGeneratorRandom() *txGeneratorRandom {
 	// Create and return our generator
 	generator := &txGeneratorRandom{
@@ -23,6 +27,7 @@ func newTxGeneratorRandom() *txGeneratorRandom {
 	return generator
 }
 
+// chooseMethod selects a random state-changing deployed contract method to target with a transaction.
 func (g *txGeneratorRandom) chooseMethod(worker *fuzzerWorker) *deployedMethod {
 	// If we have no state changing methods, return nil immediately.
 	if len(worker.stateChangingMethods) == 0 {
@@ -35,6 +40,7 @@ func (g *txGeneratorRandom) chooseMethod(worker *fuzzerWorker) *deployedMethod {
 	return &worker.stateChangingMethods[g.randomProvider.Int() % len(worker.stateChangingMethods)]
 }
 
+// chooseSender selects a random account address to send the transaction from.
 func (g *txGeneratorRandom) chooseSender(worker *fuzzerWorker) *fuzzerAccount {
 	// If we have no state changing methods, return nil immediately.
 	if len(worker.fuzzer.accounts) == 0 {
@@ -47,6 +53,7 @@ func (g *txGeneratorRandom) chooseSender(worker *fuzzerWorker) *fuzzerAccount {
 	return &worker.fuzzer.accounts[g.randomProvider.Int() % len(worker.fuzzer.accounts)]
 }
 
+// generateAddress generates a random address to use when populating transaction fields.
 func (g *txGeneratorRandom) generateAddress(worker *fuzzerWorker) common.Address {
 	// Generate random bytes of the address length, then convert it to an address.
 	addressBytes := make([]byte, common.AddressLength)
@@ -56,16 +63,19 @@ func (g *txGeneratorRandom) generateAddress(worker *fuzzerWorker) common.Address
 	return common.BytesToAddress(addressBytes)
 }
 
+// generateArrayLength generates a random array length to use when populating transaction fields.
 func (g *txGeneratorRandom) generateArrayLength(worker *fuzzerWorker) int {
-	return int(g.generateUint16(worker) % 100)  // TODO: Right now we only generate 0-100 elements, make this configurable.
+	return int(g.generateInteger(worker, false, 16).Uint64() % 100)  // TODO: Right now we only generate 0-100 elements, make this configurable.
 }
 
+// generateBool generates a random bool to use when populating transaction fields.
 func (g *txGeneratorRandom) generateBool(worker *fuzzerWorker) bool {
 	g.randomProviderLock.Lock()
 	defer g.randomProviderLock.Unlock()
 	return g.randomProvider.Uint32() % 2 == 0
 }
 
+// generateBytes generates a random dynamic-sized byte array to use when populating transaction fields.
 func (g *txGeneratorRandom) generateBytes(worker *fuzzerWorker) []byte {
 	g.randomProviderLock.Lock()
 	b := make([]byte, rand.Uint64() % 100) // TODO: Right now we only generate 0-100 bytes, make this configurable.
@@ -74,10 +84,7 @@ func (g *txGeneratorRandom) generateBytes(worker *fuzzerWorker) []byte {
 	return b
 }
 
-func (g *txGeneratorRandom) generateString(worker *fuzzerWorker) string {
-	return string(g.generateBytes(worker))
-}
-
+// generateFixedBytes generates a random fixed-sized byte array to use when populating transaction fields.
 func (g *txGeneratorRandom) generateFixedBytes(worker *fuzzerWorker, length int) []byte {
 	g.randomProviderLock.Lock()
 	b := make([]byte, length)
@@ -86,93 +93,22 @@ func (g *txGeneratorRandom) generateFixedBytes(worker *fuzzerWorker, length int)
 	return b
 }
 
-func (g *txGeneratorRandom) generateArbitraryUint(worker *fuzzerWorker, bitLength int) *big.Int {
+// generateString generates a random dynamic-sized string to use when populating transaction fields.
+func (g *txGeneratorRandom) generateString(worker *fuzzerWorker) string {
+	return string(g.generateBytes(worker))
+}
+
+// generateUint generates a random unsigned-integer to use when populating transaction fields.
+func (g *txGeneratorRandom) generateInteger(worker *fuzzerWorker, signed bool, bitLength int) *big.Int {
 	// Fill a byte array of the appropriate size with random bytes
 	b := make([]byte, bitLength / 8)
 	g.randomProviderLock.Lock()
 	g.randomProvider.Read(b)
 	g.randomProviderLock.Unlock()
 
-	// Convert to a big integer and return
-	res := big.NewInt(0)
-	return res.SetBytes(b)
-}
+	// Create an unsigned integer.
+	res := big.NewInt(0).SetBytes(b)
 
-func (g *txGeneratorRandom) generateUint64(worker *fuzzerWorker) uint64 {
-	// Return a random uint64
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return g.randomProvider.Uint64()
-}
-
-func (g *txGeneratorRandom) generateUint32(worker *fuzzerWorker) uint32 {
-	// Return a random uint32
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return g.randomProvider.Uint32()
-}
-
-func (g *txGeneratorRandom) generateUint16(worker *fuzzerWorker) uint16 {
-	// Return a random uint16
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return uint16(g.randomProvider.Uint32())
-}
-
-func (g *txGeneratorRandom) generateUint8(worker *fuzzerWorker) uint8 {
-	// Return a random uint8
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return uint8(g.randomProvider.Uint32())
-}
-
-func (g *txGeneratorRandom) generateArbitraryInt(worker *fuzzerWorker, bitLength int) *big.Int {
-	// Fill a byte array of the appropriate size with random bytes
-	b := make([]byte, bitLength / 8)
-	g.randomProviderLock.Lock()
-	g.randomProvider.Read(b)
-	g.randomProviderLock.Unlock()
-
-	// Take the first bit of the first byte as the sign (big.Int takes byte arrays as big-endian unsigned integer data)
-	negative := b[0] >> 7 != 0
-	b[0] = b[0] & 0x7F // mask out the sign bit before it's interpreted, taking our value magnitude out of bounds.
-
-	// Convert to a big integer
-	res := big.NewInt(0)
-	res.SetBytes(b)
-
-	// If negative, transform accordingly (mul by -1, sub 1 to cover full range).
-	if negative {
-		res.Mul(res, big.NewInt(-1))
-		res.Sub(res, big.NewInt(1))
-	}
-	return res
-}
-
-func (g *txGeneratorRandom) generateInt64(worker *fuzzerWorker) int64 {
-	// Return a random int64
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return int64(g.randomProvider.Uint64())
-}
-
-func (g *txGeneratorRandom) generateInt32(worker *fuzzerWorker) int32 {
-	// Return a random int32
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return int32(g.randomProvider.Uint32())
-}
-
-func (g *txGeneratorRandom) generateInt16(worker *fuzzerWorker) int16 {
-	// Return a random int16
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return int16(g.randomProvider.Uint32())
-}
-
-func (g *txGeneratorRandom) generateInt8(worker *fuzzerWorker) int8 {
-	// Return a random int8
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
-	return int8(g.randomProvider.Uint32())
+	// Constrain our integer bounds
+	return utils.ConstrainIntegerToBitLength(res, signed, bitLength)
 }

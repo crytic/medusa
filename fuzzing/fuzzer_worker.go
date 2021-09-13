@@ -199,27 +199,27 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 		return fw.fuzzer.generator.generateAddress(fw)
 	} else if inputType.T == abi.UintTy {
 		if inputType.Size == 64 {
-			return fw.fuzzer.generator.generateUint64(fw)
+			return fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64()
 		} else if inputType.Size == 32 {
-			return fw.fuzzer.generator.generateUint32(fw)
+			return uint32(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
 		} else if inputType.Size == 16 {
-			return fw.fuzzer.generator.generateUint16(fw)
+			return uint16(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
 		} else if inputType.Size == 8 {
-			return fw.fuzzer.generator.generateUint8(fw)
+			return uint8(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
 		} else {
-			return fw.fuzzer.generator.generateArbitraryUint(fw, inputType.Size)
+			return fw.fuzzer.generator.generateInteger(fw, false, inputType.Size)
 		}
 	} else if inputType.T == abi.IntTy {
 		if inputType.Size == 64 {
-			return fw.fuzzer.generator.generateInt64(fw)
+			return fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64()
 		} else if inputType.Size == 32 {
-			return fw.fuzzer.generator.generateInt32(fw)
+			return int32(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
 		} else if inputType.Size == 16 {
-			return fw.fuzzer.generator.generateInt16(fw)
+			return int16(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
 		} else if inputType.Size == 8 {
-			return fw.fuzzer.generator.generateInt8(fw)
+			return int8(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
 		} else {
-			return fw.fuzzer.generator.generateArbitraryInt(fw, inputType.Size)
+			return fw.fuzzer.generator.generateInteger(fw, true, inputType.Size)
 		}
 	} else if inputType.T == abi.BoolTy {
 		return fw.fuzzer.generator.generateBool(fw)
