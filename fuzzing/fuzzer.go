@@ -140,7 +140,7 @@ func (f *Fuzzer) Start() error {
 	f.results = NewFuzzerResults()
 	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	f.generator = newTxGeneratorRandom() // TODO: make this configurable after adding more options
+	f.generator = newTxGeneratorMutation(f.corpus)//newTxGeneratorRandom() // TODO: make this configurable after adding more options
 
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
