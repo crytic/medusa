@@ -86,9 +86,9 @@ func (g *txGeneratorRandom) generateFixedBytes(worker *fuzzerWorker, length int)
 	return b
 }
 
-func (g *txGeneratorRandom) generateArbitraryUint(worker *fuzzerWorker, bitWidth int) *big.Int {
+func (g *txGeneratorRandom) generateArbitraryUint(worker *fuzzerWorker, bitLength int) *big.Int {
 	// Fill a byte array of the appropriate size with random bytes
-	b := make([]byte, bitWidth / 8)
+	b := make([]byte, bitLength / 8)
 	g.randomProviderLock.Lock()
 	g.randomProvider.Read(b)
 	g.randomProviderLock.Unlock()
@@ -126,16 +126,27 @@ func (g *txGeneratorRandom) generateUint8(worker *fuzzerWorker) uint8 {
 	return uint8(g.randomProvider.Uint32())
 }
 
-func (g *txGeneratorRandom) generateArbitraryInt(worker *fuzzerWorker, bitWidth int) *big.Int {
+func (g *txGeneratorRandom) generateArbitraryInt(worker *fuzzerWorker, bitLength int) *big.Int {
 	// Fill a byte array of the appropriate size with random bytes
-	b := make([]byte, bitWidth / 8)
+	b := make([]byte, bitLength / 8)
 	g.randomProviderLock.Lock()
 	g.randomProvider.Read(b)
 	g.randomProviderLock.Unlock()
 
-	// Convert to a big integer and return
+	// Take the first bit of the first byte as the sign (big.Int takes byte arrays as big-endian unsigned integer data)
+	negative := b[0] >> 7 != 0
+	b[0] = b[0] & 0x7F // mask out the sign bit before it's interpreted, taking our value magnitude out of bounds.
+
+	// Convert to a big integer
 	res := big.NewInt(0)
-	return res.SetBytes(b)
+	res.SetBytes(b)
+
+	// If negative, transform accordingly (mul by -1, sub 1 to cover full range).
+	if negative {
+		res.Mul(res, big.NewInt(-1))
+		res.Sub(res, big.NewInt(1))
+	}
+	return res
 }
 
 func (g *txGeneratorRandom) generateInt64(worker *fuzzerWorker) int64 {
