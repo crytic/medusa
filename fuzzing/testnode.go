@@ -204,7 +204,14 @@ func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, s
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
-func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, account fuzzerAccount) (*coreTypes.Block, *coreTypes.Receipts, error) {
+func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, account fuzzerAccount, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
+	// Apply fixups related to gas/nonce
+	if applyFixups {
+		tx.Nonce = t.pendingState.GetNonce(account.address)
+		tx.GasPrice = big.NewInt(params.InitialBaseFee)
+		tx.Gas = t.pendingBlock.GasLimit()
+	}
+
 	// Sign the transaction
 	signedTx, err := coreTypes.SignNewTx(account.key, t.signer, tx)
 	if err != nil {
@@ -226,17 +233,18 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzz
 	// contracts.
 
 	// Create a transaction to represent our contract deployment.
+	// NOTE: We don't fill out nonce/gas as sendLegacyTransaction will apply fixups below.
 	tx := &coreTypes.LegacyTx{
-		Nonce: t.pendingState.GetNonce(deployer.address),
-		GasPrice: big.NewInt(params.InitialBaseFee),
-		Gas: t.pendingBlock.GasLimit(),
+		Nonce: 0,
+		GasPrice: big.NewInt(0),
+		Gas: 0,
 		To: nil,
 		Value: big.NewInt(0),
 		Data: b,
 	}
 
 	// Send our deployment transaction
-	_, receipts, err := t.sendLegacyTransaction(tx, deployer)
+	_, receipts, err := t.sendLegacyTransaction(tx, deployer, true)
 	if err != nil {
 		return common.Address{0}, err
 	}

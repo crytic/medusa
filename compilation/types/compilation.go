@@ -35,7 +35,7 @@ func NewCompilation() *Compilation {
 
 func InterfaceToABI(i interface{}) (*abi.ABI, error) {
 	// TODO: Refactor this ugly hack. Solidity 0.8.0 doesn't re-serialize ABI as a string, so go-ethereum simply
-	//  ensures older Solidity deserializes too. It doesn't do it as abi.ABI type though, so we do that here
+	//  ensures older Solidity deserializes too. It doesn't do it as abi.ABI type though, so we do that here.
 	b, err := json.Marshal(i)
 	if err != nil {
 		return nil, err

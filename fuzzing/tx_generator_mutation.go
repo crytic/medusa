@@ -48,10 +48,11 @@ func (g *txGeneratorMutation) generateInteger(worker *fuzzerWorker, signed bool,
 
 	// Determine additional inputs based off the value type
 	var inputs []*big.Int
+	inputs = append(inputs,  g.baseIntegers...)
 	if signed {
-		inputs = append(g.baseIntegers, big.NewInt(0), big.NewInt(1), big.NewInt(-1), min, max)
+		inputs = append(inputs, big.NewInt(0), big.NewInt(1), big.NewInt(-1), big.NewInt(2), min, max)
 	} else {
-		inputs = append(g.baseIntegers, big.NewInt(1), min, max) // zero is included in minimum
+		inputs = append(inputs, big.NewInt(1), big.NewInt(2), min, max) // zero is included in minimum
 	}
 
 	// Generate a mutated integer.
@@ -91,6 +92,11 @@ var integerMutationMethods = []func(*txGeneratorMutation, *big.Int, ...*big.Int)
 		return big.NewInt(0).Mod(x, divisor)
 	},
 }
+
+// generateMutatedInteger generates an integer of the specified type by taking a starting value and mutating it
+// such that it is derived from a sensible value and may reach some code paths more effectively, but it is still
+// sufficiently randomized.
+// Returns the generated mutated integer.
 func (g *txGeneratorMutation) generateMutatedInteger(worker *fuzzerWorker, min *big.Int, max *big.Int, inputs []*big.Int) *big.Int {
 	// Declare additional inputs for our integer to mutate and select one.
 	// Note: We add some basic cases as well.

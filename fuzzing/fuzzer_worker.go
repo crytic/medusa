@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/trailofbits/medusa/compilation/types"
 	"math/big"
 	"reflect"
@@ -38,18 +37,6 @@ type fuzzerWorker struct {
 	// (non-read-only). Each fuzzerWorker fuzzes a sequence of transactions targeting stateChangingMethods, while
 	// calling all propertyTests intermittently to verify state.
 	stateChangingMethods []deployedMethod
-}
-
-// deployedMethod describes a method which is accessible through contract deployed on the test node.
-type deployedMethod struct {
-	// address represents the Ethereum address where the deployed contract containing the method exists.
-	address common.Address
-
-	// contract describes the contract which was deployed and contains the target method.
-	contract types.CompiledContract
-
-	// method describes the method which is available through the deployed contract.
-	method abi.Method
 }
 
 // newFuzzerWorker creates a new fuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -271,7 +258,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 // generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
 // testNode.
 // Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
-func (fw *fuzzerWorker) generateFuzzedTx() (*coreTypes.LegacyTx, *fuzzerAccount, error) {
+func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	// Select a method and sender
 	selectedMethod := fw.fuzzer.generator.chooseMethod(fw)
 	selectedSender := fw.fuzzer.generator.chooseSender(fw)
@@ -293,14 +280,95 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*coreTypes.LegacyTx, *fuzzerAccount,
 	// Create a new transaction and return it
 	// TODO: If this is a payable function (or other conditions?), determine value to send
 	tx := &coreTypes.LegacyTx{
-		Nonce: fw.testNode.pendingState.GetNonce(selectedSender.address),
-		GasPrice: big.NewInt(params.InitialBaseFee),
-		Gas: fw.testNode.pendingBlock.GasLimit(),
+		Nonce: 0,
+		GasPrice: big.NewInt(0),
+		Gas: 0,
 		To: &selectedMethod.address,
 		Value: big.NewInt(0),
 		Data: data,
 	}
-	return tx, selectedSender, nil
+
+	// Return our transaction sequence element.
+	return newTxSequenceElement(tx, selectedSender), nil
+}
+
+// testTxSequence tests a transaction sequence and checks if it violates any known property tests. If any element of
+// the provided transaction sequence array is nil, a new transaction will be generated in its place. Thus, this method
+// can be used to check a pre-defined sequence, or to generate and check one of a provided length.
+// Returns the length of the transaction sequence tested, the violated property test methods, or any error if one
+// occurs.
+func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []deployedMethod, error) {
+	// After testing the sequence, we'll want to rollback changes and panic if we encounter an error, as it might
+	// mean our testing state is compromised.
+	defer func() { if err := fw.testNode.RevertUncommittedChanges(); err != nil { panic(err.Error()) } }()
+
+	// Loop for each transaction to execute
+	for i := 0; i < len(txSequence); i++ {
+		// If the transaction sequence element is nil, generate a new fuzzed tx in its place.
+		var err error
+		if txSequence[i] == nil {
+			txSequence[i], err = fw.generateFuzzedTx()
+			if err != nil {
+				return i, nil, err
+			}
+		}
+
+		// Obtain our transaction information
+		txInfo := txSequence[i]
+
+		// Send our transaction
+		_, _, err = fw.testNode.sendLegacyTransaction(txInfo.tx, *txInfo.sender, true)
+		if err != nil {
+			return i, nil, err
+		}
+
+		// Record any violated property tests.
+		violatedPropertyTests := fw.checkViolatedPropertyTests()
+
+		// Check if we have any violated property tests.
+		if len(violatedPropertyTests) > 0 {
+			// We have violated properties, return the tx sequence length needed to cause the issue, as well as the
+			// violated tests.
+			return i + 1, violatedPropertyTests, nil
+		}
+	}
+
+	// Return the amount of txs we tested and no violated properties or errors.
+	return len(txSequence), nil, nil
+}
+
+// shrinkTxSequence takes a provided transaction sequence and attempts to shrink it by looking for redundant
+// transactions in the sequence which can be removed while maintaining the same property test violations.
+// Returns a transaction sequence that was optimized to include as little transactions as possible to trigger the
+// expected number of property test violations, or returns an error if one occurs.
+func (fw *fuzzerWorker) shrinkTxSequence(txSequence []*txSequenceElement, expectedFailures int) ([]*txSequenceElement, error) {
+	// Define another slice to store our tx sequence
+	optimizedSequence := txSequence
+	for i := 0; i < len(optimizedSequence); {
+		// Recreate our sequence without the item at this index
+		testSeq := make([]*txSequenceElement, 0)
+		testSeq = append(testSeq, optimizedSequence[:i]...)
+		testSeq = append(testSeq, optimizedSequence[i+1:]...)
+
+		// Test this shrunk sequence
+		txsTested, violatedPropertyTests, err := fw.testTxSequence(testSeq)
+		if err != nil {
+			return nil, err
+		}
+
+		// If we violated the expected amount of properties, we can continue to the next iteration to try and remove
+		// the element at this index again.
+		if len(violatedPropertyTests) == expectedFailures {
+			// Set the sequence to this one as it holds our violated properties, then continue to trying to remove
+			// at this index again since the item at that index will now be new.
+			optimizedSequence = testSeq[:txsTested]
+			continue
+		}
+
+		// We didn't remove an item at this index, so we'll iterate to the next one.
+		i++
+	}
+	return optimizedSequence, nil
 }
 
 // run sets up a testNode and begins executing fuzzed transaction calls and asserting properties are upheld.
@@ -341,60 +409,49 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
 	// this worker with a fresh memory database.
-	txSequence := make([]*coreTypes.LegacyTx, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
 	for fw.testNode.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
-		// Loop for each transaction to execute
-		for i := 0; i < len(txSequence); i++ {
-			// Generate fuzzed tx
-			tx, sender, err := fw.generateFuzzedTx()
-			txSequence[i] = tx
-			if err != nil {
-				return false, err
-			}
-
-			// Send our transaction
-			_, _, err = fw.testNode.sendLegacyTransaction(tx, *sender)
-			if err != nil {
-				return false, err
-			}
-
-			// Record any violated property tests.
-			violatedPropertyTests := fw.checkViolatedPropertyTests()
-			if len(violatedPropertyTests) > 0 {
-				// Create our struct to track tx sequence information for our failed test.
-				txInfoSeq := make([]FuzzerResultFailedTestTx, i + 1)
-				for x := 0; x < len(txInfoSeq); x++ {
-					contract := fw.deployedContracts[*tx.To]
-					txInfoSeq[x] = *NewFuzzerResultFailedTestTx(&contract, txSequence[x])
-				}
-				fw.fuzzer.results.addFailedTest(NewFuzzerResultFailedTest(txInfoSeq, violatedPropertyTests))
-
-				// TODO: For now we'll stop our fuzzer and print our results but we should add a toggle to allow
-				//  for continued execution to find more property violations.
-				fmt.Printf("%s\n", fw.fuzzer.results.GetFailedTests()[0].String())
-				fw.fuzzer.Stop()
-			}
-
-			// Increase our transaction tested metric
-			fw.metrics().transactionsTested++
-
-			// If our context signalled to close the operation, exit accordingly, otherwise continue.
-			select {
-			case <-fw.fuzzer.ctx.Done():
-				return true, nil
-			default:
-				break // note: breaks out of the select to continue processing
-			}
+		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.
+		select {
+		case <-fw.fuzzer.ctx.Done():
+			return true, nil
+		default:
+			break // no signal to exit, break out of select to continue processing
 		}
 
-		// Rollback our pending blocks/transactions we generated.
-		err = fw.testNode.RevertUncommittedChanges()
+		// Define our transaction sequence slice to populate.
+		txSequence := make([]*txSequenceElement, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
+
+		// Test a newly generated transaction sequence (nil entries in the slice result in generated txs)
+		txsTested, violatedPropertyTests, err := fw.testTxSequence(txSequence)
 		if err != nil {
 			return false, err
 		}
 
-		// Increase our transaction sequence tested metric
+		// Update our metrics
+		fw.metrics().transactionsTested += uint64(txsTested)
 		fw.metrics().sequencesTested++
+
+		// Check if we have violated properties
+		if len(violatedPropertyTests) > 0 {
+			// We'll want to shrink our tx sequence to remove unneeded txs from our tx list.
+			txSequence, err = fw.shrinkTxSequence(txSequence[:txsTested], len(violatedPropertyTests))
+			if err != nil {
+				return false, err
+			}
+
+			// Create our struct to track tx sequence information for our failed test.
+			txInfoSeq := make([]FuzzerResultFailedTestTx, len(txSequence))
+			for x := 0; x < len(txInfoSeq); x++ {
+				contract := fw.deployedContracts[*txSequence[x].tx.To]
+				txInfoSeq[x] = *NewFuzzerResultFailedTestTx(&contract, txSequence[x].tx)
+			}
+			fw.fuzzer.results.addFailedTest(NewFuzzerResultFailedTest(txInfoSeq, violatedPropertyTests))
+
+			// TODO: For now we'll stop our fuzzer and print our results but we should add a toggle to allow
+			//  for continued execution to find more property violations.
+			fmt.Printf("%s\n", fw.fuzzer.results.GetFailedTests()[0].String())
+			fw.fuzzer.Stop()
+		}
 	}
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
