@@ -10,8 +10,8 @@ func (c *Corpus) seedFromAst(ast interface{}) {
 	// Walk our AST while extracting values
 	c.walkAstNodes(ast, func(node map[string]interface{}) {
 		// Extract values depending on node type.
-		nodeType := node["nodeType"].(string)
-		if strings.EqualFold(nodeType, "Literal") {
+		nodeType, obtainedNodeType := node["nodeType"].(string)
+		if obtainedNodeType && strings.EqualFold(nodeType, "Literal") {
 			// Extract literal kind and value
 			literalKind, obtainedKind := node["kind"].(string)
 			literalValue, obtainedValue := node["value"].(string)

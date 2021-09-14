@@ -98,7 +98,7 @@ func (g *txGeneratorRandom) generateString(worker *fuzzerWorker) string {
 	return string(g.generateBytes(worker))
 }
 
-// generateUint generates a random unsigned-integer to use when populating transaction fields.
+// generateInteger generates a random integer to use when populating transaction fields.
 func (g *txGeneratorRandom) generateInteger(worker *fuzzerWorker, signed bool, bitLength int) *big.Int {
 	// Fill a byte array of the appropriate size with random bytes
 	b := make([]byte, bitLength / 8)
