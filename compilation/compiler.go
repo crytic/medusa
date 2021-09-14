@@ -11,6 +11,7 @@ import (
 var supportedCompilationPlatforms = []string {
 	"solc",
 	"truffle",
+	"hardhat",
 }
 
 func GetSupportedCompilationPlatforms() []string {
@@ -49,6 +50,13 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 			return nil, err
 		}
 		platformConfig = (*json.RawMessage)(&b)
+	} else if platform == "hardhat" {
+		hardhatConfig := platforms.NewHardhatCompilationConfig(".")
+		b, err := json.Marshal(hardhatConfig)
+		if err != nil {
+			return nil, err
+		}
+		platformConfig = (*json.RawMessage)(&b)
 	}
 
 	// Return the compilation configs containing our platform-specific configs
@@ -82,6 +90,26 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, string, err
 
 		// Compile using our solc configs
 		return truffleConfig.Compile()
+	} else if config.Platform == "hardhat" {
+		// Parse a truffle config out of the underlying configs
+		hardhatConfig := platforms.HardhatCompilationConfig{}
+		err := json.Unmarshal(*config.PlatformConfig, &hardhatConfig)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Compile using our solc configs
+		return hardhatConfig.Compile()
+	} else if config.Platform == "dapp" {
+		// Parse a truffle config out of the underlying configs
+		dappConfig := platforms.DappCompilationConfig{}
+		err := json.Unmarshal(*config.PlatformConfig, &dappConfig)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Compile using our solc configs
+		return dappConfig.Compile()
 	}
 
 	// Panic if we didn't handle some other case. This should not be hit unless developer error occurs.
