@@ -14,6 +14,7 @@ var supportedCompilationPlatforms = []string {
 	"hardhat",
 	"dapp",
 	"brownie",
+	"waffle",
 }
 
 func GetSupportedCompilationPlatforms() []string {
@@ -69,6 +70,13 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 	} else if platform == "brownie" {
 		brownieConfig := platforms.NewBrownieCompilationConfig(".")
 		b, err := json.Marshal(brownieConfig)
+		if err != nil {
+			return nil, err
+		}
+		platformConfig = (*json.RawMessage)(&b)
+	} else if platform == "waffle" {
+		waffleConfig := platforms.NewWaffleCompilationConfig(".")
+		b, err := json.Marshal(waffleConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -136,6 +144,16 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, string, err
 
 		// Compile using our solc configs
 		return brownieConfig.Compile()
+	} else if config.Platform == "waffle" {
+		// Parse a truffle config out of the underlying configs
+		waffleConfig := platforms.WaffleCompilationConfig{}
+		err := json.Unmarshal(*config.PlatformConfig, &waffleConfig)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Compile using our solc configs
+		return waffleConfig.Compile()
 	}
 
 	// Panic if we didn't handle some other case. This should not be hit unless developer error occurs.
