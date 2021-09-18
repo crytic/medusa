@@ -15,6 +15,7 @@ var supportedCompilationPlatforms = []string {
 	"dapp",
 	"brownie",
 	"waffle",
+	"crytic-compile"
 }
 
 func GetSupportedCompilationPlatforms() []string {
@@ -77,6 +78,13 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 	} else if platform == "waffle" {
 		waffleConfig := platforms.NewWaffleCompilationConfig(".")
 		b, err := json.Marshal(waffleConfig)
+		if err != nil {
+			return nil, err
+		}
+		platformConfig = (*json.RawMessage)(&b)
+	} else if platform == "crytic-compile" {
+		ccConfig := platforms.NewCryticCompileCompilationConfig(".")
+		b, err := json.Marshal(ccConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -154,6 +162,16 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, string, err
 
 		// Compile using our solc configs
 		return waffleConfig.Compile()
+	} else if config.Platform == "crytic-compile" {
+		// Parse a truffle config out of the underlying configs
+		ccConfig := platforms.CryticCompileCompilationConfig{}
+		err := json.Unmarshal(*config.PlatformConfig, &ccConfig)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Compile using our solc configs
+		return ccConfig.Compile()
 	}
 
 	// Panic if we didn't handle some other case. This should not be hit unless developer error occurs.

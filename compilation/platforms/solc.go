@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/trailofbits/medusa/compilation/types"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -56,7 +58,8 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	}
 
 	// Execute solc to compile our target.
-	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions).CombinedOutput()
+	matches, err := filepath.Glob(s.Target)
+	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions, matches...).CombinedOutput()
 	if err != nil {
 		return nil, "", fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
