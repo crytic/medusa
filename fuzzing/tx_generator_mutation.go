@@ -81,13 +81,16 @@ var bytesMutationMethods = []func(*txGeneratorMutation, []byte, ...[]byte) []byt
 		b[g.randomProvider.Int() % len(b)] = byte(g.randomProvider.Int() % 256)
 		return b
 	},
-	// Append a random byte to the front
+	// Flip a random byte
 	func(g *txGeneratorMutation, b []byte, inputs ...[]byte ) []byte {
-		return append([]byte{byte(g.randomProvider.Int() % 256)}, b[:]...)
+		i := g.randomProvider.Int() % len(b)
+		b[i] = b[i] ^ (1 << (g.randomProvider.Int() % 8))
+		return b
 	},
-	// Append a random byte to the end
+	// Add a random byte at a random position
 	func(g *txGeneratorMutation, b []byte, inputs ...[]byte ) []byte {
-		return append(b, byte(g.randomProvider.Int() % 256))
+		i := g.randomProvider.Int() % len(b)
+		return append(append(b[:i], byte(g.randomProvider.Int() % 256)), b[i+1:]...)
 	},
 	// Remove a random byte
 	func(g *txGeneratorMutation, b []byte, inputs ...[]byte ) []byte {
@@ -103,13 +106,18 @@ var stringMutationMethods = []func(*txGeneratorMutation, string, ...string) stri
 		r[g.randomProvider.Int() % len(s)] = rune(32 + g.randomProvider.Int() % 95)
 		return string(r)
 	},
-	// Append a random character to the front
+	// Flip a random bit
 	func(g *txGeneratorMutation, s string, inputs ...string) string {
-		return s + string(32 + g.randomProvider.Int() % 95)
+		r := []rune(s)
+		i := g.randomProvider.Int() % len(s)
+		r[i] = r[i] ^ (1 << (g.randomProvider.Int() % 8))
+		return string(r)
 	},
-	// Append a random character to the end
+	// Add a random character at a random position
 	func(g *txGeneratorMutation, s string, inputs ...string) string {
-		return string(32 + g.randomProvider.Int() % 95) + s
+		i := g.randomProvider.Int() % len(s)
+		c := string(32 + g.randomProvider.Int() % 95)
+		return s[:i] + c + s[i+1:]
 	},
 	// Remove a random character
 	func(g *txGeneratorMutation, s string, inputs ...string) string {
