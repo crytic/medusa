@@ -102,6 +102,8 @@ func (ft *FuzzerResultFailedTest) String() string {
 		}
 
 		// Serialize our args to a JSON string and set it as our tx method name for this index.
+		// TODO: Byte arrays are encoded as base64 strings, so this should be represented another way in the future:
+		//  Reference: https://stackoverflow.com/questions/14177862/how-to-marshal-a-byte-uint8-array-as-json-array-in-go
 		b, err := json.Marshal(args)
 		if err != nil {
 			b = []byte("<error resolving args>")
