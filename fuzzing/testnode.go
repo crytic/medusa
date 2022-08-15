@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	core "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
@@ -17,18 +17,23 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/fuzzing/tracing"
+	"github.com/trailofbits/medusa/fuzzing/vendored"
 	"math/big"
 	"strings"
 )
 
 type testNode struct {
-	chain *core.BlockChain
+	chain   *core.BlockChain
 	kvstore *memorydb.Database
-	db ethdb.Database
-	signer *coreTypes.HomesteadSigner
+	db      ethdb.Database
+	signer  *coreTypes.HomesteadSigner
 
 	pendingBlock *coreTypes.Block
 	pendingState *state.StateDB
+
+	tracer   *tracing.FuzzerTracer
+	vmConfig *vm.Config
 }
 
 func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
@@ -42,8 +47,8 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Create our genesis block
 	genesisDefinition := &core.Genesis{
 		Config: chainConfig,
-		Alloc: genesisAlloc,
-		ExtraData: []byte {
+		Alloc:  genesisAlloc,
+		ExtraData: []byte{
 			0x63, 0x75, 0x72, 0x69, 0x6F, 0x75, 0x73, 0x69,
 			0x74, 0x79, 0x2C, 0x20, 0x65, 0x68, 0x3F, 0x20,
 			0x6C, 0x6F, 0x6C, 0x20, 0x2D, 0x44, 0x50,
@@ -53,9 +58,16 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Commit our genesis definition to get a block.
 	genesisDefinition.MustCommit(db)
 
+	// Create a VM config that traces execution, so we can establish a coverage map
+	tracer := tracing.NewFuzzerTracer(true)
+	vmConfig := &vm.Config{
+		Debug:  true,
+		Tracer: tracer,
+	}
+
 	// Create a new blockchain
 	// TODO: Determine if we should use a cache configs
-	chain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +86,8 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 		signer:       new(coreTypes.HomesteadSigner),
 		pendingBlock: chain.CurrentBlock(),
 		pendingState: pendingState,
+		tracer:       tracer,
+		vmConfig:     vmConfig,
 	}
 
 	return g, nil
@@ -90,13 +104,13 @@ func (t *testNode) Stop() {
 
 func (t *testNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
 	// Create our blocks.
-	blocks, receipts := core.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *core.BlockGen) {
+	blocks, receipts := vendored.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *vendored.BlockGen) {
 		// Set the coinbase and difficulty
 		b.SetCoinbase(common.Address{1})
 		b.SetDifficulty(big.NewInt(1))
 
 		// Add the transaction.
-		b.AddTx(tx)
+		b.AddTx(tx, *t.vmConfig)
 	})
 
 	// Obtain our current chain's state, so that we can use its database to obtain the pending state.
@@ -235,12 +249,12 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzz
 	// Create a transaction to represent our contract deployment.
 	// NOTE: We don't fill out nonce/gas as sendLegacyTransaction will apply fixups below.
 	tx := &coreTypes.LegacyTx{
-		Nonce: 0,
+		Nonce:    0,
 		GasPrice: big.NewInt(0),
-		Gas: 0,
-		To: nil,
-		Value: big.NewInt(0),
-		Data: b,
+		Gas:      0,
+		To:       nil,
+		Value:    big.NewInt(0),
+		Data:     b,
 	}
 
 	// Send our deployment transaction
@@ -261,20 +275,19 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzz
 	return (*receipts)[0].ContractAddress, nil
 }
 
-
 // callMsg implements core.Message to allow passing it as a transaction simulator.
 type callMsg struct {
 	ethereum.CallMsg
 }
 
-func (m callMsg) From() common.Address         { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64                { return 0 }
-func (m callMsg) IsFake() bool                 { return true }
-func (m callMsg) To() *common.Address          { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
-func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
-func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
-func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
-func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
+func (m callMsg) From() common.Address             { return m.CallMsg.From }
+func (m callMsg) Nonce() uint64                    { return 0 }
+func (m callMsg) IsFake() bool                     { return true }
+func (m callMsg) To() *common.Address              { return m.CallMsg.To }
+func (m callMsg) GasPrice() *big.Int               { return m.CallMsg.GasPrice }
+func (m callMsg) GasFeeCap() *big.Int              { return m.CallMsg.GasFeeCap }
+func (m callMsg) GasTipCap() *big.Int              { return m.CallMsg.GasTipCap }
+func (m callMsg) Gas() uint64                      { return m.CallMsg.Gas }
+func (m callMsg) Value() *big.Int                  { return m.CallMsg.Value }
+func (m callMsg) Data() []byte                     { return m.CallMsg.Data }
 func (m callMsg) AccessList() coreTypes.AccessList { return m.CallMsg.AccessList }
