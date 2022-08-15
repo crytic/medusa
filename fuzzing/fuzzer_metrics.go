@@ -7,6 +7,18 @@ type FuzzerMetrics struct {
 	workerMetrics []fuzzerWorkerMetrics
 }
 
+// fuzzerWorkerMetrics represents metrics for a single fuzzerWorker instance.
+type fuzzerWorkerMetrics struct {
+	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
+	sequencesTested uint64
+
+	// transactionsTested describes the amount of transactions which property tests were verified against.
+	transactionsTested uint64
+
+	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
+	workerStartupCount uint64
+}
+
 // NewFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
 // Returns the new FuzzerMetrics object.
 func NewFuzzerMetrics(workerCount int) *FuzzerMetrics {
@@ -45,16 +57,4 @@ func (m *FuzzerMetrics) WorkerStartupCount() uint64 {
 		workerStartupCount += workerMetrics.workerStartupCount
 	}
 	return workerStartupCount
-}
-
-// fuzzerWorkerMetrics represents metrics for a single fuzzerWorker instance.
-type fuzzerWorkerMetrics struct {
-	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
-	sequencesTested uint64
-
-	// transactionsTested describes the amount of transactions which property tests were verified against.
-	transactionsTested uint64
-
-	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
-	workerStartupCount uint64
 }

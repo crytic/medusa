@@ -9,6 +9,7 @@ import (
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
+	"github.com/trailofbits/medusa/fuzzing/base_value_set"
 	"sync"
 	"time"
 )
@@ -20,7 +21,6 @@ type Fuzzer struct {
 	// accounts describes a set of account keys derived from config, for use in fuzzing campaigns.
 	accounts []fuzzerAccount
 
-
 	// ctx describes the context for the fuzzing run, used to cancel running operations.
 	ctx context.Context
 	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
@@ -28,8 +28,8 @@ type Fuzzer struct {
 	// compilations describes the compiled targets produced by the last Start call for the Fuzzer to target.
 	compilations []types.Compilation
 
-	// corpus represents a corpus containing input values for our fuzz tests.
-	corpus *Corpus
+	// baseValueSet represents a base_value_set.BaseValueSet containing input values for our fuzz tests.
+	baseValueSet *base_value_set.BaseValueSet
 	// generator defines our fuzzing approach to generate transactions.
 	generator txGenerator
 	// workers represents the work threads created by this Fuzzer when Start invokes a fuzz operation.
@@ -64,7 +64,7 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 
 		// Add it to our account list
 		acc := fuzzerAccount{
-			key: key,
+			key:     key,
 			address: crypto.PubkeyToAddress(key.PublicKey),
 		}
 		accounts = append(accounts, acc)
@@ -81,7 +81,7 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 
 		// Add it to our account list
 		acc := fuzzerAccount{
-			key: key,
+			key:     key,
 			address: crypto.PubkeyToAddress(key.PublicKey),
 		}
 		accounts = append(accounts, acc)
@@ -92,7 +92,7 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
-		config: config,
+		config:   config,
 		accounts: accounts,
 	}
 	return fuzzer, nil
@@ -105,7 +105,7 @@ func (f *Fuzzer) Start() error {
 	// Create our running context
 	if f.config.Fuzzing.Timeout > 0 {
 		fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
-		f.ctx, f.ctxCancelFunc = context.WithTimeout(context.Background(), time.Duration(f.config.Fuzzing.Timeout) * time.Second)
+		f.ctx, f.ctxCancelFunc = context.WithTimeout(context.Background(), time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	} else {
 		f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
 	}
@@ -125,22 +125,23 @@ func (f *Fuzzer) Start() error {
 	fmt.Printf("Creating %d workers ...\n", f.config.Fuzzing.Workers)
 	availableWorkerIndexes := make([]int, f.config.Fuzzing.Workers)
 	availableWorkerIndexedLock := sync.Mutex{}
-	for i := 0; i < len(availableWorkerIndexes); i++ { availableWorkerIndexes[i] = i }
-
-	// Initialize our corpus and seed it from values derived from ASTs
-	f.corpus = NewCorpus()
-	for _, c := range f.compilations {
-		for _, source := range c.Sources {
-			f.corpus.seedFromAst(source.Ast)
-		}
+	for i := 0; i < len(availableWorkerIndexes); i++ {
+		availableWorkerIndexes[i] = i
 	}
 
+	// Initialize our BaseValueSet and seed it from values derived from ASTs
+	f.baseValueSet = base_value_set.NewBaseValueSet()
+	for _, c := range f.compilations {
+		for _, source := range c.Sources {
+			f.baseValueSet.SeedFromAst(source.Ast)
+		}
+	}
 
 	// Initialize , generator, results, and metrics providers.
 	f.results = NewFuzzerResults()
 	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	f.generator = newTxGeneratorMutation(f.corpus)//newTxGeneratorRandom() // TODO: make this configurable after adding more options
+	f.generator = newTxGeneratorMutation(f.baseValueSet) //newTxGeneratorRandom() // TODO: make this configurable after adding more options
 
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
@@ -178,7 +179,7 @@ func (f *Fuzzer) Start() error {
 			availableWorkerIndexedLock.Unlock()
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
-			<- threadReserveChannel
+			<-threadReserveChannel
 		}(workerIndex)
 	}
 
@@ -210,10 +211,10 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 			"tx num: %d, workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
 			transactionsTested,
 			len(f.metrics.workerMetrics),
-			workerStartupCount - lastWorkerStartupCount,
-			transactionsTested - lastTransactionsTested,
-			sequencesTested - lastSequencesTested,
-			)
+			workerStartupCount-lastWorkerStartupCount,
+			transactionsTested-lastTransactionsTested,
+			sequencesTested-lastSequencesTested,
+		)
 
 		// Update our delta tracking metrics
 		lastTransactionsTested = transactionsTested
