@@ -2,15 +2,16 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"reflect"
+	"strings"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/compilation/types"
-	"math/big"
-	"reflect"
-	"strings"
 )
 
 // fuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -278,13 +279,19 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	}
 
 	// Create a new transaction and return it
-	// TODO: If this is a payable function (or other conditions?), determine value to send
+	// If this is a payable function, generate value to send
+	var value *big.Int
+	value = big.NewInt(0)
+	if selectedMethod.method.StateMutability == "payable" {
+		value = fw.fuzzer.generator.generateInteger(fw, false, 64)
+	}
+	
 	tx := &coreTypes.LegacyTx{
 		Nonce: 0,
 		GasPrice: big.NewInt(0),
 		Gas: 0,
 		To: &selectedMethod.address,
-		Value: big.NewInt(0),
+		Value: value,
 		Data: data,
 	}
 
