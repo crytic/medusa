@@ -232,6 +232,9 @@ func (t *testNode) SignAndSendLegacyTransaction(tx *coreTypes.LegacyTx, signerKe
 		return nil, nil, fmt.Errorf("could not sign tx due to an error when signing: %s", err.Error())
 	}
 
+	// Set our signature parameters in the legacy tx
+	tx.V, tx.R, tx.S = signedTx.RawSignatureValues()
+
 	// Send our deployment transaction
 	return t.SendTransaction(signedTx)
 }
