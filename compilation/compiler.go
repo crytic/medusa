@@ -8,9 +8,10 @@ import (
 	"github.com/trailofbits/medusa/configs"
 )
 
-var supportedCompilationPlatforms = []string {
+var supportedCompilationPlatforms = []string{
 	"solc",
 	"truffle",
+	"crytic-compile",
 }
 
 func GetSupportedCompilationPlatforms() []string {
@@ -49,6 +50,13 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 			return nil, err
 		}
 		platformConfig = (*json.RawMessage)(&b)
+	} else if platform == "crytic-compile" {
+		cryticConfig := platforms.NewCryticCompileCompilationConfig(".")
+		b, err := json.Marshal(cryticConfig)
+		if err != nil {
+			return nil, err
+		}
+		platformConfig = (*json.RawMessage)(&b)
 	}
 
 	// Return the compilation configs containing our platform-specific configs
@@ -82,6 +90,15 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, string, err
 
 		// Compile using our solc configs
 		return truffleConfig.Compile()
+	} else if config.Platform == "crytic-compile" {
+		cryticConfig := platforms.CryticCompileCompilationConfig{}
+		err := json.Unmarshal(*config.PlatformConfig, &cryticConfig)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Compile
+		return cryticConfig.Compile()
 	}
 
 	// Panic if we didn't handle some other case. This should not be hit unless developer error occurs.
