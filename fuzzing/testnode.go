@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
@@ -49,9 +51,7 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 		Config: chainConfig,
 		Alloc:  genesisAlloc,
 		ExtraData: []byte{
-			0x63, 0x75, 0x72, 0x69, 0x6F, 0x75, 0x73, 0x69,
-			0x74, 0x79, 0x2C, 0x20, 0x65, 0x68, 0x3F, 0x20,
-			0x6C, 0x6F, 0x6C, 0x20, 0x2D, 0x44, 0x50,
+			0x6D, 0x65, 0x64, 0x75, 0x24, 0x61,
 		},
 	}
 
@@ -218,16 +218,17 @@ func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, s
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
-func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, account fuzzerAccount, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
+func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecdsa.PrivateKey, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
 	// Apply fixups related to gas/nonce
 	if applyFixups {
-		tx.Nonce = t.pendingState.GetNonce(account.address)
+		accountAddress := crypto.PubkeyToAddress(signerKey.PublicKey)
+		tx.Nonce = t.pendingState.GetNonce(accountAddress)
 		tx.GasPrice = big.NewInt(params.InitialBaseFee)
 		tx.Gas = t.pendingBlock.GasLimit()
 	}
 
 	// Sign the transaction
-	signedTx, err := coreTypes.SignNewTx(account.key, t.signer, tx)
+	signedTx, err := coreTypes.SignNewTx(signerKey, t.signer, tx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not sign tx due to an error when signing: %s", err.Error())
 	}
@@ -236,7 +237,7 @@ func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, account fuzzerA
 	return t.SendTransaction(signedTx)
 }
 
-func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzzerAccount) (common.Address, error) {
+func (t *testNode) deployContract(contract types.CompiledContract, deployerKey *ecdsa.PrivateKey) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
@@ -258,7 +259,7 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployer fuzz
 	}
 
 	// Send our deployment transaction
-	_, receipts, err := t.sendLegacyTransaction(tx, deployer, true)
+	_, receipts, err := t.sendLegacyTransaction(tx, deployerKey, true)
 	if err != nil {
 		return common.Address{0}, err
 	}
