@@ -43,7 +43,7 @@ type fuzzerWorker struct {
 // newFuzzerWorker creates a new fuzzerWorker, assigning it the provided worker index/id and associating it to the
 // Fuzzer instance supplied.
 // Returns the new fuzzerWorker
-func newFuzzerWorker(workerIndex int, fuzzer *Fuzzer) *fuzzerWorker {
+func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) *fuzzerWorker {
 	// Create a fuzzing worker struct, referencing our parent fuzzing.
 	worker := fuzzerWorker{
 		workerIndex:          workerIndex,
@@ -98,7 +98,7 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
-					deployedAddress, err := fw.testNode.deployContract(contract, fw.fuzzer.accounts[0].key)
+					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].key)
 					if err != nil {
 						return err
 					}
@@ -333,7 +333,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 		txInfo := txSequence[i]
 
 		// Send our transaction
-		_, _, err = fw.testNode.sendLegacyTransaction(txInfo.tx, txInfo.sender.key, true)
+		_, _, err = fw.testNode.SignAndSendLegacyTransaction(txInfo.tx, txInfo.sender.key, true)
 		if err != nil {
 			return i, nil, err
 		}
@@ -405,7 +405,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// Create a test node
 	var err error
-	fw.testNode, err = NewTestNode(genesisAlloc)
+	fw.testNode, err = newTestNode(genesisAlloc)
 	if err != nil {
 		return false, err
 	}

@@ -38,7 +38,7 @@ type testNode struct {
 	vmConfig *vm.Config
 }
 
-func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
+func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Define our chain configuration
 	chainConfig := params.TestChainConfig
 
@@ -66,7 +66,6 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	}
 
 	// Create a new blockchain
-	// TODO: Determine if we should use a cache configs
 	chain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
@@ -218,7 +217,7 @@ func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, s
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
-func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecdsa.PrivateKey, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
+func (t *testNode) SignAndSendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecdsa.PrivateKey, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
 	// Apply fixups related to gas/nonce
 	if applyFixups {
 		accountAddress := crypto.PubkeyToAddress(signerKey.PublicKey)
@@ -237,7 +236,7 @@ func (t *testNode) sendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecds
 	return t.SendTransaction(signedTx)
 }
 
-func (t *testNode) deployContract(contract types.CompiledContract, deployerKey *ecdsa.PrivateKey) (common.Address, error) {
+func (t *testNode) DeployContract(contract types.CompiledContract, deployerKey *ecdsa.PrivateKey) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
@@ -248,7 +247,7 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployerKey *
 	// contracts.
 
 	// Create a transaction to represent our contract deployment.
-	// NOTE: We don't fill out nonce/gas as sendLegacyTransaction will apply fixups below.
+	// NOTE: We don't fill out nonce/gas as SignAndSendLegacyTransaction will apply fixups below.
 	tx := &coreTypes.LegacyTx{
 		Nonce:    0,
 		GasPrice: big.NewInt(0),
@@ -259,7 +258,7 @@ func (t *testNode) deployContract(contract types.CompiledContract, deployerKey *
 	}
 
 	// Send our deployment transaction
-	_, receipts, err := t.sendLegacyTransaction(tx, deployerKey, true)
+	_, receipts, err := t.SignAndSendLegacyTransaction(tx, deployerKey, true)
 	if err != nil {
 		return common.Address{0}, err
 	}

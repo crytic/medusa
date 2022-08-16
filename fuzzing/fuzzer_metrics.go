@@ -6,7 +6,7 @@ import "github.com/trailofbits/medusa/fuzzing/tracing"
 type FuzzerMetrics struct {
 	// coverageMaps describes the code coverage achieved across all transactions run by every fuzzerWorker.
 	coverageMaps *tracing.CoverageMaps
-	
+
 	// workerMetrics describes the metrics for each individual worker. This expands as needed and some slots may be nil
 	// while workers are initializing, as it corresponds to the indexes in Fuzzer.workers.
 	workerMetrics []fuzzerWorkerMetrics
@@ -24,9 +24,9 @@ type fuzzerWorkerMetrics struct {
 	workerStartupCount uint64
 }
 
-// NewFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
+// newFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
 // Returns the new FuzzerMetrics object.
-func NewFuzzerMetrics(workerCount int) *FuzzerMetrics {
+func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	// Create a new metrics struct and return it with as many slots as required.
 	metrics := FuzzerMetrics{
 		coverageMaps:  tracing.NewCoverageMaps(),
