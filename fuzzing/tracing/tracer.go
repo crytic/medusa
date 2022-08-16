@@ -15,7 +15,7 @@ type FuzzerTracer struct {
 	CoverageEnabled bool // enables coverage collection
 
 	// tracing results
-	coverageMaps map[common.Address]*CoverageMap
+	coverageMaps *CoverageMaps
 	returnData   []byte
 	vmErr        error
 	gasLimit     uint64
@@ -26,7 +26,7 @@ type FuzzerTracer struct {
 func NewFuzzerTracer(coverageEnabled bool) *FuzzerTracer {
 	tracer := &FuzzerTracer{
 		CoverageEnabled: coverageEnabled,
-		coverageMaps:    make(map[common.Address]*CoverageMap),
+		coverageMaps:    NewCoverageMaps(),
 	}
 	return tracer
 }
@@ -41,9 +41,14 @@ func (t *FuzzerTracer) ReturnData() []byte {
 	return t.returnData
 }
 
+// CoverageMaps returns the coverage maps collected by this tracer.
+func (t *FuzzerTracer) CoverageMaps() *CoverageMaps {
+	return t.coverageMaps
+}
+
 // Reset clears the state of the FuzzerTracer.
 func (t *FuzzerTracer) Reset() {
-	t.coverageMaps = make(map[common.Address]*CoverageMap)
+	t.coverageMaps.Reset()
 	t.returnData = nil
 	t.vmErr = nil
 	t.gasLimit = 0
@@ -56,33 +61,13 @@ func (t *FuzzerTracer) CaptureStart(env *vm.EVM, from common.Address, to common.
 
 // CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
 func (t *FuzzerTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
-	var err error
-
-	// If the code is not nil, we collect coverage
+	// If coverage is enabled and the code is not nil, collect the coverage.
 	if t.CoverageEnabled && scope.Contract.Code != nil {
-
-		// Obtain the contract code address we're executing
-		codeAddress := scope.Contract.CodeAddr
-
 		// Ensure we have a coverage map for this code address, otherwise create one.
-		coverageMap, coverageMapExisted := t.coverageMaps[*codeAddress]
-		if !coverageMapExisted {
-			// Create a coverage map and set it
-			coverageMap, err = NewCoverageMap(scope.Contract.CodeHash, len(scope.Contract.Code))
-			if err != nil {
-				panic("failed to create coverage map: " + err.Error())
-			}
-			t.coverageMaps[*codeAddress] = coverageMap
+		_, err := t.coverageMaps.SetCoveredAt(scope.Contract.CodeHash, len(scope.Contract.Code), pc)
+		if err != nil {
+			panic("error occurred when setting coverage during execution trace: " + err.Error())
 		}
-
-		// TODO: Verify our code has not changed at this address since we started coverage collection
-		//  This can happen when a contract is being deployed to an address as the code hash will first match
-		//  the init byte code, and will later match the runtime byte code.
-		if coverageMap.codeHash != scope.Contract.CodeHash {
-			// TODO: Signal that the coverage map has changed.
-		}
-
-		// TODO: Update our coverage map and state regarding if new code was executed.
 	}
 }
 

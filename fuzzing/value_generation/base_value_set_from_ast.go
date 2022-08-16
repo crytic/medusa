@@ -1,4 +1,4 @@
-package base_value_set
+package value_generation
 
 import (
 	"math/big"
@@ -8,7 +8,7 @@ import (
 // SeedFromAst allows a BaseValueSet to be seeded from an AST interface.
 func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 	// Walk our AST while extracting values
-	bvs.walkAstNodes(ast, func(node map[string]interface{}) {
+	walkAstNodes(ast, func(node map[string]interface{}) {
 		// Extract values depending on node type.
 		nodeType, obtainedNodeType := node["nodeType"].(string)
 		if obtainedNodeType && strings.EqualFold(nodeType, "Literal") {
@@ -33,7 +33,7 @@ func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 
 // walkAstNodes walks/iterates across an AST for each node, calling the provided walk function with each discovered node
 // as an argument.
-func (bvs *BaseValueSet) walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
+func walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
 	// Try to parse our node as different types and walk all children.
 	if d, ok := ast.(map[string]interface{}); ok {
 		// If this dictionary contains keys 'id' and 'nodeType', we can assume it's an AST node
@@ -45,12 +45,12 @@ func (bvs *BaseValueSet) walkAstNodes(ast interface{}, walkFunc func(node map[st
 
 		// Walk all keys of the dictionary.
 		for _, v := range d {
-			bvs.walkAstNodes(v, walkFunc)
+			walkAstNodes(v, walkFunc)
 		}
 	} else if slice, ok := ast.([]interface{}); ok {
 		// Walk all elements of a slice.
 		for _, elem := range slice {
-			bvs.walkAstNodes(elem, walkFunc)
+			walkAstNodes(elem, walkFunc)
 		}
 	}
 }

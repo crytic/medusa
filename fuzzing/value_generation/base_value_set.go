@@ -1,4 +1,4 @@
-package base_value_set
+package value_generation
 
 import (
 	"encoding/hex"
@@ -15,7 +15,7 @@ type BaseValueSet struct {
 	strings map[string]interface{}
 	// bytes represents a set of bytes to use in fuzz tests. A mapping is used to avoid duplicates.
 	bytes map[string][]byte
-	// hashProvider represents a hash provider used to discern duplicate base value entries.
+	// hashProvider represents a hash provider used to create keys for some data.
 	hashProvider hash.Hash
 }
 

@@ -1,7 +1,6 @@
-package fuzzing
+package value_generation
 
 import (
-	"github.com/trailofbits/medusa/fuzzing/base_value_set"
 	"github.com/trailofbits/medusa/utils"
 	"math/big"
 )
@@ -18,9 +17,9 @@ const stringRandomBias = 0.2
 // byte arrays.
 const bytesRandomBias = 0.2
 
-// txGeneratorMutation represents an interface for a provider used to generate transaction fields and call arguments
-// using mutation-based approaches against items within a base_value_set.BaseValueSet, such as AST literals.
-type txGeneratorMutation struct {
+// ValueGeneratorMutation is a provider used to generate function inputs and call arguments using mutation-based
+// approaches against items within a base_value_set.BaseValueSet, such as AST literals.
+type ValueGeneratorMutation struct {
 	// baseIntegers represents the base integer values to be used in mutations.
 	baseIntegers []*big.Int
 	// baseStrings represents the base strings values to be used in mutations.
@@ -30,12 +29,12 @@ type txGeneratorMutation struct {
 
 	maxMutationRounds int
 
-	// txGeneratorRandom is included to inherit from the random generator
-	*txGeneratorRandom
+	// ValueGeneratorRandom is included to inherit from the random generator
+	*ValueGeneratorRandom
 }
 
-// newTxGeneratorMutation creates a new txGeneratorMutation using a provided base_value_set.BaseValueSet to seed base-values for mutation.
-func newTxGeneratorMutation(baseValueSet *base_value_set.BaseValueSet) *txGeneratorMutation {
+// NewValueGeneratorMutation creates a new ValueGeneratorMutation using a provided base_value_set.BaseValueSet to seed base-values for mutation.
+func NewValueGeneratorMutation(baseValueSet *BaseValueSet) *ValueGeneratorMutation {
 	// Obtain our list of integers as a big int pointer array.
 	baseValueSetIntegers := baseValueSet.Integers()
 	formattedBaseIntegers := make([]*big.Int, len(baseValueSetIntegers))
@@ -44,12 +43,12 @@ func newTxGeneratorMutation(baseValueSet *base_value_set.BaseValueSet) *txGenera
 	}
 
 	// Create and return our generator
-	generator := &txGeneratorMutation{
-		baseIntegers:      formattedBaseIntegers,
-		baseStrings:       baseValueSet.Strings(),
-		baseBytes:         baseValueSet.Bytes(),
-		maxMutationRounds: 3,
-		txGeneratorRandom: newTxGeneratorRandom(),
+	generator := &ValueGeneratorMutation{
+		baseIntegers:         formattedBaseIntegers,
+		baseStrings:          baseValueSet.Strings(),
+		baseBytes:            baseValueSet.Bytes(),
+		maxMutationRounds:    3,
+		ValueGeneratorRandom: NewValueGeneratorRandom(),
 	}
 	return generator
 }
@@ -57,20 +56,20 @@ func newTxGeneratorMutation(baseValueSet *base_value_set.BaseValueSet) *txGenera
 // integerMutationMethods define methods which take a big integer and a set of inputs and
 // transform the integer with a random input and operation. This is used in a loop to create
 // mutated integer values.
-var integerMutationMethods = []func(*txGeneratorMutation, *big.Int, ...*big.Int) *big.Int{
-	func(g *txGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
+var integerMutationMethods = []func(*ValueGeneratorMutation, *big.Int, ...*big.Int) *big.Int{
+	func(g *ValueGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Add a random input
 		return big.NewInt(0).Add(x, inputs[g.randomProvider.Int()%len(inputs)])
 	},
-	func(g *txGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
+	func(g *ValueGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Subtract a random input
 		return big.NewInt(0).Sub(x, inputs[g.randomProvider.Int()%len(inputs)])
 	},
-	func(g *txGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
+	func(g *ValueGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Multiply a random input
 		return big.NewInt(0).Mul(x, inputs[g.randomProvider.Int()%len(inputs)])
 	},
-	func(g *txGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
+	func(g *ValueGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide a random input
 		divisor := inputs[g.randomProvider.Int()%len(inputs)]
 		if divisor.Cmp(big.NewInt(0)) == 0 {
@@ -78,7 +77,7 @@ var integerMutationMethods = []func(*txGeneratorMutation, *big.Int, ...*big.Int)
 		}
 		return big.NewInt(0).Div(x, divisor)
 	},
-	func(g *txGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
+	func(g *ValueGeneratorMutation, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Modulo divide a random input
 		divisor := inputs[g.randomProvider.Int()%len(inputs)]
 		if divisor.Cmp(big.NewInt(0)) == 0 {
@@ -88,20 +87,20 @@ var integerMutationMethods = []func(*txGeneratorMutation, *big.Int, ...*big.Int)
 	},
 }
 
-var bytesMutationMethods = []func(*txGeneratorMutation, []byte, ...[]byte) []byte{
+var bytesMutationMethods = []func(*ValueGeneratorMutation, []byte, ...[]byte) []byte{
 	// Replace a random index with a random byte
-	func(g *txGeneratorMutation, b []byte, inputs ...[]byte) []byte {
+	func(g *ValueGeneratorMutation, b []byte, inputs ...[]byte) []byte {
 		b[g.randomProvider.Int()%len(b)] = byte(g.randomProvider.Int() % 256)
 		return b
 	},
 	// Flip a random byte
-	func(g *txGeneratorMutation, b []byte, inputs ...[]byte) []byte {
+	func(g *ValueGeneratorMutation, b []byte, inputs ...[]byte) []byte {
 		i := g.randomProvider.Int() % len(b)
 		b[i] = b[i] ^ (1 << (g.randomProvider.Int() % 8))
 		return b
 	},
 	// Add a random byte at a random position
-	func(g *txGeneratorMutation, b []byte, inputs ...[]byte) []byte {
+	func(g *ValueGeneratorMutation, b []byte, inputs ...[]byte) []byte {
 		i := g.randomProvider.Int() % len(b)
 		by := byte(g.randomProvider.Int() % 256)
 		if len(b) == 0 {
@@ -113,40 +112,40 @@ var bytesMutationMethods = []func(*txGeneratorMutation, []byte, ...[]byte) []byt
 		}
 	},
 	// Remove a random byte
-	func(g *txGeneratorMutation, b []byte, inputs ...[]byte) []byte {
+	func(g *ValueGeneratorMutation, b []byte, inputs ...[]byte) []byte {
 		i := g.randomProvider.Int() % len(b)
 		return append(b[:i], b[i+1:]...)
 	},
 }
 
-var stringMutationMethods = []func(*txGeneratorMutation, string, ...string) string{
+var stringMutationMethods = []func(*ValueGeneratorMutation, string, ...string) string{
 	// Replace a random index with a random character
-	func(g *txGeneratorMutation, s string, inputs ...string) string {
+	func(g *ValueGeneratorMutation, s string, inputs ...string) string {
 		r := []rune(s)
 		r[g.randomProvider.Int()%len(s)] = rune(32 + g.randomProvider.Int()%95)
 		return string(r)
 	},
 	// Flip a random bit
-	func(g *txGeneratorMutation, s string, inputs ...string) string {
+	func(g *ValueGeneratorMutation, s string, inputs ...string) string {
 		r := []rune(s)
 		i := g.randomProvider.Int() % len(s)
 		r[i] = r[i] ^ (1 << (g.randomProvider.Int() % 8))
 		return string(r)
 	},
 	// Add a random character at a random position
-	func(g *txGeneratorMutation, s string, inputs ...string) string {
+	func(g *ValueGeneratorMutation, s string, inputs ...string) string {
 		i := g.randomProvider.Int() % len(s)
 		c := string(rune(32 + g.randomProvider.Int()%95))
 		return s[:i] + c + s[i+1:]
 	},
 	// Remove a random character
-	func(g *txGeneratorMutation, s string, inputs ...string) string {
+	func(g *ValueGeneratorMutation, s string, inputs ...string) string {
 		i := g.randomProvider.Int() % len(s)
 		return s[:i] + s[i+1:]
 	},
 }
 
-func (g *txGeneratorMutation) getMutationParams(inputsLen int) (int, int) {
+func (g *ValueGeneratorMutation) getMutationParams(inputsLen int) (int, int) {
 	g.randomProviderLock.Lock()
 	inputIdx := g.randomProvider.Int() % inputsLen
 	mutationCount := g.randomProvider.Int() % (g.maxMutationRounds + 1)
@@ -155,14 +154,14 @@ func (g *txGeneratorMutation) getMutationParams(inputsLen int) (int, int) {
 	return inputIdx, mutationCount
 }
 
-// generateInteger generates/selects an integer to use when populating transaction fields.
-func (g *txGeneratorMutation) generateInteger(worker *fuzzerWorker, signed bool, bitLength int) *big.Int {
+// GenerateInteger generates/selects an integer to use when populating inputs.
+func (g *ValueGeneratorMutation) GenerateInteger(signed bool, bitLength int) *big.Int {
 	// If our bias directs us to, use the random generator instead
 	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
 	g.randomProviderLock.Unlock()
 	if randomGeneratorDecision < integerRandomBias {
-		return g.txGeneratorRandom.generateInteger(worker, signed, bitLength)
+		return g.ValueGeneratorRandom.GenerateInteger(signed, bitLength)
 	}
 
 	// Calculate our integer bounds
@@ -192,14 +191,14 @@ func (g *txGeneratorMutation) generateInteger(worker *fuzzerWorker, signed bool,
 	return input
 }
 
-func (g *txGeneratorMutation) generateBytes(worker *fuzzerWorker) []byte {
+func (g *ValueGeneratorMutation) GenerateBytes() []byte {
 	// If we have no inputs or our bias directs us to, use the random generator instead
 	inputs := g.baseBytes
 	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
 	g.randomProviderLock.Unlock()
 	if len(inputs) == 0 || randomGeneratorDecision < bytesRandomBias {
-		return g.txGeneratorRandom.generateBytes(worker)
+		return g.ValueGeneratorRandom.GenerateBytes()
 	}
 
 	// Create a copy of a random input to mutate
@@ -217,14 +216,14 @@ func (g *txGeneratorMutation) generateBytes(worker *fuzzerWorker) []byte {
 	return input
 }
 
-func (g *txGeneratorMutation) generateString(worker *fuzzerWorker) string {
+func (g *ValueGeneratorMutation) GenerateString() string {
 	// If we have no inputs or our bias directs us to, use the random generator instead
 	inputs := g.baseStrings
 	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
 	g.randomProviderLock.Unlock()
 	if len(inputs) == 0 || randomGeneratorDecision < stringRandomBias {
-		return g.txGeneratorRandom.generateString(worker)
+		return g.ValueGeneratorRandom.GenerateString()
 	}
 
 	// Obtain a random input to mutate

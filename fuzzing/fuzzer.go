@@ -9,7 +9,7 @@ import (
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
-	"github.com/trailofbits/medusa/fuzzing/base_value_set"
+	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"sync"
 	"time"
 )
@@ -29,9 +29,9 @@ type Fuzzer struct {
 	compilations []types.Compilation
 
 	// baseValueSet represents a base_value_set.BaseValueSet containing input values for our fuzz tests.
-	baseValueSet *base_value_set.BaseValueSet
-	// generator defines our fuzzing approach to generate transactions.
-	generator txGenerator
+	baseValueSet *value_generation.BaseValueSet
+	// generator defines our fuzzing approach to generate function inputs.
+	generator value_generation.ValueGenerator
 	// workers represents the work threads created by this Fuzzer when Start invokes a fuzz operation.
 	workers []*fuzzerWorker
 	// metrics represents the metrics for the fuzzing campaign.
@@ -130,18 +130,18 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our BaseValueSet and seed it from values derived from ASTs
-	f.baseValueSet = base_value_set.NewBaseValueSet()
+	f.baseValueSet = value_generation.NewBaseValueSet()
 	for _, c := range f.compilations {
 		for _, source := range c.Sources {
 			f.baseValueSet.SeedFromAst(source.Ast)
 		}
 	}
 
-	// Initialize , generator, results, and metrics providers.
+	// Initialize generator, results, and metrics providers.
 	f.results = NewFuzzerResults()
 	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	f.generator = newTxGeneratorMutation(f.baseValueSet) //newTxGeneratorRandom() // TODO: make this configurable after adding more options
+	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) //newTxGeneratorRandom() // TODO: make this configurable after adding more options
 
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
@@ -198,6 +198,9 @@ func (f *Fuzzer) Stop() {
 
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
 func (f *Fuzzer) runMetricsPrintLoop() {
+	// TODO: This method's tx/s calculation will be slightly off because we don't factor in the time for other
+	//  computations and only sleep one second. This should be timed for appropriate rate calculation later.
+
 	// Define cached variables for our metrics to calculate deltas.
 	var lastTransactionsTested, lastSequencesTested, lastWorkerStartupCount uint64
 	for {
@@ -221,7 +224,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
 
-		// Sleep for two seconds
+		// Sleep for a second
 		time.Sleep(time.Second)
 
 		// If ctx signalled to stop the operation, return immediately.

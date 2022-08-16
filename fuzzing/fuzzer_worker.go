@@ -9,6 +9,7 @@ import (
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/compilation/types"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"strings"
 )
@@ -45,17 +46,22 @@ type fuzzerWorker struct {
 func newFuzzerWorker(workerIndex int, fuzzer *Fuzzer) *fuzzerWorker {
 	// Create a fuzzing worker struct, referencing our parent fuzzing.
 	worker := fuzzerWorker{
-		workerIndex: workerIndex,
-		fuzzer: fuzzer,
-		deployedContracts: make(map[common.Address]types.CompiledContract),
-		propertyTests: make([]deployedMethod, 0),
+		workerIndex:          workerIndex,
+		fuzzer:               fuzzer,
+		deployedContracts:    make(map[common.Address]types.CompiledContract),
+		propertyTests:        make([]deployedMethod, 0),
 		stateChangingMethods: make([]deployedMethod, 0),
 	}
 	return &worker
 }
 
-// metrics returns the fuzzerWorkerMetrics for this worker.
-func (fw *fuzzerWorker) metrics() *fuzzerWorkerMetrics {
+// metrics returns the FuzzerMetrics for the fuzzing campaign.
+func (fw *fuzzerWorker) metrics() *FuzzerMetrics {
+	return fw.fuzzer.metrics
+}
+
+// workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
+func (fw *fuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
@@ -85,14 +91,14 @@ func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 // Returns an error if one is encountered.
 func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 	// Loop for each contract in each compilation and deploy it to the test node.
-	for _, comp :=  range fw.fuzzer.compilations {
+	for _, comp := range fw.fuzzer.compilations {
 		for _, source := range comp.Sources {
 			for _, contract := range source.Contracts {
 				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
-					deployedAddress, err := fw.testNode.deployContract(contract, fw.fuzzer.accounts[0])
+					deployedAddress, err := fw.testNode.deployContract(contract, fw.fuzzer.accounts[0].key)
 					if err != nil {
 						return err
 					}
@@ -124,13 +130,13 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 		// Call the underlying contract
 		// TODO: Determine if we should use `accounts[0]` or have a separate funded account for the assertions.
 		res, err := fw.testNode.CallContract(ethereum.CallMsg{
-			From: fw.fuzzer.accounts[0].address,
-			To: &propertyTest.address,
-			Gas: fw.testNode.pendingBlock.GasLimit(),
+			From:      fw.fuzzer.accounts[0].address,
+			To:        &propertyTest.address,
+			Gas:       fw.testNode.pendingBlock.GasLimit(),
 			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
 			GasTipCap: big.NewInt(1),
-			Value: big.NewInt(0), // the remaining balance for fee is 2.1ether
-			Data: data,
+			Value:     big.NewInt(0), // the remaining balance for fee is 2.1ether
+			Data:      data,
 		})
 
 		// If we have an error calling an invariant method, we should panic as we never want this to fail.
@@ -150,13 +156,13 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 
 			// We should have one return value.
 			if len(retVals) != 1 {
-				panic (fmt.Sprintf("unexpected number of return values in property '%s'", propertyTest.method.Name))
+				panic(fmt.Sprintf("unexpected number of return values in property '%s'", propertyTest.method.Name))
 			}
 
 			// The one return value should be a bool
 			bl, ok := retVals[0].(bool)
 			if !ok {
-				panic (fmt.Sprintf("could not obtain bool from first ABI output element in property '%s'", propertyTest.method.Name))
+				panic(fmt.Sprintf("could not obtain bool from first ABI output element in property '%s'", propertyTest.method.Name))
 			}
 
 			// If we returned true, our property test upheld, so we can continue to the next.
@@ -183,42 +189,42 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} {
 	//
 	if inputType.T == abi.AddressTy {
-		return fw.fuzzer.generator.generateAddress(fw)
+		return fw.fuzzer.generator.GenerateAddress()
 	} else if inputType.T == abi.UintTy {
 		if inputType.Size == 64 {
-			return fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64()
+			return fw.fuzzer.generator.GenerateInteger(false, inputType.Size).Uint64()
 		} else if inputType.Size == 32 {
-			return uint32(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
+			return uint32(fw.fuzzer.generator.GenerateInteger(false, inputType.Size).Uint64())
 		} else if inputType.Size == 16 {
-			return uint16(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
+			return uint16(fw.fuzzer.generator.GenerateInteger(false, inputType.Size).Uint64())
 		} else if inputType.Size == 8 {
-			return uint8(fw.fuzzer.generator.generateInteger(fw, false, inputType.Size).Uint64())
+			return uint8(fw.fuzzer.generator.GenerateInteger(false, inputType.Size).Uint64())
 		} else {
-			return fw.fuzzer.generator.generateInteger(fw, false, inputType.Size)
+			return fw.fuzzer.generator.GenerateInteger(false, inputType.Size)
 		}
 	} else if inputType.T == abi.IntTy {
 		if inputType.Size == 64 {
-			return fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64()
+			return fw.fuzzer.generator.GenerateInteger(true, inputType.Size).Int64()
 		} else if inputType.Size == 32 {
-			return int32(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
+			return int32(fw.fuzzer.generator.GenerateInteger(true, inputType.Size).Int64())
 		} else if inputType.Size == 16 {
-			return int16(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
+			return int16(fw.fuzzer.generator.GenerateInteger(true, inputType.Size).Int64())
 		} else if inputType.Size == 8 {
-			return int8(fw.fuzzer.generator.generateInteger(fw, true, inputType.Size).Int64())
+			return int8(fw.fuzzer.generator.GenerateInteger(true, inputType.Size).Int64())
 		} else {
-			return fw.fuzzer.generator.generateInteger(fw, true, inputType.Size)
+			return fw.fuzzer.generator.GenerateInteger(true, inputType.Size)
 		}
 	} else if inputType.T == abi.BoolTy {
-		return fw.fuzzer.generator.generateBool(fw)
+		return fw.fuzzer.generator.GenerateBool()
 	} else if inputType.T == abi.StringTy {
-		return fw.fuzzer.generator.generateString(fw)
+		return fw.fuzzer.generator.GenerateString()
 	} else if inputType.T == abi.BytesTy {
-		return fw.fuzzer.generator.generateBytes(fw)
+		return fw.fuzzer.generator.GenerateBytes()
 	} else if inputType.T == abi.FixedBytesTy {
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
 		array := reflect.Indirect(reflect.New(inputType.GetType()))
-		bytes := reflect.ValueOf(fw.fuzzer.generator.generateFixedBytes(fw, inputType.Size))
+		bytes := reflect.ValueOf(fw.fuzzer.generator.GenerateFixedBytes(inputType.Size))
 		for i := 0; i < array.Len(); i++ {
 			array.Index(i).Set(bytes.Index(i))
 		}
@@ -232,7 +238,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 		return array.Interface()
 	} else if inputType.T == abi.SliceTy {
 		// Dynamic sized arrays are represented as slices.
-		sliceSize := fw.fuzzer.generator.generateArrayLength(fw)
+		sliceSize := fw.fuzzer.generator.GenerateArrayLength()
 		slice := reflect.MakeSlice(inputType.GetType(), sliceSize, sliceSize)
 		for i := 0; i < slice.Len(); i++ {
 			slice.Index(i).Set(reflect.ValueOf(fw.generateFuzzedAbiValue(inputType.Elem)))
@@ -259,9 +265,15 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 // testNode.
 // Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
 func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
-	// Select a method and sender
-	selectedMethod := fw.fuzzer.generator.chooseMethod(fw)
-	selectedSender := fw.fuzzer.generator.chooseSender(fw)
+	// Verify we have state changing methods to call
+	if len(fw.stateChangingMethods) == 0 {
+		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
+	}
+
+	// Select a random method and sender
+	// TODO: Determine if we should bias towards certain senders
+	selectedMethod := &fw.stateChangingMethods[rand.Intn(len(fw.stateChangingMethods))]
+	selectedSender := &fw.fuzzer.accounts[rand.Intn(len(fw.fuzzer.accounts))]
 
 	// Generate fuzzed parameters for the function call
 	args := make([]interface{}, len(selectedMethod.method.Inputs))
@@ -280,12 +292,12 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	// Create a new transaction and return it
 	// TODO: If this is a payable function (or other conditions?), determine value to send
 	tx := &coreTypes.LegacyTx{
-		Nonce: 0,
+		Nonce:    0,
 		GasPrice: big.NewInt(0),
-		Gas: 0,
-		To: &selectedMethod.address,
-		Value: big.NewInt(0),
-		Data: data,
+		Gas:      0,
+		To:       &selectedMethod.address,
+		Value:    big.NewInt(0),
+		Data:     data,
 	}
 
 	// Return our transaction sequence element.
@@ -300,7 +312,11 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []deployedMethod, error) {
 	// After testing the sequence, we'll want to rollback changes and panic if we encounter an error, as it might
 	// mean our testing state is compromised.
-	defer func() { if err := fw.testNode.RevertUncommittedChanges(); err != nil { panic(err.Error()) } }()
+	defer func() {
+		if err := fw.testNode.RevertUncommittedChanges(); err != nil {
+			panic(err.Error())
+		}
+	}()
 
 	// Loop for each transaction to execute
 	for i := 0; i < len(txSequence); i++ {
@@ -317,7 +333,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 		txInfo := txSequence[i]
 
 		// Send our transaction
-		_, _, err = fw.testNode.sendLegacyTransaction(txInfo.tx, *txInfo.sender, true)
+		_, _, err = fw.testNode.sendLegacyTransaction(txInfo.tx, txInfo.sender.key, true)
 		if err != nil {
 			return i, nil, err
 		}
@@ -380,7 +396,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	genesisAlloc := make(core.GenesisAlloc)
 
 	// Fund all of our users in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))  // TODO: make this configurable
+	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for i := 0; i < len(fw.fuzzer.accounts); i++ {
 		genesisAlloc[fw.fuzzer.accounts[i].address] = core.GenesisAccount{
 			Balance: initBalance,
@@ -398,7 +414,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	defer fw.testNode.Stop()
 
 	// Increase our generation metric as we successfully generated a test node
-	fw.metrics().workerStartupCount++
+	fw.workerMetrics().workerStartupCount++
 
 	// Deploy and track all compiled contracts
 	err = fw.deployAndRegisterCompiledContracts()
@@ -428,8 +444,18 @@ func (fw *fuzzerWorker) run() (bool, error) {
 		}
 
 		// Update our metrics
-		fw.metrics().transactionsTested += uint64(txsTested)
-		fw.metrics().sequencesTested++
+		fw.workerMetrics().transactionsTested += uint64(txsTested)
+		fw.workerMetrics().sequencesTested++
+		newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+		if newCoverageMaps != nil {
+			coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
+			if err != nil {
+				return false, err
+			}
+
+			// TODO: New coverage was achieved
+			_ = coverageUpdated
+		}
 
 		// Check if we have violated properties
 		if len(violatedPropertyTests) > 0 {
@@ -447,7 +473,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 			}
 			fw.fuzzer.results.addFailedTest(NewFuzzerResultFailedTest(txInfoSeq, violatedPropertyTests))
 
-			// TODO: For now we'll stop our fuzzer and print our results but we should add a toggle to allow
+			// TODO: For now we'll stop our fuzzer and print our results, but we should add a toggle to allow
 			//  for continued execution to find more property violations.
 			fmt.Printf("%s\n", fw.fuzzer.results.GetFailedTests()[0].String())
 			fw.fuzzer.Stop()
