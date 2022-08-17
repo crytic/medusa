@@ -114,43 +114,43 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		// Index into "compilation_units" key
 		compilationUnits, ok := compiledJson["compilation_units"]
 		if !ok {
-			return nil, "", fmt.Errorf("error while parsing compiledJson: %s\n", compiledJson)
+			return nil, "", fmt.Errorf("cannot find 'compilation_units' key in compiledJson: %s\n", compiledJson)
 		}
 		// Create a mapping between key (filename) and value (contract and ast information) each compilation unit
 		compilationMap, ok := compilationUnits.(map[string]interface{})
 		if !ok {
-			return nil, "", fmt.Errorf("error while parsing compilationUnits: %s\n", compilationUnits)
+			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]interface{} format: %s\n", compilationUnits)
 		}
 		for _, contractsAndAst := range compilationMap {
 			// Create mapping between key (compiler / asts / contracts) and associated values
 			contractsAndAstMap, ok := contractsAndAst.(map[string]interface{})
 			if !ok {
-				return nil, "", fmt.Errorf("error while parsing contractsAndAst: %s\n", contractsAndAst)
+				return nil, "", fmt.Errorf("contractsAndAst is not in the map[string]interface{} format: %s\n", contractsAndAst)
 			}
 			Ast := contractsAndAstMap["asts"]
 			// Create mapping between key (file name) and value (associated contracts in that file)
 			contractsMap, ok := contractsAndAstMap["contracts"].(map[string]interface{})
 			if !ok {
-				return nil, "", fmt.Errorf("error while parsing contractsAndAstMap: %s\n", contractsAndAstMap)
+				return nil, "", fmt.Errorf("cannot find 'contracts' key in contractsAndAstMap: %s\n", contractsAndAstMap)
 			}
 			// Iterate through each contract FILE
 			for _, contractsData := range contractsMap {
 				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
 				contractMap, ok := contractsData.(map[string]interface{})
 				if !ok {
-					return nil, "", fmt.Errorf("error while parsing contractsData: %s\n", contractsData)
+					return nil, "", fmt.Errorf("contractsData is not in the map[string]interface{} format: %s\n", contractsData)
 				}
 				// Iterate through each contract
 				for contractName, contractData := range contractMap {
 					// Create mapping between contract details (abi, bytecode) to actual values
 					contractDataMap, ok := contractData.(map[string]interface{})
 					if !ok {
-						return nil, "", fmt.Errorf("error while parsing contractData: %s\n", contractData)
+						return nil, "", fmt.Errorf("contractData is not in the map[string]interface{} format: %s\n", contractData)
 					}
 					// Create unique source path which is going to be absolute path
 					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
 					if !ok {
-						return nil, "", fmt.Errorf("error while parsing contractDataMap['filenames']: %s\n", contractsAndAstMap)
+						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractsAndAstMap: %s\n", contractsAndAstMap)
 					}
 					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
 					// Get ABI
