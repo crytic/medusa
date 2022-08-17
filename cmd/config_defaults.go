@@ -25,9 +25,9 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			WorkerDatabaseEntryLimit: 1000,
 			Timeout:                  0,
 			MaxTxSequenceLength:      10,
-			TestPrefixes: map[string]struct{}{
-				"fuzz_":    {},
-				"echidna_": {},
+			TestPrefixes: []string{
+				"fuzz_",
+				"echidna_",
 			}, // Maybe we remove echidna_ as a default option
 		},
 		Compilation: *compilationConfig,

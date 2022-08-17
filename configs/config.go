@@ -2,6 +2,7 @@ package configs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 )
@@ -51,7 +52,7 @@ type FuzzingConfig struct {
 
 	// TestPrefix dictates what prefixes will determine that a fxn is a fuzz test
 	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
-	TestPrefixes map[string]struct{} `json:"test_prefixes"`
+	TestPrefixes []string `json:"test_prefixes"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
@@ -68,6 +69,13 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Making validation a separate function in case we want to add other checks
+	// The only check currently is to make sure at least one test prefix is provided
+	err = projectConfig.ValidateConfig()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("%v\n", projectConfig.Fuzzing.TestPrefixes)
 	return &projectConfig, nil
 }
 
@@ -84,5 +92,14 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 		return err
 	}
 
+	return nil
+}
+
+// ValidateConfig validate that the project config meets certain requirements
+func (p *ProjectConfig) ValidateConfig() error {
+	// Ensure at least one prefix is in config
+	if len(p.Fuzzing.TestPrefixes) == 0 {
+		return errors.New("must specify at least one test prefix")
+	}
 	return nil
 }
