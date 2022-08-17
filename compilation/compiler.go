@@ -51,7 +51,7 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 		}
 		platformConfig = (*json.RawMessage)(&b)
 	} else if platform == "crytic-compile" {
-		cryticConfig := platforms.NewCryticCompileCompilationConfig(".")
+		cryticConfig := platforms.NewCryticCompilationConfig(".")
 		b, err := json.Marshal(cryticConfig)
 		if err != nil {
 			return nil, err
@@ -91,7 +91,7 @@ func Compile(config configs.CompilationConfig) ([]types.Compilation, string, err
 		// Compile using our solc configs
 		return truffleConfig.Compile()
 	} else if config.Platform == "crytic-compile" {
-		cryticConfig := platforms.CryticCompileCompilationConfig{}
+		cryticConfig := platforms.CryticCompilationConfig{}
 		err := json.Unmarshal(*config.PlatformConfig, &cryticConfig)
 		if err != nil {
 			return nil, "", err

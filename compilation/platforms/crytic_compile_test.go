@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSimpleCryticCompileCompilation(t *testing.T) {
+func TestSimpleCryticCompilation(t *testing.T) {
 	// Define our contract source code
 	contractSource := `
 contract SimpleCryticCompilation {
@@ -36,7 +36,7 @@ contract SimpleCryticCompilation {
 
 	// Create a solc provider
 	fmt.Printf("directory is %s\n", tempDir)
-	cryticConfig := NewCryticCompileCompilationConfig(contractPath)
+	cryticConfig := NewCryticCompilationConfig(contractPath)
 
 	// Obtain our solc version and ensure we didn't encounter an error
 	compilations, _, err := cryticConfig.Compile()
