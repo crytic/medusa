@@ -2,6 +2,7 @@ package platforms
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation/types"
 	"io/ioutil"
@@ -28,13 +29,25 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	}
 }
 
-func (s *CryticCompilationConfig) CreateExecCommand() {
+func (s *CryticCompilationConfig) ValidateArgs() error {
+	// If --export-format or --export-dir are specified in s.Args, throw an error
 	for _, arg := range s.Args {
-		fmt.Printf("%s\n", arg)
-
+		if arg == "--export-format" {
+			return errors.New("do not specify `--export-format` as an argument since the standard export format is required by medusa")
+		}
+		if arg == "--export-dir" {
+			return errors.New("do not specify `--export-dir` as an argument, use the BuildDirectory config variable instead")
+		}
 	}
+	return nil
 }
+
 func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
+	// Validate args to make sure --export-format and --export-dir are not specified
+	err := s.ValidateArgs()
+	if err != nil {
+		return nil, "", err
+	}
 	// Get information on s.Target
 	// Primarily using pathInfo to figure out if s.Target is a directory or not
 	pathInfo, err := os.Stat(s.Target)
@@ -44,17 +57,16 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// TODO: can catch this upstream if we want
 	// Figure out whether s.Target is a file or directory
-	// If it is a directory, parentDir is s.Target
 	parentDirectory := s.Target
+	// Since we are compiling a whole directory, use "."
+	args := append([]string{".", "--export-format", "standard"}, s.Args...)
 	if !pathInfo.IsDir() {
 		// If it is a file, get the parent directory of s.Target
 		parentDirectory = path.Dir(s.Target)
+		// Since we are compiling a file, use s.Target
+		args = append([]string{s.Target, "--export-format", "standard"}, s.Args...)
 	}
 
-	s.CreateExecCommand()
-	// TODO: what if s.Args also contains --export-format?
-	// Ensure that the export format is `solc` for parsing. Append additional crytic-compile args as well
-	args := append([]string{".", "--export-format", "standard"}, s.Args...)
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
 	cmd.Dir = parentDirectory
@@ -122,7 +134,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("error while parsing contractsAndAstMap: %s\n", contractsAndAstMap)
 			}
 			// Iterate through each contract FILE
-			for fileName, contractsData := range contractsMap {
+			for _, contractsData := range contractsMap {
 				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
 				contractMap, ok := contractsData.(map[string]interface{})
 				if !ok {
@@ -130,17 +142,21 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				}
 				// Iterate through each contract
 				for contractName, contractData := range contractMap {
-					// Create unique source path
-					sourcePath := fileName + ":" + contractName
 					// Create mapping between contract details (abi, bytecode) to actual values
 					contractDataMap, ok := contractData.(map[string]interface{})
 					if !ok {
 						return nil, "", fmt.Errorf("error while parsing contractData: %s\n", contractData)
 					}
+					// Create unique source path which is going to be absolute path
+					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
+					if !ok {
+						return nil, "", fmt.Errorf("error while parsing contractDataMap['filenames']: %s\n", contractsAndAstMap)
+					}
+					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
+					// Get ABI
 					contractAbi, err := types.InterfaceToABI(contractDataMap["abi"])
 					if err != nil {
-						// TODO: Throw error here?
-						continue
+						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
 					}
 					// Check if source is already in compilation object
 					if _, ok := compilation.Sources[sourcePath]; !ok {
