@@ -56,7 +56,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	}
 
 	// Execute solc to compile our target.
-	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions).CombinedOutput()
+	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions).Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
@@ -80,7 +80,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 				// Construct our compiled source object
 				compilation.Sources[name] = types.CompiledSource{
-					Ast: ast,
+					Ast:       ast,
 					Contracts: make(map[string]types.CompiledContract),
 				}
 			}
@@ -103,11 +103,11 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 		// Construct our compiled contract
 		compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
-			Abi: *contractAbi,
+			Abi:             *contractAbi,
 			RuntimeBytecode: contract.RuntimeCode,
-			InitBytecode: contract.Code,
-			SrcMapsInit: contract.Info.SrcMap.(string),
-			SrcMapsRuntime: contract.Info.SrcMapRuntime,
+			InitBytecode:    contract.Code,
+			SrcMapsInit:     contract.Info.SrcMap.(string),
+			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
 		}
 	}
 

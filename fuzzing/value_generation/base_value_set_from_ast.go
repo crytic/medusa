@@ -1,14 +1,14 @@
-package fuzzing
+package value_generation
 
 import (
 	"math/big"
 	"strings"
 )
 
-// seedFromAst allows a corpus to be seeded from an AST interface.
-func (c *Corpus) seedFromAst(ast interface{}) {
+// SeedFromAst allows a BaseValueSet to be seeded from an AST interface.
+func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 	// Walk our AST while extracting values
-	c.walkAstNodes(ast, func(node map[string]interface{}) {
+	walkAstNodes(ast, func(node map[string]interface{}) {
 		// Extract values depending on node type.
 		nodeType, obtainedNodeType := node["nodeType"].(string)
 		if obtainedNodeType && strings.EqualFold(nodeType, "Literal") {
@@ -19,13 +19,13 @@ func (c *Corpus) seedFromAst(ast interface{}) {
 				return // fail silently to continue walking
 			}
 
-			// Seed corpus with literals
+			// Seed BaseValueSet with literals
 			if literalKind == "number" {
 				if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
-					c.AddInteger(*b)
+					bvs.AddInteger(*b)
 				}
 			} else if literalKind == "string" {
-				c.AddString(literalValue)
+				bvs.AddString(literalValue)
 			}
 		}
 	})
@@ -33,7 +33,7 @@ func (c *Corpus) seedFromAst(ast interface{}) {
 
 // walkAstNodes walks/iterates across an AST for each node, calling the provided walk function with each discovered node
 // as an argument.
-func (c *Corpus) walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
+func walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
 	// Try to parse our node as different types and walk all children.
 	if d, ok := ast.(map[string]interface{}); ok {
 		// If this dictionary contains keys 'id' and 'nodeType', we can assume it's an AST node
@@ -45,12 +45,12 @@ func (c *Corpus) walkAstNodes(ast interface{}, walkFunc func(node map[string]int
 
 		// Walk all keys of the dictionary.
 		for _, v := range d {
-			c.walkAstNodes(v, walkFunc)
+			walkAstNodes(v, walkFunc)
 		}
 	} else if slice, ok := ast.([]interface{}); ok {
 		// Walk all elements of a slice.
 		for _, elem := range slice {
-			c.walkAstNodes(elem, walkFunc)
+			walkAstNodes(elem, walkFunc)
 		}
 	}
 }
