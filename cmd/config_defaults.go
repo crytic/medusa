@@ -21,10 +21,14 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			Generate: 5,
 		},
 		Fuzzing: configs.FuzzingConfig{
-			Workers: 10,
+			Workers:                  10,
 			WorkerDatabaseEntryLimit: 1000,
-			Timeout: 0,
-			MaxTxSequenceLength: 10,
+			Timeout:                  0,
+			MaxTxSequenceLength:      10,
+			TestPrefixes: map[string]struct{}{
+				"fuzz_":    {},
+				"echidna_": {},
+			}, // Maybe we remove echidna_ as a default option
 		},
 		Compilation: *compilationConfig,
 	}
