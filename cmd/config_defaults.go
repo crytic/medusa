@@ -27,8 +27,7 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			MaxTxSequenceLength:      10,
 			TestPrefixes: []string{
 				"fuzz_",
-				"echidna_",
-			}, // Maybe we remove echidna_ as a default option
+			},
 		},
 		Compilation: *compilationConfig,
 	}
