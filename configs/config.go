@@ -75,7 +75,6 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("%v\n", projectConfig.Fuzzing.TestPrefixes)
 	return &projectConfig, nil
 }
 
