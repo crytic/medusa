@@ -77,9 +77,9 @@ func TestCryticSingleFileNoArgs(t *testing.T) {
 	compilations, _, err := cryticConfig.Compile()
 	// No failures
 	assert.Nil(t, err)
-	assert.True(t, len(compilations) == 1)                                        // One compilation object
-	assert.True(t, len(compilations[0].Sources) == 1)                             // One source because we specified one file
-	assert.True(t, len(compilations[0].Sources["crytic_one.sol"].Contracts) == 1) // One contract in crytic.sol
+	assert.True(t, len(compilations) == 1)                                // One compilation object
+	assert.True(t, len(compilations[0].Sources) == 1)                     // One source because we specified one file
+	assert.True(t, len(compilations[0].Sources[filePath].Contracts) == 1) // One contract in crytic.sol
 }
 
 // Single file test with bad arguments
@@ -116,8 +116,8 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 	compilations, _, err := cryticConfig.Compile()
 	// No failures
 	assert.Nil(t, err)
-	assert.True(t, len(compilations) == 1)                                        // One compilation object
-	assert.True(t, len(compilations[0].Sources) == 2)                             // Two sources because we specified two files
-	assert.True(t, len(compilations[0].Sources["crytic_one.sol"].Contracts) == 1) // One contract in crytic_one.sol
-	assert.True(t, len(compilations[0].Sources["crytic_two.sol"].Contracts) == 2) // Two contracts in crytic_two.sol
+	assert.True(t, len(compilations) == 1)                                                             // One compilation object
+	assert.True(t, len(compilations[0].Sources) == 2)                                                  // Two sources because we specified two files
+	assert.True(t, len(compilations[0].Sources["/private"+filePath+"/crytic_one.sol"].Contracts) == 1) // One contract in crytic_one.sol
+	assert.True(t, len(compilations[0].Sources["/private"+filePath+"/crytic_two.sol"].Contracts) == 2) // Two contracts in crytic_two.sol
 }
