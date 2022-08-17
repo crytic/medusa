@@ -1,17 +1,35 @@
 package fuzzing
 
+import "github.com/trailofbits/medusa/fuzzing/tracing"
+
 // FuzzerMetrics represents a struct tracking metrics for a Fuzzer run.
 type FuzzerMetrics struct {
+	// coverageMaps describes the code coverage achieved across all transactions run by every fuzzerWorker.
+	coverageMaps *tracing.CoverageMaps
+
 	// workerMetrics describes the metrics for each individual worker. This expands as needed and some slots may be nil
 	// while workers are initializing, as it corresponds to the indexes in Fuzzer.workers.
 	workerMetrics []fuzzerWorkerMetrics
 }
 
-// NewFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
+// fuzzerWorkerMetrics represents metrics for a single fuzzerWorker instance.
+type fuzzerWorkerMetrics struct {
+	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
+	sequencesTested uint64
+
+	// transactionsTested describes the amount of transactions which property tests were verified against.
+	transactionsTested uint64
+
+	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
+	workerStartupCount uint64
+}
+
+// newFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
 // Returns the new FuzzerMetrics object.
-func NewFuzzerMetrics(workerCount int) *FuzzerMetrics {
+func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	// Create a new metrics struct and return it with as many slots as required.
 	metrics := FuzzerMetrics{
+		coverageMaps:  tracing.NewCoverageMaps(),
 		workerMetrics: make([]fuzzerWorkerMetrics, workerCount),
 	}
 	return &metrics
@@ -45,16 +63,4 @@ func (m *FuzzerMetrics) WorkerStartupCount() uint64 {
 		workerStartupCount += workerMetrics.workerStartupCount
 	}
 	return workerStartupCount
-}
-
-// fuzzerWorkerMetrics represents metrics for a single fuzzerWorker instance.
-type fuzzerWorkerMetrics struct {
-	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
-	sequencesTested uint64
-
-	// transactionsTested describes the amount of transactions which property tests were verified against.
-	transactionsTested uint64
-
-	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
-	workerStartupCount uint64
 }
