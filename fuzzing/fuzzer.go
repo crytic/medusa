@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/status-im/keycard-go/hexutils"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
@@ -54,22 +55,6 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	// Create our accounts based on our configs
 	accounts := make([]fuzzerAccount, 0)
 
-	// Generate new accounts as requested.
-	for i := 0; i < config.Accounts.Generate; i++ {
-		// Generate a new key
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-
-		// Add it to our account list
-		acc := fuzzerAccount{
-			key:     key,
-			address: crypto.PubkeyToAddress(key.PublicKey),
-		}
-		accounts = append(accounts, acc)
-	}
-
 	// Set up accounts for provided keys
 	for i := 0; i < len(config.Accounts.Keys); i++ {
 		// Parse our provided key string
@@ -87,8 +72,30 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		accounts = append(accounts, acc)
 	}
 
-	// Print some output
+	// Generate new accounts as requested.
+	for i := 0; i < config.Accounts.Generate; i++ {
+		// Generate a new key
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+
+		// Add it to our account list
+		acc := fuzzerAccount{
+			key:     key,
+			address: crypto.PubkeyToAddress(key.PublicKey),
+		}
+		accounts = append(accounts, acc)
+	}
+
+	// Print some updates regarding account keys loaded
 	fmt.Printf("Account keys loaded (%d generated, %d pre-defined) ...\n", config.Accounts.Generate, len(config.Accounts.Keys))
+
+	for i := 0; i < len(accounts); i++ {
+		accountAddr := crypto.PubkeyToAddress(accounts[i].key.PublicKey).String()
+		accountKey := hexutils.BytesToHex(crypto.FromECDSA(accounts[i].key))
+		fmt.Printf("-[account #%d] address=%s, key=%s\n", i+1, accountAddr, accountKey)
+	}
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
