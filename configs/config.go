@@ -48,8 +48,11 @@ type FuzzingConfig struct {
 
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
-}
 
+	// TestPrefix dictates what prefixes will determine that a fxn is a fuzz test
+	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
+	TestPrefixes map[string]struct{} `json:"test_prefixes"`
+}
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
