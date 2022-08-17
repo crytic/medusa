@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-type CryticCompileCompilationConfig struct {
+type CryticCompilationConfig struct {
 	Target         string   `json:"target"`
 	SolcVersion    string   `json:"solcVersion"`
 	SolcInstall    bool     `json:"solcINstall"`
@@ -19,8 +19,8 @@ type CryticCompileCompilationConfig struct {
 	Args           []string `json:"args,omitempty"`
 }
 
-func NewCryticCompileCompilationConfig(target string) *CryticCompileCompilationConfig {
-	return &CryticCompileCompilationConfig{
+func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
+	return &CryticCompilationConfig{
 		Target:         target,
 		BuildDirectory: "",
 		Args:           []string{},
@@ -28,7 +28,13 @@ func NewCryticCompileCompilationConfig(target string) *CryticCompileCompilationC
 	}
 }
 
-func (s *CryticCompileCompilationConfig) Compile() ([]types.Compilation, string, error) {
+func (s *CryticCompilationConfig) CreateExecCommand() {
+	for _, arg := range s.Args {
+		fmt.Printf("%s\n", arg)
+
+	}
+}
+func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Get information on s.Target
 	// Primarily using pathInfo to figure out if s.Target is a directory or not
 	pathInfo, err := os.Stat(s.Target)
@@ -45,6 +51,7 @@ func (s *CryticCompileCompilationConfig) Compile() ([]types.Compilation, string,
 		parentDirectory = path.Dir(s.Target)
 	}
 
+	s.CreateExecCommand()
 	// TODO: what if s.Args also contains --export-format?
 	// Ensure that the export format is `solc` for parsing. Append additional crytic-compile args as well
 	args := append([]string{".", "--export-format", "standard"}, s.Args...)
