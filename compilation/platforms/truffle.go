@@ -6,22 +6,21 @@ import (
 	"github.com/trailofbits/medusa/compilation/types"
 	"io/ioutil"
 	"os/exec"
-	"path"
 	"path/filepath"
 )
 
 type TruffleCompilationConfig struct {
-	Target string `json:"target"`
-	UseNpx bool `json:"use_npx"`
-	Command string `json:"command,omitempty"`
+	Target         string `json:"target"`
+	UseNpx         bool   `json:"use_npx"`
+	Command        string `json:"command,omitempty"`
 	BuildDirectory string `json:"build_directory,omitempty"`
 }
 
 func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
 	return &TruffleCompilationConfig{
-		Target: target,
-		UseNpx: true,
-		Command: "",
+		Target:         target,
+		UseNpx:         true,
+		Command:        "",
 		BuildDirectory: "",
 	}
 }
@@ -50,27 +49,26 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 	compilation := types.NewCompilation()
 
 	// Find all the compiled truffle artifacts
-	targetDirectory := path.Dir(s.Target)
 	buildDirectory := s.BuildDirectory
 	if buildDirectory == "" {
-		buildDirectory = path.Join(targetDirectory, "build", "contracts")
+		buildDirectory = filepath.Join(s.Target, "build", "contracts")
 	}
-	matches, err := filepath.Glob(path.Join(buildDirectory, "*.json"))
+	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Define our truffle structure to parse
 	type TruffleCompiledJson struct {
-		ContractName string `json:"contractName"`
-		Abi interface{} `json:"abi"`
-		Bytecode string `json:"bytecode"`
-		DeployedBytecode string `json:"deployedBytecode"`
-		SourceMap string `json:"sourceMap"`
-		DeployedSourceMap string `json:"deployedSourceMap"`
-		Source string `json:"source"`
-		SourcePath string `json:"sourcePath"`
-		Ast interface{} `json:"ast"`
+		ContractName      string      `json:"contractName"`
+		Abi               interface{} `json:"abi"`
+		Bytecode          string      `json:"bytecode"`
+		DeployedBytecode  string      `json:"deployedBytecode"`
+		SourceMap         string      `json:"sourceMap"`
+		DeployedSourceMap string      `json:"deployedSourceMap"`
+		Source            string      `json:"source"`
+		SourcePath        string      `json:"sourcePath"`
+		Ast               interface{} `json:"ast"`
 	}
 
 	// Loop for each truffle artifact to parse our compilations.
@@ -104,11 +102,11 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 
 		// Add our contract to the source
 		compilation.Sources[compiledJson.SourcePath].Contracts[compiledJson.ContractName] = types.CompiledContract{
-			Abi: *contractAbi,
+			Abi:             *contractAbi,
 			RuntimeBytecode: compiledJson.DeployedBytecode,
-			InitBytecode: compiledJson.Bytecode,
-			SrcMapsInit: compiledJson.SourceMap,
-			SrcMapsRuntime: compiledJson.DeployedSourceMap,
+			InitBytecode:    compiledJson.Bytecode,
+			SrcMapsInit:     compiledJson.SourceMap,
+			SrcMapsRuntime:  compiledJson.DeployedSourceMap,
 		}
 	}
 
