@@ -95,10 +95,10 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", err
 	}
 
-	// Create a compilation unit out of this.
-	compilation := types.NewCompilation()
+	// Create a compilation list for a list of compilation units.
+	var compilationList []types.Compilation
 
-	// Loop for each crytic artifact to parse our compilations.
+	// Loop through each .json file for compilation units.
 	for i := 0; i < len(matches); i++ {
 		// Read the compiled JSON file data
 		b, err := ioutil.ReadFile(matches[i])
@@ -121,19 +121,22 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		if !ok {
 			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]interface{} format: %s\n", compilationUnits)
 		}
-		for _, contractsAndAst := range compilationMap {
+		// Iterate through compilationUnits
+		for _, compilationUnit := range compilationMap {
+			// Create a compilation object that will store the contracts and ast for a single compilation unit
+			compilation := types.NewCompilation()
 			// Create mapping between key (compiler / asts / contracts) and associated values
-			contractsAndAstMap, ok := contractsAndAst.(map[string]interface{})
+			compilationUnitMap, ok := compilationUnit.(map[string]interface{})
 			if !ok {
-				return nil, "", fmt.Errorf("contractsAndAst is not in the map[string]interface{} format: %s\n", contractsAndAst)
+				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]interface{} format: %s\n", compilationUnit)
 			}
-			Ast := contractsAndAstMap["asts"]
+			Ast := compilationUnitMap["asts"]
 			// Create mapping between key (file name) and value (associated contracts in that file)
-			contractsMap, ok := contractsAndAstMap["contracts"].(map[string]interface{})
+			contractsMap, ok := compilationUnitMap["contracts"].(map[string]interface{})
 			if !ok {
-				return nil, "", fmt.Errorf("cannot find 'contracts' key in contractsAndAstMap: %s\n", contractsAndAstMap)
+				return nil, "", fmt.Errorf("cannot find 'contracts' key in compilationUnitMap: %s\n", compilationUnitMap)
 			}
-			// Iterate through each contract FILE
+			// Iterate through each contract FILE (note that each FILE might have more than one contract)
 			for _, contractsData := range contractsMap {
 				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
 				contractMap, ok := contractsData.(map[string]interface{})
@@ -150,7 +153,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 					// Create unique source path which is going to be absolute path
 					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
 					if !ok {
-						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractsAndAstMap: %s\n", contractsAndAstMap)
+						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractDataMap: %s\n", contractDataMap)
 					}
 					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
 					// Get ABI
@@ -159,12 +162,14 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
 					}
 					// Check if source is already in compilation object
+					// if not, add source
 					if _, ok := compilation.Sources[sourcePath]; !ok {
 						compilation.Sources[sourcePath] = types.CompiledSource{
 							Ast:       Ast,
 							Contracts: make(map[string]types.CompiledContract),
 						}
 					}
+					// Add contract
 					compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 						Abi:             *contractAbi,
 						RuntimeBytecode: fmt.Sprintf("%v", contractDataMap["bin-runtime"]),
@@ -172,10 +177,11 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 						SrcMapsInit:     fmt.Sprintf("%v", contractDataMap["srcmap"]),
 						SrcMapsRuntime:  fmt.Sprintf("%v", contractDataMap["srcmap-runtime"]),
 					}
-
 				}
 			}
+			// Append compilation object to compilationList
+			compilationList = append(compilationList, *compilation)
 		}
 	}
-	return []types.Compilation{*compilation}, string(out), nil
+	return compilationList, string(out), nil
 }
