@@ -21,10 +21,11 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			Generate: 5,
 		},
 		Fuzzing: configs.FuzzingConfig{
-			Workers: 10,
-			WorkerDatabaseEntryLimit: 1000,
-			Timeout: 0,
-			MaxTxSequenceLength: 10,
+			Workers:                  10,
+			WorkerDatabaseEntryLimit: 10000,
+			Timeout:                  0,
+			TestLimit:                0,
+			MaxTxSequenceLength:      100,
 		},
 		Compilation: *compilationConfig,
 	}
