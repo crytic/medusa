@@ -25,6 +25,10 @@ func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
 	}
 }
 
+func (s *TruffleCompilationConfig) Platform() string {
+	return "truffle"
+}
+
 func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Determine the base command to use.
 	var baseCommandStr = "truffle"

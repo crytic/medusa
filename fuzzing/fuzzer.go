@@ -105,6 +105,12 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	return fuzzer, nil
 }
 
+// Results exposes the underlying results of the fuzzer, including any violated property tests and transaction sequences
+// used to do so.
+func (f *Fuzzer) Results() *FuzzerResults {
+	return f.results
+}
+
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
