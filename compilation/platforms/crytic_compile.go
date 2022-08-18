@@ -12,14 +12,23 @@ import (
 	"path/filepath"
 )
 
+// CryticCompilationConfig represents the various configuration options that can be provided by the user
+// while using the `crytic-compile` platform
 type CryticCompilationConfig struct {
-	Target         string   `json:"target"`
-	SolcVersion    string   `json:"solcVersion"`
-	SolcInstall    bool     `json:"solcINstall"`
-	BuildDirectory string   `json:"buildDirectory"`
-	Args           []string `json:"args,omitempty"`
+	// Target is the object that is being compiled. It can be a single `.sol` file or a whole directory
+	Target string `json:"target"`
+	// SolcVersion is the version of `solc` that will be installed if SolcInstall is set to true
+	SolcVersion string `json:"solcVersion"`
+	// SolcInstall is a way to request medusa to install a specific version of `solc`, which is dictated by SolcVersion
+	SolcInstall bool `json:"solcInstall"`
+	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
+	// `./crytic-export`
+	BuildDirectory string `json:"buildDirectory"`
+	// Args are additional arguments that can be provided to `crytic-compile`
+	Args []string `json:"args,omitempty"`
 }
 
+// NewCryticCompilationConfig returns the default configuration options while using `crytic-compile`
 func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	return &CryticCompilationConfig{
 		Target:         target,
@@ -29,6 +38,9 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	}
 }
 
+// ValidateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
+// or the `--export-dir` arguments. This is because `--export-format` has to be `standard` for the `crytic-compile`
+// integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
 func (s *CryticCompilationConfig) ValidateArgs() error {
 	// If --export-format or --export-dir are specified in s.Args, throw an error
 	for _, arg := range s.Args {
@@ -42,6 +54,8 @@ func (s *CryticCompilationConfig) ValidateArgs() error {
 	return nil
 }
 
+// Compile uses the CryticCompilationConfig provided to compile a given target, parse the artifacts, and then
+// create a list of types.Compilation.
 func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Validate args to make sure --export-format and --export-dir are not specified
 	err := s.ValidateArgs()
@@ -55,23 +69,25 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", fmt.Errorf("error while trying to get information on directory %s\n", s.Target)
 	}
 
-	// TODO: can catch this upstream if we want
 	// Figure out whether s.Target is a file or directory
+	// parentDirectory is s.Target if s.Target is a directory
 	parentDirectory := s.Target
-	// Since we are compiling a whole directory, use "."
+	// Since we are compiling a whole directory, use "." as the target
 	args := append([]string{".", "--export-format", "standard"}, s.Args...)
 	if !pathInfo.IsDir() {
 		// If it is a file, get the parent directory of s.Target
 		parentDirectory = path.Dir(s.Target)
-		// Since we are compiling a file, use s.Target
+		// Since we are compiling a file, use s.Target as the target
 		args = append([]string{s.Target, "--export-format", "standard"}, s.Args...)
 	}
 
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
+	// Set working directory
 	cmd.Dir = parentDirectory
 
 	// Install a specific `solc` version if requested in the config
+	// TODO: Do we really care about this?
 	if s.SolcVersion != "" {
 		err := exec.Command("solc-select", "install", s.SolcVersion).Run()
 		if err != nil {
@@ -87,6 +103,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// Find build directory
 	buildDirectory := s.BuildDirectory
+	// Default directory is parentDirectory/crytic-export
 	if buildDirectory == "" {
 		buildDirectory = path.Join(parentDirectory, "crytic-export")
 	}
@@ -123,14 +140,15 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		}
 		// Iterate through compilationUnits
 		for _, compilationUnit := range compilationMap {
-			// Create a compilation object that will store the contracts and ast for a single compilation unit
+			// Create a compilation object that will store the contracts and asts for a single compilation unit
 			compilation := types.NewCompilation()
 			// Create mapping between key (compiler / asts / contracts) and associated values
 			compilationUnitMap, ok := compilationUnit.(map[string]interface{})
 			if !ok {
 				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]interface{} format: %s\n", compilationUnit)
 			}
-			Ast := compilationUnitMap["asts"]
+			// Get Asts for compilation unit
+			Asts := compilationUnitMap["asts"]
 			// Create mapping between key (file name) and value (associated contracts in that file)
 			contractsMap, ok := compilationUnitMap["contracts"].(map[string]interface{})
 			if !ok {
@@ -150,26 +168,28 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 					if !ok {
 						return nil, "", fmt.Errorf("contractData is not in the map[string]interface{} format: %s\n", contractData)
 					}
-					// Create unique source path which is going to be absolute path
+					// Create mapping between "filenames" (key) associated with the contract and the various filename
+					// types (absolute, relative, short, long)
 					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
 					if !ok {
 						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractDataMap: %s\n", contractDataMap)
 					}
+					// Create unique source path which is going to be absolute path
 					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
 					// Get ABI
 					contractAbi, err := types.InterfaceToABI(contractDataMap["abi"])
 					if err != nil {
 						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
 					}
-					// Check if source is already in compilation object
-					// if not, add source
+					// Check if sourcePath has already been set (note that a sourcePath (i.e., file) can have more
+					// than one contract)
 					if _, ok := compilation.Sources[sourcePath]; !ok {
 						compilation.Sources[sourcePath] = types.CompiledSource{
-							Ast:       Ast,
+							Ast:       Asts,
 							Contracts: make(map[string]types.CompiledContract),
 						}
 					}
-					// Add contract
+					// Add contract details
 					compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 						Abi:             *contractAbi,
 						RuntimeBytecode: fmt.Sprintf("%v", contractDataMap["bin-runtime"]),
@@ -183,5 +203,6 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			compilationList = append(compilationList, *compilation)
 		}
 	}
+	// Return the compilationList
 	return compilationList, string(out), nil
 }

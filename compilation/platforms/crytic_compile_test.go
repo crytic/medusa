@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// TODO: This whole file will change after the dev/test PR is merged
+
+// SetupContracts is a helper function that will perform different actions based on the values of isFile and
+// twoContracts. If isFile is true, the function will return the path of the contract file. If isFile is false,
+// the function will return the path of the directory. If twoContracts is false, only 1 contract is written to the
+// working directory and if twoContracts is true, two contracts are written to the working directory.
 func SetupContracts(t *testing.T, isFile bool, twoContracts bool) string {
 	contractOne := `
 	contract ContractOne {
@@ -64,7 +70,7 @@ func SetupContracts(t *testing.T, isFile bool, twoContracts bool) string {
 	return tempDir
 }
 
-// Single file test with no additional args
+// TestCryticSingleFileNoArgs tests compilation of a single with no additional arguments provided
 func TestCryticSingleFileNoArgs(t *testing.T) {
 	// Setup contract
 	isFile := true
@@ -82,7 +88,8 @@ func TestCryticSingleFileNoArgs(t *testing.T) {
 	assert.True(t, len(compilations[0].Sources[filePath].Contracts) == 1) // One contract in crytic.sol
 }
 
-// Single file test with bad arguments
+// TestCryticSingleFileBadArgs tests compilation of a single with unaccepted or bad arguments
+// (e.g. export-dir, export-format)
 func TestCryticSingleFileBadArgs(t *testing.T) {
 	// Setup contract
 	isFile := true
@@ -104,7 +111,7 @@ func TestCryticSingleFileBadArgs(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// Whole directory test with no args
+// TestCryticDirectoryNoArgs tests compilation of a whole directory with no addition arguments provided
 func TestCryticDirectoryNoArgs(t *testing.T) {
 	// Setup contracts
 	isFile := false
