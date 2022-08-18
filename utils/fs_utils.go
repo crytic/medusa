@@ -23,7 +23,7 @@ func CopyFile(sourcePath string, targetPath string) error {
 
 	// Ensure the existence of the directory we wish to copy to.
 	targetDirectory := filepath.Dir(targetPath)
-	err = os.MkdirAll(targetDirectory, os.ModeDir)
+	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
 		return nil
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/configs"
 	"github.com/trailofbits/medusa/utils/test_utils"
+	"strconv"
 	"testing"
 )
 
@@ -14,7 +15,9 @@ import (
 // against it. It asserts that the fuzzer should find a result prior to timeout/cancellation.
 func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig configs.FuzzingConfig) {
 	// Print a status message
-	fmt.Printf("Fuzzing to solve '%s'...", solidityFile)
+	fmt.Printf("##############################################################\n")
+	fmt.Printf("Fuzzing '%s'...\n", solidityFile)
+	fmt.Printf("##############################################################\n")
 
 	// Copy our target file to our test directory
 	testContractPath := test_utils.CopyToTestDirectory(t, solidityFile)
@@ -44,7 +47,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig configs
 	assert.Nil(t, err)
 
 	// Ensure we captured a failed test.
-	assert.True(t, len(fuzzer.Results().GetFailedTests()) > 0)
+	assert.True(t, len(fuzzer.Results().GetFailedTests()) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
 }
 
 // FuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
@@ -56,21 +59,21 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig con
 	}
 }
 
-// TestFuzzMagicNumbers tests files runs tests against smart contracts which make use of magic numbers.
-func TestFuzzMagicNumbers(t *testing.T) {
-	// Create our configuration for this fuzzing campaign
-	fuzzConfig := configs.FuzzingConfig{
-		Workers:                  10,
-		WorkerDatabaseEntryLimit: 1000,
-		Timeout:                  30,
-		MaxTxSequenceLength:      10,
-	}
-	// Copy our set of contracts to test
-	testContracts := []string{
-		"testdata/contracts/magic_numbers/simple_xy.sol",
-		"testdata/contracts/magic_numbers/simple_xy_payable.sol",
-	}
+// Create our configuration for testing
+var defaultTestingFuzzConfig = configs.FuzzingConfig{
+	Workers:                  10,
+	WorkerDatabaseEntryLimit: 1000,
+	Timeout:                  30,
+	TestLimit:                0,
+	MaxTxSequenceLength:      100,
+}
 
-	// Fuzz all contracts
-	testFuzzSolcTargets(t, testContracts, fuzzConfig)
+// TestFuzzMagicNumbersSimpleXY runs a test to solve simple_xy.sol
+func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", defaultTestingFuzzConfig)
+}
+
+// TestFuzzMagicNumbersSimpleXYPayable runs a test to solve simple_xy_payable.sol
+func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy_payable.sol", defaultTestingFuzzConfig)
 }

@@ -239,6 +239,13 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
 
+		// If we reached our transaction threshold, halt
+		testLimit := uint64(f.config.Fuzzing.TestLimit)
+		if testLimit > 0 && transactionsTested >= testLimit {
+			fmt.Printf("transaction test limit reached, halting now ...\n")
+			f.Stop()
+		}
+
 		// Sleep for a second
 		time.Sleep(time.Second)
 
