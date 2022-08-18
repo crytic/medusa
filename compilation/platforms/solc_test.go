@@ -2,7 +2,7 @@ package platforms
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/trailofbits/medusa/utils/test_utils"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +16,7 @@ func TestSolcVersion(t *testing.T) {
 
 func TestSimpleSolcCompilationAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Create a solc provider
 	solc := NewSolcCompilationConfig(contractPath)
@@ -33,7 +33,7 @@ func TestSimpleSolcCompilationRelativePath(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Copy our testdata over to our testing directory
-	contractPath := utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Obtain the contract directory and cd to it.
 	contractDirectory := filepath.Dir(contractPath)

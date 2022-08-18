@@ -2,13 +2,13 @@ package platforms
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/trailofbits/medusa/utils/test_utils"
 	"testing"
 )
 
 func TestTruffleCompilationAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	truffleDirectory := utils.CopyToTestDirectory(t, "testdata/truffle/basic_project/")
+	truffleDirectory := test_utils.CopyToTestDirectory(t, "testdata/truffle/basic_project/")
 
 	// Create a solc provider
 	truffleConfig := NewTruffleCompilationConfig(truffleDirectory)

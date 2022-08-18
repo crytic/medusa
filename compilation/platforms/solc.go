@@ -22,6 +22,10 @@ func NewSolcCompilationConfig(target string) *SolcCompilationConfig {
 	}
 }
 
+func (s *SolcCompilationConfig) Platform() string {
+	return "solc"
+}
+
 func GetSystemSolcVersion() (*semver.Version, error) {
 	// Run solc --version to obtain our compiler version.
 	out, err := exec.Command("solc", "--version").CombinedOutput()

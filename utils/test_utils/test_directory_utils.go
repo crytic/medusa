@@ -1,7 +1,8 @@
-package utils
+package test_utils
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/trailofbits/medusa/utils"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,9 +27,9 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 
 	// Copy our source to the target destination
 	if sourcePathInfo.IsDir() {
-		err = CopyDirectory(sourcePath, targetPath, true)
+		err = utils.CopyDirectory(sourcePath, targetPath, true)
 	} else {
-		err = CopyFile(sourcePath, targetPath)
+		err = utils.CopyFile(sourcePath, targetPath)
 	}
 	assert.Nil(t, err)
 
