@@ -46,10 +46,13 @@ type FuzzingConfig struct {
 	// will result in no timeout.
 	Timeout int `json:"timeout"`
 
+	// TestLimit describes a threshold for the number of transactions to test, after which it will exit. This number
+	// must be non-negative. A zero value indicates the test limit should not be enforced.
+	TestLimit uint64 `json:"test_limit"`
+
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
 }
-
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
