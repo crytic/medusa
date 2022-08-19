@@ -30,6 +30,7 @@ An example project configuration can be observed below:
 		"workers": 20,
 		"worker_database_entry_limit": 20000,
 		"timeout": 0,
+		"test_limit": 0,
 		"max_tx_sequence_length": 10
 	},
 	"compilation": {
@@ -50,7 +51,8 @@ The structure is described below:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
   - `worker_database_entry_limit` defines how many keys a worker's memory database can contain before the worker is reset
     - **Note**: this is a temporary logic for memory throttling
-  - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the fuzzer will run indefinitely.
+  - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced.
+  - `test_limit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
   - `max_tx_sequence_length` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
 - `compilation` defines parameters used to compile a given target to be fuzzed:
   - `platform` refers to the type of platform to be used to compile the underlying target.
