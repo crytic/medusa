@@ -52,6 +52,12 @@ type FuzzingConfig struct {
 
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
+
+	// Coverage describes whether to use coverage-guided fuzzing
+	Coverage bool `json:"coverage"`
+
+	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
+	CorpusDirectory string `json:"corpus_dir"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {

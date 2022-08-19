@@ -26,6 +26,8 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			Timeout:                  0,
 			TestLimit:                0,
 			MaxTxSequenceLength:      100,
+			Coverage:                 true,
+			CorpusDirectory:          "corpus",
 		},
 		Compilation: *compilationConfig,
 	}

@@ -413,7 +413,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// Create a test node
 	var err error
-	fw.testNode, err = newTestNode(genesisAlloc)
+	fw.testNode, err = newTestNode(genesisAlloc, fw.fuzzer.config.Fuzzing.Coverage)
 	if err != nil {
 		return false, err
 	}
@@ -454,16 +454,20 @@ func (fw *fuzzerWorker) run() (bool, error) {
 		// Update our metrics
 		fw.workerMetrics().transactionsTested += uint64(txsTested)
 		fw.workerMetrics().sequencesTested++
-		newCoverageMaps := fw.testNode.tracer.CoverageMaps()
-		if newCoverageMaps != nil {
-			coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
-			if err != nil {
-				return false, err
-			}
 
-			if coverageUpdated {
-				// new coverage has been found
-				fw.AddToCorpus(txSequence)
+		// Track coverage only if it is enabled
+		if fw.fuzzer.config.Fuzzing.Coverage {
+			newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+			if newCoverageMaps != nil {
+				coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
+				if err != nil {
+					return false, err
+				}
+
+				if coverageUpdated {
+					// new coverage has been found
+					fw.AddToCorpus(txSequence)
+				}
 			}
 		}
 

@@ -38,7 +38,7 @@ type testNode struct {
 	vmConfig *vm.Config
 }
 
-func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
+func newTestNode(genesisAlloc core.GenesisAlloc, coverageEnabled bool) (*testNode, error) {
 	// Define our chain configuration
 	chainConfig := params.TestChainConfig
 
@@ -59,7 +59,7 @@ func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	genesisDefinition.MustCommit(db)
 
 	// Create a VM config that traces execution, so we can establish a coverage map
-	tracer := tracing.NewFuzzerTracer(true)
+	tracer := tracing.NewFuzzerTracer(coverageEnabled)
 	vmConfig := &vm.Config{
 		Debug:  true,
 		Tracer: tracer,
