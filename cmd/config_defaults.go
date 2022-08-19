@@ -26,6 +26,9 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			Timeout:                  0,
 			TestLimit:                0,
 			MaxTxSequenceLength:      100,
+			TestPrefixes: []string{
+				"fuzz_",
+			},
 		},
 		Compilation: *compilationConfig,
 	}

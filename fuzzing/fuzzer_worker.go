@@ -66,6 +66,19 @@ func (fw *fuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
+// IsPropertyTest check whether the method is a property test
+func (fw *fuzzerWorker) IsPropertyTest(method abi.Method) bool {
+	// loop through all enabled prefixes to find a match
+	for _, prefix := range fw.fuzzer.config.Fuzzing.TestPrefixes {
+		if strings.HasPrefix(method.Name, prefix) {
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // registerDeployedContract registers an address with a compiled contract descriptor for it to be tracked by the
 // fuzzerWorker, both as methods of changing state and for properties to assert.
 func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address, contract types.CompiledContract) {
@@ -76,8 +89,7 @@ func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 	for _, method := range contract.Abi.Methods {
 		if method.IsConstant() {
 			// Check if this is a property test and add it to our list if so.
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy &&
-				(strings.HasPrefix(method.Name, "medusa_") || strings.HasPrefix(method.Name, "echidna_")) {
+			if fw.IsPropertyTest(method) {
 				fw.propertyTests = append(fw.propertyTests, deployedMethod{address: deployedAddress, contract: contract, method: method})
 			}
 			continue

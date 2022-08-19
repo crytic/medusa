@@ -66,6 +66,9 @@ var defaultTestingFuzzConfig = configs.FuzzingConfig{
 	Timeout:                  30,
 	TestLimit:                0,
 	MaxTxSequenceLength:      100,
+	TestPrefixes: []string{
+		"fuzz_", "echidna_",
+	},
 }
 
 // TestFuzzMagicNumbersSimpleXY runs a test to solve simple_xy.sol

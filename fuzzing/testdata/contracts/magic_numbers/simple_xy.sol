@@ -11,7 +11,7 @@ contract TestXY {
     }
 
 
-    function medusa_never_specific_values() public view returns (bool) {
+    function fuzz_never_specific_values() public view returns (bool) {
         // ASSERTION: x should never be 10 at the same time y is 80
         return !(x == 10 && y == 80);
     }

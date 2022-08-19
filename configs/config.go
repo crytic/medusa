@@ -2,6 +2,7 @@ package configs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 )
@@ -52,6 +53,10 @@ type FuzzingConfig struct {
 
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
+
+	// TestPrefix dictates what prefixes will determine that a fxn is a fuzz test
+	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
+	TestPrefixes []string `json:"test_prefixes"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
@@ -65,6 +70,12 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Parse the project configuration
 	var projectConfig ProjectConfig
 	err = json.Unmarshal(b, &projectConfig)
+	if err != nil {
+		return nil, err
+	}
+	// Making validation a separate function in case we want to add other checks
+	// The only check currently is to make sure at least one test prefix is provided
+	err = projectConfig.ValidateConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -84,5 +95,14 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 		return err
 	}
 
+	return nil
+}
+
+// ValidateConfig validate that the project config meets certain requirements
+func (p *ProjectConfig) ValidateConfig() error {
+	// Ensure at least one prefix is in config
+	if len(p.Fuzzing.TestPrefixes) == 0 {
+		return errors.New("at least one test prefix must be specified within your project configuration file")
+	}
 	return nil
 }
