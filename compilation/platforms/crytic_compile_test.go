@@ -10,70 +10,6 @@ import (
 	"testing"
 )
 
-/*
-// SetupContracts is a helper function that will perform different actions based on the values of isFile and
-// twoContracts. If isFile is true, the function will return the path of the contract file. If isFile is false,
-// the function will return the path of the directory. If twoContracts is false, only 1 contract is written to the
-// working directory and if twoContracts is true, two contracts are written to the working directory.
-func SetupContracts(t *testing.T, isFile bool, twoContracts bool) string {
-	contractOne := `
-	contract ContractOne {
-		uint x1;
-		uint x2;
-
-		function setx1(uint val) public {
-			x1 = val;
-		}
-
-		function setx2(uint val) public {
-			x2 = val;
-		}
-
-		function medusa_set_x1_x2_sequence() public view returns (bool) {
-			return x1 != x2 * 3 || x1 == 0;
-		}
-	}`
-	contractTwo := `
-	abstract contract AbstractContractTwo {
-		uint x;
-		function setx(uint val) public {
-			x = val;
-		}
-	}
-	contract ContractTwo {
-		uint x1;
-		uint x2;
-
-		function setx1(uint val) public {
-			x1 = val;
-		}
-
-		function setx2(uint val) public {
-			x2 = val;
-		}
-
-		function medusa_set_x1_x2_sequence() public view returns (bool) {
-			return x1 != x2 * 3 || x1 == 0;
-		}
-	}`
-	// Write the contract out to our temporary test directory
-	tempDir := t.TempDir()
-	contractPathOne := path.Join(tempDir, "crytic_one.sol")
-	err := ioutil.WriteFile(contractPathOne, []byte(contractOne), 0644)
-	assert.Nil(t, err)
-	if twoContracts {
-		contractPathTwo := path.Join(tempDir, "crytic_two.sol")
-		err := ioutil.WriteFile(contractPathTwo, []byte(contractTwo), 0644)
-		assert.Nil(t, err)
-	}
-	if isFile {
-		return contractPathOne
-	}
-	return tempDir
-}
-
-*/
-
 // TestCryticSingleFileNoArgsAbsolutePath tests compilation of a single with no additional arguments and absolute path provided
 func TestCryticSingleFileNoArgsAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
@@ -179,6 +115,7 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 	assert.True(t, len(compilations[1].Sources) == 1)
 	// Compilation unit ordering is non-deterministic in JSON output
 	// All we care about is that each comp unit has two contracts for one or the other file
+	// TODO: might be a better way to do this?
 	firstCompilationUnitHasTwoContracts :=
 		(len(compilations[0].Sources["/private"+contractDirectory+"/contracts/SecondContract.sol"].Contracts) == 2 &&
 			len(compilations[0].Sources["/private"+contractDirectory+"/contracts/FirstContract.sol"].Contracts) == 0) ||
