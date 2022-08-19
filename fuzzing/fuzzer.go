@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/status-im/keycard-go/hexutils"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
@@ -54,22 +55,6 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	// Create our accounts based on our configs
 	accounts := make([]fuzzerAccount, 0)
 
-	// Generate new accounts as requested.
-	for i := 0; i < config.Accounts.Generate; i++ {
-		// Generate a new key
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-
-		// Add it to our account list
-		acc := fuzzerAccount{
-			key:     key,
-			address: crypto.PubkeyToAddress(key.PublicKey),
-		}
-		accounts = append(accounts, acc)
-	}
-
 	// Set up accounts for provided keys
 	for i := 0; i < len(config.Accounts.Keys); i++ {
 		// Parse our provided key string
@@ -87,8 +72,30 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		accounts = append(accounts, acc)
 	}
 
-	// Print some output
+	// Generate new accounts as requested.
+	for i := 0; i < config.Accounts.Generate; i++ {
+		// Generate a new key
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+
+		// Add it to our account list
+		acc := fuzzerAccount{
+			key:     key,
+			address: crypto.PubkeyToAddress(key.PublicKey),
+		}
+		accounts = append(accounts, acc)
+	}
+
+	// Print some updates regarding account keys loaded
 	fmt.Printf("Account keys loaded (%d generated, %d pre-defined) ...\n", config.Accounts.Generate, len(config.Accounts.Keys))
+
+	for i := 0; i < len(accounts); i++ {
+		accountAddr := crypto.PubkeyToAddress(accounts[i].key.PublicKey).String()
+		accountKey := hexutils.BytesToHex(crypto.FromECDSA(accounts[i].key))
+		fmt.Printf("-[account #%d] address=%s, key=%s\n", i+1, accountAddr, accountKey)
+	}
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
@@ -96,6 +103,12 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		accounts: accounts,
 	}
 	return fuzzer, nil
+}
+
+// Results exposes the underlying results of the fuzzer, including any violated property tests and transaction sequences
+// used to do so.
+func (f *Fuzzer) Results() *FuzzerResults {
+	return f.results
 }
 
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
@@ -139,9 +152,9 @@ func (f *Fuzzer) Start() error {
 
 	// Initialize generator, results, and metrics providers.
 	f.results = NewFuzzerResults()
-	f.metrics = NewFuzzerMetrics(f.config.Fuzzing.Workers)
+	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) //newTxGeneratorRandom() // TODO: make this configurable after adding more options
+	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
@@ -163,7 +176,7 @@ func (f *Fuzzer) Start() error {
 		// keeping us at our desired thread capacity.
 		go func(workerIndex int) {
 			// Create a new worker for this fuzzing.
-			worker := newFuzzerWorker(workerIndex, f)
+			worker := newFuzzerWorker(f, workerIndex)
 			f.workers[workerIndex] = worker
 
 			// Run the fuzz worker and set our result such that errors or a ctx cancellation will exit the loop.
@@ -198,31 +211,40 @@ func (f *Fuzzer) Stop() {
 
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
 func (f *Fuzzer) runMetricsPrintLoop() {
-	// TODO: This method's tx/s calculation will be slightly off because we don't factor in the time for other
-	//  computations and only sleep one second. This should be timed for appropriate rate calculation later.
-
 	// Define cached variables for our metrics to calculate deltas.
 	var lastTransactionsTested, lastSequencesTested, lastWorkerStartupCount uint64
+	lastPrintedTime := time.Time{}
 	for {
 		// Obtain our metrics
 		transactionsTested := f.metrics.TransactionsTested()
 		sequencesTested := f.metrics.SequencesTested()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 
+		// Calculate time elapsed since the last update
+		secondsSinceLastUpdate := time.Now().Sub(lastPrintedTime).Seconds()
+
 		// Print a metrics update
 		fmt.Printf(
 			"tx num: %d, workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
 			transactionsTested,
 			len(f.metrics.workerMetrics),
-			workerStartupCount-lastWorkerStartupCount,
-			transactionsTested-lastTransactionsTested,
-			sequencesTested-lastSequencesTested,
+			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
+			uint64(float64(transactionsTested-lastTransactionsTested)/secondsSinceLastUpdate),
+			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
 		)
 
 		// Update our delta tracking metrics
+		lastPrintedTime = time.Now()
 		lastTransactionsTested = transactionsTested
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
+
+		// If we reached our transaction threshold, halt
+		testLimit := uint64(f.config.Fuzzing.TestLimit)
+		if testLimit > 0 && transactionsTested >= testLimit {
+			fmt.Printf("transaction test limit reached, halting now ...\n")
+			f.Stop()
+		}
 
 		// Sleep for a second
 		time.Sleep(time.Second)

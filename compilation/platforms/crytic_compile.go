@@ -28,6 +28,11 @@ type CryticCompilationConfig struct {
 	Args []string `json:"args,omitempty"`
 }
 
+// Platform returns the platform type
+func (s *CryticCompilationConfig) Platform() string {
+	return "crytic-compile"
+}
+
 // NewCryticCompilationConfig returns the default configuration options while using `crytic-compile`
 func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	return &CryticCompilationConfig{
