@@ -5,6 +5,7 @@ import (
 	"fmt"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/compilation/types"
+	fuzzingTypes "github.com/trailofbits/medusa/types"
 	"strings"
 	"sync"
 )
@@ -43,12 +44,12 @@ type FuzzerResultFailedTest struct {
 	// TxSequence represents the transaction sequence used to trigger the failed tests.
 	TxSequence []FuzzerResultFailedTestTx
 	// FailedTests represents the property tests which were violated after applying the TxSequence.
-	FailedTests []deployedMethod
+	FailedTests []fuzzingTypes.DeployedMethod
 }
 
 // NewFuzzerResultFailedTest returns a new FuzzerResultFailedTest struct which describes a property test which failed
 // during Fuzzer execution.
-func NewFuzzerResultFailedTest(txSequence []FuzzerResultFailedTestTx, failedTests []deployedMethod) *FuzzerResultFailedTest {
+func NewFuzzerResultFailedTest(txSequence []FuzzerResultFailedTestTx, failedTests []fuzzingTypes.DeployedMethod) *FuzzerResultFailedTest {
 	result := &FuzzerResultFailedTest{
 		TxSequence:  txSequence,
 		FailedTests: failedTests,
@@ -61,7 +62,7 @@ func (ft *FuzzerResultFailedTest) String() string {
 	// Construct a message with all property test names.
 	violatedNames := make([]string, len(ft.FailedTests))
 	for i := 0; i < len(ft.FailedTests); i++ {
-		violatedNames[i] = ft.FailedTests[i].method.Sig
+		violatedNames[i] = ft.FailedTests[i].Method.Sig
 	}
 
 	// Next we'll want the tx call information.

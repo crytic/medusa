@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	fuzzingTypes "github.com/trailofbits/medusa/types"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -33,12 +34,12 @@ type fuzzerWorker struct {
 	// propertyTests describes the contract functions which represent properties to be tested.
 	// These should be read-only (pure/view) functions which take no input parameters and return a boolean variable.
 	// The functions return true if the property/invariant is upheld.
-	propertyTests []deployedMethod
+	propertyTests []fuzzingTypes.DeployedMethod
 
 	// stateChangingMethods is a list of contract functions which are suspected of changing contract state
 	// (non-read-only). Each fuzzerWorker fuzzes a sequence of transactions targeting stateChangingMethods, while
 	// calling all propertyTests intermittently to verify state.
-	stateChangingMethods []deployedMethod
+	stateChangingMethods []fuzzingTypes.DeployedMethod
 }
 
 // newFuzzerWorker creates a new fuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -50,8 +51,8 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) *fuzzerWorker {
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]types.CompiledContract),
-		propertyTests:        make([]deployedMethod, 0),
-		stateChangingMethods: make([]deployedMethod, 0),
+		propertyTests:        make([]fuzzingTypes.DeployedMethod, 0),
+		stateChangingMethods: make([]fuzzingTypes.DeployedMethod, 0),
 	}
 	return &worker
 }
@@ -78,12 +79,12 @@ func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 			// Check if this is a property test and add it to our list if so.
 			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy &&
 				(strings.HasPrefix(method.Name, "medusa_") || strings.HasPrefix(method.Name, "echidna_")) {
-				fw.propertyTests = append(fw.propertyTests, deployedMethod{address: deployedAddress, contract: contract, method: method})
+				fw.propertyTests = append(fw.propertyTests, fuzzingTypes.DeployedMethod{Address: deployedAddress, Contract: contract, Method: method})
 			}
 			continue
 		}
 		// Any non-constant method should be tracked as a state changing method.
-		fw.stateChangingMethods = append(fw.stateChangingMethods, deployedMethod{address: deployedAddress, contract: contract, method: method})
+		fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzingTypes.DeployedMethod{Address: deployedAddress, Contract: contract, Method: method})
 	}
 }
 
@@ -99,7 +100,7 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
-					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].key)
+					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].Key)
 					if err != nil {
 						return err
 					}
@@ -116,14 +117,14 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 
 // checkViolatedPropertyTests executes all property tests in deployed contracts in this fuzzerWorker's testNode.
 // Returns deployedMethod references for all failed property test results.
-func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
+func (fw *fuzzerWorker) checkViolatedPropertyTests() []fuzzingTypes.DeployedMethod {
 	// Create a list of violated properties
-	violatedProperties := make([]deployedMethod, 0)
+	violatedProperties := make([]fuzzingTypes.DeployedMethod, 0)
 
 	// Loop through all property tests methods
 	for _, propertyTest := range fw.propertyTests {
 		// Generate our ABI input data for the call (just the method ID, no args)
-		data, err := propertyTest.contract.Abi.Pack(propertyTest.method.Name)
+		data, err := propertyTest.Contract.Abi.Pack(propertyTest.Method.Name)
 		if err != nil {
 			panic(err)
 		}
@@ -131,8 +132,8 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 		// Call the underlying contract
 		// TODO: Determine if we should use `accounts[0]` or have a separate funded account for the assertions.
 		res, err := fw.testNode.CallContract(ethereum.CallMsg{
-			From:      fw.fuzzer.accounts[0].address,
-			To:        &propertyTest.address,
+			From:      fw.fuzzer.accounts[0].Address,
+			To:        &propertyTest.Address,
 			Gas:       fw.testNode.pendingBlock.GasLimit(),
 			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
 			GasTipCap: big.NewInt(1),
@@ -148,7 +149,7 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 		// Verify the execution did not revert
 		if !res.Failed() {
 			// Decode our ABI outputs
-			retVals, err := propertyTest.method.Outputs.Unpack(res.Return())
+			retVals, err := propertyTest.Method.Outputs.Unpack(res.Return())
 
 			// We should not have an issue decoding ABI
 			if err != nil {
@@ -157,13 +158,13 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 
 			// We should have one return value.
 			if len(retVals) != 1 {
-				panic(fmt.Sprintf("unexpected number of return values in property '%s'", propertyTest.method.Name))
+				panic(fmt.Sprintf("unexpected number of return values in property '%s'", propertyTest.Method.Name))
 			}
 
 			// The one return value should be a bool
 			bl, ok := retVals[0].(bool)
 			if !ok {
-				panic(fmt.Sprintf("could not obtain bool from first ABI output element in property '%s'", propertyTest.method.Name))
+				panic(fmt.Sprintf("could not obtain bool from first ABI output element in property '%s'", propertyTest.Method.Name))
 			}
 
 			// If we returned true, our property test upheld, so we can continue to the next.
@@ -265,7 +266,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 // generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
 // testNode.
 // Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
-func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
+func (fw *fuzzerWorker) generateFuzzedTx() (*fuzzingTypes.TxSequenceElement, error) {
 	// Verify we have state changing methods to call
 	if len(fw.stateChangingMethods) == 0 {
 		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
@@ -277,15 +278,15 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	selectedSender := &fw.fuzzer.accounts[rand.Intn(len(fw.fuzzer.accounts))]
 
 	// Generate fuzzed parameters for the function call
-	args := make([]interface{}, len(selectedMethod.method.Inputs))
+	args := make([]interface{}, len(selectedMethod.Method.Inputs))
 	for i := 0; i < len(args); i++ {
 		// Create our fuzzed parameters.
-		input := selectedMethod.method.Inputs[i]
+		input := selectedMethod.Method.Inputs[i]
 		args[i] = fw.generateFuzzedAbiValue(&input.Type)
 	}
 
 	// Encode our parameters.
-	data, err := selectedMethod.contract.Abi.Pack(selectedMethod.method.Name, args...)
+	data, err := selectedMethod.Contract.Abi.Pack(selectedMethod.Method.Name, args...)
 	if err != nil {
 		panic("could not generate tx due to error: " + err.Error())
 	}
@@ -294,7 +295,7 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	// If this is a payable function, generate value to send
 	var value *big.Int
 	value = big.NewInt(0)
-	if selectedMethod.method.StateMutability == "payable" {
+	if selectedMethod.Method.StateMutability == "payable" {
 		value = fw.fuzzer.generator.GenerateInteger(false, 64)
 	}
 
@@ -302,13 +303,13 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 		Nonce:    0,
 		GasPrice: big.NewInt(0),
 		Gas:      0,
-		To:       &selectedMethod.address,
+		To:       &selectedMethod.Address,
 		Value:    value,
 		Data:     data,
 	}
 
 	// Return our transaction sequence element.
-	return newTxSequenceElement(tx, selectedSender), nil
+	return fuzzingTypes.NewTxSequenceElement(tx, selectedSender), nil
 }
 
 // testTxSequence tests a transaction sequence and checks if it violates any known property tests. If any element of
@@ -316,7 +317,7 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 // can be used to check a pre-defined sequence, or to generate and check one of a provided length.
 // Returns the length of the transaction sequence tested, the violated property test methods, or any error if one
 // occurs.
-func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []deployedMethod, error) {
+func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzingTypes.TxSequenceElement) (int, []fuzzingTypes.DeployedMethod, error) {
 	// After testing the sequence, we'll want to rollback changes and panic if we encounter an error, as it might
 	// mean our testing state is compromised.
 	defer func() {
@@ -340,7 +341,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 		txInfo := txSequence[i]
 
 		// Send our transaction
-		_, _, err = fw.testNode.SignAndSendLegacyTransaction(txInfo.tx, txInfo.sender.key, true)
+		_, _, err = fw.testNode.SignAndSendLegacyTransaction(txInfo.Tx, txInfo.Sender.Key, true)
 		if err != nil {
 			return i, nil, err
 		}
@@ -364,12 +365,12 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 // transactions in the sequence which can be removed while maintaining the same property test violations.
 // Returns a transaction sequence that was optimized to include as little transactions as possible to trigger the
 // expected number of property test violations, or returns an error if one occurs.
-func (fw *fuzzerWorker) shrinkTxSequence(txSequence []*txSequenceElement, expectedFailures int) ([]*txSequenceElement, error) {
+func (fw *fuzzerWorker) shrinkTxSequence(txSequence []*fuzzingTypes.TxSequenceElement, expectedFailures int) ([]*fuzzingTypes.TxSequenceElement, error) {
 	// Define another slice to store our tx sequence
 	optimizedSequence := txSequence
 	for i := 0; i < len(optimizedSequence); {
 		// Recreate our sequence without the item at this index
-		testSeq := make([]*txSequenceElement, 0)
+		testSeq := make([]*fuzzingTypes.TxSequenceElement, 0)
 		testSeq = append(testSeq, optimizedSequence[:i]...)
 		testSeq = append(testSeq, optimizedSequence[i+1:]...)
 
@@ -405,7 +406,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	// Fund all of our users in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for i := 0; i < len(fw.fuzzer.accounts); i++ {
-		genesisAlloc[fw.fuzzer.accounts[i].address] = core.GenesisAccount{
+		genesisAlloc[fw.fuzzer.accounts[i].Address] = core.GenesisAccount{
 			Balance: initBalance,
 		}
 	}
@@ -442,7 +443,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 		}
 
 		// Define our transaction sequence slice to populate.
-		txSequence := make([]*txSequenceElement, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
+		txSequence := make([]*fuzzingTypes.TxSequenceElement, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
 
 		// Test a newly generated transaction sequence (nil entries in the slice result in generated txs)
 		txsTested, violatedPropertyTests, err := fw.testTxSequence(txSequence)
@@ -460,8 +461,10 @@ func (fw *fuzzerWorker) run() (bool, error) {
 				return false, err
 			}
 
-			// TODO: New coverage was achieved
-			_ = coverageUpdated
+			if coverageUpdated {
+				// new coverage has been found
+				fw.AddToCorpus(txSequence)
+			}
 		}
 
 		// Check if we have violated properties
@@ -475,8 +478,8 @@ func (fw *fuzzerWorker) run() (bool, error) {
 			// Create our struct to track tx sequence information for our failed test.
 			txInfoSeq := make([]FuzzerResultFailedTestTx, len(txSequence))
 			for x := 0; x < len(txInfoSeq); x++ {
-				contract := fw.deployedContracts[*txSequence[x].tx.To]
-				txInfoSeq[x] = *NewFuzzerResultFailedTestTx(&contract, txSequence[x].tx)
+				contract := fw.deployedContracts[*txSequence[x].Tx.To]
+				txInfoSeq[x] = *NewFuzzerResultFailedTestTx(&contract, txSequence[x].Tx)
 			}
 			fw.fuzzer.results.addFailedTest(NewFuzzerResultFailedTest(txInfoSeq, violatedPropertyTests))
 
@@ -489,4 +492,36 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
 	return false, nil
+}
+
+//AddToCorpus adds a transaction sequence to the corpus
+func (fw *fuzzerWorker) AddToCorpus(txSequence []*fuzzingTypes.TxSequenceElement) error {
+	var metaTxSequence []*fuzzingTypes.MetaTx
+	for _, tx := range txSequence {
+		metaTx, err := convertLegacyToMeta(tx)
+		if err != nil {
+			return err
+		}
+		metaTxSequence = append(metaTxSequence, metaTx)
+	}
+	// TODO: use some sort of de-duplication logic
+	fw.fuzzer.corpus.Mutex.Lock()
+	fw.fuzzer.corpus.TransactionSequences = append(fw.fuzzer.corpus.TransactionSequences, metaTxSequence)
+	fw.fuzzer.corpus.Mutex.Unlock()
+	return nil
+}
+
+// convertLegacyToMeta converts a LegacyTx to a MetaTx which is a custom transaction that is used for tracking coverage
+// and replaying transactions
+func convertLegacyToMeta(tx *fuzzingTypes.TxSequenceElement) (*fuzzingTypes.MetaTx, error) {
+	metaTx := fuzzingTypes.NewMetaTx()
+	// TODO: Figure out Src
+	// TODO: Is there any way for this this function to throw an error
+	metaTx.Dst = tx.Tx.To
+	metaTx.Nonce = tx.Tx.Nonce
+	metaTx.Gas = tx.Tx.Gas
+	metaTx.GasPrice = tx.Tx.GasPrice
+	metaTx.Data = tx.Tx.Data
+	metaTx.Value = tx.Tx.Value
+	return metaTx, nil
 }

@@ -2,15 +2,14 @@ package fuzzing
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/status-im/keycard-go/hexutils"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
+	fuzzingTypes "github.com/trailofbits/medusa/types"
 	"sync"
 	"time"
 )
@@ -20,7 +19,7 @@ type Fuzzer struct {
 	// config describes the project configuration which the fuzzing is targeting.
 	config configs.ProjectConfig
 	// accounts describes a set of account keys derived from config, for use in fuzzing campaigns.
-	accounts []fuzzerAccount
+	accounts []fuzzingTypes.FuzzerAccount
 
 	// ctx describes the context for the fuzzing run, used to cancel running operations.
 	ctx context.Context
@@ -39,21 +38,15 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// results describes the results we track during our fuzzing campaign, such as failed property tests.
 	results *FuzzerResults
-}
-
-// fuzzerAccount represents a single keypair generated or derived from settings provided in the Fuzzer.config.
-type fuzzerAccount struct {
-	// key describes the ecdsa private key of an account used a Fuzzer instance.
-	key *ecdsa.PrivateKey
-	// address represents the ethereum address which corresponds to key.
-	address common.Address
+	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
+	corpus *fuzzingTypes.Corpus
 }
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	// Create our accounts based on our configs
-	accounts := make([]fuzzerAccount, 0)
+	accounts := make([]fuzzingTypes.FuzzerAccount, 0)
 
 	// Set up accounts for provided keys
 	for i := 0; i < len(config.Accounts.Keys); i++ {
@@ -65,9 +58,9 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		}
 
 		// Add it to our account list
-		acc := fuzzerAccount{
-			key:     key,
-			address: crypto.PubkeyToAddress(key.PublicKey),
+		acc := fuzzingTypes.FuzzerAccount{
+			Key:     key,
+			Address: crypto.PubkeyToAddress(key.PublicKey),
 		}
 		accounts = append(accounts, acc)
 	}
@@ -81,9 +74,9 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 		}
 
 		// Add it to our account list
-		acc := fuzzerAccount{
-			key:     key,
-			address: crypto.PubkeyToAddress(key.PublicKey),
+		acc := fuzzingTypes.FuzzerAccount{
+			Key:     key,
+			Address: crypto.PubkeyToAddress(key.PublicKey),
 		}
 		accounts = append(accounts, acc)
 	}
@@ -92,8 +85,8 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	fmt.Printf("Account keys loaded (%d generated, %d pre-defined) ...\n", config.Accounts.Generate, len(config.Accounts.Keys))
 
 	for i := 0; i < len(accounts); i++ {
-		accountAddr := crypto.PubkeyToAddress(accounts[i].key.PublicKey).String()
-		accountKey := hexutils.BytesToHex(crypto.FromECDSA(accounts[i].key))
+		accountAddr := crypto.PubkeyToAddress(accounts[i].Key.PublicKey).String()
+		accountKey := hexutils.BytesToHex(crypto.FromECDSA(accounts[i].Key))
 		fmt.Printf("-[account #%d] address=%s, key=%s\n", i+1, accountAddr, accountKey)
 	}
 
