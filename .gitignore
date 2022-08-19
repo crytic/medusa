@@ -16,3 +16,5 @@
 
 # PyCharm project dir
 .idea/
+
+*node_modules/

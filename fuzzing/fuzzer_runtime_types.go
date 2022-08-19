@@ -32,7 +32,7 @@ type txSequenceElement struct {
 func newTxSequenceElement(tx *coreTypes.LegacyTx, sender *fuzzerAccount) *txSequenceElement {
 	// Create a sequence element and return it.
 	elem := &txSequenceElement{
-		tx: tx,
+		tx:     tx,
 		sender: sender,
 	}
 	return elem

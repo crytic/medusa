@@ -87,7 +87,26 @@ func (ft *FuzzerResultFailedTest) String() string {
 		if err != nil {
 			b = []byte("<error resolving args>")
 		}
-		txMethodNames[i] = fmt.Sprintf("[%d] %s(%s)", i+1, method.Name, string(b))
+
+		// Obtain our sender for this transaction
+		var senderStr string
+		sender, err := coreTypes.Sender(coreTypes.HomesteadSigner{}, coreTypes.NewTx(failedTestTx.Tx))
+		if err == nil {
+			senderStr = sender.String()
+		} else {
+			senderStr = "<unresolved>"
+		}
+
+		txMethodNames[i] = fmt.Sprintf(
+			"[%d] %s(%s) (sender=%s, gas=%d, gasprice=%s, value=%s)",
+			i+1,
+			method.Name,
+			string(b),
+			senderStr,
+			failedTestTx.Tx.Gas,
+			failedTestTx.Tx.GasPrice.String(),
+			failedTestTx.Tx.Value.String(),
+		)
 	}
 
 	// Create our final message and return it.
