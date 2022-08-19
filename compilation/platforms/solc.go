@@ -46,7 +46,6 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 
 // SetSolcOutputOptions determines what outputOptions should be provided to solc given a semver.Version
 func (s *SolcCompilationConfig) SetSolcOutputOptions(v *semver.Version) string {
-	// TODO: should we remove patch conditionals if all patch versions are supported for a given minor version?
 	// useCompactFormat will add the compact-format output option
 	// if version is 0.4.12-0.4.26 or 0.5.0-0.5.17 or 0.6.0-0.6.12 or 0.7.0-0.7.6 or 0.8.0-0.8.9
 	useCompactFormat := (v.Major() == 0 && v.Minor() == 4 && v.Patch() >= 12 && v.Patch() <= 26) ||
