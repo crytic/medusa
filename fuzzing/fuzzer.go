@@ -105,6 +105,12 @@ func NewFuzzer(config configs.ProjectConfig) (*Fuzzer, error) {
 	return fuzzer, nil
 }
 
+// Results exposes the underlying results of the fuzzer, including any violated property tests and transaction sequences
+// used to do so.
+func (f *Fuzzer) Results() *FuzzerResults {
+	return f.results
+}
+
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
@@ -232,6 +238,13 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		lastTransactionsTested = transactionsTested
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
+
+		// If we reached our transaction threshold, halt
+		testLimit := uint64(f.config.Fuzzing.TestLimit)
+		if testLimit > 0 && transactionsTested >= testLimit {
+			fmt.Printf("transaction test limit reached, halting now ...\n")
+			f.Stop()
+		}
 
 		// Sleep for a second
 		time.Sleep(time.Second)
