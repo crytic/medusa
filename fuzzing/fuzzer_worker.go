@@ -111,7 +111,7 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
-					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].key)
+					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].address)
 					if err != nil {
 						return err
 					}
@@ -145,7 +145,7 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 		res, err := fw.testNode.CallContract(ethereum.CallMsg{
 			From:      fw.fuzzer.accounts[0].address,
 			To:        &propertyTest.address,
-			Gas:       fw.testNode.pendingBlock.GasLimit(),
+			Gas:       fw.testNode.GetBlockHeader().GasLimit,
 			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
 			GasTipCap: big.NewInt(1),
 			Value:     big.NewInt(0), // the remaining balance for fee is 2.1ether
@@ -332,7 +332,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 	// After testing the sequence, we'll want to rollback changes and panic if we encounter an error, as it might
 	// mean our testing state is compromised.
 	defer func() {
-		if err := fw.testNode.RevertUncommittedChanges(); err != nil {
+		if err := fw.testNode.Revert(); err != nil {
 			panic(err.Error())
 		}
 	}()
@@ -352,10 +352,8 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 		txInfo := txSequence[i]
 
 		// Send our transaction
-		_, _, err = fw.testNode.SignAndSendLegacyTransaction(txInfo.tx, txInfo.sender.key, true)
-		if err != nil {
-			return i, nil, err
-		}
+		msg := fw.testNode.createMessage(txInfo.sender.address, txInfo.tx.To, txInfo.tx.Value, txInfo.tx.Data)
+		fw.testNode.SendMessage(msg)
 
 		// Record any violated property tests.
 		violatedPropertyTests := fw.checkViolatedPropertyTests()
@@ -440,6 +438,9 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	// Snapshot so we can revert to our vanilla post-deployment state after each tx sequence test.
+	fw.testNode.Snapshot()
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
