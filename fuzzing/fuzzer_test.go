@@ -71,6 +71,21 @@ var defaultTestingFuzzConfig = configs.FuzzingConfig{
 	},
 }
 
+// TestFuzzVMBlockNumber runs a test to solve block_number.sol
+func TestFuzzVMBlockNumber(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", defaultTestingFuzzConfig)
+}
+
+// TestFuzzVMTimestamp runs a test to solve block_number.sol
+func TestFuzzVMTimestamp(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", defaultTestingFuzzConfig)
+}
+
+// TestFuzzAssertionsImmediate runs a test to solve assertion_immediate.sol
+func TestFuzzAssertionsImmediate(t *testing.T) {
+	//testFuzzSolcTarget(t, "testdata/contracts/basic_assertions/assertion_immediate.sol", defaultTestingFuzzConfig)
+}
+
 // TestFuzzMagicNumbersSimpleXY runs a test to solve simple_xy.sol
 func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", defaultTestingFuzzConfig)
