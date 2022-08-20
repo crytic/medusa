@@ -1,7 +1,6 @@
 package fuzzing
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
@@ -26,16 +24,27 @@ import (
 )
 
 type testNode struct {
-	chain   *core.BlockChain
-	kvstore *memorydb.Database
-	db      ethdb.Database
-	signer  *coreTypes.HomesteadSigner
+	// chain represents the blocks post-genesis that were generated after sending messages.
+	chain []TestNodeBlock
 
-	pendingBlock *coreTypes.Block
-	pendingState *state.StateDB
+	// dummyChain is core.BlockChain instance which is used to construct the genesis state. After such point it is
+	// only used for reference to fulfill the needs of some methods.
+	dummyChain *core.BlockChain
+	kvstore    *memorydb.Database
+	db         ethdb.Database
+	signer     *coreTypes.HomesteadSigner
+
+	state    *state.StateDB
+	snapshot int
 
 	tracer   *tracing.FuzzerTracer
 	vmConfig *vm.Config
+}
+
+type TestNodeBlock struct {
+	header  *coreTypes.Header
+	message core.Message
+	receipt *coreTypes.Receipt
 }
 
 func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
@@ -61,32 +70,33 @@ func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Create a VM config that traces execution, so we can establish a coverage map
 	tracer := tracing.NewFuzzerTracer(true)
 	vmConfig := &vm.Config{
-		Debug:  true,
-		Tracer: tracer,
+		Debug:     true,
+		Tracer:    tracer,
+		NoBaseFee: true,
 	}
 
-	// Create a new blockchain
-	chain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
+	// Create a new blockchain provider
+	dummyChain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Obtain our current state
-	pendingState, err := chain.State()
+	state, err := dummyChain.State()
 	if err != nil {
 		return nil, err
 	}
 
 	// Create our instance
 	g := &testNode{
-		chain:        chain,
-		kvstore:      kvstore,
-		db:           db,
-		signer:       new(coreTypes.HomesteadSigner),
-		pendingBlock: chain.CurrentBlock(),
-		pendingState: pendingState,
-		tracer:       tracer,
-		vmConfig:     vmConfig,
+		chain:      make([]TestNodeBlock, 0),
+		dummyChain: dummyChain,
+		kvstore:    kvstore,
+		db:         db,
+		signer:     new(coreTypes.HomesteadSigner),
+		state:      state,
+		tracer:     tracer,
+		vmConfig:   vmConfig,
 	}
 
 	return g, nil
@@ -98,50 +108,22 @@ func (t *testNode) MemoryDatabaseEntryCount() int {
 
 func (t *testNode) Stop() {
 	// Stop the underlying chain's update loop
-	t.chain.Stop()
+	t.dummyChain.Stop()
 }
 
-func (t *testNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
-	// Create our blocks.
-	blocks, receipts := vendored.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *vendored.BlockGen) {
-		// Set the coinbase and difficulty
-		b.SetCoinbase(common.Address{1})
-		b.SetDifficulty(big.NewInt(1))
-
-		// Add the transaction.
-		b.AddTx(tx, *t.vmConfig)
-	})
-
-	// Obtain our current chain's state, so that we can use its database to obtain the pending state.
-	stateDB, err := t.chain.State()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Set our pending block and state.
-	t.pendingBlock = blocks[0]
-	t.pendingState, err = state.New(t.pendingBlock.Root(), stateDB.Database(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return blocks[0], &receipts[0], nil
+func (t *testNode) Snapshot() {
+	// Save our snapshot (block height)
+	t.snapshot = len(t.chain)
 }
 
-func (t *testNode) Commit() {
-	// Insert our pending block into the chain.
-	_, err := t.chain.InsertChain([]*coreTypes.Block{t.pendingBlock})
-	if err != nil {
-		panic("failed to insert pending block into chain.")
-	}
-}
-
-func (t *testNode) RevertUncommittedChanges() error {
-	// Reset our pending block to our chain's current block
-	t.pendingBlock = t.chain.CurrentBlock()
-
-	// Reset our pending state to our chain's current state.
+func (t *testNode) Revert() error {
 	var err error
-	t.pendingState, err = t.chain.State()
+
+	// Adjust our chain length to match our snapshot
+	t.chain = t.chain[:t.snapshot]
+
+	// Reload our state from our database
+	t.state, err = state.New(t.GetBlockHeader().Root, t.state.Database(), nil)
 	if err != nil {
 		return err
 	}
@@ -150,25 +132,25 @@ func (t *testNode) RevertUncommittedChanges() error {
 
 func (t *testNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
 	// Obtain our snapshot
-	snapshot := t.pendingState.Snapshot()
+	snapshot := t.state.Snapshot()
 
 	// Call our contract
-	res, err := t.callContract(call, t.pendingBlock, t.pendingState)
+	res, err := t.callContract(call, t.GetBlockHeader(), t.state)
 
 	// Revert to our snapshot to undo any changes.
-	t.pendingState.RevertToSnapshot(snapshot)
+	t.state.RevertToSnapshot(snapshot)
 
 	return res, err
 }
 
 // Copied from go-ethereum/accounts/abi/bind/backends/simulated.go
-func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+func (t *testNode) callContract(call ethereum.CallMsg, header *coreTypes.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	head := t.chain.CurrentHeader()
-	if !t.chain.Config().IsLondon(head.Number) {
+	head := t.dummyChain.CurrentHeader()
+	if !t.dummyChain.Config().IsLondon(head.Number) {
 		// If there's no basefee, then it must be a non-1559 execution
 		if call.GasPrice == nil {
 			call.GasPrice = new(big.Int)
@@ -204,42 +186,152 @@ func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, s
 	// Set infinite balance to the fake caller account.
 	from := stateDB.GetOrNewStateObject(call.From)
 	from.SetBalance(math.MaxBig256)
+
 	// Execute the call.
-	msg := callMsg{call}
+	msg := t.createMessage(call.From, call.To, call.Value, call.Data)
 
 	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(block.Header(), t.chain, nil)
+	evmContext := core.NewEVMBlockContext(header, t.dummyChain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, t.chain.Config(), vm.Config{NoBaseFee: true})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
 
-func (t *testNode) SignAndSendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecdsa.PrivateKey, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
-	// Apply fixups related to gas/nonce
-	if applyFixups {
-		accountAddress := crypto.PubkeyToAddress(signerKey.PublicKey)
-		tx.Nonce = t.pendingState.GetNonce(accountAddress)
-		tx.GasPrice = big.NewInt(params.InitialBaseFee)
-		tx.Gas = t.pendingBlock.GasLimit()
-	}
-
-	// Sign the transaction
-	signedTx, err := coreTypes.SignNewTx(signerKey, t.signer, tx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not sign tx due to an error when signing: %s", err.Error())
-	}
-
-	// Set our signature parameters in the legacy tx
-	tx.V, tx.R, tx.S = signedTx.RawSignatureValues()
-
-	// Send our deployment transaction
-	return t.SendTransaction(signedTx)
+func messageToTransaction(msg coreTypes.Message) *coreTypes.Transaction {
+	// TODO: This probably might not hash due to invalid signatures.
+	return coreTypes.NewTx(&coreTypes.LegacyTx{
+		Nonce:    msg.Nonce(),
+		GasPrice: msg.GasPrice(),
+		Gas:      msg.Gas(),
+		To:       msg.To(),
+		Value:    msg.Value(),
+		Data:     msg.Data(),
+	})
 }
 
-func (t *testNode) DeployContract(contract types.CompiledContract, deployerKey *ecdsa.PrivateKey) (common.Address, error) {
+func (t *testNode) createMessage(from common.Address, to *common.Address, value *big.Int, data []byte) coreTypes.Message {
+	nonce := t.state.GetNonce(from)
+	msg := coreTypes.NewMessage(from, to, nonce, value, t.dummyChain.GasLimit(), big.NewInt(1), big.NewInt(0), big.NewInt(0), data, nil, true)
+	return msg
+}
+
+func (t *testNode) GetBlockNumber() int64 {
+	// Our chain length is genesis block + test node blocks
+	return int64(len(t.chain))
+}
+
+func (t *testNode) GetBlockHeader() *coreTypes.Header {
+	// If we have any blocks on the test chain, return the latest
+	if len(t.chain) > 0 {
+		return t.chain[len(t.chain)-1].header
+	}
+
+	// Otherwise return the genesis header
+	return t.dummyChain.CurrentHeader()
+}
+
+func (t *testNode) GetBlockHashFromBlockNumber(blockNumber uint64) common.Hash {
+	// If this is the genesis block, return that hash from the chain.
+	if len(t.chain) == 0 {
+		return t.dummyChain.CurrentBlock().Hash()
+	} else {
+		// Otherwise any block but the genesis will be given an empty hash with the block number set at the end
+		// for simplicity/uniqueness/computational speed..
+		return t.chain[len(t.chain)-1].header.Hash()
+	}
+}
+
+func (t *testNode) SendMessage(msg coreTypes.Message) *TestNodeBlock {
+	blockNumber := big.NewInt(t.GetBlockNumber() + 1)
+	blockHash := t.GetBlockHashFromBlockNumber(blockNumber.Uint64())
+	blockTimestamp := uint64(t.GetBlockNumber() + 1) // TODO:
+	coinbase := common.Address{}                     // TODO: Reference the previous coinbase.
+	config := t.dummyChain.Config()
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is safe, this is a lot of gas!
+	var usedGas uint64
+
+	parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
+	parentBlockHash := t.GetBlockHashFromBlockNumber(parentBlockNumber.Uint64()) // TODO: Figure this out
+
+	// Use the default set gas limit from the dummy chain
+	gasLimit := t.dummyChain.GasLimit()
+
+	// Create a block header for this block:
+	// - Root hashes are not populated on first run.
+	// - State root hash is populated later in this method.
+	// - Bloom is not populated on first run.
+	// - TODO: Difficulty is not proven to be safe
+	// - GasUsed is not populated on first run.
+	// - Mix digest is only useful for randomness, so we just use block hash.
+	// - TODO: Figure out appropriate params for BaseFee
+	header := &coreTypes.Header{
+		ParentHash:  parentBlockHash,
+		UncleHash:   coreTypes.EmptyUncleHash,
+		Coinbase:    coinbase,
+		Root:        coreTypes.EmptyRootHash,
+		TxHash:      coreTypes.EmptyRootHash,
+		ReceiptHash: coreTypes.EmptyRootHash,
+		Bloom:       coreTypes.Bloom{},
+		Difficulty:  common.Big0,
+		Number:      blockNumber,
+		GasLimit:    gasLimit,
+		GasUsed:     0,
+		Time:        blockTimestamp,
+		Extra:       []byte{},
+		MixDigest:   blockHash,
+		Nonce:       coreTypes.BlockNonce{},
+		BaseFee:     big.NewInt(params.InitialBaseFee),
+	}
+
+	// Create a tx from our msg, for hashing/receipt purposes
+	tx := messageToTransaction(msg)
+
+	// Create a new context to be used in the EVM environment
+	blockContext := core.NewEVMBlockContext(header, t.dummyChain, &coinbase)
+
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used.
+	blockContext.GetHash = func(num uint64) common.Hash {
+		// TODO: Implement getting header hash.
+		return common.Hash{}
+	}
+
+	// Create our EVM instance.
+	evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
+
+	// Apply our transaction
+	receipt, err := vendored.EVMApplyTransaction(msg, config, &coinbase, gasPool, t.state, blockNumber, blockHash, tx, &usedGas, evm)
+	if err != nil {
+		panic(fmt.Sprintf("state write error: %v", err))
+	}
+
+	// Write state changes to db
+	root, err := t.state.Commit(config.IsEIP158(header.Number))
+	if err != nil {
+		panic(fmt.Sprintf("state write error: %v", err))
+	}
+	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
+		panic(fmt.Sprintf("trie write error: %v", err))
+	}
+
+	// Update the header's state root hash
+	header.Root = root // TODO: t.state.IntermediateRoot(config.IsEIP158(parentBlockNumber))
+
+	// Create a new block for our test node
+	block := TestNodeBlock{
+		header:  header,
+		message: msg,
+		receipt: receipt,
+	}
+
+	// Append it to our chain
+	t.chain = append(t.chain, block)
+	return &block
+}
+
+func (t *testNode) DeployContract(contract types.CompiledContract, deployer common.Address) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
@@ -251,46 +343,17 @@ func (t *testNode) DeployContract(contract types.CompiledContract, deployerKey *
 
 	// Create a transaction to represent our contract deployment.
 	// NOTE: We don't fill out nonce/gas as SignAndSendLegacyTransaction will apply fixups below.
-	tx := &coreTypes.LegacyTx{
-		Nonce:    0,
-		GasPrice: big.NewInt(0),
-		Gas:      0,
-		To:       nil,
-		Value:    big.NewInt(0),
-		Data:     b,
-	}
+	amount := big.NewInt(0)
+	msg := t.createMessage(deployer, nil, amount, b)
 
 	// Send our deployment transaction
-	_, receipts, err := t.SignAndSendLegacyTransaction(tx, deployerKey, true)
-	if err != nil {
-		return common.Address{0}, err
-	}
+	block := t.SendMessage(msg)
 
 	// Ensure our transaction succeeded
-	if (*receipts)[0].Status != coreTypes.ReceiptStatusSuccessful {
+	if block.receipt.Status != coreTypes.ReceiptStatusSuccessful {
 		return common.Address{0}, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
-	// Commit our state immediately so our pending state can access
-	t.Commit()
-
 	// Return the address for the deployed contract.
-	return (*receipts)[0].ContractAddress, nil
+	return block.receipt.ContractAddress, nil
 }
-
-// callMsg implements core.Message to allow passing it as a transaction simulator.
-type callMsg struct {
-	ethereum.CallMsg
-}
-
-func (m callMsg) From() common.Address             { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64                    { return 0 }
-func (m callMsg) IsFake() bool                     { return true }
-func (m callMsg) To() *common.Address              { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int               { return m.CallMsg.GasPrice }
-func (m callMsg) GasFeeCap() *big.Int              { return m.CallMsg.GasFeeCap }
-func (m callMsg) GasTipCap() *big.Int              { return m.CallMsg.GasTipCap }
-func (m callMsg) Gas() uint64                      { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int                  { return m.CallMsg.Value }
-func (m callMsg) Data() []byte                     { return m.CallMsg.Data }
-func (m callMsg) AccessList() coreTypes.AccessList { return m.CallMsg.AccessList }
