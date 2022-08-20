@@ -62,7 +62,7 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig con
 // Create our configuration for testing
 var defaultTestingFuzzConfig = configs.FuzzingConfig{
 	Workers:                  10,
-	WorkerDatabaseEntryLimit: 1000,
+	WorkerDatabaseEntryLimit: 10000,
 	Timeout:                  30,
 	TestLimit:                0,
 	MaxTxSequenceLength:      100,

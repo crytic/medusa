@@ -21,9 +21,9 @@ type deployedMethod struct {
 
 // txSequenceElement describes an element of a transaction sequence.
 type txSequenceElement struct {
-	// tx represents the actual transaction sent to the testNode in a fuzzing transaction sequence.
+	// tx represents the actual transaction sent to the TestNode in a fuzzing transaction sequence.
 	tx *coreTypes.LegacyTx
-	// sender represents the account which was selected to send the tx on the testNode.
+	// sender represents the account which was selected to send the tx on the TestNode.
 	sender *fuzzerAccount
 }
 

@@ -2,28 +2,27 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/trailofbits/medusa/compilation/types"
+	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/tracing"
 	"github.com/trailofbits/medusa/fuzzing/vendored"
 	"math/big"
 	"strings"
 )
 
-type testNode struct {
+// TestNode represents a simulated Ethereum backend used for testing
+type TestNode struct {
 	// chain represents the blocks post-genesis that were generated after sending messages.
 	chain []TestNodeBlock
 
@@ -32,7 +31,7 @@ type testNode struct {
 	dummyChain *core.BlockChain
 	kvstore    *memorydb.Database
 	db         ethdb.Database
-	signer     *coreTypes.HomesteadSigner
+	signer     *types.HomesteadSigner
 
 	state    *state.StateDB
 	snapshot int
@@ -41,13 +40,15 @@ type testNode struct {
 	vmConfig *vm.Config
 }
 
+// TestNodeBlock represents a block or update within a TestNode
 type TestNodeBlock struct {
-	header  *coreTypes.Header
+	header  *types.Header
 	message core.Message
-	receipt *coreTypes.Receipt
+	receipt *types.Receipt
 }
 
-func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
+// NewTestNode creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
+func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	// Define our chain configuration
 	chainConfig := params.TestChainConfig
 
@@ -82,19 +83,19 @@ func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	}
 
 	// Obtain our current state
-	state, err := dummyChain.State()
+	stateDb, err := dummyChain.State()
 	if err != nil {
 		return nil, err
 	}
 
 	// Create our instance
-	g := &testNode{
+	g := &TestNode{
 		chain:      make([]TestNodeBlock, 0),
 		dummyChain: dummyChain,
 		kvstore:    kvstore,
 		db:         db,
-		signer:     new(coreTypes.HomesteadSigner),
-		state:      state,
+		signer:     new(types.HomesteadSigner),
+		state:      stateDb,
 		tracer:     tracer,
 		vmConfig:   vmConfig,
 	}
@@ -102,107 +103,77 @@ func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	return g, nil
 }
 
-func (t *testNode) MemoryDatabaseEntryCount() int {
+// MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
+func (t *TestNode) MemoryDatabaseEntryCount() int {
 	return t.kvstore.Len()
 }
 
-func (t *testNode) Stop() {
+// Stop is a TestNode method used to tear down the node.
+func (t *TestNode) Stop() {
 	// Stop the underlying chain's update loop
 	t.dummyChain.Stop()
 }
 
-func (t *testNode) Snapshot() {
+// Snapshot saves the given chain state, which can later be reverted to by calling the RevertToSnapshot
+// method.
+func (t *TestNode) Snapshot() {
 	// Save our snapshot (block height)
 	t.snapshot = len(t.chain)
 }
 
-func (t *testNode) Revert() error {
+// RevertToSnapshot uses a snapshot set by the Snapshot method to revert the test chain state to its previous state.
+// Returns an error if one occurs.
+func (t *TestNode) RevertToSnapshot() error {
 	var err error
 
 	// Adjust our chain length to match our snapshot
 	t.chain = t.chain[:t.snapshot]
 
 	// Reload our state from our database
-	t.state, err = state.New(t.GetBlockHeader().Root, t.state.Database(), nil)
+	t.state, err = state.New(t.BlockHeader().Root, t.state.Database(), nil)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *testNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
-	// Obtain our snapshot
+// CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
+// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
+func (t *TestNode) CallContract(call types.Message) (*core.ExecutionResult, error) {
+	// Obtain our state snapshot (note: this is different from the test node snapshot)
 	snapshot := t.state.Snapshot()
 
-	// Call our contract
-	res, err := t.callContract(call, t.GetBlockHeader(), t.state)
+	// Set infinite balance to the fake caller account
+	from := t.state.GetOrNewStateObject(call.From())
+	from.SetBalance(math.MaxBig256)
 
-	// Revert to our snapshot to undo any changes.
+	// Execute the call.
+	msg := t.CreateMessage(call.From(), call.To(), call.Value(), call.Data())
+
+	// Create our transaction and block contexts for the vm
+	txContext := core.NewEVMTxContext(msg)
+	evmContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
+
+	// Create our EVM instance
+	evm := vm.NewEVM(evmContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
+
+	// Fund the gas pool for execution appropriately
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	// Perform our state transition to obtain the result.
+	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
+
+	// Revert to our state snapshot to undo any changes.
 	t.state.RevertToSnapshot(snapshot)
 
 	return res, err
 }
 
-// Copied from go-ethereum/accounts/abi/bind/backends/simulated.go
-func (t *testNode) callContract(call ethereum.CallMsg, header *coreTypes.Header, stateDB *state.StateDB) (*core.ExecutionResult, error) {
-	// Gas prices post 1559 need to be initialized
-	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
-		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	head := t.dummyChain.CurrentHeader()
-	if !t.dummyChain.Config().IsLondon(head.Number) {
-		// If there's no basefee, then it must be a non-1559 execution
-		if call.GasPrice == nil {
-			call.GasPrice = new(big.Int)
-		}
-		call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
-	} else {
-		// A basefee is provided, necessitating 1559-type execution
-		if call.GasPrice != nil {
-			// User specified the legacy gas field, convert to 1559 gas typing
-			call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
-		} else {
-			// User specified 1559 gas feilds (or none), use those
-			if call.GasFeeCap == nil {
-				call.GasFeeCap = new(big.Int)
-			}
-			if call.GasTipCap == nil {
-				call.GasTipCap = new(big.Int)
-			}
-			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
-			call.GasPrice = new(big.Int)
-			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
-				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, head.BaseFee), call.GasFeeCap)
-			}
-		}
-	}
-	// Ensure message is initialized properly.
-	if call.Gas == 0 {
-		call.Gas = 50000000
-	}
-	if call.Value == nil {
-		call.Value = new(big.Int)
-	}
-	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256)
-
-	// Execute the call.
-	msg := t.createMessage(call.From, call.To, call.Value, call.Data)
-
-	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(header, t.dummyChain, nil)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
-
-	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
-}
-
-func messageToTransaction(msg coreTypes.Message) *coreTypes.Transaction {
-	// TODO: This probably might not hash due to invalid signatures.
-	return coreTypes.NewTx(&coreTypes.LegacyTx{
+// messageToTransaction derived a types.Transaction from a types.Message.
+func messageToTransaction(msg types.Message) *types.Transaction {
+	// TODO: This might have issues in the future due to not being given a valid signatures.
+	//  This should probably be verified at some point.
+	return types.NewTx(&types.LegacyTx{
 		Nonce:    msg.Nonce(),
 		GasPrice: msg.GasPrice(),
 		Gas:      msg.Gas(),
@@ -212,18 +183,30 @@ func messageToTransaction(msg coreTypes.Message) *coreTypes.Transaction {
 	})
 }
 
-func (t *testNode) createMessage(from common.Address, to *common.Address, value *big.Int, data []byte) coreTypes.Message {
+// CreateMessage creates an object which satisfies the types.Message interface. It populates gas limit, price, nonce,
+// and other fields automatically, and sets fee/tip caps such that no base fee is charged (for testing).
+func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) types.Message {
+	// Obtain our message parameters
 	nonce := t.state.GetNonce(from)
-	msg := coreTypes.NewMessage(from, to, nonce, value, t.dummyChain.GasLimit(), big.NewInt(1), big.NewInt(0), big.NewInt(0), data, nil, true)
-	return msg
+	gasLimit := t.dummyChain.GasLimit()
+	gasPrice := big.NewInt(1)
+
+	// Setting fee and tip cap to zero alongside the NoBaseFee for the vm.Config will bypass base fee validation.
+	gasFeeCap := big.NewInt(0)
+	gasTipCap := big.NewInt(0)
+
+	// Construct and return a new message from our given parameters.
+	return types.NewMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data, nil, true)
 }
 
-func (t *testNode) GetBlockNumber() int64 {
+// BlockNumber returns the test chain head's block number, where zero is the genesis block.
+func (t *TestNode) BlockNumber() int64 {
 	// Our chain length is genesis block + test node blocks
 	return int64(len(t.chain))
 }
 
-func (t *testNode) GetBlockHeader() *coreTypes.Header {
+// BlockHeader returns the block header of the current test chain head.
+func (t *TestNode) BlockHeader() *types.Header {
 	// If we have any blocks on the test chain, return the latest
 	if len(t.chain) > 0 {
 		return t.chain[len(t.chain)-1].header
@@ -233,31 +216,23 @@ func (t *testNode) GetBlockHeader() *coreTypes.Header {
 	return t.dummyChain.CurrentHeader()
 }
 
-func (t *testNode) GetBlockHashFromBlockNumber(blockNumber uint64) common.Hash {
-	// If this is the genesis block, return that hash from the chain.
-	if len(t.chain) == 0 {
-		return t.dummyChain.CurrentBlock().Hash()
-	} else {
-		// Otherwise any block but the genesis will be given an empty hash with the block number set at the end
-		// for simplicity/uniqueness/computational speed..
-		return t.chain[len(t.chain)-1].header.Hash()
-	}
-}
-
-func (t *testNode) SendMessage(msg coreTypes.Message) *TestNodeBlock {
-	blockNumber := big.NewInt(t.GetBlockNumber() + 1)
-	blockHash := t.GetBlockHashFromBlockNumber(blockNumber.Uint64())
-	blockTimestamp := uint64(t.GetBlockNumber() + 1) // TODO:
-	coinbase := common.Address{}                     // TODO: Reference the previous coinbase.
+// SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
+// with it, as if a transaction were just received. Returns the TestNodeBlock representing the result of the state
+// transition.
+func (t *TestNode) SendMessage(msg types.Message) *TestNodeBlock {
+	// Set up some parameters used to construct our test block
+	blockNumber := big.NewInt(t.BlockNumber() + 1)
+	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO:
+	coinbase := t.BlockHeader().Coinbase
 	config := t.dummyChain.Config()
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is safe, this is a lot of gas!
 	var usedGas uint64
 
-	parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
-	parentBlockHash := t.GetBlockHashFromBlockNumber(parentBlockNumber.Uint64()) // TODO: Figure this out
-
 	// Use the default set gas limit from the dummy chain
 	gasLimit := t.dummyChain.GasLimit()
+
+	//parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
+	parentBlockHash := t.BlockHeader().Hash()
 
 	// Create a block header for this block:
 	// - Root hashes are not populated on first run.
@@ -265,26 +240,27 @@ func (t *testNode) SendMessage(msg coreTypes.Message) *TestNodeBlock {
 	// - Bloom is not populated on first run.
 	// - TODO: Difficulty is not proven to be safe
 	// - GasUsed is not populated on first run.
-	// - Mix digest is only useful for randomness, so we just use block hash.
+	// - Mix digest is only useful for randomness, so we just use previous block hash.
 	// - TODO: Figure out appropriate params for BaseFee
-	header := &coreTypes.Header{
+	header := &types.Header{
 		ParentHash:  parentBlockHash,
-		UncleHash:   coreTypes.EmptyUncleHash,
+		UncleHash:   types.EmptyUncleHash,
 		Coinbase:    coinbase,
-		Root:        coreTypes.EmptyRootHash,
-		TxHash:      coreTypes.EmptyRootHash,
-		ReceiptHash: coreTypes.EmptyRootHash,
-		Bloom:       coreTypes.Bloom{},
+		Root:        types.EmptyRootHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		Bloom:       types.Bloom{},
 		Difficulty:  common.Big0,
 		Number:      blockNumber,
 		GasLimit:    gasLimit,
 		GasUsed:     0,
 		Time:        blockTimestamp,
 		Extra:       []byte{},
-		MixDigest:   blockHash,
-		Nonce:       coreTypes.BlockNonce{},
+		MixDigest:   parentBlockHash,
+		Nonce:       types.BlockNonce{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
+	blockHash := header.Hash()
 
 	// Create a tx from our msg, for hashing/receipt purposes
 	tx := messageToTransaction(msg)
@@ -331,7 +307,10 @@ func (t *testNode) SendMessage(msg coreTypes.Message) *TestNodeBlock {
 	return &block
 }
 
-func (t *testNode) DeployContract(contract types.CompiledContract, deployer common.Address) (common.Address, error) {
+// DeployContract is a helper method used to deploy a given types.CompiledContract to the current instance of the
+// test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
+// otherwise returns an error.
+func (t *TestNode) DeployContract(contract compilationTypes.CompiledContract, deployer common.Address) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
@@ -341,17 +320,16 @@ func (t *testNode) DeployContract(contract types.CompiledContract, deployer comm
 	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
 	// contracts.
 
-	// Create a transaction to represent our contract deployment.
-	// NOTE: We don't fill out nonce/gas as SignAndSendLegacyTransaction will apply fixups below.
-	amount := big.NewInt(0)
-	msg := t.createMessage(deployer, nil, amount, b)
+	// Create a message to represent our contract deployment.
+	value := big.NewInt(0)
+	msg := t.CreateMessage(deployer, nil, value, b)
 
 	// Send our deployment transaction
 	block := t.SendMessage(msg)
 
 	// Ensure our transaction succeeded
-	if block.receipt.Status != coreTypes.ReceiptStatusSuccessful {
-		return common.Address{0}, fmt.Errorf("contract deployment tx returned a failed status")
+	if block.receipt.Status != types.ReceiptStatusSuccessful {
+		return common.Address{}, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
 	// Return the address for the deployed contract.

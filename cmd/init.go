@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/compilation"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -18,8 +17,8 @@ var initCmd = &cobra.Command{
 	Use:   "init [platform]",
 	Short: "Initializes a project configuration",
 	Long:  `Initializes a project configuration`,
-	Args: cmdValidateInitArgs,
-	RunE: cmdRunInit,
+	Args:  cmdValidateInitArgs,
+	RunE:  cmdRunInit,
 }
 
 func init() {
@@ -32,7 +31,7 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	// Validate we have a positional argument to represent our platform
 	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
 		supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
-		return fmt.Errorf("init requires a platform argument (options: %s)",strings.Join(supportedPlatforms, ", "))
+		return fmt.Errorf("init requires a platform argument (options: %s)", strings.Join(supportedPlatforms, ", "))
 	}
 
 	// Ensure the provided argument refers to a supported platform
@@ -52,7 +51,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		argInitOutputPath = path.Join(workingDirectory, DefaultProjectConfigFilename)
+		argInitOutputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
 	// Get a default project configuration
