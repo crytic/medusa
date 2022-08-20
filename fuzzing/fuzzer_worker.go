@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -25,7 +24,7 @@ type fuzzerWorker struct {
 	fuzzer *Fuzzer
 
 	// testNode describes a testNode created by the fuzzerWorker to run tests against.
-	testNode *testNode
+	testNode *TestNode
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
 	deployedContracts map[common.Address]types.CompiledContract
@@ -126,7 +125,7 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 	return nil
 }
 
-// checkViolatedPropertyTests executes all property tests in deployed contracts in this fuzzerWorker's testNode.
+// checkViolatedPropertyTests executes all property tests in deployed contracts in this fuzzerWorker's TestNode.
 // Returns deployedMethod references for all failed property test results.
 func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 	// Create a list of violated properties
@@ -142,15 +141,9 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []deployedMethod {
 
 		// Call the underlying contract
 		// TODO: Determine if we should use `accounts[0]` or have a separate funded account for the assertions.
-		res, err := fw.testNode.CallContract(ethereum.CallMsg{
-			From:      fw.fuzzer.accounts[0].address,
-			To:        &propertyTest.address,
-			Gas:       fw.testNode.GetBlockHeader().GasLimit,
-			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
-			GasTipCap: big.NewInt(1),
-			Value:     big.NewInt(0), // the remaining balance for fee is 2.1ether
-			Data:      data,
-		})
+		value := big.NewInt(0)
+		msg := fw.testNode.CreateMessage(fw.fuzzer.accounts[0].address, &propertyTest.address, value, data)
+		res, err := fw.testNode.CallContract(msg)
 
 		// If we have an error calling an invariant method, we should panic as we never want this to fail.
 		if err != nil {
@@ -275,7 +268,7 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 }
 
 // generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
-// testNode.
+// TestNode.
 // Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
 func (fw *fuzzerWorker) generateFuzzedTx() (*txSequenceElement, error) {
 	// Verify we have state changing methods to call
@@ -332,7 +325,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 	// After testing the sequence, we'll want to rollback changes and panic if we encounter an error, as it might
 	// mean our testing state is compromised.
 	defer func() {
-		if err := fw.testNode.Revert(); err != nil {
+		if err := fw.testNode.RevertToSnapshot(); err != nil {
 			panic(err.Error())
 		}
 	}()
@@ -352,7 +345,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*txSequenceElement) (int, []
 		txInfo := txSequence[i]
 
 		// Send our transaction
-		msg := fw.testNode.createMessage(txInfo.sender.address, txInfo.tx.To, txInfo.tx.Value, txInfo.tx.Data)
+		msg := fw.testNode.CreateMessage(txInfo.sender.address, txInfo.tx.To, txInfo.tx.Value, txInfo.tx.Data)
 		fw.testNode.SendMessage(msg)
 
 		// Record any violated property tests.
@@ -404,7 +397,7 @@ func (fw *fuzzerWorker) shrinkTxSequence(txSequence []*txSequenceElement, expect
 	return optimizedSequence, nil
 }
 
-// run sets up a testNode and begins executing fuzzed transaction calls and asserting properties are upheld.
+// run sets up a TestNode and begins executing fuzzed transaction calls and asserting properties are upheld.
 // This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
 func (fw *fuzzerWorker) run() (bool, error) {
@@ -422,7 +415,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// Create a test node
 	var err error
-	fw.testNode, err = newTestNode(genesisAlloc)
+	fw.testNode, err = NewTestNode(genesisAlloc)
 	if err != nil {
 		return false, err
 	}
