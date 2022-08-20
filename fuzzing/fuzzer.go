@@ -149,6 +149,9 @@ func (f *Fuzzer) Start() error {
 	go f.runMetricsPrintLoop()
 	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
+	// Setup corpus
+	f.corpus = fuzzingTypes.NewCorpus()
+
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
 	f.workers = make([]*fuzzerWorker, f.config.Fuzzing.Workers)

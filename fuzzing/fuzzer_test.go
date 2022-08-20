@@ -48,6 +48,8 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig configs
 
 	// Ensure we captured a failed test.
 	assert.True(t, len(fuzzer.Results().GetFailedTests()) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
+	// Simple test to make sure coverage is being stored in memory
+	assert.True(t, len(fuzzer.corpus.TransactionSequences) > 0, "Some coverage should be found")
 }
 
 // FuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
@@ -66,6 +68,7 @@ var defaultTestingFuzzConfig = configs.FuzzingConfig{
 	Timeout:                  30,
 	TestLimit:                0,
 	MaxTxSequenceLength:      100,
+	Coverage:                 true,
 }
 
 // TestFuzzMagicNumbersSimpleXY runs a test to solve simple_xy.sol

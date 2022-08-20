@@ -8,29 +8,38 @@ import (
 
 // Corpus holds a list of corpus transaction sequences
 type Corpus struct {
-	// List of corpus transaction sequences
-	TransactionSequences [][]*MetaTx
+	// TransactionSequences is a list of meta transaction sequences
+	TransactionSequences [][]MetaTx
 	// Mutex allows for concurrent reads but syncs on writes
 	Mutex sync.RWMutex
+	// WriteIndex is an index in the TransactionSequences list that points to the next object to be written to disk
+	WriteIndex int
+}
+
+// NewCorpus initializes a new Corpus object for the Fuzzer
+func NewCorpus() *Corpus {
+	return &Corpus{
+		TransactionSequences: [][]MetaTx{},
+	}
 }
 
 // MetaTx is the core components of a transaction and is used for storing and replaying transactions in the Corpus
 type MetaTx struct {
-	// Nonce is the nonce
+	// Nonce is the nonce field in the original transaction
 	Nonce uint64
-	// Src is the source of the transaction
+	// Value is value field in the original transaction
+	Value *big.Int
+	// Src is the source of the original transaction
 	// TODO: Can this be a common.Address?
 	Src *common.Address
-	// Dst is the destination of the transaction
+	// Dst is the destination of the original transaction
 	Dst *common.Address
-	// Gas is gas
+	// Gas is the gas field in the original transaction
 	Gas uint64
-	// GasPrice is gas price
+	// GasPrice is the gas price field in the original transaction
 	GasPrice *big.Int
-	// Data is data
+	// Data is the data field in the original transaction
 	Data []byte
-	// Value is value
-	Value *big.Int
 }
 
 //NewMetaTx creates a default MetaTx object

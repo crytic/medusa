@@ -346,6 +346,27 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzingTypes.TxSequenceElem
 			return i, nil, err
 		}
 
+		// Check if coverage has increased
+		// TODO: is checking this if statement every time going to slow the fuzzing down too much?
+		if fw.fuzzer.config.Fuzzing.Coverage {
+			newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+			if newCoverageMaps != nil {
+				coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
+				if err != nil {
+					// TODO: is this the correct return value?
+					return i + 1, nil, err
+				}
+
+				if coverageUpdated {
+					// New coverage has been found, add it to the corpus
+					err = fw.AddToCorpus(txSequence[:i+1])
+					if err != nil {
+						// TODO: same question about whether this is the right stuff to return
+						return i + 1, nil, err
+					}
+				}
+			}
+		}
 		// Record any violated property tests.
 		violatedPropertyTests := fw.checkViolatedPropertyTests()
 
@@ -454,22 +475,24 @@ func (fw *fuzzerWorker) run() (bool, error) {
 		// Update our metrics
 		fw.workerMetrics().transactionsTested += uint64(txsTested)
 		fw.workerMetrics().sequencesTested++
+		//TODO: need to write to disk every 10,000 transactions
 
-		// Track coverage only if it is enabled
-		if fw.fuzzer.config.Fuzzing.Coverage {
-			newCoverageMaps := fw.testNode.tracer.CoverageMaps()
-			if newCoverageMaps != nil {
-				coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
-				if err != nil {
-					return false, err
-				}
+		/*
+			// Track coverage only if it is enabled
+			if fw.fuzzer.config.Fuzzing.Coverage {
+				newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+				if newCoverageMaps != nil {
+					coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
+					if err != nil {
+						return false, err
+					}
 
-				if coverageUpdated {
-					// new coverage has been found
-					fw.AddToCorpus(txSequence)
+					if coverageUpdated {
+						// new coverage has been found
+						fw.AddToCorpus(txSequence)
+					}
 				}
-			}
-		}
+			}*/
 
 		// Check if we have violated properties
 		if len(violatedPropertyTests) > 0 {
@@ -500,32 +523,39 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 //AddToCorpus adds a transaction sequence to the corpus
 func (fw *fuzzerWorker) AddToCorpus(txSequence []*fuzzingTypes.TxSequenceElement) error {
-	var metaTxSequence []*fuzzingTypes.MetaTx
+	// Initialize list of meta tx sequence
+	var metaTxSequence []fuzzingTypes.MetaTx
+	// Convert each legacy transaction to a meta transaction
 	for _, tx := range txSequence {
-		metaTx, err := convertLegacyToMeta(tx)
+		metaTx, err := convertLegacyTxToMetaTx(tx)
 		if err != nil {
 			return err
 		}
+		// Add meta transaction to list
 		metaTxSequence = append(metaTxSequence, metaTx)
 	}
-	// TODO: use some sort of de-duplication logic
+	//TODO: use some sort of de-duplication logic
+	// Get mutex lock
 	fw.fuzzer.corpus.Mutex.Lock()
+	// Add meta txn sequence to corpus
 	fw.fuzzer.corpus.TransactionSequences = append(fw.fuzzer.corpus.TransactionSequences, metaTxSequence)
+	// Release mutex lock
 	fw.fuzzer.corpus.Mutex.Unlock()
 	return nil
 }
 
-// convertLegacyToMeta converts a LegacyTx to a MetaTx which is a custom transaction that is used for tracking coverage
-// and replaying transactions
-func convertLegacyToMeta(tx *fuzzingTypes.TxSequenceElement) (*fuzzingTypes.MetaTx, error) {
+// convertLegacyTxToMetaTx converts a LegacyTx to a types.MetaTx
+func convertLegacyTxToMetaTx(tx *fuzzingTypes.TxSequenceElement) (fuzzingTypes.MetaTx, error) {
+	// Create new metaTx object
 	metaTx := fuzzingTypes.NewMetaTx()
 	// TODO: Figure out Src
-	// TODO: Is there any way for this this function to throw an error
+	// TODO: Is there any way for this function to throw an error
+	// Set all the fields
 	metaTx.Dst = tx.Tx.To
 	metaTx.Nonce = tx.Tx.Nonce
 	metaTx.Gas = tx.Tx.Gas
 	metaTx.GasPrice = tx.Tx.GasPrice
 	metaTx.Data = tx.Tx.Data
 	metaTx.Value = tx.Tx.Value
-	return metaTx, nil
+	return *metaTx, nil
 }
