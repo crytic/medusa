@@ -354,13 +354,12 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 				}
 
 				if coverageUpdated {
-					/*
-						// New coverage has been found, add it to the corpus
-						err = fw.AddToCorpus(txSequence[:i+1])
-						if err != nil {
-							// TODO: same question about whether this is the right stuff to return
-							return i + 1, nil, err
-						}*/
+					// New coverage has been found, add it to the corpus
+					err = fw.AddToCorpus(txSequence[:i+1])
+					if err != nil {
+						// TODO: same question about whether this is the right stuff to return
+						return i + 1, nil, err
+					}
 				}
 			}
 		}
@@ -476,23 +475,6 @@ func (fw *fuzzerWorker) run() (bool, error) {
 		fw.workerMetrics().transactionsTested += uint64(txsTested)
 		fw.workerMetrics().sequencesTested++
 
-		/*
-			// Track coverage only if it is enabled
-			if fw.fuzzer.config.Fuzzing.Coverage {
-				newCoverageMaps := fw.testNode.tracer.CoverageMaps()
-				if newCoverageMaps != nil {
-					coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
-					if err != nil {
-						return false, err
-					}
-
-					if coverageUpdated {
-						// new coverage has been found
-						fw.AddToCorpus(txSequence)
-					}
-				}
-			}*/
-
 		// Check if we have violated properties
 		if len(violatedPropertyTests) > 0 {
 			// We'll want to shrink our tx sequence to remove unneeded txs from our tx list.
@@ -525,47 +507,38 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	return false, nil
 }
 
-/*
 //AddToCorpus adds a transaction sequence to the corpus
-func (fw *fuzzerWorker) AddToCorpus(txSequence []*fuzzingTypes.TxSequenceElement) error {
-	// Initialize list of meta tx sequence
-	var metaTxSequence []fuzzingTypes.MetaTx
-	// Convert each legacy transaction to a meta transaction
-	for _, tx := range txSequence {
-		metaTx, err := convertLegacyTxToMetaTx(tx)
-		if err != nil {
-			return err
+func (fw *fuzzerWorker) AddToCorpus(txSequence []*fuzzerTypes.CallMessage) error {
+	// Commenting in case we want to store other than CallMessage
+	/*
+		// Initialize list of meta tx sequence
+		var metaTxSequence []fuzzerTypes.MetaTx
+		// Convert each legacy transaction to a meta transaction
+		for _, tx := range txSequence {
+			metaTx, err := convertCallMessageToMetaTx(tx)
+			if err != nil {
+				return err
+			}
+			// Add meta transaction to list
+			metaTxSequence = append(metaTxSequence, metaTx)
 		}
-		// Add meta transaction to list
-		metaTxSequence = append(metaTxSequence, metaTx)
+	*/
+	txSequenceHash := fw.fuzzer.corpus.TransactionSequenceHash(txSequence)
+	if _, ok := fw.fuzzer.corpus.TransactionSequences[txSequenceHash]; ok {
+		return nil
 	}
-	//TODO: use some sort of de-duplication logic
-	// Get mutex lock
+	// Get mutex lock and defer unlocking
 	fw.fuzzer.corpus.Mutex.Lock()
+	defer fw.fuzzer.corpus.Mutex.Unlock()
 	// Add meta txn sequence to corpus
-	fw.fuzzer.corpus.TransactionSequences = append(fw.fuzzer.corpus.TransactionSequences, metaTxSequence)
-	// Release mutex lock
-	fw.fuzzer.corpus.Mutex.Unlock()
+	fw.fuzzer.corpus.TransactionSequences[txSequenceHash] = txSequence
 	return nil
 }
 
-*/
-
-/*
-// convertLegacyTxToMetaTx converts a LegacyTx to a types.MetaTx
-func convertLegacyTxToMetaTx(tx *fuzzingTypes.TxSequenceElement) (fuzzingTypes.MetaTx, error) {
+// convertCallMessageToMetaTx converts a fuzzerTypes.CallMessage to a fuzzerTypes.MetaTx
+// TODO: we are not currently going to use this but probably will in the future
+func convertCallMessageToMetaTx(tx *fuzzerTypes.CallMessage) (fuzzerTypes.MetaTx, error) {
 	// Create new metaTx object
-	metaTx := fuzzingTypes.NewMetaTx()
-	// TODO: Figure out Src
-	// TODO: Is there any way for this function to throw an error
-	// Set all the fields
-	metaTx.Dst = tx.Tx.To
-	metaTx.Nonce = tx.Tx.Nonce
-	metaTx.Gas = tx.Tx.Gas
-	metaTx.GasPrice = tx.Tx.GasPrice
-	metaTx.Data = tx.Tx.Data
-	metaTx.Value = tx.Tx.Value
+	metaTx := fuzzerTypes.NewMetaTx()
 	return *metaTx, nil
 }
-
-*/

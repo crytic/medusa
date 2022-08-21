@@ -22,6 +22,7 @@ func getFuzzConfigDefault() *configs.FuzzingConfig {
 		TestPrefixes: []string{
 			"fuzz_", "echidna_",
 		},
+		Coverage: true,
 	}
 }
 
@@ -75,6 +76,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	} else {
 		assert.True(t, len(fuzzer.Results().GetFailedTests()) == 0, "Fuzz test found a violated property test when it should not have")
 	}
+	assert.True(t, len(fuzzer.corpus.TransactionSequences) > 0, "No coverage was captured")
 }
 
 // FuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
