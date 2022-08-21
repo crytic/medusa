@@ -22,8 +22,8 @@ type AccountConfig struct {
 	// Generate describes how many accounts should be dynamically generated at runtime
 	Generate int `json:"generate"`
 
-	// Keys describe an existing set of keys that a user can provide to be used
-	Keys []string `json:"keys,omitempty"`
+	// Predefined describe an existing set of accounts that a user can provide to be used
+	Predefined []string `json:"predefined,omitempty"`
 }
 
 type CompilationConfig struct {
