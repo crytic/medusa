@@ -225,10 +225,10 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 				return false, fmt.Errorf("error while creating corpus directory")
 			}
 			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus/corpus sub-directory")
+				return false, fmt.Errorf("error while creating corpus sub-directory")
 			}
 			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus/coverage sub-directory")
+				return false, fmt.Errorf("error while creating coverage sub-directory")
 			}
 			return false, nil
 		}
@@ -246,14 +246,14 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 	// If corpus/corpus is not there, make it
 	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); err != nil {
 		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
-			return false, fmt.Errorf("error while creating corpus/corpus sub-directory")
+			return false, fmt.Errorf("error while creating corpus sub-directory")
 		}
 	}
 
 	// if corpus/coverage is not there, make it
 	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); err != nil {
 		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
-			return false, fmt.Errorf("error while creating corpus/coverage sub-directory")
+			return false, fmt.Errorf("error while creating coverage sub-directory")
 		}
 	}
 
