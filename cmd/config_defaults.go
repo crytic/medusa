@@ -27,7 +27,7 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 			TestLimit:                0,
 			MaxTxSequenceLength:      100,
 			Coverage:                 true,
-			CorpusDirectory:          "corpus",
+			CorpusDirectory:          "",
 			TestPrefixes: []string{
 				"fuzz_",
 			},

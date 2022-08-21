@@ -11,6 +11,8 @@ import (
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -136,6 +138,10 @@ func (f *Fuzzer) Start() error {
 
 	// Setup corpus
 	f.corpus = fuzzerTypes.NewCorpus()
+	_, err = f.checkAndSetupCorpusDirectory()
+	if err != nil {
+		return err
+	}
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
@@ -194,6 +200,66 @@ func (f *Fuzzer) Stop() {
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
 	}
+}
+
+// checkAndSetupCorpusDirectory sets up the corpus/ directory and subdirectories. If the (sub)directories already exist
+// then return true so that corpus can be read into memory. Note that it will return true even if corpus/corpus is empty.
+// The function checks for directory existence and nothing more.
+// TODO: need to make sure it works for absolute and relative paths
+func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
+	// Guard clause
+	if f.config.Fuzzing.CorpusDirectory == "" {
+		return false, nil
+	}
+
+	// Do some effort to make sure there are no backslashes or front-slashes
+	if strings.Contains(f.config.Fuzzing.CorpusDirectory, "/") || strings.Contains(f.config.Fuzzing.CorpusDirectory, "\\") {
+		return false, fmt.Errorf("do not include any backslashes or frontslashes in the corpus_dir config option")
+	}
+	// Get info on corpus_dir directory existence
+	dirInfo, err := os.Stat(f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		// If directory does not exist, make 'corpus', 'corpus/corpus', and 'corpus/coverage'
+		if os.IsNotExist(err) {
+			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory, 0777); err != nil {
+				return false, fmt.Errorf("error while creating corpus directory")
+			}
+			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
+				return false, fmt.Errorf("error while creating corpus/corpus sub-directory")
+			}
+			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
+				return false, fmt.Errorf("error while creating corpus/coverage sub-directory")
+			}
+			return false, nil
+		}
+
+		// some other sort of error
+		return false, err
+	}
+
+	// if corpus is a file and not a directory, throw an error
+	if !dirInfo.IsDir() {
+		return false, fmt.Errorf("there exists a conflicting "+
+			"file named %s in this directory.\n", f.config.Fuzzing.CorpusDirectory)
+	}
+
+	// If corpus/corpus is not there, make it
+	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); err != nil {
+		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
+			return false, fmt.Errorf("error while creating corpus/corpus sub-directory")
+		}
+	}
+
+	// if corpus/coverage is not there, make it
+	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); err != nil {
+		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
+			return false, fmt.Errorf("error while creating corpus/coverage sub-directory")
+		}
+	}
+
+	// we will return true even if corpus/corpus is empty. There is no reason to check here whether there are files in
+	// there right now.
+	return true, nil
 }
 
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
