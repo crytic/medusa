@@ -241,10 +241,10 @@ func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, er
 // EVM. This method is used as a hook to fetch block hashes from our TestNode rather than the dummy chain we use to
 // create vm.BlockContext objects. A user supplies a block number for which they wish to obtain a hash. If the number
 // refers to the currently executing block number or a future one, a zero hash is returned. If a block number requested
-// is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise the block
+// is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise, the block
 // hash is returned.
 func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
-	// If we're asking for our current block or newer, we can't provide that information at that time so we return
+	// If we're asking for our current block or newer, we can't provide that information at that time, so we return
 	// a zero hash, per the Ethereum spec.
 	// Note: We add 1 to block number here because if we're executing this, it means we're constructing a new block
 	// or doing a new call on top of the last recorded block number.

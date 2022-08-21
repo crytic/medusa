@@ -14,7 +14,7 @@ type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
-	// CompilationSettings describes the configuration used to compile the underlying project.
+	// Compilation describes the configuration used to compile the underlying project.
 	Compilation CompilationConfig `json:"compilation"`
 }
 

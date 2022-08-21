@@ -110,6 +110,9 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
+					// Echidna has the property sender equal to the deployer of the contracts. Thus, it is a fixed
+					// account (https://github.com/crytic/echidna/blob/34b6df9260945653158708d300395f25f470c3bf/tests/solidity/basic/default.yaml#L33-L34)
+					// https://github.com/crytic/echidna/blob/34b6df9260945653158708d300395f25f470c3bf/tests/solidity/basic/default.yaml#L8-L9
 					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0])
 					if err != nil {
 						return err
