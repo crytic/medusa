@@ -1,4 +1,4 @@
-contract TestXY {
+contract TestMagicNumbersXY {
     uint x;
     uint y;
 

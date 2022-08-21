@@ -1,44 +1,83 @@
 package fuzzing
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/trailofbits/medusa/compilation/types"
+	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/tracing"
+	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/vendored"
 	"math/big"
 	"strings"
 )
 
-type testNode struct {
-	chain   *core.BlockChain
+// TestNode represents a simulated Ethereum backend used for testing
+type TestNode struct {
+	// chain represents the blocks post-genesis that were generated after sending messages.
+	chain []TestNodeBlock
+
+	// dummyChain is core.BlockChain instance which is used to construct the genesis state. After such point it is
+	// only used for reference to fulfill the needs of some methods.
+	dummyChain *core.BlockChain
+
+	// kvstore represents the underlying key-value store used to construct the db.
 	kvstore *memorydb.Database
-	db      ethdb.Database
-	signer  *coreTypes.HomesteadSigner
 
-	pendingBlock *coreTypes.Block
-	pendingState *state.StateDB
+	// db represents the in-memory database used by the TestNode and its underlying chain and dummyChain objects to
+	// store state changes.
+	db ethdb.Database
 
-	tracer   *tracing.FuzzerTracer
+	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
+	// and is the subject of state changes when executing new transactions. This does not track the current block
+	// head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
+	state *state.StateDB
+
+	// snapshot is an identifier which is used by the Snapshot and RevertToSnapshot method. It represents a block number
+	// on the chain which we should return to when RevertToSnapshot is used.
+	snapshot int
+
+	// tracer represents an execution trace provider for the VM. It observes VM execution for any notable events such
+	// as coverage map updates, etc.
+	tracer *tracing.FuzzerTracer
+
+	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
+	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
 }
 
-func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
+// TestNodeBlock represents a block or update within a TestNode
+type TestNodeBlock struct {
+	// header represents the block header for this current block.
+	header *types.Header
+
+	// message represents an internal EVM core.Message. Messages are derived from transactions after validation of a
+	// transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction fields
+	// plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field in a
+	// message).
+	message core.Message
+
+	// receipt represents a transaction receipt received when the associated message in this structure was sent to the
+	// VM to perform a state update. It houses event logs and other information collected during the state transition
+	// when the transaction was applied.
+	receipt *types.Receipt
+
+	// blockHash represents a cached hash for this block.
+	blockHash common.Hash
+}
+
+// NewTestNode creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
+func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	// Define our chain configuration
 	chainConfig := params.TestChainConfig
 
@@ -61,236 +100,319 @@ func newTestNode(genesisAlloc core.GenesisAlloc) (*testNode, error) {
 	// Create a VM config that traces execution, so we can establish a coverage map
 	tracer := tracing.NewFuzzerTracer(true)
 	vmConfig := &vm.Config{
-		Debug:  true,
-		Tracer: tracer,
+		Debug:     true,
+		Tracer:    tracer,
+		NoBaseFee: true,
 	}
 
-	// Create a new blockchain
-	chain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
+	// Create a new blockchain provider
+	dummyChain, err := core.NewBlockChain(db, nil, chainConfig, ethash.NewFullFaker(), *vmConfig, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Obtain our current state
-	pendingState, err := chain.State()
+	stateDb, err := dummyChain.State()
 	if err != nil {
 		return nil, err
 	}
 
 	// Create our instance
-	g := &testNode{
-		chain:        chain,
-		kvstore:      kvstore,
-		db:           db,
-		signer:       new(coreTypes.HomesteadSigner),
-		pendingBlock: chain.CurrentBlock(),
-		pendingState: pendingState,
-		tracer:       tracer,
-		vmConfig:     vmConfig,
+	g := &TestNode{
+		chain:      make([]TestNodeBlock, 0),
+		dummyChain: dummyChain,
+		kvstore:    kvstore,
+		db:         db,
+		state:      stateDb,
+		tracer:     tracer,
+		vmConfig:   vmConfig,
 	}
 
 	return g, nil
 }
 
-func (t *testNode) MemoryDatabaseEntryCount() int {
+// MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
+func (t *TestNode) MemoryDatabaseEntryCount() int {
 	return t.kvstore.Len()
 }
 
-func (t *testNode) Stop() {
+// Stop is a TestNode method used to tear down the node.
+func (t *TestNode) Stop() {
 	// Stop the underlying chain's update loop
-	t.chain.Stop()
+	t.dummyChain.Stop()
 }
 
-func (t *testNode) SendTransaction(tx *coreTypes.Transaction) (*coreTypes.Block, *coreTypes.Receipts, error) {
-	// Create our blocks.
-	blocks, receipts := vendored.GenerateChain(t.chain.Config(), t.pendingBlock, t.chain.Engine(), t.db, 1, func(i int, b *vendored.BlockGen) {
-		// Set the coinbase and difficulty
-		b.SetCoinbase(common.Address{1})
-		b.SetDifficulty(big.NewInt(1))
-
-		// Add the transaction.
-		b.AddTx(tx, *t.vmConfig)
-	})
-
-	// Obtain our current chain's state, so that we can use its database to obtain the pending state.
-	stateDB, err := t.chain.State()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Set our pending block and state.
-	t.pendingBlock = blocks[0]
-	t.pendingState, err = state.New(t.pendingBlock.Root(), stateDB.Database(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return blocks[0], &receipts[0], nil
+// Snapshot saves the given chain state, which can later be reverted to by calling the RevertToSnapshot
+// method.
+func (t *TestNode) Snapshot() {
+	// Save our snapshot (block height)
+	t.snapshot = len(t.chain)
 }
 
-func (t *testNode) Commit() {
-	// Insert our pending block into the chain.
-	_, err := t.chain.InsertChain([]*coreTypes.Block{t.pendingBlock})
-	if err != nil {
-		panic("failed to insert pending block into chain.")
-	}
-}
-
-func (t *testNode) RevertUncommittedChanges() error {
-	// Reset our pending block to our chain's current block
-	t.pendingBlock = t.chain.CurrentBlock()
-
-	// Reset our pending state to our chain's current state.
+// RevertToSnapshot uses a snapshot set by the Snapshot method to revert the test chain state to its previous state.
+// Returns an error if one occurs.
+func (t *TestNode) RevertToSnapshot() error {
 	var err error
-	t.pendingState, err = t.chain.State()
+
+	// Adjust our chain length to match our snapshot
+	t.chain = t.chain[:t.snapshot]
+
+	// Reload our state from our database
+	t.state, err = state.New(t.BlockHeader().Root, t.state.Database(), nil)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *testNode) CallContract(call ethereum.CallMsg) (*core.ExecutionResult, error) {
-	// Obtain our snapshot
-	snapshot := t.pendingState.Snapshot()
+// CreateMessage creates an object which satisfies the types.Message interface. It populates gas limit, price, nonce,
+// and other fields automatically, and sets fee/tip caps such that no base fee is charged (for testing).
+func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) *fuzzingTypes.CallMessage {
+	// Obtain our message parameters
+	nonce := t.state.GetNonce(from)
+	gasLimit := t.dummyChain.GasLimit()
+	gasPrice := big.NewInt(1)
 
-	// Call our contract
-	res, err := t.callContract(call, t.pendingBlock, t.pendingState)
+	// Setting fee and tip cap to zero alongside the NoBaseFee for the vm.Config will bypass base fee validation.
+	gasFeeCap := big.NewInt(0)
+	gasTipCap := big.NewInt(0)
 
-	// Revert to our snapshot to undo any changes.
-	t.pendingState.RevertToSnapshot(snapshot)
+	// Construct and return a new message from our given parameters.
+	return fuzzingTypes.NewCallMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data)
+}
+
+// BlockNumber returns the test chain head's block number, where zero is the genesis block.
+func (t *TestNode) BlockNumber() uint64 {
+	// Our chain length is genesis block + test node blocks
+	return uint64(len(t.chain))
+}
+
+// BlockHeader returns the block header of the current test chain head.
+func (t *TestNode) BlockHeader() *types.Header {
+	// If we have any blocks on the test chain, return the latest
+	if len(t.chain) > 0 {
+		return t.chain[len(t.chain)-1].header
+	}
+
+	// Otherwise return the genesis header
+	return t.dummyChain.CurrentHeader()
+}
+
+// BlockHashFromBlockNumber returns a block hash for a given block number. If the index is out of bounds, it returns
+// an error.
+func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, error) {
+	// If our block number references something too new, return an error
+	if blockNumber > uint64(len(t.chain)) {
+		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, len(t.chain)+1)
+	}
+
+	// Fetch either the genesis block hash or one of our later simulated block hashes.
+	if blockNumber == 0 {
+		genesisHash := t.dummyChain.CurrentBlock().Hash()
+		return genesisHash, nil
+	} else {
+		blockHash := t.chain[blockNumber-1].blockHash
+		return blockHash, nil
+	}
+}
+
+// messageToTransaction derived a types.Transaction from a types.Message.
+func messageToTransaction(msg core.Message) *types.Transaction {
+	// TODO: This might have issues in the future due to not being given a valid signatures.
+	//  This should probably be verified at some point.
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    msg.Nonce(),
+		GasPrice: msg.GasPrice(),
+		Gas:      msg.Gas(),
+		To:       msg.To(),
+		Value:    msg.Value(),
+		Data:     msg.Data(),
+	})
+}
+
+// evmOpBlockHash represents a function used for a vm.BlockContext to facilitate BLOCKHASH instruction operations in the
+// EVM. This method is used as a hook to fetch block hashes from our TestNode rather than the dummy core.BlockChain we
+// use to create vm.BlockContext objects. A user supplies a block number for which they wish to obtain a hash. If the
+// number refers to the currently executing block number or a future one, a zero hash is returned. If a block number
+// requested is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise,
+// the block hash is returned.
+func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
+	// If we're asking for our current block or newer, we can't provide that information at that time, so we return
+	// a zero hash, per the Ethereum spec.
+	// Note: We add 1 to block number here because if we're executing this, it means we're constructing a new block
+	// or doing a new call on top of the last recorded block number.
+	currentBlockNumber := t.BlockNumber() + 1
+	if currentBlockNumber <= n {
+		return common.Hash{}
+	}
+
+	// Calculate our distance from our last block and ensure it does not index more than 256 items (255 indexes away
+	// from the last block), as the BLOCKHASH opcode cannot obtain history further than this.
+	distanceFromLastBlock := currentBlockNumber - n - 1
+	if distanceFromLastBlock > 255 {
+		return common.Hash{}
+	}
+
+	// Obtain our requested block hash and return it.
+	requestedBlockHash, err := t.BlockHashFromBlockNumber(n)
+	if err != nil {
+		return common.Hash{}
+	} else {
+		return requestedBlockHash
+	}
+}
+
+// CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
+// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
+func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionResult, error) {
+	// Obtain our state snapshot (note: this is different from the test node snapshot)
+	snapshot := t.state.Snapshot()
+
+	// Set infinite balance to the fake caller account
+	from := t.state.GetOrNewStateObject(msg.From())
+	from.SetBalance(math.MaxBig256)
+
+	// Create our transaction and block contexts for the vm
+	txContext := core.NewEVMTxContext(msg)
+	blockContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
+
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+	// original implementation, as it is not maintained for the true chain state.
+	blockContext.GetHash = t.evmOpBlockHash
+
+	// Create our EVM instance
+	evm := vm.NewEVM(blockContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
+
+	// Fund the gas pool for execution appropriately
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	// Perform our state transition to obtain the result.
+	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
+
+	// Revert to our state snapshot to undo any changes.
+	t.state.RevertToSnapshot(snapshot)
 
 	return res, err
 }
 
-// Copied from go-ethereum/accounts/abi/bind/backends/simulated.go
-func (t *testNode) callContract(call ethereum.CallMsg, block *coreTypes.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
-	// Gas prices post 1559 need to be initialized
-	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
-		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	head := t.chain.CurrentHeader()
-	if !t.chain.Config().IsLondon(head.Number) {
-		// If there's no basefee, then it must be a non-1559 execution
-		if call.GasPrice == nil {
-			call.GasPrice = new(big.Int)
-		}
-		call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
-	} else {
-		// A basefee is provided, necessitating 1559-type execution
-		if call.GasPrice != nil {
-			// User specified the legacy gas field, convert to 1559 gas typing
-			call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
-		} else {
-			// User specified 1559 gas feilds (or none), use those
-			if call.GasFeeCap == nil {
-				call.GasFeeCap = new(big.Int)
-			}
-			if call.GasTipCap == nil {
-				call.GasTipCap = new(big.Int)
-			}
-			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
-			call.GasPrice = new(big.Int)
-			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
-				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, head.BaseFee), call.GasFeeCap)
-			}
-		}
-	}
-	// Ensure message is initialized properly.
-	if call.Gas == 0 {
-		call.Gas = 50000000
-	}
-	if call.Value == nil {
-		call.Value = new(big.Int)
-	}
-	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256)
-	// Execute the call.
-	msg := callMsg{call}
+// SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
+// with it, as if a transaction were just received. Returns the TestNodeBlock representing the result of the state
+// transition.
+func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
+	// Set up some parameters used to construct our test block
+	blockNumber := big.NewInt(int64(t.BlockNumber()) + 1)
+	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO: Determine proper timestamp advance logic
+	coinbase := t.BlockHeader().Coinbase
+	config := t.dummyChain.Config()
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is sensible
+	var usedGas uint64
 
-	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(block.Header(), t.chain, nil)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, t.chain.Config(), vm.Config{NoBaseFee: true})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	// Use the default set gas limit from the dummy chain
+	gasLimit := t.dummyChain.GasLimit()
 
-	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
-}
+	//parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
+	parentBlockHash := t.BlockHeader().Hash()
 
-func (t *testNode) SignAndSendLegacyTransaction(tx *coreTypes.LegacyTx, signerKey *ecdsa.PrivateKey, applyFixups bool) (*coreTypes.Block, *coreTypes.Receipts, error) {
-	// Apply fixups related to gas/nonce
-	if applyFixups {
-		accountAddress := crypto.PubkeyToAddress(signerKey.PublicKey)
-		tx.Nonce = t.pendingState.GetNonce(accountAddress)
-		tx.GasPrice = big.NewInt(params.InitialBaseFee)
-		tx.Gas = t.pendingBlock.GasLimit()
+	// Create a block header for this block:
+	// - Root hashes are not populated on first run.
+	// - State root hash is populated later in this method.
+	// - Bloom is not populated on first run.
+	// - TODO: Difficulty is not proven to be safe
+	// - GasUsed is not populated on first run.
+	// - Mix digest is only useful for randomness, so we just use previous block hash.
+	// - TODO: Figure out appropriate params for BaseFee
+	header := &types.Header{
+		ParentHash:  parentBlockHash,
+		UncleHash:   types.EmptyUncleHash,
+		Coinbase:    coinbase,
+		Root:        types.EmptyRootHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		Bloom:       types.Bloom{},
+		Difficulty:  common.Big0,
+		Number:      blockNumber,
+		GasLimit:    gasLimit,
+		GasUsed:     0,
+		Time:        blockTimestamp,
+		Extra:       []byte{},
+		MixDigest:   parentBlockHash,
+		Nonce:       types.BlockNonce{},
+		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 
-	// Sign the transaction
-	signedTx, err := coreTypes.SignNewTx(signerKey, t.signer, tx)
+	// Calculate our block hash for this block
+	blockHash := header.Hash()
+
+	// Create a tx from our msg, for hashing/receipt purposes
+	tx := messageToTransaction(msg)
+
+	// Create a new context to be used in the EVM environment
+	blockContext := core.NewEVMBlockContext(header, t.dummyChain, &coinbase)
+
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+	// original implementation, as it is not maintained for the true chain state.
+	blockContext.GetHash = t.evmOpBlockHash
+
+	// Create our EVM instance.
+	evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
+
+	// Apply our transaction
+	receipt, err := vendored.EVMApplyTransaction(msg.ToEVMMessage(), config, &coinbase, gasPool, t.state, blockNumber, blockHash, tx, &usedGas, evm)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not sign tx due to an error when signing: %s", err.Error())
+		panic(fmt.Sprintf("state write error: %v", err))
 	}
 
-	// Set our signature parameters in the legacy tx
-	tx.V, tx.R, tx.S = signedTx.RawSignatureValues()
+	// Write state changes to db
+	root, err := t.state.Commit(config.IsEIP158(header.Number))
+	if err != nil {
+		panic(fmt.Sprintf("state write error: %v", err))
+	}
+	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
+		panic(fmt.Sprintf("trie write error: %v", err))
+	}
 
-	// Send our deployment transaction
-	return t.SendTransaction(signedTx)
+	// Update the header's state root hash
+	// Note: You could also retrieve the root with state.IntermediateRoot(config.IsEIP158(parentBlockNumber))
+	header.Root = root
+
+	// Create a new block for our test node
+	block := TestNodeBlock{
+		header:    header,
+		message:   msg,
+		receipt:   receipt,
+		blockHash: blockHash,
+	}
+
+	// Append it to our chain
+	t.chain = append(t.chain, block)
+	return &block
 }
 
-func (t *testNode) DeployContract(contract types.CompiledContract, deployerKey *ecdsa.PrivateKey) (common.Address, error) {
+// DeployContract is a helper method used to deploy a given types.CompiledContract to the current instance of the
+// test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
+// otherwise returns an error.
+func (t *TestNode) DeployContract(contract compilationTypes.CompiledContract, deployer common.Address) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
-		panic("could not convert compiled contract bytecode from hex string to byte code")
+		return common.Address{}, fmt.Errorf("could not convert compiled contract bytecode from hex string to byte code")
 	}
 
 	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
 	// contracts.
 
-	// Create a transaction to represent our contract deployment.
-	// NOTE: We don't fill out nonce/gas as SignAndSendLegacyTransaction will apply fixups below.
-	tx := &coreTypes.LegacyTx{
-		Nonce:    0,
-		GasPrice: big.NewInt(0),
-		Gas:      0,
-		To:       nil,
-		Value:    big.NewInt(0),
-		Data:     b,
-	}
+	// Create a message to represent our contract deployment.
+	value := big.NewInt(0)
+	msg := t.CreateMessage(deployer, nil, value, b)
 
 	// Send our deployment transaction
-	_, receipts, err := t.SignAndSendLegacyTransaction(tx, deployerKey, true)
-	if err != nil {
-		return common.Address{0}, err
-	}
+	block := t.SendMessage(msg)
 
 	// Ensure our transaction succeeded
-	if (*receipts)[0].Status != coreTypes.ReceiptStatusSuccessful {
-		return common.Address{0}, fmt.Errorf("contract deployment tx returned a failed status")
+	if block.receipt.Status != types.ReceiptStatusSuccessful {
+		return common.Address{}, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
-	// Commit our state immediately so our pending state can access
-	t.Commit()
-
 	// Return the address for the deployed contract.
-	return (*receipts)[0].ContractAddress, nil
+	return block.receipt.ContractAddress, nil
 }
-
-// callMsg implements core.Message to allow passing it as a transaction simulator.
-type callMsg struct {
-	ethereum.CallMsg
-}
-
-func (m callMsg) From() common.Address             { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64                    { return 0 }
-func (m callMsg) IsFake() bool                     { return true }
-func (m callMsg) To() *common.Address              { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int               { return m.CallMsg.GasPrice }
-func (m callMsg) GasFeeCap() *big.Int              { return m.CallMsg.GasFeeCap }
-func (m callMsg) GasTipCap() *big.Int              { return m.CallMsg.GasTipCap }
-func (m callMsg) Gas() uint64                      { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int                  { return m.CallMsg.Value }
-func (m callMsg) Data() []byte                     { return m.CallMsg.Data }
-func (m callMsg) AccessList() coreTypes.AccessList { return m.CallMsg.AccessList }

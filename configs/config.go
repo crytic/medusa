@@ -14,7 +14,7 @@ type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
-	// CompilationSettings describes the configuration used to compile the underlying project.
+	// Compilation describes the configuration used to compile the underlying project.
 	Compilation CompilationConfig `json:"compilation"`
 }
 
@@ -22,8 +22,8 @@ type AccountConfig struct {
 	// Generate describes how many accounts should be dynamically generated at runtime
 	Generate int `json:"generate"`
 
-	// Keys describe an existing set of keys that a user can provide to be used
-	Keys []string `json:"keys,omitempty"`
+	// Predefined describe an existing set of accounts that a user can provide to be used
+	Predefined []string `json:"predefined,omitempty"`
 }
 
 type CompilationConfig struct {
@@ -54,7 +54,7 @@ type FuzzingConfig struct {
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
 
-	// TestPrefix dictates what prefixes will determine that a fxn is a fuzz test
+	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
 	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
 	TestPrefixes []string `json:"test_prefixes"`
 }

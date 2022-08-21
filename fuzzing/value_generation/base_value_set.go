@@ -25,7 +25,7 @@ func NewBaseValueSet() *BaseValueSet {
 		integers:     make(map[string]big.Int, 0),
 		strings:      make(map[string]interface{}, 0),
 		bytes:        make(map[string][]byte, 0),
-		hashProvider: sha3.New256(),
+		hashProvider: sha3.NewLegacyKeccak256(),
 	}
 	return baseValueSet
 }
