@@ -23,7 +23,7 @@ type CallMessage struct {
 	MsgData      []byte          `json:"data"`
 }
 
-// callMessageMarshaling is a structure that overrides field types during JSON marhsaling. It allows CallMessage to
+// callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
 // For example, this enables serialization of big.Int but specifying a different field type to serialize it as.
 type callMessageMarshaling struct {
