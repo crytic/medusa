@@ -2,6 +2,7 @@ package configs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 )
@@ -13,7 +14,7 @@ type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
-	// CompilationSettings describes the configuration used to compile the underlying project.
+	// Compilation describes the configuration used to compile the underlying project.
 	Compilation CompilationConfig `json:"compilation"`
 }
 
@@ -21,8 +22,8 @@ type AccountConfig struct {
 	// Generate describes how many accounts should be dynamically generated at runtime
 	Generate int `json:"generate"`
 
-	// Keys describe an existing set of keys that a user can provide to be used
-	Keys []string `json:"keys,omitempty"`
+	// Predefined describe an existing set of accounts that a user can provide to be used
+	Predefined []string `json:"predefined,omitempty"`
 }
 
 type CompilationConfig struct {
@@ -58,6 +59,10 @@ type FuzzingConfig struct {
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
 	CorpusDirectory string `json:"corpus_dir"`
+
+	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
+	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
+	TestPrefixes []string `json:"test_prefixes"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
@@ -71,6 +76,12 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Parse the project configuration
 	var projectConfig ProjectConfig
 	err = json.Unmarshal(b, &projectConfig)
+	if err != nil {
+		return nil, err
+	}
+	// Making validation a separate function in case we want to add other checks
+	// The only check currently is to make sure at least one test prefix is provided
+	err = projectConfig.ValidateConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -90,5 +101,14 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 		return err
 	}
 
+	return nil
+}
+
+// ValidateConfig validate that the project config meets certain requirements
+func (p *ProjectConfig) ValidateConfig() error {
+	// Ensure at least one prefix is in config
+	if len(p.Fuzzing.TestPrefixes) == 0 {
+		return errors.New("at least one test prefix must be specified within your project configuration file")
+	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -13,6 +14,9 @@ type CoverageMaps struct {
 
 	cachedCodeHash common.Hash
 	cachedMap      *CoverageMap
+
+	// updateLock is a lock to offer concurrent thread safety for map accesses.
+	updateLock sync.Mutex
 }
 
 // NewCoverageMaps initializes a new CoverageMaps object.
@@ -25,6 +29,10 @@ func NewCoverageMaps() *CoverageMaps {
 // Update updates the current coverage maps with the provided ones. It returns a boolean indicating whether
 // new coverage was achieved, or an error if one was encountered.
 func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
+	// Acquire our thread lock and defer our unlocking for when we exit this method
+	cm.updateLock.Lock()
+	defer cm.updateLock.Unlock()
+
 	// Create a boolean indicating whether we achieved new coverage
 	changed := false
 

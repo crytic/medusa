@@ -6,7 +6,7 @@ import (
 	"github.com/trailofbits/medusa/fuzzing"
 	"os"
 	"os/signal"
-	"path"
+	"path/filepath"
 )
 
 // argFuzzConfigPath describes the project configuration path
@@ -17,7 +17,7 @@ var fuzzCmd = &cobra.Command{
 	Use:   "fuzz",
 	Short: "Starts a fuzzing campaign",
 	Long:  `Starts a fuzzing campaign`,
-	RunE: cmdRunFuzz,
+	RunE:  cmdRunFuzz,
 }
 
 func init() {
@@ -33,7 +33,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		argFuzzConfigPath = path.Join(workingDirectory, DefaultProjectConfigFilename)
+		argFuzzConfigPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
 	// Read our project configuration
@@ -46,7 +46,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// This is important as when we compile for a given platform, the paths may be relative to wherever the
 	// configuration is supplied from. Providing a file path explicitly is optional anyways, so we _should_
 	// be in the config directory when running this.
-	err = os.Chdir(path.Dir(argFuzzConfigPath))
+	err = os.Chdir(filepath.Dir(argFuzzConfigPath))
 	if err != nil {
 		return err
 	}
