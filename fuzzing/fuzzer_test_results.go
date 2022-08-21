@@ -3,8 +3,8 @@ package fuzzing
 import (
 	"encoding/json"
 	"fmt"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/compilation/types"
+	types2 "github.com/trailofbits/medusa/fuzzing/types"
 	"strings"
 	"sync"
 )
@@ -43,12 +43,12 @@ type FuzzerResultFailedTest struct {
 	// TxSequence represents the transaction sequence used to trigger the failed tests.
 	TxSequence []FuzzerResultFailedTestTx
 	// FailedTests represents the property tests which were violated after applying the TxSequence.
-	FailedTests []deployedMethod
+	FailedTests []types2.DeployedMethod
 }
 
 // NewFuzzerResultFailedTest returns a new FuzzerResultFailedTest struct which describes a property test which failed
 // during Fuzzer execution.
-func NewFuzzerResultFailedTest(txSequence []FuzzerResultFailedTestTx, failedTests []deployedMethod) *FuzzerResultFailedTest {
+func NewFuzzerResultFailedTest(txSequence []FuzzerResultFailedTestTx, failedTests []types2.DeployedMethod) *FuzzerResultFailedTest {
 	result := &FuzzerResultFailedTest{
 		TxSequence:  txSequence,
 		FailedTests: failedTests,
@@ -61,7 +61,7 @@ func (ft *FuzzerResultFailedTest) String() string {
 	// Construct a message with all property test names.
 	violatedNames := make([]string, len(ft.FailedTests))
 	for i := 0; i < len(ft.FailedTests); i++ {
-		violatedNames[i] = ft.FailedTests[i].method.Sig
+		violatedNames[i] = ft.FailedTests[i].Method.Sig
 	}
 
 	// Next we'll want the tx call information.
@@ -69,13 +69,13 @@ func (ft *FuzzerResultFailedTest) String() string {
 	for i := 0; i < len(txMethodNames); i++ {
 		// Obtain our tx and decode our method from this.
 		failedTestTx := ft.TxSequence[i]
-		method, err := failedTestTx.Contract.Abi.MethodById(failedTestTx.Tx.Data)
+		method, err := failedTestTx.Contract.Abi.MethodById(failedTestTx.Tx.Data())
 		if err != nil || method == nil {
 			panic("failed to evaluate failed test method from transaction data")
 		}
 
 		// Next decode our arguments
-		args, err := method.Inputs.Unpack(failedTestTx.Tx.Data[4:])
+		args, err := method.Inputs.Unpack(failedTestTx.Tx.Data()[4:])
 		if err != nil {
 			panic("failed to unpack method args from transaction data")
 		}
@@ -89,13 +89,7 @@ func (ft *FuzzerResultFailedTest) String() string {
 		}
 
 		// Obtain our sender for this transaction
-		var senderStr string
-		sender, err := coreTypes.Sender(coreTypes.HomesteadSigner{}, coreTypes.NewTx(failedTestTx.Tx))
-		if err == nil {
-			senderStr = sender.String()
-		} else {
-			senderStr = "<unresolved>"
-		}
+		senderStr := failedTestTx.Tx.From()
 
 		txMethodNames[i] = fmt.Sprintf(
 			"[%d] %s(%s) (sender=%s, gas=%d, gasprice=%s, value=%s)",
@@ -103,9 +97,9 @@ func (ft *FuzzerResultFailedTest) String() string {
 			method.Name,
 			string(b),
 			senderStr,
-			failedTestTx.Tx.Gas,
-			failedTestTx.Tx.GasPrice.String(),
-			failedTestTx.Tx.Value.String(),
+			failedTestTx.Tx.Gas(),
+			failedTestTx.Tx.GasPrice().String(),
+			failedTestTx.Tx.Value().String(),
 		)
 	}
 
@@ -125,12 +119,12 @@ type FuzzerResultFailedTestTx struct {
 	Contract *types.CompiledContract
 
 	// Tx represents the underlying transaction.
-	Tx *coreTypes.LegacyTx
+	Tx *types2.CallMessage
 }
 
 // NewFuzzerResultFailedTestTx returns a new FuzzerResultFailedTestTx struct to track a tx in a tx sequence leading to
 // a failed test.
-func NewFuzzerResultFailedTestTx(contract *types.CompiledContract, tx *coreTypes.LegacyTx) *FuzzerResultFailedTestTx {
+func NewFuzzerResultFailedTestTx(contract *types.CompiledContract, tx *types2.CallMessage) *FuzzerResultFailedTestTx {
 	failedTx := &FuzzerResultFailedTestTx{
 		Contract: contract,
 		Tx:       tx,

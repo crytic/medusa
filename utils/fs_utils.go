@@ -25,7 +25,7 @@ func CopyFile(sourcePath string, targetPath string) error {
 	targetDirectory := filepath.Dir(targetPath)
 	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Open a handle to the source file

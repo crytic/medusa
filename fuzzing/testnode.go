@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/tracing"
+	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/vendored"
 	"math/big"
 	"strings"
@@ -139,16 +140,13 @@ func (t *TestNode) RevertToSnapshot() error {
 
 // CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
-func (t *TestNode) CallContract(call types.Message) (*core.ExecutionResult, error) {
+func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionResult, error) {
 	// Obtain our state snapshot (note: this is different from the test node snapshot)
 	snapshot := t.state.Snapshot()
 
 	// Set infinite balance to the fake caller account
-	from := t.state.GetOrNewStateObject(call.From())
+	from := t.state.GetOrNewStateObject(msg.From())
 	from.SetBalance(math.MaxBig256)
-
-	// Execute the call.
-	msg := t.CreateMessage(call.From(), call.To(), call.Value(), call.Data())
 
 	// Create our transaction and block contexts for the vm
 	txContext := core.NewEVMTxContext(msg)
@@ -170,7 +168,7 @@ func (t *TestNode) CallContract(call types.Message) (*core.ExecutionResult, erro
 }
 
 // messageToTransaction derived a types.Transaction from a types.Message.
-func messageToTransaction(msg types.Message) *types.Transaction {
+func messageToTransaction(msg core.Message) *types.Transaction {
 	// TODO: This might have issues in the future due to not being given a valid signatures.
 	//  This should probably be verified at some point.
 	return types.NewTx(&types.LegacyTx{
@@ -185,7 +183,7 @@ func messageToTransaction(msg types.Message) *types.Transaction {
 
 // CreateMessage creates an object which satisfies the types.Message interface. It populates gas limit, price, nonce,
 // and other fields automatically, and sets fee/tip caps such that no base fee is charged (for testing).
-func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) types.Message {
+func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) *fuzzingTypes.CallMessage {
 	// Obtain our message parameters
 	nonce := t.state.GetNonce(from)
 	gasLimit := t.dummyChain.GasLimit()
@@ -196,7 +194,7 @@ func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value 
 	gasTipCap := big.NewInt(0)
 
 	// Construct and return a new message from our given parameters.
-	return types.NewMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data, nil, true)
+	return fuzzingTypes.NewCallMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data)
 }
 
 // BlockNumber returns the test chain head's block number, where zero is the genesis block.
@@ -219,7 +217,7 @@ func (t *TestNode) BlockHeader() *types.Header {
 // SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
 // with it, as if a transaction were just received. Returns the TestNodeBlock representing the result of the state
 // transition.
-func (t *TestNode) SendMessage(msg types.Message) *TestNodeBlock {
+func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	// Set up some parameters used to construct our test block
 	blockNumber := big.NewInt(t.BlockNumber() + 1)
 	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO:
@@ -260,6 +258,8 @@ func (t *TestNode) SendMessage(msg types.Message) *TestNodeBlock {
 		Nonce:       types.BlockNonce{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
+
+	// Calculate our block hash for this block
 	blockHash := header.Hash()
 
 	// Create a tx from our msg, for hashing/receipt purposes
@@ -278,7 +278,7 @@ func (t *TestNode) SendMessage(msg types.Message) *TestNodeBlock {
 	evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
 
 	// Apply our transaction
-	receipt, err := vendored.EVMApplyTransaction(msg, config, &coinbase, gasPool, t.state, blockNumber, blockHash, tx, &usedGas, evm)
+	receipt, err := vendored.EVMApplyTransaction(msg.ToEVMMessage(), config, &coinbase, gasPool, t.state, blockNumber, blockHash, tx, &usedGas, evm)
 	if err != nil {
 		panic(fmt.Sprintf("state write error: %v", err))
 	}
@@ -293,7 +293,8 @@ func (t *TestNode) SendMessage(msg types.Message) *TestNodeBlock {
 	}
 
 	// Update the header's state root hash
-	header.Root = root // TODO: t.state.IntermediateRoot(config.IsEIP158(parentBlockNumber))
+	// Note: You could also retrieve the root with state.IntermediateRoot(config.IsEIP158(parentBlockNumber))
+	header.Root = root
 
 	// Create a new block for our test node
 	block := TestNodeBlock{
