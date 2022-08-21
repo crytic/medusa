@@ -12,24 +12,54 @@ import (
 
 // CallMessage implements Ethereum's core.Message, used to apply EVM/state updates.
 type CallMessage struct {
-	MsgFrom      common.Address  `json:"from"`
-	MsgTo        *common.Address `json:"to"`
-	MsgNonce     uint64          `json:"nonce"`
-	MsgValue     *big.Int        `json:"gas"`
-	MsgGas       uint64          `json:"value"`
-	MsgGasPrice  *big.Int        `json:"gas_price"`
-	MsgGasFeeCap *big.Int        `json:"gas_fee_cap"`
-	MsgGasTipCap *big.Int        `json:"gas_tip_cap"`
-	MsgData      []byte          `json:"data"`
+	// MsgFrom represents a core.Message's from parameter (sender), indicating who sent a transaction/message to the
+	// Ethereum core to apply a state update.
+	MsgFrom common.Address `json:"from"`
+
+	// MsgTo represents the receiving address for a given core.Message.
+	MsgTo *common.Address `json:"to"`
+
+	// MsgNonce represents the core.Message sender's nonce
+	MsgNonce uint64 `json:"nonce"`
+
+	// MsgValue represents ETH value to be sent to the receiver of the message.
+	MsgValue *big.Int `json:"value"`
+
+	// MsgGas represents the maximum amount of gas the sender is willing to spend to cover the cost of executing the
+	// message or transaction.
+	MsgGas uint64 `json:"gas"`
+
+	// MsgGasPrice represents the price which the sender is willing to pay for each unit of gas used during execution
+	// of the message.
+	MsgGasPrice *big.Int `json:"gas_price"`
+
+	// MsgGasFeeCap represents the maximum fee to enforce for gas related costs (related to 1559 transaction executed).
+	// The use of nil here indicates that the gas price oracle should be relied on instead.
+	MsgGasFeeCap *big.Int `json:"gas_fee_cap"`
+
+	// MsgGasTipCap represents the fee cap to use for 1559 transaction. The use of nil here indicates that the gas price
+	// oracle should be relied on instead.
+	MsgGasTipCap *big.Int `json:"gas_tip_cap"`
+
+	// MsgData represents the underlying message data to be sent to the receiver. If the receiver is a smart contract,
+	// this will likely house your call parameters and other serialized data.
+	MsgData []byte `json:"data"`
 }
 
 // callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
 // For example, this enables serialization of big.Int but specifying a different field type to serialize it as.
 type callMessageMarshaling struct {
-	MsgValue     *hexutil.Big
-	MsgGasPrice  *hexutil.Big
+	// MsgValue represents the marshaling rules for CallMessage.MsgValue.
+	MsgValue *hexutil.Big
+
+	// MsgGasPrice represents the marshaling rules for CallMessage.MsgGasPrice.
+	MsgGasPrice *hexutil.Big
+
+	// MsgGasFeeCap represents the marshaling rules for CallMessage.MsgGasFeeCap.
 	MsgGasFeeCap *hexutil.Big
+
+	// MsgGasTipCap represents the marshaling rules for CallMessage.MsgGasTipCap.
 	MsgGasTipCap *hexutil.Big
 }
 
