@@ -6,7 +6,7 @@ contract TestBlockTimestamp {
         startingBlockTimestamp = block.timestamp;
     }
 
-    function doNothing() public {
+    function waitTimestamp() public {
         // This method does nothing but is left exposed so it can be called by the fuzzer to advance blocks
     }
 

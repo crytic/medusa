@@ -6,7 +6,7 @@ contract TestBlockNumber {
         startingBlockNumber = block.number;
     }
 
-    function doNothing() public {
+    function waitBlockNumber() public {
         // This method does nothing but is left exposed so it can be called by the fuzzer to advance block.number
     }
 
