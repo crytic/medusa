@@ -21,9 +21,9 @@ An example project configuration can be observed below:
 {
 	"accounts": {
 		"generate": 5,
-		"keys": [
-			"9E9E0488FA54525AE25A5277BF3D3EF8FC44E0686210005EA10C7F07C69FCE28",
-			"B3C0A41BC2AB9EB9239C006D9844FDF32E03F947D969933FD4503793F0C7C9D7"
+		"predefined": [
+			"0xb28C44E977ED1CdE3f20de60b5C03c16BCA370Eb",
+			"0xD261ACF13cE381BA2FA9226392BC10238aF8A998"
 		]
 	},
 	"fuzzing": {
@@ -49,7 +49,7 @@ An example project configuration can be observed below:
 The structure is described below:
 - `accounts` defines which accounts will be used by `medusa` in a fuzzing campaign:
   - `generate` specifies the number of accounts to create and fund. 
-  - `keys` can be used to specify an array of hex strings which will be interpreted as pre-defined account private keys to use in the fuzzing campaign.
+  - `predefined` can be used to specify an array of hex strings which will be interpreted as externally owned account addresses to use in the fuzzing campaign.
 - `fuzzing` defines parameters for the fuzzing campaign:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
   - `worker_database_entry_limit` defines how many keys a worker's memory database can contain before the worker is reset

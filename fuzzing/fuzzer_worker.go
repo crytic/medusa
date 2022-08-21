@@ -110,7 +110,7 @@ func (fw *fuzzerWorker) deployAndRegisterCompiledContracts() error {
 				if len(contract.Abi.Constructor.Inputs) == 0 {
 					// TODO: Determine if we should use random accounts to deploy each contract, the same, or
 					//  user-specified, instead of `accounts[0]`.
-					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0].address)
+					deployedAddress, err := fw.testNode.DeployContract(contract, fw.fuzzer.accounts[0])
 					if err != nil {
 						return err
 					}
@@ -142,7 +142,7 @@ func (fw *fuzzerWorker) checkViolatedPropertyTests() []fuzzerTypes.DeployedMetho
 		// Call the underlying contract
 		// TODO: Determine if we should use `accounts[0]` or have a separate funded account for the assertions.
 		value := big.NewInt(0)
-		msg := fw.testNode.CreateMessage(fw.fuzzer.accounts[0].address, &propertyTest.Address, value, data)
+		msg := fw.testNode.CreateMessage(fw.fuzzer.accounts[0], &propertyTest.Address, value, data)
 		res, err := fw.testNode.CallContract(msg)
 
 		// If we have an error calling an invariant method, we should panic as we never want this to fail.
@@ -267,9 +267,9 @@ func (fw *fuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 	panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
 }
 
-// generateFuzzedTx generates a new transaction and determines which fuzzerAccount should send it on this fuzzerWorker's
+// generateFuzzedTx generates a new transaction and determines which account should send it on this fuzzerWorker's
 // TestNode.
-// Returns the transaction and a fuzzerAccount intended to be the sender, or an error if one was encountered.
+// Returns the transaction information, or an error if one was encountered.
 func (fw *fuzzerWorker) generateFuzzedTx() (*fuzzerTypes.CallMessage, error) {
 	// Verify we have state changing methods to call
 	if len(fw.stateChangingMethods) == 0 {
@@ -279,7 +279,7 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*fuzzerTypes.CallMessage, error) {
 	// Select a random method and sender
 	// TODO: Determine if we should bias towards certain senders
 	selectedMethod := &fw.stateChangingMethods[rand.Intn(len(fw.stateChangingMethods))]
-	selectedSender := &fw.fuzzer.accounts[rand.Intn(len(fw.fuzzer.accounts))]
+	selectedSender := fw.fuzzer.accounts[rand.Intn(len(fw.fuzzer.accounts))]
 
 	// Generate fuzzed parameters for the function call
 	args := make([]interface{}, len(selectedMethod.Method.Inputs))
@@ -302,7 +302,7 @@ func (fw *fuzzerWorker) generateFuzzedTx() (*fuzzerTypes.CallMessage, error) {
 	if selectedMethod.Method.StateMutability == "payable" {
 		value = fw.fuzzer.generator.GenerateInteger(false, 64)
 	}
-	msg := fw.testNode.CreateMessage(selectedSender.address, &selectedMethod.Address, value, data)
+	msg := fw.testNode.CreateMessage(selectedSender, &selectedMethod.Address, value, data)
 
 	// Return our transaction sequence element.
 	return msg, nil
@@ -399,7 +399,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	// Fund all of our users in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for i := 0; i < len(fw.fuzzer.accounts); i++ {
-		genesisAlloc[fw.fuzzer.accounts[i].address] = core.GenesisAccount{
+		genesisAlloc[fw.fuzzer.accounts[i]] = core.GenesisAccount{
 			Balance: initBalance,
 		}
 	}
