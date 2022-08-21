@@ -1,4 +1,4 @@
-contract TestXYPayable {
+contract TestMagicNumbersXYPayable {
     uint paidAmount;
     uint paidAmount2;
     bool calledOnce;
