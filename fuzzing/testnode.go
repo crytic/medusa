@@ -30,22 +30,49 @@ type TestNode struct {
 	// dummyChain is core.BlockChain instance which is used to construct the genesis state. After such point it is
 	// only used for reference to fulfill the needs of some methods.
 	dummyChain *core.BlockChain
-	kvstore    *memorydb.Database
-	db         ethdb.Database
-	signer     *types.HomesteadSigner
 
-	state    *state.StateDB
+	// kvstore represents the underlying key-value store used to construct the db.
+	kvstore *memorydb.Database
+
+	// db represents the in-memory database used by the TestNode and its underlying chain and dummyChain objects to
+	// store state changes.
+	db ethdb.Database
+
+	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
+	// and is the subject of state changes when executing new transactions. This does not track the current block
+	// head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
+	state *state.StateDB
+
+	// snapshot is an identifier which is used by the Snapshot and RevertToSnapshot method. It represents a block number
+	// on the chain which we should return to when RevertToSnapshot is used.
 	snapshot int
 
-	tracer   *tracing.FuzzerTracer
+	// tracer represents an execution trace provider for the VM. It observes VM execution for any notable events such
+	// as coverage map updates, etc.
+	tracer *tracing.FuzzerTracer
+
+	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
+	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
 }
 
 // TestNodeBlock represents a block or update within a TestNode
 type TestNodeBlock struct {
-	header    *types.Header
-	message   core.Message
-	receipt   *types.Receipt
+	// header represents the block header for this current block.
+	header *types.Header
+
+	// message represents an internal EVM core.Message. Messages are derived from transactions after validation of a
+	// transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction fields
+	// plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field in a
+	// message).
+	message core.Message
+
+	// receipt represents a transaction receipt received when the associated message in this structure was sent to the
+	// VM to perform a state update. It houses event logs and other information collected during the state transition
+	// when the transaction was applied.
+	receipt *types.Receipt
+
+	// blockHash represents a cached hash for this block.
 	blockHash common.Hash
 }
 
@@ -96,7 +123,6 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 		dummyChain: dummyChain,
 		kvstore:    kvstore,
 		db:         db,
-		signer:     new(types.HomesteadSigner),
 		state:      stateDb,
 		tracer:     tracer,
 		vmConfig:   vmConfig,
@@ -137,53 +163,6 @@ func (t *TestNode) RevertToSnapshot() error {
 		return err
 	}
 	return nil
-}
-
-// CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
-// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
-func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionResult, error) {
-	// Obtain our state snapshot (note: this is different from the test node snapshot)
-	snapshot := t.state.Snapshot()
-
-	// Set infinite balance to the fake caller account
-	from := t.state.GetOrNewStateObject(msg.From())
-	from.SetBalance(math.MaxBig256)
-
-	// Create our transaction and block contexts for the vm
-	txContext := core.NewEVMTxContext(msg)
-	blockContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
-
-	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
-	// original implementation, as it is not maintained for the true chain state.
-	blockContext.GetHash = t.evmOpBlockHash
-
-	// Create our EVM instance
-	evm := vm.NewEVM(blockContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
-
-	// Fund the gas pool for execution appropriately
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
-
-	// Perform our state transition to obtain the result.
-	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
-
-	// Revert to our state snapshot to undo any changes.
-	t.state.RevertToSnapshot(snapshot)
-
-	return res, err
-}
-
-// messageToTransaction derived a types.Transaction from a types.Message.
-func messageToTransaction(msg core.Message) *types.Transaction {
-	// TODO: This might have issues in the future due to not being given a valid signatures.
-	//  This should probably be verified at some point.
-	return types.NewTx(&types.LegacyTx{
-		Nonce:    msg.Nonce(),
-		GasPrice: msg.GasPrice(),
-		Gas:      msg.Gas(),
-		To:       msg.To(),
-		Value:    msg.Value(),
-		Data:     msg.Data(),
-	})
 }
 
 // CreateMessage creates an object which satisfies the types.Message interface. It populates gas limit, price, nonce,
@@ -237,12 +216,26 @@ func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, er
 	}
 }
 
+// messageToTransaction derived a types.Transaction from a types.Message.
+func messageToTransaction(msg core.Message) *types.Transaction {
+	// TODO: This might have issues in the future due to not being given a valid signatures.
+	//  This should probably be verified at some point.
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    msg.Nonce(),
+		GasPrice: msg.GasPrice(),
+		Gas:      msg.Gas(),
+		To:       msg.To(),
+		Value:    msg.Value(),
+		Data:     msg.Data(),
+	})
+}
+
 // evmOpBlockHash represents a function used for a vm.BlockContext to facilitate BLOCKHASH instruction operations in the
-// EVM. This method is used as a hook to fetch block hashes from our TestNode rather than the dummy chain we use to
-// create vm.BlockContext objects. A user supplies a block number for which they wish to obtain a hash. If the number
-// refers to the currently executing block number or a future one, a zero hash is returned. If a block number requested
-// is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise, the block
-// hash is returned.
+// EVM. This method is used as a hook to fetch block hashes from our TestNode rather than the dummy core.BlockChain we
+// use to create vm.BlockContext objects. A user supplies a block number for which they wish to obtain a hash. If the
+// number refers to the currently executing block number or a future one, a zero hash is returned. If a block number
+// requested is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise,
+// the block hash is returned.
 func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
 	// If we're asking for our current block or newer, we can't provide that information at that time, so we return
 	// a zero hash, per the Ethereum spec.
@@ -254,7 +247,7 @@ func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
 	}
 
 	// Calculate our distance from our last block and ensure it does not index more than 256 items (255 indexes away
-	// from zero), as the BLOCKHASH opcode cannot obtain history further than this.
+	// from the last block), as the BLOCKHASH opcode cannot obtain history further than this.
 	distanceFromLastBlock := currentBlockNumber - n - 1
 	if distanceFromLastBlock > 255 {
 		return common.Hash{}
@@ -267,6 +260,39 @@ func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
 	} else {
 		return requestedBlockHash
 	}
+}
+
+// CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
+// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
+func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionResult, error) {
+	// Obtain our state snapshot (note: this is different from the test node snapshot)
+	snapshot := t.state.Snapshot()
+
+	// Set infinite balance to the fake caller account
+	from := t.state.GetOrNewStateObject(msg.From())
+	from.SetBalance(math.MaxBig256)
+
+	// Create our transaction and block contexts for the vm
+	txContext := core.NewEVMTxContext(msg)
+	blockContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
+
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+	// original implementation, as it is not maintained for the true chain state.
+	blockContext.GetHash = t.evmOpBlockHash
+
+	// Create our EVM instance
+	evm := vm.NewEVM(blockContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
+
+	// Fund the gas pool for execution appropriately
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	// Perform our state transition to obtain the result.
+	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
+
+	// Revert to our state snapshot to undo any changes.
+	t.state.RevertToSnapshot(snapshot)
+
+	return res, err
 }
 
 // SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
@@ -369,7 +395,7 @@ func (t *TestNode) DeployContract(contract compilationTypes.CompiledContract, de
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
-		panic("could not convert compiled contract bytecode from hex string to byte code")
+		return common.Address{}, fmt.Errorf("could not convert compiled contract bytecode from hex string to byte code")
 	}
 
 	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
