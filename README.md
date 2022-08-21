@@ -54,7 +54,7 @@ The structure is described below:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
   - `worker_database_entry_limit` defines how many keys a worker's memory database can contain before the worker is reset
     - **Note**: this is a temporary logic for memory throttling
-  - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced.
+  - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `test_limit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
   - `max_tx_sequence_length` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
   - `test_prefixes` defines the list of prefixes that medusa will use to determine whether a given function is a property test or not. For example, if `fuzz_` is a test prefix, then any function name in the form `fuzz_*` may be a property test. There must be _at least_ one default test prefix. Note that if you are using Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.

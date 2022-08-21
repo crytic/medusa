@@ -43,9 +43,10 @@ type TestNode struct {
 
 // TestNodeBlock represents a block or update within a TestNode
 type TestNodeBlock struct {
-	header  *types.Header
-	message core.Message
-	receipt *types.Receipt
+	header    *types.Header
+	message   core.Message
+	receipt   *types.Receipt
+	blockHash common.Hash
 }
 
 // NewTestNode creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -150,10 +151,14 @@ func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionR
 
 	// Create our transaction and block contexts for the vm
 	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
+	blockContext := core.NewEVMBlockContext(t.BlockHeader(), t.dummyChain, nil)
+
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+	// original implementation, as it is not maintained for the true chain state.
+	blockContext.GetHash = t.evmOpBlockHash
 
 	// Create our EVM instance
-	evm := vm.NewEVM(evmContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(blockContext, txContext, t.state, t.dummyChain.Config(), vm.Config{NoBaseFee: true})
 
 	// Fund the gas pool for execution appropriately
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
@@ -198,9 +203,9 @@ func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value 
 }
 
 // BlockNumber returns the test chain head's block number, where zero is the genesis block.
-func (t *TestNode) BlockNumber() int64 {
+func (t *TestNode) BlockNumber() uint64 {
 	// Our chain length is genesis block + test node blocks
-	return int64(len(t.chain))
+	return uint64(len(t.chain))
 }
 
 // BlockHeader returns the block header of the current test chain head.
@@ -214,16 +219,66 @@ func (t *TestNode) BlockHeader() *types.Header {
 	return t.dummyChain.CurrentHeader()
 }
 
+// BlockHashFromBlockNumber returns a block hash for a given block number. If the index is out of bounds, it returns
+// an error.
+func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, error) {
+	// If our block number references something too new, return an error
+	if blockNumber > uint64(len(t.chain)) {
+		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, len(t.chain)+1)
+	}
+
+	// Fetch either the genesis block hash or one of our later simulated block hashes.
+	if blockNumber == 0 {
+		genesisHash := t.dummyChain.CurrentBlock().Hash()
+		return genesisHash, nil
+	} else {
+		blockHash := t.chain[blockNumber-1].blockHash
+		return blockHash, nil
+	}
+}
+
+// evmOpBlockHash represents a function used for a vm.BlockContext to facilitate BLOCKHASH instruction operations in the
+// EVM. This method is used as a hook to fetch block hashes from our TestNode rather than the dummy chain we use to
+// create vm.BlockContext objects. A user supplies a block number for which they wish to obtain a hash. If the number
+// refers to the currently executing block number or a future one, a zero hash is returned. If a block number requested
+// is over 256 blocks in the past from the current executing block number, a zero hash is returned. Otherwise the block
+// hash is returned.
+func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
+	// If we're asking for our current block or newer, we can't provide that information at that time so we return
+	// a zero hash, per the Ethereum spec.
+	// Note: We add 1 to block number here because if we're executing this, it means we're constructing a new block
+	// or doing a new call on top of the last recorded block number.
+	currentBlockNumber := t.BlockNumber() + 1
+	if currentBlockNumber <= n {
+		return common.Hash{}
+	}
+
+	// Calculate our distance from our last block and ensure it does not index more than 256 items (255 indexes away
+	// from zero), as the BLOCKHASH opcode cannot obtain history further than this.
+	distanceFromLastBlock := currentBlockNumber - n - 1
+	if distanceFromLastBlock > 255 {
+		return common.Hash{}
+	}
+
+	// Obtain our requested block hash and return it.
+	requestedBlockHash, err := t.BlockHashFromBlockNumber(n)
+	if err != nil {
+		return common.Hash{}
+	} else {
+		return requestedBlockHash
+	}
+}
+
 // SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
 // with it, as if a transaction were just received. Returns the TestNodeBlock representing the result of the state
 // transition.
 func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	// Set up some parameters used to construct our test block
-	blockNumber := big.NewInt(t.BlockNumber() + 1)
-	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO:
+	blockNumber := big.NewInt(int64(t.BlockNumber()) + 1)
+	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO: Determine proper timestamp advance logic
 	coinbase := t.BlockHeader().Coinbase
 	config := t.dummyChain.Config()
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is safe, this is a lot of gas!
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is sensible
 	var usedGas uint64
 
 	// Use the default set gas limit from the dummy chain
@@ -268,11 +323,9 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	// Create a new context to be used in the EVM environment
 	blockContext := core.NewEVMBlockContext(header, t.dummyChain, &coinbase)
 
-	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used.
-	blockContext.GetHash = func(num uint64) common.Hash {
-		// TODO: Implement getting header hash.
-		return common.Hash{}
-	}
+	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+	// original implementation, as it is not maintained for the true chain state.
+	blockContext.GetHash = t.evmOpBlockHash
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
@@ -298,9 +351,10 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 
 	// Create a new block for our test node
 	block := TestNodeBlock{
-		header:  header,
-		message: msg,
-		receipt: receipt,
+		header:    header,
+		message:   msg,
+		receipt:   receipt,
+		blockHash: blockHash,
 	}
 
 	// Append it to our chain
