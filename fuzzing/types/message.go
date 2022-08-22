@@ -1,10 +1,15 @@
 package types
 
 import (
+	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/crypto/sha3"
 	"math/big"
+	"strconv"
+	"strings"
 )
 
 //go:generate go get github.com/fjl/gencodec
@@ -77,6 +82,18 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 		MsgGasTipCap: gasTipCap,
 		MsgData:      data,
 	}
+}
+
+//Hash hashes all the contents of a CallMessage
+func (m *CallMessage) Hash() string {
+	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
+		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),
+		strconv.FormatUint(m.Gas(), 10), m.GasFeeCap().String(), m.GasTipCap().String(),
+		m.GasPrice().String()}, ",")
+	hash := sha3.NewLegacyKeccak256()
+	// TODO: not checking returned error from hash.Write. can add this later
+	hash.Write([]byte(msgSequenceString))
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func (m *CallMessage) From() common.Address             { return m.MsgFrom }

@@ -134,6 +134,7 @@ func (f *Fuzzer) Start() error {
 	f.results = NewFuzzerResults()
 	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
+	//go f.writeCorpusToDisk()
 	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
 	// Setup corpus
@@ -311,3 +312,25 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		}
 	}
 }
+
+/*
+// writeCorpusToDisk will write 10 sequences from the corpus to disk every 10,000 transactions.
+// TODO: Can make 10 and 10,000 transactions configurable?
+func (f *Fuzzer) writeCorpusToDisk() error {
+	numTransactionsTested := f.metrics.TransactionsTested()
+	// If more than 10,000 transactions have passed, write to disk
+	if int(numTransactionsTested)-f.corpus.TransactionsTestedAtLastWrite < 10_000 {
+		return nil
+	}
+	// Write the last 10 sequences to disk
+	for index := f.corpus.WriteIndex; index < f.corpus.WriteIndex+10; index++ {
+		// If we have caught up the length of transaction sequences, return
+		if f.corpus.WriteIndex == len(f.corpus.TransactionSequences)-1 {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+*/

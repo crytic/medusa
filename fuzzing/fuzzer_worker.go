@@ -326,6 +326,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 	}()
 
 	// Loop for each transaction to execute
+	var testNodeBlockSequence []*TestNodeBlock
 	for i := 0; i < len(txSequence); i++ {
 		// If the transaction sequence element is nil, generate a new fuzzed tx in its place.
 		var err error
@@ -340,10 +341,11 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 		msg := txSequence[i]
 
 		// Send our message
-		fw.testNode.SendMessage(msg)
+		testNodeBlock := fw.testNode.SendMessage(msg)
+		// Append testNodeBlock to sequence
+		testNodeBlockSequence = append(testNodeBlockSequence, testNodeBlock)
 
 		// Check if coverage has increased
-		// TODO: is checking this if statement every time going to slow the fuzzing down too much?
 		if fw.fuzzer.config.Fuzzing.Coverage {
 			newCoverageMaps := fw.testNode.tracer.CoverageMaps()
 			if newCoverageMaps != nil {
@@ -355,7 +357,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 
 				if coverageUpdated {
 					// New coverage has been found, add it to the corpus
-					err = fw.AddToCorpus(txSequence[:i+1])
+					err = fw.AddToCorpus(testNodeBlockSequence, txSequence[:i+1])
 					if err != nil {
 						// TODO: same question about whether this is the right stuff to return
 						return i + 1, nil, err
@@ -507,38 +509,44 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	return false, nil
 }
 
-//AddToCorpus adds a transaction sequence to the corpus
-func (fw *fuzzerWorker) AddToCorpus(txSequence []*fuzzerTypes.CallMessage) error {
-	// Commenting in case we want to store other than CallMessage
-	/*
-		// Initialize list of meta tx sequence
-		var metaTxSequence []fuzzerTypes.MetaTx
-		// Convert each legacy transaction to a meta transaction
-		for _, tx := range txSequence {
-			metaTx, err := convertCallMessageToMetaTx(tx)
-			if err != nil {
-				return err
-			}
-			// Add meta transaction to list
-			metaTxSequence = append(metaTxSequence, metaTx)
+//AddToCorpus intakes a list of TestNodeBlock and a list of CallMessage, pushes those values into a
+//fuzzerTypes.MetaBlockSequence and adds that sequence to the corpus, assuming it was not there already.
+//Uniqueness is tested by taking the hash of the sequence.
+func (fw *fuzzerWorker) AddToCorpus(testNodeBlockSequence []*TestNodeBlock, txSequence []*fuzzerTypes.CallMessage) error {
+	var metaBlockSequence fuzzerTypes.MetaBlockSequence
+	// Create sequence of meta blocks
+	for idx, testNodeBlock := range testNodeBlockSequence {
+		metaBlock, err := convertTestNodeBlockToMetaBlock(testNodeBlock, txSequence[idx])
+		if err != nil {
+			return err
 		}
-	*/
-	txSequenceHash := fw.fuzzer.corpus.TransactionSequenceHash(txSequence)
-	if _, ok := fw.fuzzer.corpus.TransactionSequences[txSequenceHash]; ok {
-		return nil
+		// Add meta transaction to list
+		metaBlockSequence = append(metaBlockSequence, metaBlock)
 	}
-	// Get mutex lock and defer unlocking
-	fw.fuzzer.corpus.Mutex.Lock()
-	defer fw.fuzzer.corpus.Mutex.Unlock()
-	// Add meta txn sequence to corpus
-	fw.fuzzer.corpus.TransactionSequences[txSequenceHash] = txSequence
+
+	// Get hash of the sequence
+	metaBlockSequenceHash := metaBlockSequence.Hash()
+	// Add to corpus if it is not in there already
+	if _, ok := fw.fuzzer.corpus.MetaBlockSequences[metaBlockSequenceHash]; !ok {
+		fw.fuzzer.corpus.MetaBlockSequences[metaBlockSequenceHash] = &metaBlockSequence
+	}
 	return nil
 }
 
-// convertCallMessageToMetaTx converts a fuzzerTypes.CallMessage to a fuzzerTypes.MetaTx
-// TODO: we are not currently going to use this but probably will in the future
-func convertCallMessageToMetaTx(tx *fuzzerTypes.CallMessage) (fuzzerTypes.MetaTx, error) {
-	// Create new metaTx object
-	metaTx := fuzzerTypes.NewMetaTx()
-	return *metaTx, nil
+//convertTestNodeBlockToMetaBlock converts a TestNodeBlock to a fuzzerTypes.MetaBlock. Components such as the
+//block timestamp, block number, block hash, transaction receipts, and the transactions are used during the
+//conversion
+//TODO: Note that this will change as each block will hold more than 1 transaction and receipt
+func convertTestNodeBlockToMetaBlock(testNodeBlock *TestNodeBlock, tx *fuzzerTypes.CallMessage) (*fuzzerTypes.MetaBlock, error) {
+	// Create metaBlock object
+	metaBlock := fuzzerTypes.NewMetaBlock()
+	// Set header fields
+	metaBlock.Header.BlockTimestamp = testNodeBlock.header.Time
+	metaBlock.Header.BlockNumber = testNodeBlock.header.Number
+	metaBlock.Header.BlockHash = testNodeBlock.blockHash
+	// TODO: need to change the append functions after TestNodeBlock changes to slices of receipts and txns
+	// Set receipts and transactions
+	metaBlock.Receipts = append(metaBlock.Receipts, testNodeBlock.receipt)
+	metaBlock.Transactions = append(metaBlock.Transactions, tx)
+	return metaBlock, nil
 }
