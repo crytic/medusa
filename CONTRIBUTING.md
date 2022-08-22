@@ -4,8 +4,10 @@
 For more context about the project, check out the [README](./README.md).
 
 To better understand how to make responsible open source contributions, consider the following guidance:
-- TODO1
-- TODO2
+- [Finding ways to contribute to open source on GitHub](https://docs.github.com/en/get-started/exploring-projects-on-github/finding-ways-to-contribute-to-open-source-on-github)
+- [Quickstart for GitHub Issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/quickstart)
+- [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow)
+- [Collaborating with pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests)
 
 ## Contributor & Reviewer Requirements
 When introducing changes to the project, note the following requirements:
@@ -27,6 +29,7 @@ Pull request reviewers have a responsibility to uphold these standards. Even if 
 ## Considerations for cross-platform code
 - While Linux/macOS us LF line endings (`\n`), Windows uses CRLF line endings (`\r\n`). This is important to note when processing text files (e.g., performing source mapping operations).
 - Windows file paths use backslashes (`\\`) while other operating systems tend to use forward-slashes (`/`). Many APIs will support forward slashes on Windows, but some may not. This is generally important to note when constructing file paths or performing equality checks. Ensure file paths are normalized for consistency where possible.
+  - For file operations, use the `filepath` package rather than `path` where possible. `filepath` respects system path separators, while `path` does not. (`path` is useful to construct consistent path strings across systems).
 
 ## License
 TODO
