@@ -17,10 +17,9 @@ import (
 type CryticCompilationConfig struct {
 	// Target is the object that is being compiled. It can be a single `.sol` file or a whole directory
 	Target string `json:"target"`
-	// SolcVersion is the version of `solc` that will be installed if SolcInstall is set to true
+	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
+	// no special version is installed prior to compilation.
 	SolcVersion string `json:"solcVersion"`
-	// SolcInstall is a way to request medusa to install a specific version of `solc`, which is dictated by SolcVersion
-	SolcInstall bool `json:"solcInstall"`
 	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
 	// `./crytic-export`
 	BuildDirectory string `json:"buildDirectory"`
