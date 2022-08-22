@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 )
 
@@ -80,7 +79,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	args := append([]string{".", "--export-format", "standard"}, s.Args...)
 	if !pathInfo.IsDir() {
 		// If it is a file, get the parent directory of s.Target
-		parentDirectory = path.Dir(s.Target)
+		parentDirectory = filepath.Dir(s.Target)
 		// Since we are compiling a file, use s.Target as the target
 		args = append([]string{s.Target, "--export-format", "standard"}, s.Args...)
 	}
@@ -109,9 +108,9 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	buildDirectory := s.BuildDirectory
 	// Default directory is parentDirectory/crytic-export
 	if buildDirectory == "" {
-		buildDirectory = path.Join(parentDirectory, "crytic-export")
+		buildDirectory = filepath.Join(parentDirectory, "crytic-export")
 	}
-	matches, err := filepath.Glob(path.Join(buildDirectory, "*.json"))
+	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
 		return nil, "", err
 	}
