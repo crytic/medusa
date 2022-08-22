@@ -38,3 +38,34 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 	assert.Nil(t, err)
 	return targetPath
 }
+
+// ExecuteInDirectory executes the given method in a given test directory. It changes the current working directory
+// to the directory specified, runs the provided method, then restores the working directory. This wraps tests so
+// any file artifacts generated do not end up in the codebase directories.
+func ExecuteInDirectory(t *testing.T, testPath string, method func()) {
+	// Backup our old working directory
+	cwd, err := os.Getwd()
+	assert.Nil(t, err)
+
+	// Check if the test path refers to a file or directory, as we'll want to change our working directory to a
+	// directory path.
+	testPathInfo, err := os.Stat(testPath)
+	assert.Nil(t, err)
+
+	// Ensure we obtained a directory from our path
+	testDirectory := testPath
+	if !testPathInfo.IsDir() {
+		testDirectory = filepath.Dir(testPath)
+	}
+
+	// Change our working directory to the test directory
+	err = os.Chdir(testDirectory)
+	assert.Nil(t, err)
+
+	// Execute the given method
+	method()
+
+	// Restore our working directory (we must leave the test directory or else clean up will fail post testing)
+	err = os.Chdir(cwd)
+	assert.Nil(t, err)
+}
