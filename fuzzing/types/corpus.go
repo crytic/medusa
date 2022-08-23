@@ -58,6 +58,21 @@ func (m MetaBlockSequence) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals a byte string into a MetaBlockSequence object.
+func (m *MetaBlockSequence) UnmarshalJSON(input []byte) error {
+	type MetaBlockSequence struct {
+		MetaBlockSequence []*MetaBlock `json:"sequence"`
+	}
+	var dec MetaBlockSequence
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.MetaBlockSequence != nil {
+		*m = dec.MetaBlockSequence
+	}
+	return nil
+}
+
 //MetaBlock is an abstraction of a fuzzing.TestNodeBlock. It includes some core header components in Header, transactions
 //in Transactions, and receipts in Receipts
 type MetaBlock struct {
@@ -97,6 +112,29 @@ func (m MetaBlock) MarshalJSON() ([]byte, error) {
 	enc.Transactions = m.Transactions
 	enc.Receipts = m.Receipts
 	return json.Marshal(&enc)
+}
+
+// UnmarshalJSON unmarshals a byte string into a MetaBlock object.
+func (m *MetaBlock) UnmarshalJSON(input []byte) error {
+	type MetaBlock struct {
+		MetaHeader   *MetaHeader      `json:"header"`
+		Transactions []*CallMessage   `json:"transactions"`
+		Receipts     []*types.Receipt `json:"receipts"`
+	}
+	var dec MetaBlock
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.MetaHeader != nil {
+		m.Header = *dec.MetaHeader
+	}
+	if dec.Transactions != nil {
+		m.Transactions = dec.Transactions
+	}
+	if dec.Receipts != nil {
+		m.Receipts = dec.Receipts
+	}
+	return nil
 }
 
 //NewMetaBlock instantiates a new instance of MetaBlock
@@ -141,4 +179,27 @@ func (m MetaHeader) MarshalJSON() ([]byte, error) {
 	enc.BlockTimestamp = m.BlockTimestamp
 	enc.BlockNumber = m.BlockNumber
 	return json.Marshal(&enc)
+}
+
+// UnmarshalJSON unmarshals a byte string into a MetaHeader object.
+func (m *MetaHeader) UnmarshalJSON(input []byte) error {
+	type MetaHeader struct {
+		BlockHash      *common.Hash `json:"block_hash"`
+		BlockTimestamp *uint64      `json:"block_timestamp"`
+		BlockNumber    *big.Int     `json:"block_number"`
+	}
+	var dec MetaHeader
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.BlockHash != nil {
+		m.BlockHash = *dec.BlockHash
+	}
+	if dec.BlockTimestamp != nil {
+		m.BlockTimestamp = *dec.BlockTimestamp
+	}
+	if dec.BlockNumber != nil {
+		m.BlockNumber = dec.BlockNumber
+	}
+	return nil
 }
