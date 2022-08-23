@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -11,7 +12,9 @@ import (
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -134,7 +137,7 @@ func (f *Fuzzer) Start() error {
 	f.results = NewFuzzerResults()
 	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	//go f.writeCorpusToDisk()
+	// go f.writeCorpusToDisk()
 	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
 	// Setup corpus
@@ -197,6 +200,8 @@ func (f *Fuzzer) Start() error {
 // Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
 // occurs.
 func (f *Fuzzer) Stop() {
+	// Write corpus to disk
+	f.writeCorpusToDisk()
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
@@ -207,6 +212,7 @@ func (f *Fuzzer) Stop() {
 // then return true so that corpus can be read into memory. Note that it will return true even if corpus/corpus is empty.
 // The function checks for directory existence and nothing more.
 // TODO: need to make sure it works for absolute and relative paths
+// TODO: is this OS agnostic?
 func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 	// Guard clause
 	if f.config.Fuzzing.CorpusDirectory == "" {
@@ -225,10 +231,10 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory, 0777); err != nil {
 				return false, fmt.Errorf("error while creating corpus directory")
 			}
-			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
+			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
 				return false, fmt.Errorf("error while creating corpus sub-directory")
 			}
-			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
+			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
 				return false, fmt.Errorf("error while creating coverage sub-directory")
 			}
 			return false, nil
@@ -246,14 +252,14 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 
 	// If corpus/corpus is not there, make it
 	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); err != nil {
-		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/corpus", 0777); err != nil {
+		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
 			return false, fmt.Errorf("error while creating corpus sub-directory")
 		}
 	}
 
 	// if corpus/coverage is not there, make it
 	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); err != nil {
-		if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory+"/coverage", 0777); err != nil {
+		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
 			return false, fmt.Errorf("error while creating coverage sub-directory")
 		}
 	}
@@ -313,24 +319,19 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 	}
 }
 
-/*
-// writeCorpusToDisk will write 10 sequences from the corpus to disk every 10,000 transactions.
-// TODO: Can make 10 and 10,000 transactions configurable?
-func (f *Fuzzer) writeCorpusToDisk() error {
-	numTransactionsTested := f.metrics.TransactionsTested()
-	// If more than 10,000 transactions have passed, write to disk
-	if int(numTransactionsTested)-f.corpus.TransactionsTestedAtLastWrite < 10_000 {
-		return nil
+// writeCorpusToDisk will write the corpus after the fuzzer finishes
+// TODO: Still need to add feature to write corpus once in a while
+// TODO: not going to deal with errors for now
+func (f *Fuzzer) writeCorpusToDisk() {
+	// Get current working directory
+	currentDir, _ := os.Getwd()
+	// Move to corpus/corpus subdirectory
+	os.Chdir(filepath.Join(currentDir, f.config.Fuzzing.CorpusDirectory, "/corpus"))
+	// Write all sequences to corpus
+	for hash, metaBlockSequence := range f.corpus.MetaBlockSequences {
+		jsonString, _ := json.MarshalIndent(metaBlockSequence, "", " ")
+		ioutil.WriteFile(hash+".json", jsonString, os.ModePerm)
 	}
-	// Write the last 10 sequences to disk
-	for index := f.corpus.WriteIndex; index < f.corpus.WriteIndex+10; index++ {
-		// If we have caught up the length of transaction sequences, return
-		if f.corpus.WriteIndex == len(f.corpus.TransactionSequences)-1 {
-			return nil
-		}
-	}
-
-	return nil
+	// Change back to original directory
+	os.Chdir(currentDir)
 }
-
-*/
