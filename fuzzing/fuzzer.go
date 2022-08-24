@@ -137,7 +137,6 @@ func (f *Fuzzer) Start() error {
 	f.results = NewFuzzerResults()
 	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
 	go f.runMetricsPrintLoop()
-	// go f.writeCorpusToDisk()
 	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
 	// Setup corpus
@@ -201,7 +200,11 @@ func (f *Fuzzer) Start() error {
 // occurs.
 func (f *Fuzzer) Stop() {
 	// Write corpus to disk
-	f.writeCorpusToDisk()
+	err := f.writeCorpusToDisk()
+	// TODO: Should I throw a panic?
+	if err != nil {
+		panic(err)
+	}
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
@@ -319,19 +322,36 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 	}
 }
 
-// writeCorpusToDisk will write the corpus to disk after the fuzzer finishes
-// TODO: Still need to add feature to write corpus once in a while
-// TODO: not going to deal with errors for now
-func (f *Fuzzer) writeCorpusToDisk() {
+// writeCorpusToDisk will write the corpus to disk after the fuzzer finishes its work
+func (f *Fuzzer) writeCorpusToDisk() error {
 	// Get current working directory
-	currentDir, _ := os.Getwd()
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	// Move to corpus/corpus subdirectory
-	os.Chdir(filepath.Join(currentDir, f.config.Fuzzing.CorpusDirectory, "/corpus"))
+	err = os.Chdir(filepath.Join(currentDir, f.config.Fuzzing.CorpusDirectory, "/corpus"))
+	if err != nil {
+		return err
+	}
 	// Write all sequences to corpus
 	for hash, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
-		jsonString, _ := json.MarshalIndent(corpusBlockSequence, "", " ")
-		ioutil.WriteFile(hash+".json", jsonString, os.ModePerm)
+		// Marshal the sequence
+		jsonString, err := json.MarshalIndent(corpusBlockSequence, "", " ")
+		if err != nil {
+			return err
+		}
+		// Write the byte string
+		err = ioutil.WriteFile(hash+".json", jsonString, os.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
 	// Change back to original directory
-	os.Chdir(currentDir)
+	err = os.Chdir(currentDir)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
