@@ -83,10 +83,13 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 			assert.True(t, len(fuzzer.Results().GetFailedTests()) == 0, "Fuzz test found a violated property test when it should not have")
 		}
 		// If default configuration is used, all test contracts should show some level of coverage
-		assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "No coverage was captured")
-		testCoverageMarshalingAndUnmarsharling(t, fuzzer)
+		if fuzzingConfig.Coverage {
+			assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "No coverage was captured")
+			if fuzzingConfig.CorpusDirectory != "" {
+				testCoverageMarshalingAndUnmarsharling(t, fuzzer)
+			}
+		}
 	})
-
 }
 
 // testCoverageMarshalingAndUnmarsharling tests to make sure that a marshaled and then unmarshaled
