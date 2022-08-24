@@ -15,7 +15,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -140,8 +139,15 @@ func (f *Fuzzer) Start() error {
 	f.generator = value_generation.NewValueGeneratorMutation(f.baseValueSet) // TODO: make this configurable after adding more options
 
 	// Setup corpus
-	f.corpus = fuzzerTypes.NewCorpus()
-	_, err = f.checkAndSetupCorpusDirectory()
+	if f.config.Fuzzing.Coverage {
+		f.corpus = fuzzerTypes.NewCorpus()
+	}
+	if f.config.Fuzzing.Coverage && f.config.Fuzzing.CorpusDirectory != "" {
+		_, err = f.checkAndSetupCorpusDirectory()
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -199,76 +205,69 @@ func (f *Fuzzer) Start() error {
 // Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
 // occurs.
 func (f *Fuzzer) Stop() {
-	// Write corpus to disk
-	err := f.writeCorpusToDisk()
-	// TODO: Should I throw a panic?
-	if err != nil {
-		panic(err)
+	// Write corpus to disk if corpusDirectory is set and coverage is enabled
+	if f.config.Fuzzing.CorpusDirectory != "" && f.config.Fuzzing.Coverage {
+		err := f.writeCorpusToDisk()
+		// TODO: Should I throw a panic?
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
 	}
 }
 
-// checkAndSetupCorpusDirectory sets up the corpus/ directory and subdirectories. If the (sub)directories already exist
-// then return true so that corpus can be read into memory. Note that it will return true even if corpus/corpus is empty.
+// checkAndSetupCorpusDirectory sets up the my_corpus/ directory and subdirectories. If the (sub)directories already exist
+// then return true so that corpus can be read into memory. Note that it will return true even if my_corpus/corpus is empty.
 // The function checks for directory existence and nothing more.
-// TODO: need to make sure it works for absolute and relative paths
-// TODO: is this OS agnostic?
+// TODO: Are the directory permissions too lose? 0644 and 0666 did would lead to permission errors
+// TODO: Should there be a regex check to make sure it is a valid directory name?
 func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
-	// Guard clause
-	if f.config.Fuzzing.CorpusDirectory == "" {
-		return false, nil
-	}
-
-	// Do some effort to make sure there are no backslashes or front-slashes
-	if strings.Contains(f.config.Fuzzing.CorpusDirectory, "/") || strings.Contains(f.config.Fuzzing.CorpusDirectory, "\\") {
-		return false, fmt.Errorf("do not include any backslashes or frontslashes in the corpus_dir config option")
-	}
 	// Get info on corpus_dir directory existence
 	dirInfo, err := os.Stat(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		// If directory does not exist, make 'corpus', 'corpus/corpus', and 'corpus/coverage'
 		if os.IsNotExist(err) {
 			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory, 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus directory")
+				return false, fmt.Errorf("error while creating corpus directory. Make sure the config_dir config option is a valid directory name: %v\n", err)
 			}
 			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus sub-directory")
+				return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
 			}
 			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
-				return false, fmt.Errorf("error while creating coverage sub-directory")
+				return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
 			}
 			return false, nil
 		}
 
-		// some other sort of error
+		// some other sort of error, throw it
 		return false, err
 	}
 
 	// if corpus is a file and not a directory, throw an error
 	if !dirInfo.IsDir() {
-		return false, fmt.Errorf("there exists a conflicting "+
-			"file named %s in this directory.\n", f.config.Fuzzing.CorpusDirectory)
+		return false, fmt.Errorf("there exists a conflicting file named %s in this directory.\n", f.config.Fuzzing.CorpusDirectory)
 	}
 
 	// If corpus/corpus is not there, make it
-	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); err != nil {
+	if _, err = os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); os.IsNotExist(err) {
 		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
-			return false, fmt.Errorf("error while creating corpus sub-directory")
+			return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
 		}
 	}
 
 	// if corpus/coverage is not there, make it
-	if _, err := os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); err != nil {
+	if _, err = os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); os.IsNotExist(err) {
 		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
-			return false, fmt.Errorf("error while creating coverage sub-directory")
+			return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
 		}
 	}
 
-	// we will return true even if corpus/corpus is empty. There is no reason to check here whether there are files in
-	// there right now.
+	// we will return true even if corpus/corpus is empty.
+	// There is no reason to check here whether there are files in there right now.
 	return true, nil
 }
 
@@ -336,13 +335,18 @@ func (f *Fuzzer) writeCorpusToDisk() error {
 	}
 	// Write all sequences to corpus
 	for hash, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
+		fileName := hash + ".json"
+		// If corpus file already exists, no need to write it again
+		if _, err := os.Stat(fileName); err == nil {
+			continue
+		}
 		// Marshal the sequence
 		jsonString, err := json.MarshalIndent(corpusBlockSequence, "", " ")
 		if err != nil {
 			return err
 		}
 		// Write the byte string
-		err = ioutil.WriteFile(hash+".json", jsonString, os.ModePerm)
+		err = ioutil.WriteFile(fileName, jsonString, os.ModePerm)
 		if err != nil {
 			return err
 		}
