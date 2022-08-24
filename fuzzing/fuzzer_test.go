@@ -1,12 +1,16 @@
 package fuzzing
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/configs"
+	"github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/utils/test_utils"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
@@ -22,7 +26,8 @@ func getFuzzConfigDefault() *configs.FuzzingConfig {
 		TestPrefixes: []string{
 			"fuzz_", "echidna_",
 		},
-		Coverage: true,
+		Coverage:        true,
+		CorpusDirectory: "corpus",
 	}
 }
 
@@ -46,40 +51,67 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	// Copy our target file to our test directory
 	testContractPath := test_utils.CopyToTestDirectory(t, solidityFile)
 
-	// Create a default solc platform config
-	solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
+	test_utils.ExecuteInDirectory(t, testContractPath, func() {
+		// Create a default solc platform config
+		solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
 
-	// Wrap the platform config in a compilation config
-	compilationConfig, err := compilation.GetCompilationConfigFromPlatformConfig(solcPlatformConfig)
-	assert.Nil(t, err)
+		// Wrap the platform config in a compilation config
+		compilationConfig, err := compilation.GetCompilationConfigFromPlatformConfig(solcPlatformConfig)
+		assert.Nil(t, err)
 
-	// Create a project configuration to run the fuzzer with
-	projectConfig := &configs.ProjectConfig{
-		Accounts: configs.AccountConfig{
-			Generate: 5,
-		},
-		Fuzzing:     *fuzzingConfig,
-		Compilation: *compilationConfig,
-	}
+		// Create a project configuration to run the fuzzer with
+		projectConfig := &configs.ProjectConfig{
+			Accounts: configs.AccountConfig{
+				Generate: 5,
+			},
+			Fuzzing:     *fuzzingConfig,
+			Compilation: *compilationConfig,
+		}
 
-	// Create a fuzzer instance
-	fuzzer, err := NewFuzzer(*projectConfig)
-	assert.Nil(t, err)
+		// Create a fuzzer instance
+		fuzzer, err := NewFuzzer(*projectConfig)
+		assert.Nil(t, err)
 
-	// Run the fuzzer against the compilation
-	err = fuzzer.Start()
-	assert.Nil(t, err)
+		// Run the fuzzer against the compilation
+		err = fuzzer.Start()
+		assert.Nil(t, err)
 
-	// Ensure we captured a failed test.
-	if expectFailure {
-		assert.True(t, len(fuzzer.Results().GetFailedTests()) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
-	} else {
-		assert.True(t, len(fuzzer.Results().GetFailedTests()) == 0, "Fuzz test found a violated property test when it should not have")
-	}
-	assert.True(t, len(fuzzer.corpus.TransactionSequences) > 0, "No coverage was captured")
+		// Ensure we captured a failed test.
+		if expectFailure {
+			assert.True(t, len(fuzzer.Results().GetFailedTests()) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
+		} else {
+			assert.True(t, len(fuzzer.Results().GetFailedTests()) == 0, "Fuzz test found a violated property test when it should not have")
+		}
+		// If default configuration is used, all test contracts should show some level of coverage
+		assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "No coverage was captured")
+		testCoverageMarshalingAndUnmarsharling(t, fuzzer)
+	})
+
 }
 
-// FuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
+// testCoverageMarshalingAndUnmarsharling tests to make sure that a marshaled and then unmarshaled
+// CorpusBlockSequence preserves the sequence.
+func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
+	// Get current working directory
+	currentDir, _ := os.Getwd()
+	// Iterate through each sequence in the corpus
+	for hash, seqOne := range fuzzer.corpus.CorpusBlockSequences {
+		// Move to corpus/corpus subdirectory
+		os.Chdir(filepath.Join(currentDir, fuzzer.config.Fuzzing.CorpusDirectory, "/corpus"))
+		// Read corpus file
+		b, _ := os.ReadFile(hash + ".json")
+		// Unmarshal corpus file
+		var seqTwo types.CorpusBlockSequence
+		err := json.Unmarshal(b, &seqTwo)
+		if err != nil {
+			assert.False(t, false, "JSON unmarshaling failed")
+		}
+		// Assert that the unmarshaled sequence is equal to the sequence (which was marshaled to begin with)
+		assert.True(t, test_utils.SequencesAreEqual(t, *seqOne, seqTwo), "marshaling and unmarshaling are not symmetric operations")
+	}
+}
+
+// testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
 // against them. It asserts that the fuzzer should find a result prior to timeout/cancellation for each test.
 func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *configs.FuzzingConfig, expectFailure bool) {
 	// For each solidity file, we invoke fuzzing.
