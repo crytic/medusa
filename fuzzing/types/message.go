@@ -85,15 +85,17 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 }
 
 //Hash hashes all the contents of a CallMessage
-func (m *CallMessage) Hash() string {
+func (m *CallMessage) Hash() (string, error) {
 	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
 		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),
 		strconv.FormatUint(m.Gas(), 10), m.GasFeeCap().String(), m.GasTipCap().String(),
 		m.GasPrice().String()}, ",")
 	hash := sha3.NewLegacyKeccak256()
-	// TODO: not checking returned error from hash.Write. can add this later
-	hash.Write([]byte(msgSequenceString))
-	return hex.EncodeToString(hash.Sum(nil))
+	_, err := hash.Write([]byte(msgSequenceString))
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func (m *CallMessage) From() common.Address             { return m.MsgFrom }
