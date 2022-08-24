@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"math/rand"
@@ -341,6 +342,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 		msg := txSequence[i]
 
 		// Send our message
+		// TODO: After more than one msg can go in a block, SendMessage should return an []*CallMessage as well
 		testNodeBlock := fw.testNode.SendMessage(msg)
 		// Append testNodeBlock to sequence
 		testNodeBlockSequence = append(testNodeBlockSequence, testNodeBlock)
@@ -351,16 +353,14 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 			if newCoverageMaps != nil {
 				coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
 				if err != nil {
-					// TODO: is this the correct return value?
-					return i + 1, nil, err
+					return i, nil, err
 				}
 
 				if coverageUpdated {
 					// New coverage has been found, add it to the corpus
 					err = fw.AddToCorpus(testNodeBlockSequence, txSequence[:i+1])
 					if err != nil {
-						// TODO: same question about whether this is the right stuff to return
-						return i + 1, nil, err
+						return i, nil, err
 					}
 				}
 			}
@@ -509,44 +509,59 @@ func (fw *fuzzerWorker) run() (bool, error) {
 	return false, nil
 }
 
-//AddToCorpus intakes a list of TestNodeBlock and a list of CallMessage, pushes those values into a
-//fuzzerTypes.MetaBlockSequence and adds that sequence to the corpus, assuming it was not there already.
-//Uniqueness is tested by taking the hash of the sequence.
+// AddToCorpus intakes a list of TestNodeBlock and a list of CallMessage, pushes those values into a
+// fuzzerTypes.CorpusBlockSequence and adds that sequence to the corpus, assuming it was not there already.
+// Uniqueness is tested by taking the hash of the sequence.
 func (fw *fuzzerWorker) AddToCorpus(testNodeBlockSequence []*TestNodeBlock, txSequence []*fuzzerTypes.CallMessage) error {
-	var metaBlockSequence fuzzerTypes.MetaBlockSequence
-	// Create sequence of meta blocks
+	var corpusBlockSequence fuzzerTypes.CorpusBlockSequence
+	// Create sequence of corpus blocks
 	for idx, testNodeBlock := range testNodeBlockSequence {
-		metaBlock, err := convertTestNodeBlockToMetaBlock(testNodeBlock, txSequence[idx])
-		if err != nil {
-			return err
-		}
-		// Add meta transaction to list
-		metaBlockSequence = append(metaBlockSequence, metaBlock)
+		// TODO: This will change when more than one transaction goes in a block
+		corpusBlock := convertTestNodeBlockToCorpusBlock(testNodeBlock, txSequence[idx])
+		// Add corpus block to list
+		corpusBlockSequence = append(corpusBlockSequence, corpusBlock)
 	}
 
 	// Get hash of the sequence
-	metaBlockSequenceHash := metaBlockSequence.Hash()
-	// Add to corpus if it is not in there already
-	if _, ok := fw.fuzzer.corpus.MetaBlockSequences[metaBlockSequenceHash]; !ok {
-		fw.fuzzer.corpus.MetaBlockSequences[metaBlockSequenceHash] = &metaBlockSequence
+	corpusBlockSequenceHash, err := corpusBlockSequence.Hash()
+	if err != nil {
+		return err
 	}
+	// Add to corpus if it is not in there already
+	fw.fuzzer.corpus.Mutex.Lock() // lock
+	if _, ok := fw.fuzzer.corpus.CorpusBlockSequences[corpusBlockSequenceHash]; !ok {
+		fw.fuzzer.corpus.CorpusBlockSequences[corpusBlockSequenceHash] = &corpusBlockSequence
+	}
+	fw.fuzzer.corpus.Mutex.Unlock() // unlock
 	return nil
 }
 
-//convertTestNodeBlockToMetaBlock converts a TestNodeBlock to a fuzzerTypes.MetaBlock. Components such as the
-//block timestamp, block number, block hash, transaction receipts, and the transactions are used during the
-//conversion
-//TODO: Note that this will change as each block will hold more than 1 transaction and receipt
-func convertTestNodeBlockToMetaBlock(testNodeBlock *TestNodeBlock, tx *fuzzerTypes.CallMessage) (*fuzzerTypes.MetaBlock, error) {
-	// Create metaBlock object
-	metaBlock := fuzzerTypes.NewMetaBlock()
+// convertTestNodeBlockToCorpusBlock converts a TestNodeBlock to a fuzzerTypes.CorpusBlock. Components such as the
+// block timestamp, block number, block hash, transaction receipts, and the transactions are used during the
+// conversion
+func convertTestNodeBlockToCorpusBlock(testNodeBlock *TestNodeBlock, tx *fuzzerTypes.CallMessage) *fuzzerTypes.CorpusBlock {
+	// Create corpusBlock object
+	corpusBlock := fuzzerTypes.NewCorpusBlock()
 	// Set header fields
-	metaBlock.Header.BlockTimestamp = testNodeBlock.header.Time
-	metaBlock.Header.BlockNumber = testNodeBlock.header.Number
-	metaBlock.Header.BlockHash = testNodeBlock.blockHash
-	// TODO: need to change the append functions after TestNodeBlock changes to slices of receipts and txns
-	// Set receipts and transactions
-	metaBlock.Receipts = append(metaBlock.Receipts, testNodeBlock.receipt)
-	metaBlock.Transactions = append(metaBlock.Transactions, tx)
-	return metaBlock, nil
+	corpusBlock.Header.BlockTimestamp = testNodeBlock.header.Time
+	corpusBlock.Header.BlockNumber = testNodeBlock.header.Number
+	corpusBlock.Header.BlockHash = testNodeBlock.blockHash
+	// TODO: This will change when more than one receipt goes in a block
+	corpusBlock.Receipts = append(corpusBlock.Receipts, testNodeBlock.receipt)
+	checkReceipts(corpusBlock.Receipts)
+	// TODO: This will change when more than one transaction goes in a block
+	corpusBlock.Transactions = append(corpusBlock.Transactions, tx)
+	return corpusBlock
+}
+
+// checkReceipts ensures that each receipt has a Log object that is not nil. This is performed so that unmarshaling
+// works as expected
+func checkReceipts(receipts []*coreTypes.Receipt) []*coreTypes.Receipt {
+	// Iterate through receipts and if there is a nil receipt.Logs, update it to an empty list
+	for _, receipt := range receipts {
+		if receipt.Logs == nil {
+			receipt.Logs = []*coreTypes.Log{}
+		}
+	}
+	return receipts
 }

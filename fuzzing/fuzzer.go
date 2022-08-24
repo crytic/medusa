@@ -319,7 +319,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 	}
 }
 
-// writeCorpusToDisk will write the corpus after the fuzzer finishes
+// writeCorpusToDisk will write the corpus to disk after the fuzzer finishes
 // TODO: Still need to add feature to write corpus once in a while
 // TODO: not going to deal with errors for now
 func (f *Fuzzer) writeCorpusToDisk() {
@@ -328,8 +328,8 @@ func (f *Fuzzer) writeCorpusToDisk() {
 	// Move to corpus/corpus subdirectory
 	os.Chdir(filepath.Join(currentDir, f.config.Fuzzing.CorpusDirectory, "/corpus"))
 	// Write all sequences to corpus
-	for hash, metaBlockSequence := range f.corpus.MetaBlockSequences {
-		jsonString, _ := json.MarshalIndent(metaBlockSequence, "", " ")
+	for hash, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
+		jsonString, _ := json.MarshalIndent(corpusBlockSequence, "", " ")
 		ioutil.WriteFile(hash+".json", jsonString, os.ModePerm)
 	}
 	// Change back to original directory
