@@ -14,8 +14,8 @@ import (
 
 // Corpus holds the list of block sequences that increased fuzz coverage
 type Corpus struct {
-	// CorpusBlockSequences is a mapping between a hashed string and a CorpusBlockSequence
-	CorpusBlockSequences map[string]*CorpusBlockSequence
+	// CorpusBlockSequences is a list of CorpusBlockSequence
+	CorpusBlockSequences []*CorpusBlockSequence
 	// Mutex is used to prevent races to write and read from corpus
 	Mutex sync.Mutex
 	// WriteIndex is an index in the CorpusBlockSequences list that points to the next object to be written to disk
@@ -26,7 +26,7 @@ type Corpus struct {
 // NewCorpus initializes a new Corpus object for the Fuzzer
 func NewCorpus() *Corpus {
 	return &Corpus{
-		CorpusBlockSequences: map[string]*CorpusBlockSequence{},
+		CorpusBlockSequences: []*CorpusBlockSequence{},
 		WriteIndex:           0,
 	}
 }

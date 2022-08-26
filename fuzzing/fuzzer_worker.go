@@ -522,16 +522,9 @@ func (fw *fuzzerWorker) AddToCorpus(testNodeBlockSequence []*TestNodeBlock, txSe
 		corpusBlockSequence = append(corpusBlockSequence, corpusBlock)
 	}
 
-	// Get hash of the sequence
-	corpusBlockSequenceHash, err := corpusBlockSequence.Hash()
-	if err != nil {
-		return err
-	}
-	// Add to corpus if it is not in there already
+	// Add to corpus, if we do not care about duplicates
 	fw.fuzzer.corpus.Mutex.Lock() // lock
-	if _, ok := fw.fuzzer.corpus.CorpusBlockSequences[corpusBlockSequenceHash]; !ok {
-		fw.fuzzer.corpus.CorpusBlockSequences[corpusBlockSequenceHash] = &corpusBlockSequence
-	}
+	fw.fuzzer.corpus.CorpusBlockSequences = append(fw.fuzzer.corpus.CorpusBlockSequences, &corpusBlockSequence)
 	fw.fuzzer.corpus.Mutex.Unlock() // unlock
 	return nil
 }

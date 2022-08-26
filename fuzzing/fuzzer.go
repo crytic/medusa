@@ -334,8 +334,13 @@ func (f *Fuzzer) writeCorpusToDisk() error {
 		return err
 	}
 	// Write all sequences to corpus
-	for hash, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
-		fileName := hash + ".json"
+	for _, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
+		// Get hash of the sequence
+		corpusBlockSequenceHash, err := corpusBlockSequence.Hash()
+		if err != nil {
+			return err
+		}
+		fileName := corpusBlockSequenceHash + ".json"
 		// If corpus file already exists, no need to write it again
 		if _, err := os.Stat(fileName); err == nil {
 			continue

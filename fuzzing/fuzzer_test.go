@@ -98,14 +98,19 @@ func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
 	// Get current working directory
 	currentDir, _ := os.Getwd()
 	// Iterate through each sequence in the corpus
-	for hash, seqOne := range fuzzer.corpus.CorpusBlockSequences {
+	for _, seqOne := range fuzzer.corpus.CorpusBlockSequences {
 		// Move to corpus/corpus subdirectory
 		os.Chdir(filepath.Join(currentDir, fuzzer.config.Fuzzing.CorpusDirectory, "/corpus"))
+		// Hash the seq
+		corpusBlockSequenceHash, err := seqOne.Hash()
+		if err != nil {
+			assert.False(t, false, "There was an error hashing a corpus sequence")
+		}
 		// Read corpus file
-		b, _ := os.ReadFile(hash + ".json")
+		b, _ := os.ReadFile(corpusBlockSequenceHash + ".json")
 		// Unmarshal corpus file
 		var seqTwo types.CorpusBlockSequence
-		err := json.Unmarshal(b, &seqTwo)
+		err = json.Unmarshal(b, &seqTwo)
 		if err != nil {
 			assert.False(t, false, "JSON unmarshaling failed")
 		}
