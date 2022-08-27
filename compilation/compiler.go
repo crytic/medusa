@@ -20,6 +20,7 @@ func init() {
 	generators := []func() platforms.PlatformConfigInterface{
 		func() platforms.PlatformConfigInterface { return platforms.NewSolcCompilationConfig("contract.sol") },
 		func() platforms.PlatformConfigInterface { return platforms.NewTruffleCompilationConfig(".") },
+		func() platforms.PlatformConfigInterface { return platforms.NewCryticCompilationConfig(".") },
 	}
 
 	// Initialize our platform config generator.
