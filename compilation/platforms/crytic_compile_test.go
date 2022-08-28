@@ -1,7 +1,6 @@
 package platforms
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/utils/test_utils"
@@ -121,7 +120,6 @@ func TestCryticSingleFileBadArgs(t *testing.T) {
 func TestCryticDirectoryNoArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
 	contractDirectory := test_utils.CopyToTestDirectory(t, "testdata/hardhat/basic_project/")
-	fmt.Printf("contract directory: %v\n", contractDirectory)
 
 	// Execute our tests in the given test path
 	test_utils.ExecuteInDirectory(t, contractDirectory, func() {
@@ -132,10 +130,10 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 		// Create a crytic-compile provider
 		cryticConfig := NewCryticCompilationConfig(contractDirectory)
 		compilations, _, err := cryticConfig.Compile()
-		fmt.Printf("compilations: %v\n", compilations)
+
 		// No failures
 		assert.Nil(t, err)
-		fmt.Printf("number of compilations: %v\n", len(compilations))
+
 		// Two compilation objects
 		assert.True(t, len(compilations) == 2)
 		// One source per compilation unit

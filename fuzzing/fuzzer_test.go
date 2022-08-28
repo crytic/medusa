@@ -86,27 +86,32 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *co
 	}
 }
 
-// TestFuzzVMBlockNumber runs a test to solve block_number.sol
-func TestFuzzVMBlockNumber(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", getFuzzConfigDefault(), true)
+// TestDeploymentInternalLibrary runs a test against internal_library.sol to ensure internal libraries behave correctly.
+func TestDeploymentInternalLibrary(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/internal_library.sol", getFuzzConfigCantSolveShortTime(), false)
 }
 
-// TestFuzzVMTimestamp runs a test to solve block_number.sol
-func TestFuzzVMTimestamp(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", getFuzzConfigDefault(), true)
-}
-
-// TestFuzzVMBlockHash runs a test to solve block_hash.sol
-func TestFuzzVMBlockHash(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", getFuzzConfigCantSolveShortTime(), false)
-}
-
-// TestFuzzMagicNumbersSimpleXY runs a test to solve simple_xy.sol
+// TestFuzzMagicNumbersSimpleXY runs a test against simple_xy.sol to solve specific function input parameters.
 func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", getFuzzConfigDefault(), true)
 }
 
-// TestFuzzMagicNumbersSimpleXYPayable runs a test to solve simple_xy_payable.sol
+// TestFuzzMagicNumbersSimpleXYPayable runs a test against simple_xy_payable.sol to solve specific payable values.
 func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy_payable.sol", getFuzzConfigDefault(), true)
+}
+
+// TestFuzzVMBlockNumber runs a test against block_number.sol to ensure block numbers behave correctly in the VM.
+func TestFuzzVMBlockNumber(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", getFuzzConfigDefault(), true)
+}
+
+// TestFuzzVMTimestamp runs a test against block_number.sol to ensure block timestamps behave correctly in the VM.
+func TestFuzzVMTimestamp(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", getFuzzConfigDefault(), true)
+}
+
+// TestFuzzVMBlockHash runs a test against block_hash.sol to ensure block hashes behave correctly in the VM.
+func TestFuzzVMBlockHash(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", getFuzzConfigCantSolveShortTime(), false)
 }

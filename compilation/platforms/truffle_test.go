@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestTruffleCompilationAbsolutePath tests compilation of a truffle project with an absolute project path.
 func TestTruffleCompilationAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
 	truffleDirectory := test_utils.CopyToTestDirectory(t, "testdata/truffle/basic_project/")
