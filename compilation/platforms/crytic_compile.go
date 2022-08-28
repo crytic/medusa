@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 )
 
@@ -17,10 +16,9 @@ import (
 type CryticCompilationConfig struct {
 	// Target is the object that is being compiled. It can be a single `.sol` file or a whole directory
 	Target string `json:"target"`
-	// SolcVersion is the version of `solc` that will be installed if SolcInstall is set to true
+	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
+	// no special version is installed prior to compilation.
 	SolcVersion string `json:"solcVersion"`
-	// SolcInstall is a way to request medusa to install a specific version of `solc`, which is dictated by SolcVersion
-	SolcInstall bool `json:"solcInstall"`
 	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
 	// `./crytic-export`
 	BuildDirectory string `json:"buildDirectory"`
@@ -81,7 +79,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	args := append([]string{".", "--export-format", "standard"}, s.Args...)
 	if !pathInfo.IsDir() {
 		// If it is a file, get the parent directory of s.Target
-		parentDirectory = path.Dir(s.Target)
+		parentDirectory = filepath.Dir(s.Target)
 		// Since we are compiling a file, use s.Target as the target
 		args = append([]string{s.Target, "--export-format", "standard"}, s.Args...)
 	}
@@ -110,9 +108,9 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	buildDirectory := s.BuildDirectory
 	// Default directory is parentDirectory/crytic-export
 	if buildDirectory == "" {
-		buildDirectory = path.Join(parentDirectory, "crytic-export")
+		buildDirectory = filepath.Join(parentDirectory, "crytic-export")
 	}
-	matches, err := filepath.Glob(path.Join(buildDirectory, "*.json"))
+	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
 		return nil, "", err
 	}
