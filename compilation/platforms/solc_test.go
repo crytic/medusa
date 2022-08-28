@@ -26,7 +26,7 @@ func TestSimpleSolcCompilationAbsolutePath(t *testing.T) {
 		// Create a solc provider
 		solc := NewSolcCompilationConfig(contractPath)
 
-		// Obtain our solc version and ensure we didn't encounter an error
+		// Obtain our solc version and ensure we encountered an error
 		compilations, _, err := solc.Compile()
 		assert.Nil(t, err)
 		assert.True(t, len(compilations) > 0)
