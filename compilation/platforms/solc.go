@@ -7,6 +7,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/utils"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -75,15 +76,16 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Determine which compiler options we need.
 	outputOptions := s.SetSolcOutputOptions(v)
 
-	// Execute solc to compile our target.
-	out, err := exec.Command("solc", s.Target, "--combined-json", outputOptions).Output()
+	// Create our command
+	cmd := exec.Command("solc", s.Target, "--combined-json", outputOptions)
+	cmdStdout, cmdStderr, cmdCombined, err := utils.RunCommandWithOutputAndError(cmd)
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", fmt.Errorf("error while executing solc:\n%s\n\nCommand Output:\n%s\n", err.Error(), string(cmdCombined))
 	}
 
 	// Our compilation succeeded, load the JSON
 	var results map[string]interface{}
-	err = json.Unmarshal(out, &results)
+	err = json.Unmarshal(cmdStdout, &results)
 	if err != nil {
 		return nil, "", err
 	}
@@ -108,7 +110,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	}
 
 	// Parse our contracts from solc output
-	contracts, err := compiler.ParseCombinedJSON(out, "solc", v.String(), v.String(), "")
+	contracts, err := compiler.ParseCombinedJSON(cmdStdout, "solc", v.String(), v.String(), "")
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
 		nameSplit := strings.Split(name, ":")
@@ -131,5 +133,5 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		}
 	}
 
-	return []types.Compilation{*compilation}, "", nil
+	return []types.Compilation{*compilation}, string(cmdStderr), nil
 }
