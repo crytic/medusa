@@ -2,22 +2,27 @@ package utils
 
 import (
 	"bytes"
+	"io"
 	"os/exec"
 )
 
-// RunCommandWithOutputAndError runs a given exec.Cmd and returns the stdout and stderr output
-// as bytes, or an error if one occurred.
-func RunCommandWithOutputAndError(command *exec.Cmd) ([]byte, []byte, error) {
+// RunCommandWithOutputAndError runs a given exec.Cmd and returns the stdout, stderr, and
+// combined output as bytes, or an error if one occurred.
+func RunCommandWithOutputAndError(command *exec.Cmd) ([]byte, []byte, []byte, error) {
 	// Create our buffers to capture output and errors.
-	var bStdout, bStderr bytes.Buffer
-	command.Stdout = &bStdout
-	command.Stderr = &bStderr
+	var bStdout, bStderr, bCombined bytes.Buffer
+
+	// Create multi writers to capture output into individual and combined buffers
+	stdoutMulti := io.MultiWriter(&bStdout, &bCombined)
+	stderrMulti := io.MultiWriter(&bStderr, &bCombined)
+
+	// Set our writers
+	command.Stdout = stdoutMulti
+	command.Stderr = stderrMulti
 
 	// Execute the command and perform error checking
 	err := command.Run()
 
-	// Set our results
-	stdout := bStdout.Bytes()
-	stderr := bStderr.Bytes()
-	return stdout, stderr, err
+	// Return our results
+	return bStdout.Bytes(), bStderr.Bytes(), bCombined.Bytes(), err
 }
