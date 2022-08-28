@@ -20,7 +20,7 @@ func RunCommandWithOutputAndError(command *exec.Cmd) ([]byte, []byte, []byte, er
 	command.Stdout = stdoutMulti
 	command.Stderr = stderrMulti
 
-	// Execute the command and perform error checking
+	// Execute the command
 	err := command.Run()
 
 	// Return our results
