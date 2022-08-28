@@ -1,0 +1,19 @@
+{
+	"accounts": {
+		"generate": 5
+	},
+	"fuzzing": {
+		"workers": 10,
+		"worker_database_entry_limit": 10000,
+		"timeout": 0,
+		"test_limit": 0,
+		"max_tx_sequence_length": 100
+	},
+	"compilation": {
+		"platform": "truffle",
+		"platform_config": {
+			"target": ".",
+			"use_npx": true
+		}
+	}
+}
