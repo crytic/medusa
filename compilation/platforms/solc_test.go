@@ -57,11 +57,14 @@ func TestFailedSolcCompilation(t *testing.T) {
 	// Copy our testdata over to our testing directory
 	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/FailedCompilationContract.sol")
 
-	// Create a solc provider
-	solc := NewSolcCompilationConfig(contractPath)
+	// Execute our tests in the given test path
+	test_utils.ExecuteInDirectory(t, contractPath, func() {
+		// Create a solc provider
+		solc := NewSolcCompilationConfig(contractPath)
 
-	// Obtain our solc version and ensure we didn't encounter an error
-	compilations, _, err := solc.Compile()
-	assert.NotNil(t, err)
-	assert.True(t, len(compilations) == 0)
+		// Obtain our solc version and ensure we didn't encounter an error
+		compilations, _, err := solc.Compile()
+		assert.NotNil(t, err)
+		assert.True(t, len(compilations) == 0)
+	})
 }
