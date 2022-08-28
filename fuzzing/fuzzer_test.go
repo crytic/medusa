@@ -87,6 +87,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 			assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "No coverage was captured")
 			if fuzzingConfig.CorpusDirectory != "" {
 				testCoverageMarshalingAndUnmarsharling(t, fuzzer)
+				testReadWriteCorpus(t, fuzzer)
 			}
 		}
 	})
@@ -119,6 +120,18 @@ func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
 	}
 	// Go back to original directory
 	os.Chdir(currentDir)
+
+}
+
+// testReadWriteCorpus tests whether you can write to the corpus and read from it
+func testReadWriteCorpus(t *testing.T, fuzzer *Fuzzer) {
+	// Run the fuzzer against the compilation again
+	err := fuzzer.Start()
+	assert.Nil(t, err)
+	// Stop the fuzzer immediately
+	fuzzer.Stop()
+	// Ensure that you can read from corpus directory
+	assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "Read from corpus not working")
 }
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer

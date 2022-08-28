@@ -143,9 +143,15 @@ func (f *Fuzzer) Start() error {
 		f.corpus = fuzzerTypes.NewCorpus()
 	}
 	if f.config.Fuzzing.Coverage && f.config.Fuzzing.CorpusDirectory != "" {
-		_, err = f.checkAndSetupCorpusDirectory()
+		// Find out if corpus already exists
+		// Otherwise make the corpus directory and its subdirectories
+		corpusExists, err := f.checkAndSetupCorpusDirectory()
 		if err != nil {
 			return err
+		}
+		if corpusExists {
+			// do something
+			f.readFromCorpus()
 		}
 	}
 	if err != nil {
@@ -360,6 +366,33 @@ func (f *Fuzzer) writeCorpusToDisk() error {
 	err = os.Chdir(currentDir)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// readFromCorpus reads all json files from the corpus/ subdirectory and populates the in-memory corpus
+func (f *Fuzzer) readFromCorpus() error {
+	// Get .json files from the corpus/corpus subdirectory
+	// These .json files are corpusBlock sequences
+	matches, err := filepath.Glob(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus", "*.json"))
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(matches); i++ {
+		// Read the JSON file data
+		b, err := ioutil.ReadFile(matches[i])
+		if err != nil {
+			return err
+		}
+		// Read JSON file into corpusBlockSequence
+		var corpusBlockSequence fuzzerTypes.CorpusBlockSequence
+		err = json.Unmarshal(b, &corpusBlockSequence)
+		if err != nil {
+			return err
+		}
+		// Add sequence to corpus
+		f.corpus.CorpusBlockSequences = append(f.corpus.CorpusBlockSequences, &corpusBlockSequence)
 	}
 
 	return nil
