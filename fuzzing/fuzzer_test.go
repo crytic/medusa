@@ -97,10 +97,10 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
 	// Get current working directory
 	currentDir, _ := os.Getwd()
+	// Move to corpus/corpus subdirectory
+	os.Chdir(filepath.Join(currentDir, fuzzer.config.Fuzzing.CorpusDirectory, "corpus"))
 	// Iterate through each sequence in the corpus
 	for _, seqOne := range fuzzer.corpus.CorpusBlockSequences {
-		// Move to corpus/corpus subdirectory
-		os.Chdir(filepath.Join(currentDir, fuzzer.config.Fuzzing.CorpusDirectory, "/corpus"))
 		// Hash the seq
 		corpusBlockSequenceHash, err := seqOne.Hash()
 		if err != nil {
@@ -117,6 +117,8 @@ func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
 		// Assert that the unmarshaled sequence is equal to the sequence (which was marshaled to begin with)
 		assert.True(t, test_utils.SequencesAreEqual(t, *seqOne, seqTwo), "marshaling and unmarshaling are not symmetric operations")
 	}
+	// Go back to original directory
+	os.Chdir(currentDir)
 }
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
