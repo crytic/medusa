@@ -13,7 +13,7 @@ To better understand how to make responsible open source contributions, consider
 ### Overview
 When introducing changes to the project, note the following requirements:
 - All changes to the main branch should be introduced via pull requests.
-- Every pull request should be reviewed by at least one other peer prior to being merged into the main branch.
+- Every pull request **MUST** be reviewed by at least one other peer prior to being merged into the main branch.
 - Code **MUST** be supported on Linux, macOS, and Windows.
 - Code **MUST** be sufficiently commented:
   - Every type, function, const, and other variables should be accompanied by [doc comments](https://tip.golang.org/doc/comment).
