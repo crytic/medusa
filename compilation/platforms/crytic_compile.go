@@ -18,10 +18,10 @@ type CryticCompilationConfig struct {
 	Target string `json:"target"`
 	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
 	// no special version is installed prior to compilation.
-	SolcVersion string `json:"solcVersion"`
+	SolcVersion string `json:"solcVersion,omitempty"`
 	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
 	// `./crytic-export`
-	BuildDirectory string `json:"buildDirectory"`
+	BuildDirectory string `json:"buildDirectory,omitempty"`
 	// Args are additional arguments that can be provided to `crytic-compile`
 	Args []string `json:"args"`
 }
