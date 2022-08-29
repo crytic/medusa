@@ -63,7 +63,7 @@ The structure is described below:
   - `platformConfig` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
 
 ### Writing property tests
-Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `test_prefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
+Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 ```solidity
 contract TestXY {
     uint x;
