@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/vm"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"math/rand"
@@ -91,10 +92,10 @@ func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 			if fw.IsPropertyTest(method) {
 				fw.propertyTests = append(fw.propertyTests, fuzzerTypes.DeployedMethod{Address: deployedAddress, Contract: contract, Method: method})
 			}
-			continue
+		} else {
+			// Any non-constant method should be tracked as a state changing method.
+			fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedMethod{Address: deployedAddress, Contract: contract, Method: method})
 		}
-		// Any non-constant method should be tracked as a state changing method.
-		fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedMethod{Address: deployedAddress, Contract: contract, Method: method})
 	}
 }
 
@@ -341,6 +342,11 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 
 		// Send our message
 		fw.testNode.SendMessage(msg)
+
+		// If we encountered an invalid opcode error, it is indicative of an assertion failure
+		if _, hitInvalidOpcode := fw.testNode.tracer.VMError().(*vm.ErrInvalidOpCode); hitInvalidOpcode {
+			// TODO: Report assertion failure
+		}
 
 		// Record any violated property tests.
 		violatedPropertyTests := fw.checkViolatedPropertyTests()
