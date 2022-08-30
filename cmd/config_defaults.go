@@ -18,7 +18,8 @@ func GetDefaultProjectConfig(platform string) (*configs.ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &configs.ProjectConfig{
 		Accounts: configs.AccountConfig{
-			Generate: 5,
+			Generate:   5,
+			Predefined: make([]string, 0),
 		},
 		Fuzzing: configs.FuzzingConfig{
 			Workers:                  10,

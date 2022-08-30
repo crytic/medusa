@@ -31,15 +31,15 @@ type CallMessage struct {
 
 	// MsgGasPrice represents the price which the sender is willing to pay for each unit of gas used during execution
 	// of the message.
-	MsgGasPrice *big.Int `json:"gas_price"`
+	MsgGasPrice *big.Int `json:"gasPrice"`
 
 	// MsgGasFeeCap represents the maximum fee to enforce for gas related costs (related to 1559 transaction executed).
 	// The use of nil here indicates that the gas price oracle should be relied on instead.
-	MsgGasFeeCap *big.Int `json:"gas_fee_cap"`
+	MsgGasFeeCap *big.Int `json:"gasFeeCap"`
 
 	// MsgGasTipCap represents the fee cap to use for 1559 transaction. The use of nil here indicates that the gas price
 	// oracle should be relied on instead.
-	MsgGasTipCap *big.Int `json:"gas_tip_cap"`
+	MsgGasTipCap *big.Int `json:"gasTipCap"`
 
 	// MsgData represents the underlying message data to be sent to the receiver. If the receiver is a smart contract,
 	// this will likely house your call parameters and other serialized data.

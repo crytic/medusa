@@ -18,11 +18,11 @@ func (c CallMessage) MarshalJSON() ([]byte, error) {
 		MsgFrom      common.Address  `json:"from"`
 		MsgTo        *common.Address `json:"to"`
 		MsgNonce     uint64          `json:"nonce"`
-		MsgValue     *hexutil.Big    `json:"gas"`
-		MsgGas       uint64          `json:"value"`
-		MsgGasPrice  *hexutil.Big    `json:"gas_price"`
-		MsgGasFeeCap *hexutil.Big    `json:"gas_fee_cap"`
-		MsgGasTipCap *hexutil.Big    `json:"gas_tip_cap"`
+		MsgValue     *hexutil.Big    `json:"value"`
+		MsgGas       uint64          `json:"gas"`
+		MsgGasPrice  *hexutil.Big    `json:"gasPrice"`
+		MsgGasFeeCap *hexutil.Big    `json:"gasFeeCap"`
+		MsgGasTipCap *hexutil.Big    `json:"gasTipCap"`
 		MsgData      []byte          `json:"data"`
 	}
 	var enc CallMessage
@@ -44,11 +44,11 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 		MsgFrom      *common.Address `json:"from"`
 		MsgTo        *common.Address `json:"to"`
 		MsgNonce     *uint64         `json:"nonce"`
-		MsgValue     *hexutil.Big    `json:"gas"`
-		MsgGas       *uint64         `json:"value"`
-		MsgGasPrice  *hexutil.Big    `json:"gas_price"`
-		MsgGasFeeCap *hexutil.Big    `json:"gas_fee_cap"`
-		MsgGasTipCap *hexutil.Big    `json:"gas_tip_cap"`
+		MsgValue     *hexutil.Big    `json:"value"`
+		MsgGas       *uint64         `json:"gas"`
+		MsgGasPrice  *hexutil.Big    `json:"gasPrice"`
+		MsgGasFeeCap *hexutil.Big    `json:"gasFeeCap"`
+		MsgGasTipCap *hexutil.Big    `json:"gasTipCap"`
 		MsgData      []byte          `json:"data"`
 	}
 	var dec CallMessage
