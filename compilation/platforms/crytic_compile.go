@@ -18,12 +18,12 @@ type CryticCompilationConfig struct {
 	Target string `json:"target"`
 	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
 	// no special version is installed prior to compilation.
-	SolcVersion string `json:"solcVersion"`
+	SolcVersion string `json:"solcVersion,omitempty"`
 	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
 	// `./crytic-export`
-	BuildDirectory string `json:"buildDirectory"`
+	BuildDirectory string `json:"buildDirectory,omitempty"`
 	// Args are additional arguments that can be provided to `crytic-compile`
-	Args []string `json:"args,omitempty"`
+	Args []string `json:"args"`
 }
 
 // Platform returns the platform type
@@ -134,7 +134,8 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		// Index into "compilation_units" key
 		compilationUnits, ok := compiledJson["compilation_units"]
 		if !ok {
-			return nil, "", fmt.Errorf("cannot find 'compilation_units' key in compiledJson: %s\n", compiledJson)
+			// If our json file does not have any compilation units, it is not a file of interest
+			continue
 		}
 		// Create a mapping between key (filename) and value (contract and ast information) each compilation unit
 		compilationMap, ok := compilationUnits.(map[string]interface{})

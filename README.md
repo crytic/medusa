@@ -28,19 +28,19 @@ An example project configuration can be observed below:
 	},
 	"fuzzing": {
 		"workers": 20,
-		"worker_database_entry_limit": 20000,
+		"workerDatabaseEntryLimit": 20000,
 		"timeout": 0,
-		"test_limit": 0,
-		"max_tx_sequence_length": 10,
-		"test_prefixes": [
+		"testLimit": 0,
+		"maxTxSequenceLength": 10,
+		"testPrefixes": [
 			"fuzz_"
 		]
 	},
 	"compilation": {
 		"platform": "truffle",
-		"platform_config": {
+		"platformConfig": {
 			"target": ".",
-			"use_npx": true
+			"useNpx": true
 		}
 	}
 }
@@ -52,18 +52,18 @@ The structure is described below:
   - `predefined` can be used to specify an array of hex strings which will be interpreted as externally owned account addresses to use in the fuzzing campaign.
 - `fuzzing` defines parameters for the fuzzing campaign:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
-  - `worker_database_entry_limit` defines how many keys a worker's memory database can contain before the worker is reset
+  - `workerDatabaseEntryLimit` defines how many keys a worker's memory database can contain before the worker is reset
     - **Note**: this is a temporary logic for memory throttling
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
-  - `test_limit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
-  - `max_tx_sequence_length` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
-  - `test_prefixes` defines the list of prefixes that medusa will use to determine whether a given function is a property test or not. For example, if `fuzz_` is a test prefix, then any function name in the form `fuzz_*` may be a property test. There must be _at least_ one default test prefix. Note that if you are using Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.
+  - `testLimit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
+  - `maxTxSequenceLength` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
+  - `testPrefixes` defines the list of prefixes that medusa will use to determine whether a given function is a property test or not. For example, if `fuzz_` is a test prefix, then any function name in the form `fuzz_*` may be a property test. There must be _at least_ one default test prefix. Note that if you are using Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.
 - `compilation` defines parameters used to compile a given target to be fuzzed:
   - `platform` refers to the type of platform to be used to compile the underlying target.
-  - `platform_config` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
+  - `platformConfig` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
 
 ### Writing property tests
-Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `test_prefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
+Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 ```solidity
 contract TestXY {
     uint x;

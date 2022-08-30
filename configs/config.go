@@ -23,7 +23,7 @@ type AccountConfig struct {
 	Generate int `json:"generate"`
 
 	// Predefined describe an existing set of accounts that a user can provide to be used
-	Predefined []string `json:"predefined,omitempty"`
+	Predefined []string `json:"predefined"`
 }
 
 type CompilationConfig struct {
@@ -32,7 +32,7 @@ type CompilationConfig struct {
 	Platform string `json:"platform"`
 
 	// PlatformConfig describes the Platform-specific configuration needed to compile.
-	PlatformConfig *json.RawMessage `json:"platform_config"`
+	PlatformConfig *json.RawMessage `json:"platformConfig"`
 }
 
 type FuzzingConfig struct {
@@ -41,7 +41,7 @@ type FuzzingConfig struct {
 
 	// WorkerDatabaseEntryLimit describes an upper bound on the amount of entries that can exist in a worker database
 	// before it is pruned and recreated.
-	WorkerDatabaseEntryLimit int `json:"worker_database_entry_limit"`
+	WorkerDatabaseEntryLimit int `json:"workerDatabaseEntryLimit"`
 
 	// Timeout describes a time in seconds for which the fuzzing operation should run. Providing negative or zero value
 	// will result in no timeout.
@@ -49,14 +49,14 @@ type FuzzingConfig struct {
 
 	// TestLimit describes a threshold for the number of transactions to test, after which it will exit. This number
 	// must be non-negative. A zero value indicates the test limit should not be enforced.
-	TestLimit uint64 `json:"test_limit"`
+	TestLimit uint64 `json:"testLimit"`
 
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
-	MaxTxSequenceLength int `json:"max_tx_sequence_length"`
+	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
 	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
 	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
-	TestPrefixes []string `json:"test_prefixes"`
+	TestPrefixes []string `json:"testPrefixes"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
