@@ -5,8 +5,8 @@ import "github.com/trailofbits/medusa/fuzzing/types"
 const (
 	TestCaseStatusNotStarted string = "NOT STARTED"
 	TestCaseStatusRunning           = "RUNNING"
-	TestCaseStatusPassed            = "PASS"
-	TestCaseStatusFailed            = "FAIL"
+	TestCaseStatusPassed            = "PASSED"
+	TestCaseStatusFailed            = "FAILED"
 )
 
 // TestCase describes a test being run by a TestCaseProvider.

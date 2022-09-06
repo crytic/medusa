@@ -193,7 +193,8 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 // that this current call sequence was interesting, and it should stop building on it and find a shrunken
 // sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
 // entirely new call sequences. Thus, this method should only return ShrinkCallSequenceRequest instances
-// when it "found a result" (e.g., call sequence that violates some property).
+// when it "found a result" (e.g., call sequence that violates some property). Returning one each
+// time will mean no call sequence is continued to be built upon after the initial call.
 func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
 	// Lock to avoid concurrent map access issues.
 	t.propertyTestMethodsLock.Lock()
