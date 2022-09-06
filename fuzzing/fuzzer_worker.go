@@ -267,7 +267,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		// this call sequence.
 		shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 		for _, testProvider := range fw.fuzzer.testCaseProviders {
-			newShrinkRequests := testProvider.OnWorkerTestedCall(fw, callSequence[:i+1])
+			newShrinkRequests := testProvider.OnWorkerCallSequenceCallTested(fw, callSequence[:i+1])
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 

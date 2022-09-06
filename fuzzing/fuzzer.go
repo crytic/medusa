@@ -167,8 +167,8 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	f.testCases = append(f.testCases, testCase)
 }
 
-// ReportFinishedTestCase is used by TestCaseProvider to report a TestCase status as finalized.
-func (f *Fuzzer) ReportFinishedTestCase(testCase TestCase) {
+// ReportTestCaseFinished is used by TestCaseProvider to report a TestCase status as finalized.
+func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 	// Acquire a thread lock to avoid race conditions
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()

@@ -187,10 +187,14 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 	}
 }
 
-// OnWorkerTestedCall is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence during
-// a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
-// shrunken call sequences alongside verifiers to guide the shrinking process.
-func (t *PropertyTestCaseProvider) OnWorkerTestedCall(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
+// OnWorkerCallSequenceCallTested is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
+// during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
+// shrunken call sequences alongside verifiers to guide the shrinking process. This signals to the FuzzerWorker
+// that this current call sequence was interesting, and it should stop building on it and find a shrunken
+// sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
+// entirely new call sequences. Thus, this method should only return ShrinkCallSequenceRequest instances
+// when it "found a result" (e.g., call sequence that violates some property).
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
 	// Lock to avoid concurrent map access issues.
 	t.propertyTestMethodsLock.Lock()
 	defer t.propertyTestMethodsLock.Unlock()
@@ -230,7 +234,7 @@ func (t *PropertyTestCaseProvider) OnWorkerTestedCall(worker *FuzzerWorker, call
 					// When we're finished shrinking, update our test state and report it finalized.
 					testCase.status = TestCaseStatusFailed
 					testCase.callSequence = shrunkenCallSequence
-					worker.Fuzzer().ReportFinishedTestCase(testCase)
+					worker.Fuzzer().ReportTestCaseFinished(testCase)
 				},
 			}
 

@@ -31,10 +31,14 @@ type TestCaseProvider interface {
 	// contract that no longer exists in the underlying TestNode.
 	OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract)
 
-	// OnWorkerTestedCall is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence during
-	// a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
-	// shrunken call sequences alongside verifiers to guide the shrinking process.
-	OnWorkerTestedCall(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest
+	// OnWorkerCallSequenceCallTested is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
+	// during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
+	// shrunken call sequences alongside verifiers to guide the shrinking process. This signals to the FuzzerWorker
+	// that this current call sequence was interesting, and it should stop building on it and find a shrunken
+	// sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
+	// entirely new call sequences. Thus, this method should only return ShrinkCallSequenceRequest instances
+	// when it "found a result" (e.g., call sequence that violates some property).
+	OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest
 }
 
 // ShrinkCallSequenceRequest is a structure signifying a request for a shrunken call sequence from the FuzzerWorker.
