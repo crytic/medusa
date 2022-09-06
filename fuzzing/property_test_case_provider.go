@@ -101,8 +101,11 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	for _, contract := range fuzzer.Contracts() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.PropertyTestPrefixes) {
+				// Create local variables to avoid pointer types in the loop being overridden.
 				contract := contract
 				method := method
+
+				// Create our property test case
 				propertyTestCase := &PropertyTestCase{
 					status:         TestCaseStatusNotStarted,
 					targetContract: &contract,
@@ -209,7 +212,7 @@ func (t *PropertyTestCaseProvider) OnWorkerTestedCall(worker *FuzzerWorker, call
 			continue
 		}
 
-		// Test our property test method
+		// Test our property test method (create a local copy to avoid loop overwriting the method)
 		workerPropertyTestMethod := workerPropertyTestMethod
 		failedPropertyTest := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
 

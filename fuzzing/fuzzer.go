@@ -149,9 +149,9 @@ func (f *Fuzzer) TestCasesWithStatus(status string) []TestCase {
 
 	// Collect all test cases with matching statuses.
 	matchingTests := make([]TestCase, 0)
-	for _, testCase := range f.testCases {
-		if testCase.Status() == status {
-			matchingTests = append(matchingTests, testCase)
+	for i := range f.testCases {
+		if f.testCases[i].Status() == status {
+			matchingTests = append(matchingTests, f.testCases[i])
 		}
 	}
 	return matchingTests
