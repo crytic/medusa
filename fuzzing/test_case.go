@@ -3,10 +3,15 @@ package fuzzing
 import "github.com/trailofbits/medusa/fuzzing/types"
 
 const (
+	// TestCaseStatusNotStarted describes a test status where conditions have not yet been tested.
 	TestCaseStatusNotStarted string = "NOT STARTED"
-	TestCaseStatusRunning           = "RUNNING"
-	TestCaseStatusPassed            = "PASSED"
-	TestCaseStatusFailed            = "FAILED"
+	// TestCaseStatusRunning describes a test status where conditions have been tested for but no result
+	// has been reported.
+	TestCaseStatusRunning = "RUNNING"
+	// TestCaseStatusPassed describes a test status where testing has concluded and the test passed.
+	TestCaseStatusPassed = "PASSED"
+	// TestCaseStatusFailed describes a test status where testing has concluded and the test failed.
+	TestCaseStatusFailed = "FAILED"
 )
 
 // TestCase describes a test being run by a TestCaseProvider.

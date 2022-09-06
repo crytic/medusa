@@ -47,5 +47,7 @@ type ShrinkCallSequenceRequest struct {
 	// VerifierFunction is a method is called upon by a FuzzerWorker to check if a shrunken call sequence satisfies
 	// the needs of an original method.
 	VerifierFunction func(worker *FuzzerWorker, callSequence types.CallSequence) bool
+	// FinishedCallback is a method called upon when the shrink request has concluded. It provides the finalized
+	// shrunken call sequence.
 	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence)
 }

@@ -23,7 +23,9 @@ type PropertyTestCaseProvider struct {
 	// Where each deployed contract method is a property test to evaluate. Property tests should be read-only
 	// (pure/view) functions which take  no input parameters and return a boolean variable indicating if the
 	// property test passed.
-	propertyTestMethods     map[int]map[string]types.DeployedContractMethod
+	propertyTestMethods map[int]map[string]types.DeployedContractMethod
+
+	// propertyTestMethodsLock is used for thread-synchronization when updating propertyTestMethods
 	propertyTestMethodsLock sync.Mutex
 }
 
