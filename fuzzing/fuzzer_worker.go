@@ -290,8 +290,8 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
 // calls which can be removed that continue to satisfy the provided shrink verifier.
-// Returns a call sequence that was optimized to include as little transactions as possible to trigger the
-// expected number of property test violations, or returns an error if one occurs.
+// Returns a call sequence that was optimized to include as little calls as possible to trigger the
+// expected conditions.
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (fuzzerTypes.CallSequence, error) {
 	// Define another slice to store our tx sequence
 	optimizedSequence := callSequence
