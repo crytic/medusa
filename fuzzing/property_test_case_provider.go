@@ -216,10 +216,11 @@ func (t *PropertyTestCaseProvider) OnWorkerTestedCall(worker *FuzzerWorker, call
 		// If we failed a test, we update our state immediately. We provide a shrink verifier which will update
 		// the call sequence for each shrunken sequence provided that fails the property test.
 		if failedPropertyTest {
-			// Add a shrink request that checks the same property test failed for the shrunken sequence and updates
-			// the call sequence with the shrunk sequence if it did. After shrinking, we report the result.
+			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
 				VerifierFunction: func(worker *FuzzerWorker, callSequence types.CallSequence) bool {
+					// The shrink verifier simply ensures the previously failed property test fails
+					// for the shrunk sequence as well.
 					return t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
 				},
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) {

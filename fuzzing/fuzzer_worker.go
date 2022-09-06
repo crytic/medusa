@@ -97,7 +97,10 @@ func (fw *FuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 // Returns an error if one is encountered.
 func (fw *FuzzerWorker) deployAndRegisterCompiledContracts() error {
 	// Loop for each contract in each compilation and deploy it to the test node.
-	for _, contract := range fw.fuzzer.contracts {
+	for i := 0; i < len(fw.fuzzer.contracts); i++ {
+		// Obtain the currently indexed contract.
+		contract := fw.fuzzer.contracts[i]
+
 		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 			// Deploy the contract using our deployer address.

@@ -135,8 +135,8 @@ func (f *Fuzzer) TestCases() []TestCase {
 
 	// Collect all test cases and return them.
 	testCases := make([]TestCase, 0)
-	for _, testCase := range f.testCases {
-		testCases = append(testCases, testCase)
+	for i := range f.testCases {
+		testCases = append(testCases, f.testCases[i])
 	}
 	return testCases
 }
@@ -206,7 +206,8 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			f.BaseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
-			for contractName, contract := range source.Contracts {
+			for contractName := range source.Contracts {
+				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, &contract)
 				f.contracts = append(f.contracts, *contractDefinition)
 			}
