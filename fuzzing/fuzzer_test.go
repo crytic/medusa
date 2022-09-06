@@ -55,7 +55,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
 
 	// Wrap the platform config in a compilation config
-	compilationConfig, err := compilation.GetCompilationConfigFromPlatformConfig(solcPlatformConfig)
+	compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
 	assert.Nil(t, err)
 
 	// Create a project configuration to run the fuzzer with

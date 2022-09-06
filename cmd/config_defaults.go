@@ -10,7 +10,7 @@ const DefaultProjectConfigFilename = "medusa.json"
 
 // GetDefaultProjectConfig obtains a default configuration for a project, given a platform.
 func GetDefaultProjectConfig(platform string) (*config.ProjectConfig, error) {
-	compilationConfig, err := compilation.GetDefaultCompilationConfig(platform)
+	compilationConfig, err := compilation.NewCompilationConfig(platform)
 	if err != nil {
 		return nil, err
 	}

@@ -5,11 +5,6 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/types"
 )
 
-// ShrinkCallSequenceVerifier is called repetitively by a fuzzing.FuzzerWorker with varying call sequences to discover
-// a shrunken call sequence which satisfies some requirement. Returns a boolean indicating whether the call sequence
-// provided satisfies the requirement.
-type ShrinkCallSequenceVerifier func(worker *FuzzerWorker, callSequenceToVerify types.CallSequence) bool
-
 // TestCaseProvider is an interface for a provider which can report and update the status of test cases at given points
 // during a fuzzing.Fuzzer's execution.
 type TestCaseProvider interface {
@@ -37,7 +32,15 @@ type TestCaseProvider interface {
 	OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract)
 
 	// OnWorkerTestedCall is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence during
-	// a fuzzing campaign. It returns a ShrinkCallSequenceVerifier for each request it makes for a shrunk call sequence
-	// that is derived from this one.
-	OnWorkerTestedCall(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceVerifier
+	// a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
+	// shrunken call sequences alongside verifiers to guide the shrinking process.
+	OnWorkerTestedCall(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest
+}
+
+// ShrinkCallSequenceRequest is a structure signifying a request for a shrunken call sequence from the FuzzerWorker.
+type ShrinkCallSequenceRequest struct {
+	// VerifierFunction is a method is called upon by a FuzzerWorker to check if a shrunken call sequence satisfies
+	// the needs of an original method.
+	VerifierFunction func(worker *FuzzerWorker, callSequence types.CallSequence) bool
+	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence)
 }

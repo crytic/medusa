@@ -3,10 +3,10 @@ package fuzzing
 import "github.com/trailofbits/medusa/fuzzing/types"
 
 const (
-	TestCaseStatusNotStarted string = "not started"
-	TestCaseStatusRunning           = "running"
-	TestCaseStatusPassed            = "passed"
-	TestCaseStatusFailed            = "failed"
+	TestCaseStatusNotStarted string = "NOT STARTED"
+	TestCaseStatusRunning           = "RUNNING"
+	TestCaseStatusPassed            = "PASS"
+	TestCaseStatusFailed            = "FAIL"
 )
 
 // TestCase describes a test being run by a TestCaseProvider.
@@ -17,8 +17,11 @@ type TestCase interface {
 	// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase.
 	CallSequence() types.CallSequence
 
-	// String obtains a text-based printable message which describes the test result.
-	String() string
+	// Name describes the name of the test case.
+	Name() string
+
+	// Message obtains a text-based printable message which describes the test result.
+	Message() string
 
 	// ID obtains a unique identifier for a test result. If the same test fails, this ID should match for both
 	// TestResult instances (even if the CallSequence differs or has not been shrunk).

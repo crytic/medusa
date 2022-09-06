@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trailofbits/medusa/compilation"
 	"io/ioutil"
 )
 
@@ -12,18 +13,10 @@ type ProjectConfig struct {
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
 	// Compilation describes the configuration used to compile the underlying project.
-	Compilation *CompilationConfig `json:"compilation"`
+	Compilation *compilation.CompilationConfig `json:"compilation"`
 }
 
-type CompilationConfig struct {
-	// Platform references an identifier indicating which compilation platform to use.
-	// PlatformConfig is a structure dependent on the defined Platform.
-	Platform string `json:"platform"`
-
-	// PlatformConfig describes the Platform-specific configuration needed to compile.
-	PlatformConfig *json.RawMessage `json:"platformConfig"`
-}
-
+// FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
 type FuzzingConfig struct {
 	// Workers describes the amount of threads to use in fuzzing campaigns.
 	Workers int `json:"workers"`
@@ -56,6 +49,8 @@ type FuzzingConfig struct {
 	DeployerAddress string `json:"deployerAddress"`
 }
 
+// ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
+// Returns the ProjectConfig if it succeeds, or an error if one occurs.
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
 	fmt.Printf("Reading configuration file: %s\n", path)
@@ -79,6 +74,8 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	return &projectConfig, nil
 }
 
+// WriteToFile writes the ProjectConfig to a provided file path in a JSON-serialized format.
+// Returns an error if one occurs.
 func (p *ProjectConfig) WriteToFile(path string) error {
 	// Serialize the configuration
 	b, err := json.MarshalIndent(p, "", "\t")
@@ -95,7 +92,8 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 	return nil
 }
 
-// ValidateConfig validate that the project config meets certain requirements
+// ValidateConfig validate that the ProjectConfig meets certain requirements.
+// Returns an error if one occurs.
 func (p *ProjectConfig) ValidateConfig() error {
 	// Ensure at least one prefix is in config
 	if len(p.Fuzzing.PropertyTestPrefixes) == 0 {

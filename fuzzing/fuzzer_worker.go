@@ -78,17 +78,17 @@ func (fw *FuzzerWorker) registerDeployedContract(deployedAddress common.Address,
 	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
 	fw.deployedContracts[deployedAddress] = contract
 
-	// Report our deployed contract to any test providers
-	for _, testProvider := range fw.fuzzer.testCaseProviders {
-		testProvider.OnWorkerDeployedContractAdded(fw, deployedAddress, contract)
-	}
-
 	// If we deployed the contract, also enumerate property tests and state changing methods.
 	for _, method := range contract.CompiledContract().Abi.Methods {
 		if !method.IsConstant() {
 			// Any non-constant method should be tracked as a state changing method.
 			fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: deployedAddress, Contract: contract, Method: method})
 		}
+	}
+
+	// Report our deployed contract to any test providers
+	for _, testProvider := range fw.fuzzer.testCaseProviders {
+		testProvider.OnWorkerDeployedContractAdded(fw, deployedAddress, contract)
 	}
 }
 
@@ -238,7 +238,7 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 // is nil, a call message will be created in its place, targeting a state changing method of a contract deployed in the
 // TestNode.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
-func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) (int, []ShrinkCallSequenceVerifier, error) {
+func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) (int, []ShrinkCallSequenceRequest, error) {
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	defer func() {
 		if err := fw.testNode.RevertToSnapshot(); err != nil {
@@ -262,7 +262,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 
 		// Loop through each test provider, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
-		shrinkCallSequenceRequests := make([]ShrinkCallSequenceVerifier, 0)
+		shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 		for _, testProvider := range fw.fuzzer.testCaseProviders {
 			newShrinkRequests := testProvider.OnWorkerTestedCall(fw, callSequence[:i+1])
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
@@ -289,9 +289,9 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 // calls which can be removed that continue to satisfy the provided shrink verifier.
 // Returns a call sequence that was optimized to include as little transactions as possible to trigger the
 // expected number of property test violations, or returns an error if one occurs.
-func (fw *FuzzerWorker) shrinkCallSequence(txSequence fuzzerTypes.CallSequence, shrinkVerifier ShrinkCallSequenceVerifier) (fuzzerTypes.CallSequence, error) {
+func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (fuzzerTypes.CallSequence, error) {
 	// Define another slice to store our tx sequence
-	optimizedSequence := txSequence
+	optimizedSequence := callSequence
 	for i := 0; i < len(optimizedSequence); {
 		// Recreate our sequence without the item at this index
 		testSeq := make(fuzzerTypes.CallSequence, 0)
@@ -304,22 +304,25 @@ func (fw *FuzzerWorker) shrinkCallSequence(txSequence fuzzerTypes.CallSequence, 
 			fw.testNode.SendMessage(callSequenceElement.Call())
 		}
 
-		// Check if our verifier signalled that we met our conditions after
-		if shrinkVerifier(fw, testSeq) {
-			// This current sequence satisfied our conditions, set it as our optimized sequence and continue to
-			// the next shrink iteration.
-			optimizedSequence = testSeq
-			break
-		} else {
-			// We didn't remove an item at this index, so we'll iterate to the next one.
-			i++
-		}
+		// Check if our verifier signalled that we met our conditions
+		validShrunkSequence := shrinkRequest.VerifierFunction(fw, testSeq)
 
 		// After testing the sequence, we'll want to rollback changes to reset our testing state.
 		if err := fw.testNode.RevertToSnapshot(); err != nil {
 			return optimizedSequence, err
 		}
+
+		// If this current sequence satisfied our conditions, set it as our optimized sequence.
+		if validShrunkSequence {
+			optimizedSequence = testSeq
+		} else {
+			// We didn't remove an item at this index, so we'll iterate to the next one.
+			i++
+		}
 	}
+
+	// After we finished shrinking, report our result
+	shrinkRequest.FinishedCallback(fw, optimizedSequence)
 
 	return optimizedSequence, nil
 }
