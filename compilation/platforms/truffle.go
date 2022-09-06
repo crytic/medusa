@@ -91,7 +91,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 		}
 
 		// Convert the abi structure to our parsed abi type
-		contractAbi, err := types.InterfaceToABI(compiledJson.Abi)
+		contractAbi, err := types.ParseABIFromInterface(compiledJson.Abi)
 		if err != nil {
 			continue
 		}

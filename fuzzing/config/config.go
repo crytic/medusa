@@ -1,4 +1,4 @@
-package configs
+package config
 
 import (
 	"encoding/json"
@@ -8,22 +8,11 @@ import (
 )
 
 type ProjectConfig struct {
-	// Accounts offers configurable options for how many accounts to generate and allows user to provide existing keys.
-	Accounts AccountConfig `json:"accounts"`
-
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
 	// Compilation describes the configuration used to compile the underlying project.
-	Compilation CompilationConfig `json:"compilation"`
-}
-
-type AccountConfig struct {
-	// Generate describes how many accounts should be dynamically generated at runtime
-	Generate int `json:"generate"`
-
-	// Predefined describe an existing set of accounts that a user can provide to be used
-	Predefined []string `json:"predefined"`
+	Compilation *CompilationConfig `json:"compilation"`
 }
 
 type CompilationConfig struct {
@@ -54,9 +43,17 @@ type FuzzingConfig struct {
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
-	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
-	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
-	TestPrefixes []string `json:"testPrefixes"`
+	// PropertyTestPrefixes dictates what prefixes will determine if a function is a fuzz test.
+	// TODO: This can probably be moved to a different config struct once we isolate property testing from assertion
+	//  testing.
+	PropertyTestPrefixes []string `json:"propertyTestPrefixes"`
+
+	// SenderAddresses describe a set of account addresses to be used to send state-changing txs (calls) in fuzzing
+	// campaigns.
+	SenderAddresses []string `json:"senderAddresses"`
+
+	// DeployerAddress describe the account address to be used to deploy contracts.
+	DeployerAddress string `json:"deployerAddress"`
 }
 
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
@@ -101,7 +98,7 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 // ValidateConfig validate that the project config meets certain requirements
 func (p *ProjectConfig) ValidateConfig() error {
 	// Ensure at least one prefix is in config
-	if len(p.Fuzzing.TestPrefixes) == 0 {
+	if len(p.Fuzzing.PropertyTestPrefixes) == 0 {
 		return errors.New("at least one test prefix must be specified within your project configuration file")
 	}
 	return nil

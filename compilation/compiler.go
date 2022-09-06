@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/configs"
+	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // defaultPlatformConfigGenerator is a mapping of platform identifier to generator functions which can be used to create
@@ -66,7 +66,7 @@ func IsSupportedCompilationPlatform(platform string) bool {
 // GetCompilationConfigFromPlatformConfig takes a platforms.PlatformConfigInterface and wraps it in a generic
 // configs.CompilationConfig. This allows many platform config types to be serialized/deserialized to their appropriate
 // types and supported generally.
-func GetCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformConfigInterface) (*configs.CompilationConfig, error) {
+func GetCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformConfigInterface) (*config.CompilationConfig, error) {
 	// Marshal our config to a raw message
 	b, err := json.Marshal(platformConfig)
 	if err != nil {
@@ -75,12 +75,12 @@ func GetCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformCon
 	platformConfigMsg := (*json.RawMessage)(&b)
 
 	// Return the compilation configs containing our platform-specific configs
-	return &configs.CompilationConfig{Platform: platformConfig.Platform(), PlatformConfig: platformConfigMsg}, nil
+	return &config.CompilationConfig{Platform: platformConfig.Platform(), PlatformConfig: platformConfigMsg}, nil
 }
 
 // GetDefaultCompilationConfig returns a configs.CompilationConfig with default values for a given platform identifier.
 // If an error occurs, it is returned instead.
-func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, error) {
+func GetDefaultCompilationConfig(platform string) (*config.CompilationConfig, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(platform) {
 		return nil, fmt.Errorf("could not get default compilation configs: platform '%s' is unsupported", platform)
@@ -94,7 +94,7 @@ func GetDefaultCompilationConfig(platform string) (*configs.CompilationConfig, e
 // Compile takes a generic configs.CompilationConfig and deserializes the inner platforms.PlatformConfigInterface, which
 // is then used to compile the underlying targets. Returns a list of compilations returned by the platform provider or
 // an error. Command-line input may also be returned in either case.,
-func Compile(config configs.CompilationConfig) ([]types.Compilation, string, error) {
+func Compile(config config.CompilationConfig) ([]types.Compilation, string, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(config.Platform) {
 		return nil, "", fmt.Errorf("could not compile from configs: platform '%s' is unsupported", config.Platform)

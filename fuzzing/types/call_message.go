@@ -7,8 +7,10 @@ import (
 	"math/big"
 )
 
+// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
+// templates defined below. They should be preserved for re-use in case we change our structures.
 //go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_message_json.go
+//go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_call_message_json.go
 
 // CallMessage implements Ethereum's core.Message, used to apply EVM/state updates.
 type CallMessage struct {
