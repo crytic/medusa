@@ -58,9 +58,9 @@ func TestCryticSingleFileNoArgsAbsolutePath(t *testing.T) {
 	})
 }
 
-// TestCryticSingleFileNoArgsRelativePath tests compilation of a single contract with no additional arguments and
+// TestCryticSingleFileBuildDirectoryArgRelativePath tests compilation of a single contract with the buildDirectory arg and
 // a relative path provided.
-func TestCryticSingleFileNoArgsRelativePath(t *testing.T) {
+func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
 	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
@@ -76,7 +76,8 @@ func TestCryticSingleFileNoArgsRelativePath(t *testing.T) {
 
 		// Create a cryticConfig object
 		cryticConfig := NewCryticCompilationConfig(contractName)
-
+		// Custom build directory
+		cryticConfig.BuildDirectory = "build_directory"
 		// Compile the file
 		compilations, _, err := cryticConfig.Compile()
 		// No failures
@@ -168,5 +169,41 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 			secondCompilationUnitContractCount += len(secondUnitSecondContractSource.Contracts)
 		}
 		assert.EqualValues(t, secondCompilationUnitContractCount, 2)
+	})
+}
+
+// TestDeleteBuildDirectory tests whether the crytic-export or custom BuildDirectory directory gets deleted successfully.
+func TestDeleteBuildDirectory(t *testing.T) {
+	// Copy our testdata over to our testing directory
+	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+
+	// Execute our tests in the given test path
+	test_utils.ExecuteInDirectory(t, contractPath, func() {
+		// Create a default cryticConfig object
+		cryticConfig := NewCryticCompilationConfig(contractPath)
+		// Compile the file
+		_, _, err := cryticConfig.Compile()
+		assert.Nil(t, err)
+		// Delete crytic-export
+		err = cryticConfig.DeleteBuildDirectory()
+		assert.Nil(t, err)
+		// Check to see if it was deleted
+		buildDir := "crytic-export"
+		_, err = os.Stat(buildDir)
+		assert.True(t, err != nil, "Error cannot be nil")
+		assert.True(t, os.IsNotExist(err), "Error is something other than IsNotExist")
+		// Try the same while specifying BuildDirectory
+		buildDir = "build_directory"
+		cryticConfig.BuildDirectory = buildDir
+		// Compile the file
+		_, _, err = cryticConfig.Compile()
+		assert.Nil(t, err)
+		// Delete build_directory
+		err = cryticConfig.DeleteBuildDirectory()
+		assert.Nil(t, err)
+		// Check to see if it was deleted
+		_, err = os.Stat(buildDir)
+		assert.True(t, err != nil, "Error cannot be nil")
+		assert.True(t, os.IsNotExist(err), "Error is something other than IsNotExist")
 	})
 }
