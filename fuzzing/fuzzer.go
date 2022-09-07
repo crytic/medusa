@@ -341,12 +341,13 @@ func (f *Fuzzer) Start() error {
 		testProvider.OnFuzzerStopping(f)
 	}
 
-	// Print our results
+	// Print our test case results
+	fmt.Printf("Fuzzer stopped, test results followed below ...\n")
 	for _, testCase := range f.testCases {
 		if testCase.Status() == TestCaseStatusFailed {
-			fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
 		} else {
-			fmt.Printf("\n[%s] %s\n", testCase.Status(), testCase.Name())
+			fmt.Printf("[%s] %s\n", testCase.Status(), testCase.Name())
 		}
 	}
 
@@ -365,6 +366,9 @@ func (f *Fuzzer) Stop() {
 
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
 func (f *Fuzzer) runMetricsPrintLoop() {
+	// Define our start time
+	startTime := time.Now()
+
 	// Define cached variables for our metrics to calculate deltas.
 	var lastTransactionsTested, lastSequencesTested, lastWorkerStartupCount uint64
 	lastPrintedTime := time.Time{}
@@ -379,7 +383,8 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"tx num: %d (%d/sec), seq/s: %d, hitmemlimit: %d/s\n",
+			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, hitmemlimit: %d/s\n",
+			time.Now().Sub(startTime).Round(time.Second),
 			transactionsTested,
 			uint64(float64(transactionsTested-lastTransactionsTested)/secondsSinceLastUpdate),
 			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
@@ -400,7 +405,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		}
 
 		// Sleep for a second
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 3)
 
 		// If ctx signalled to stop the operation, return immediately.
 		select {
