@@ -2,9 +2,9 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/fuzzing/testnode"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 )
 
@@ -28,8 +28,8 @@ type Corpus interface {
 	ReadCorpusFromDisk(readDirectory string) error
 	// TODO: Note for David - should this function be here? I added it here so that the corpus is responsible for this task
 	// but it is not a very generic function.
-	// TestSequenceToCorpusEntry takes a testNodeBlockSequence and a txSequence and converts it into a corpus entry
-	TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock, txSequence []*fuzzerTypes.CallMessage) (CorpusEntry, error)
+	// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a CorpusEntry
+	TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock) (CorpusEntry, error)
 }
 
 // CorpusEntry is the generic interface for a single entry in the Corpus. The Corpus is simply a list of corpus entries.
@@ -51,7 +51,7 @@ type CorpusBlock interface {
 	// Header returns the CorpusBlockHeader of the CorpusBlock
 	Header() CorpusBlockHeader
 	// Transactions returns the transactions of the CorpusBlock
-	Transactions() []*fuzzerTypes.CallMessage
+	Transactions() []core.Message
 	// Receipts returns the receipts of the CorpusBlock
 	Receipts() []*coreTypes.Receipt
 	// Hash hashes the contents of a CorpusBlock

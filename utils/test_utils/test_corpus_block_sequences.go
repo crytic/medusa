@@ -1,10 +1,11 @@
 package test_utils
 
 import (
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/fuzzing/corpus/simple_corpus"
-	types2 "github.com/trailofbits/medusa/fuzzing/corpus/types"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func SequencesAreEqual(t *testing.T, seqOne *simple_corpus.SimpleCorpusEntry, se
 }
 
 // HeadersAreEqual tests whether the headers of the two types.CorpusBlockSequence objects are equal to each other
-func HeadersAreEqual(t *testing.T, headerOne types2.CorpusBlockHeader, headerTwo types2.CorpusBlockHeader) {
+func HeadersAreEqual(t *testing.T, headerOne corpusTypes.CorpusBlockHeader, headerTwo corpusTypes.CorpusBlockHeader) {
 	// Make sure that the block number, block hash, and block timestamp are the same
 	assert.True(t, headerOne.(*simple_corpus.SimpleCorpusBlockHeader).BlockNumber().Cmp(headerTwo.(*simple_corpus.SimpleCorpusBlockHeader).BlockNumber()) == 0, "Block numbers are not equal")
 	assert.True(t, headerOne.(*simple_corpus.SimpleCorpusBlockHeader).BlockHash() == headerTwo.(*simple_corpus.SimpleCorpusBlockHeader).BlockHash(), "Block hashes are not equal")
@@ -32,14 +33,14 @@ func HeadersAreEqual(t *testing.T, headerOne types2.CorpusBlockHeader, headerTwo
 }
 
 // TransactionsAreEqual tests whether each transaction in both types.CorpusBlockSequence objects are equal
-func TransactionsAreEqual(t *testing.T, txSeqOne []*types.CallMessage, txSeqTwo []*types.CallMessage) {
+func TransactionsAreEqual(t *testing.T, txSeqOne []core.Message, txSeqTwo []core.Message) {
 	// Ensure the lengths of both transaction sequences are the same
 	assert.True(t, len(txSeqOne) == len(txSeqTwo), "Different number of transactions in blocks")
 	// Iterate across each transaction
-	for idx, txPointer := range txSeqOne {
+	for idx, txOneInterface := range txSeqOne {
 		// De-reference
-		txOne := *txPointer
-		txTwo := *txSeqTwo[idx]
+		txOne := txOneInterface.(*fuzzerTypes.CallMessage)
+		txTwo := txSeqTwo[idx].(*fuzzerTypes.CallMessage)
 		// Check all fields of a types.CallMessage
 		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "MsgGasPrices are not equal")
 		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "MsgGasTips are not equal")

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
 	"github.com/trailofbits/medusa/fuzzing/testnode"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -140,14 +139,13 @@ func (c *SimpleCorpus) ReadCorpusFromDisk(readDirectory string) error {
 	return nil
 }
 
-// TestSequenceToCorpusEntry takes a testNodeBlockSequence and a txSequence and converts it into a corpus entry
-func (c *SimpleCorpus) TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock, txSequence []*fuzzerTypes.CallMessage) (corpusTypes.CorpusEntry, error) {
+// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a SimpleCorpusEntry
+func (c *SimpleCorpus) TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock) (corpusTypes.CorpusEntry, error) {
 	simpleEntry := NewSimpleCorpusEntry()
-	// Create sequence of corpus blocks
-	for idx, testNodeBlock := range testNodeBlockSequence {
-		// TODO: This will change when more than one transaction goes in a block
-		simpleBlock := testNodeBlockToCorpusBlock(testNodeBlock, txSequence[idx])
-		// Add corpus block to list
+	for _, testNodeBlock := range testNodeBlockSequence {
+		// Convert TestNodeBlock to SimpleCorpusBlock
+		simpleBlock := testNodeBlockToCorpusBlock(testNodeBlock)
+		// Add block to list
 		err := simpleEntry.AddCorpusBlock(simpleBlock)
 		if err != nil {
 			return simpleEntry, err

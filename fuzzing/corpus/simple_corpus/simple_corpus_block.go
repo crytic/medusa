@@ -3,6 +3,7 @@ package simple_corpus
 import (
 	"encoding/hex"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
@@ -36,9 +37,13 @@ func (m *SimpleCorpusBlock) Header() corpusTypes.CorpusBlockHeader {
 }
 
 // Transactions returns the transactions of the SimpleCorpusBlock
-// TODO: Need to make callMessage generic
-func (m *SimpleCorpusBlock) Transactions() []*fuzzerTypes.CallMessage {
-	return m.blockTransactions
+func (m *SimpleCorpusBlock) Transactions() []core.Message {
+	var messages []core.Message
+	for _, callMessage := range m.blockTransactions {
+		message := core.Message(callMessage)
+		messages = append(messages, message)
+	}
+	return messages
 }
 
 // Receipts returns the receipts of the SimpleCorpusBlock
@@ -50,7 +55,7 @@ func (m *SimpleCorpusBlock) Receipts() []*coreTypes.Receipt {
 func (m *SimpleCorpusBlock) Hash() (string, error) {
 	// Concatenate the hashes of each CallMessage
 	var txnSequenceHashString string
-	for _, txn := range m.Transactions() {
+	for _, txn := range m.blockTransactions {
 		txnHash, err := txn.Hash()
 		if err != nil {
 			return "", err
