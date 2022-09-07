@@ -102,7 +102,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	// Create a test case for every property test method.
 	for _, contract := range fuzzer.Contracts() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestNamePrefixes) {
+			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes) {
 				// Create local variables to avoid pointer types in the loop being overridden.
 				contract := contract
 				method := method
@@ -124,8 +124,9 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	}
 }
 
-// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a running
-// state should be updated during this step and put into a finalized state.
+// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a
+// running state should be updated during this step and put into a finalized state. This is guaranteed to be called
+// after all workers have been stopped.
 func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 	// Clear our property test methods
 	t.propertyTestMethodsLock.Lock()

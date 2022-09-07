@@ -73,8 +73,8 @@ type PropertyTestConfig struct {
 	// Enabled describes whether testing is enabled.
 	Enabled bool `json:"enabled"`
 
-	// TestNamePrefixes dictates what method name prefixes will determine if a contract method is a property test.
-	TestNamePrefixes []string `json:"testNamePrefixes"`
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestPrefixes []string `json:"testPrefixes"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
@@ -131,8 +131,8 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify property testing fields.
 	if p.Fuzzing.Testing.PropertyTesting.Enabled {
-		// Test name prefixes must be supplied if property testing is enabled.
-		if len(p.Fuzzing.Testing.PropertyTesting.TestNamePrefixes) == 0 {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}

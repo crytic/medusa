@@ -13,7 +13,8 @@ type TestCaseProvider interface {
 	OnFuzzerStarting(fuzzer *Fuzzer)
 
 	// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a
-	// running state should be updated during this step and put into a finalized state.
+	// running state should be updated during this step and put into a finalized state. This is guaranteed to be called
+	// after all workers have been stopped.
 	OnFuzzerStopping(fuzzer *Fuzzer)
 
 	// OnWorkerCreated is called when a new fuzzing.FuzzerWorker is created by the fuzzing.Fuzzer.

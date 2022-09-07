@@ -31,7 +31,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				},
 				PropertyTesting: PropertyTestConfig{
 					Enabled: true,
-					TestNamePrefixes: []string{
+					TestPrefixes: []string{
 						"fuzz_",
 					},
 				},

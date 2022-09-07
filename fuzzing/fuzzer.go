@@ -379,12 +379,11 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"tx num: %d, workers: %d, hitmemlimit: %d/s, tx/s: %d, seq/s: %d\n",
+			"tx num: %d (%d/sec), seq/s: %d, hitmemlimit: %d/s\n",
 			transactionsTested,
-			len(f.metrics.workerMetrics),
-			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
 			uint64(float64(transactionsTested-lastTransactionsTested)/secondsSinceLastUpdate),
 			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
+			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
 		)
 
 		// Update our delta tracking metrics
@@ -394,7 +393,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt
-		testLimit := uint64(f.config.Fuzzing.TestLimit)
+		testLimit := f.config.Fuzzing.TestLimit
 		if testLimit > 0 && transactionsTested >= testLimit {
 			fmt.Printf("transaction test limit reached, halting now ...\n")
 			f.Stop()

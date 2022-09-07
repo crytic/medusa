@@ -33,7 +33,7 @@ func getFuzzConfigDefault() *config.FuzzingConfig {
 			},
 			PropertyTesting: config.PropertyTestConfig{
 				Enabled: true,
-				TestNamePrefixes: []string{
+				TestPrefixes: []string{
 					"fuzz_",
 				},
 			},
