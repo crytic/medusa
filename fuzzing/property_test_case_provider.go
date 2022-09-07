@@ -19,13 +19,14 @@ type PropertyTestCaseProvider struct {
 	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
 	testCases map[string]*PropertyTestCase
 
-	// propertyTestMethods is a map of workerIndex->contract-method ID -> deployed contract method descriptors.
-	// Where each deployed contract method is a property test to evaluate. Property tests should be read-only
-	// (pure/view) functions which take  no input parameters and return a boolean variable indicating if the
+	// propertyTestMethods is a slice of mappings from contract-method ID to deployed contract-method descriptors.
+	// each index of the slice corresponds to the worker index that maintains the deployed contracts. Each deployed
+	// contract-method represents a property test method to call for evaluation. Property tests should be read-only
+	// (pure/view) functions which take no input parameters and return a boolean variable indicating if the
 	// property test passed.
-	propertyTestMethods map[int]map[string]types.DeployedContractMethod
+	propertyTestMethods []map[string]types.DeployedContractMethod
 
-	// propertyTestMethodsLock is used for thread-synchronization when updating propertyTestMethods
+	// propertyTestMethodsLock is used for thread-synchronization when updating maps within propertyTestMethods
 	propertyTestMethodsLock sync.Mutex
 }
 
@@ -97,7 +98,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	// Reset our state
 	t.testCases = make(map[string]*PropertyTestCase)
-	t.propertyTestMethods = make(map[int]map[string]types.DeployedContractMethod)
+	t.propertyTestMethods = make([]map[string]types.DeployedContractMethod, fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every property test method.
 	for _, contract := range fuzzer.Contracts() {
@@ -131,7 +132,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 	// Clear our property test methods
 	t.propertyTestMethodsLock.Lock()
 	t.propertyTestMethods = nil
-	defer t.propertyTestMethodsLock.Unlock()
+	t.propertyTestMethodsLock.Unlock()
 
 	// Loop through each test case and set any tests with a running status to a passed status.
 	for _, testCase := range t.testCases {
@@ -143,10 +144,6 @@ func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 
 // OnWorkerCreated is called when a new fuzzing.FuzzerWorker is created by the fuzzing.Fuzzer.
 func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) {
-	// Lock to avoid concurrent map access issues.
-	t.propertyTestMethodsLock.Lock()
-	defer t.propertyTestMethodsLock.Unlock()
-
 	// Refresh our property test map for this worker
 	t.propertyTestMethods[worker.WorkerIndex()] = make(map[string]types.DeployedContractMethod)
 }
@@ -201,10 +198,12 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 		// Obtain an identifier for this pair
 		methodId := types.GetContractMethodID(contract, &method)
 
-		// If this identifier is in our test cases map, then we remove it from our property test method list for
+		// If this identifier is in our test cases map, then we remove it from our property test method lookup for
 		// this worker index.
 		if _, isPropertyTestMethod := t.testCases[methodId]; isPropertyTestMethod {
+			t.propertyTestMethodsLock.Lock()
 			delete(t.propertyTestMethods[worker.WorkerIndex()], methodId)
+			t.propertyTestMethodsLock.Unlock()
 		}
 	}
 }
@@ -223,10 +222,6 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTested(worker *FuzzerWork
 // entirely new call sequences. A TestCaseProvider provider should not unnecessarily make shrink requests
 // as this will cancel the current call sequence being further built upon.
 func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
-	// Lock to avoid concurrent map access issues.
-	t.propertyTestMethodsLock.Lock()
-	defer t.propertyTestMethodsLock.Unlock()
-
 	// Create a list of shrink call sequence verifiers, which we populate for each failed property test we want a call
 	// sequence shrunk for.
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
