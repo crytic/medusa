@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/fuzzing/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get a default project configuration
-	projectConfig, err := GetDefaultProjectConfig(args[0])
+	projectConfig, err := config.GetDefaultProjectConfig(args[0])
 	if err != nil {
 		return err
 	}

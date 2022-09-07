@@ -102,7 +102,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	// Create a test case for every property test method.
 	for _, contract := range fuzzer.Contracts() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.PropertyTestPrefixes) {
+			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestNamePrefixes) {
 				// Create local variables to avoid pointer types in the loop being overridden.
 				contract := contract
 				method := method
@@ -120,6 +120,22 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 				t.testCases[methodId] = propertyTestCase
 				fuzzer.RegisterTestCase(propertyTestCase)
 			}
+		}
+	}
+}
+
+// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a running
+// state should be updated during this step and put into a finalized state.
+func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
+	// Clear our property test methods
+	t.propertyTestMethodsLock.Lock()
+	t.propertyTestMethods = nil
+	defer t.propertyTestMethodsLock.Unlock()
+
+	// Loop through each test case and set any tests with a running status to a passed status.
+	for _, testCase := range t.testCases {
+		if testCase.status == TestCaseStatusRunning {
+			testCase.status = TestCaseStatusPassed
 		}
 	}
 }
@@ -152,8 +168,11 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerW
 		methodId := types.GetContractMethodID(contract, &method)
 
 		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
-		// our map for this worker.
+		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
 		if propertyTestCase, exists := t.testCases[methodId]; exists {
+			if propertyTestCase.Status() == TestCaseStatusNotStarted {
+				propertyTestCase.status = TestCaseStatusRunning
+			}
 			if propertyTestCase.Status() != TestCaseStatusFailed {
 				// Lock to avoid concurrent map access issues.
 				t.propertyTestMethodsLock.Lock()
@@ -189,14 +208,19 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 	}
 }
 
+// OnWorkerCallSequenceTesting is called before a fuzzing.FuzzerWorker generates and tests a new call sequence.
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTesting(worker *FuzzerWorker) {}
+
+// OnWorkerCallSequenceTested is called after a fuzzing.FuzzerWorker generates and tests a new call sequence.
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTested(worker *FuzzerWorker) {}
+
 // OnWorkerCallSequenceCallTested is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 // during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
 // shrunken call sequences alongside verifiers to guide the shrinking process. This signals to the FuzzerWorker
 // that this current call sequence was interesting, and it should stop building on it and find a shrunken
 // sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
-// entirely new call sequences. Thus, this method should only return ShrinkCallSequenceRequest instances
-// when it "found a result" (e.g., call sequence that violates some property). Returning one each
-// time will mean no call sequence is continued to be built upon after the initial call.
+// entirely new call sequences. A TestCaseProvider provider should not unnecessarily make shrink requests
+// as this will cancel the current call sequence being further built upon.
 func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
 	// Lock to avoid concurrent map access issues.
 	t.propertyTestMethodsLock.Lock()
@@ -247,20 +271,4 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 	}
 
 	return shrinkRequests
-}
-
-// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a running
-// state should be updated during this step and put into a finalized state.
-func (t *PropertyTestCaseProvider) OnFuzzerStopping() {
-	// Clear our property test methods
-	t.propertyTestMethodsLock.Lock()
-	t.propertyTestMethods = nil
-	defer t.propertyTestMethodsLock.Unlock()
-
-	// Loop through each test case and set any tests with a running status to a passed status.
-	for _, testCase := range t.testCases {
-		if testCase.status == TestCaseStatusRunning {
-			testCase.status = TestCaseStatusPassed
-		}
-	}
 }

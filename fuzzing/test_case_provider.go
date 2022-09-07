@@ -14,7 +14,7 @@ type TestCaseProvider interface {
 
 	// OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a
 	// running state should be updated during this step and put into a finalized state.
-	OnFuzzerStopping()
+	OnFuzzerStopping(fuzzer *Fuzzer)
 
 	// OnWorkerCreated is called when a new fuzzing.FuzzerWorker is created by the fuzzing.Fuzzer.
 	OnWorkerCreated(worker *FuzzerWorker)
@@ -31,14 +31,19 @@ type TestCaseProvider interface {
 	// contract that no longer exists in the underlying TestNode.
 	OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract)
 
+	// OnWorkerCallSequenceTesting is called before a fuzzing.FuzzerWorker generates and tests a new call sequence.
+	OnWorkerCallSequenceTesting(worker *FuzzerWorker)
+
+	// OnWorkerCallSequenceTested is called after a fuzzing.FuzzerWorker generates and tests a new call sequence.
+	OnWorkerCallSequenceTested(worker *FuzzerWorker)
+
 	// OnWorkerCallSequenceCallTested is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 	// during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
 	// shrunken call sequences alongside verifiers to guide the shrinking process. This signals to the FuzzerWorker
 	// that this current call sequence was interesting, and it should stop building on it and find a shrunken
 	// sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
-	// entirely new call sequences. Thus, this method should only return ShrinkCallSequenceRequest instances
-	// when it "found a result" (e.g., call sequence that violates some property). Returning one each
-	// time will mean no call sequence is continued to be built upon after the initial call.
+	// entirely new call sequences. A TestCaseProvider provider should not unnecessarily make shrink requests
+	// as this will cancel the current call sequence being further built upon.
 	OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest
 }
 

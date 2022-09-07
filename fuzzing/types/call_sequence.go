@@ -21,7 +21,7 @@ func (cs CallSequence) String() string {
 	// Construct a list of strings for each CallSequenceElement.
 	elementStrings := make([]string, len(cs))
 	for i := 0; i < len(elementStrings); i++ {
-		elementStrings[i] = cs[i].String()
+		elementStrings[i] = fmt.Sprintf("%d) %s", i+1, cs[i].String())
 	}
 
 	// Join each element with new lines and return it.

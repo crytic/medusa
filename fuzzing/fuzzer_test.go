@@ -19,15 +19,25 @@ func getFuzzConfigDefault() *config.FuzzingConfig {
 		Timeout:                  30,
 		TestLimit:                0,
 		MaxTxSequenceLength:      100,
-		PropertyTestPrefixes: []string{
-			"fuzz_", "echidna_",
-		},
 		SenderAddresses: []string{
 			"0x1111111111111111111111111111111111111111",
 			"0x2222222222222222222222222222222222222222",
 			"0x3333333333333333333333333333333333333333",
 		},
 		DeployerAddress: "0x1111111111111111111111111111111111111111",
+		Testing: config.TestingConfig{
+			StopOnFailedTest: true,
+			AssertionTesting: config.AssertionTestingConfig{
+				Enabled:         false,
+				TestViewMethods: false,
+			},
+			PropertyTesting: config.PropertyTestConfig{
+				Enabled: true,
+				TestNamePrefixes: []string{
+					"fuzz_",
+				},
+			},
+		},
 	}
 }
 

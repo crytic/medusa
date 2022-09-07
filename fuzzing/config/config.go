@@ -36,17 +36,45 @@ type FuzzingConfig struct {
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
-	// PropertyTestPrefixes dictates what prefixes will determine if a function is a fuzz test.
-	// TODO: This can probably be moved to a different config struct once we isolate property testing from assertion
-	//  testing.
-	PropertyTestPrefixes []string `json:"propertyTestPrefixes"`
+	// DeployerAddress describe the account address to be used to deploy contracts.
+	DeployerAddress string `json:"deployerAddress"`
 
 	// SenderAddresses describe a set of account addresses to be used to send state-changing txs (calls) in fuzzing
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
 
-	// DeployerAddress describe the account address to be used to deploy contracts.
-	DeployerAddress string `json:"deployerAddress"`
+	// Testing describes the configuration used for different testing strategies.
+	Testing TestingConfig `json:"testing"`
+}
+
+// TestingConfig describes the configuration options used for testing
+type TestingConfig struct {
+	// StopOnFailedTest describes whether the fuzzing.Fuzzer should stop after detecting the first failed test.
+	StopOnFailedTest bool `json:"stopOnFailedTest"`
+
+	// AssertionTesting describes the configuration used for assertion testing.
+	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
+
+	// PropertyTesting describes the configuration used for property testing.
+	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+}
+
+// AssertionTestingConfig describes the configuration options used for assertion testing
+type AssertionTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestViewMethods dictates whether constant/pure/view methods should be tested.
+	TestViewMethods bool `json:"testViewMethods"`
+}
+
+// PropertyTestConfig describes the configuration options used for property testing
+type PropertyTestConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestNamePrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestNamePrefixes []string `json:"testNamePrefixes"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
@@ -65,9 +93,10 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Making validation a separate function in case we want to add other checks
 	// The only check currently is to make sure at least one test prefix is provided
-	err = projectConfig.ValidateConfig()
+	err = projectConfig.Validate()
 	if err != nil {
 		return nil, err
 	}
@@ -92,12 +121,20 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 	return nil
 }
 
-// ValidateConfig validate that the ProjectConfig meets certain requirements.
+// Validate validates that the ProjectConfig meets certain requirements.
 // Returns an error if one occurs.
-func (p *ProjectConfig) ValidateConfig() error {
-	// Ensure at least one prefix is in config
-	if len(p.Fuzzing.PropertyTestPrefixes) == 0 {
-		return errors.New("at least one test prefix must be specified within your project configuration file")
+func (p *ProjectConfig) Validate() error {
+	// Verify the worker count is a positive number.
+	if p.Fuzzing.Workers <= 0 {
+		return errors.New("project configuration must specify a positive number for the worker count")
+	}
+
+	// Verify property testing fields.
+	if p.Fuzzing.Testing.PropertyTesting.Enabled {
+		// Test name prefixes must be supplied if property testing is enabled.
+		if len(p.Fuzzing.Testing.PropertyTesting.TestNamePrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+		}
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
@@ -101,8 +102,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.AddCompilationTargets(compilations)
 	}
 
-	// TODO: For default we enable property tests, but this should be configurable.
-	fuzzer.RegisterTestProvider(NewPropertyTestCaseProvider())
+	// Register any default providers if specified.
+	if fuzzer.config.Fuzzing.Testing.PropertyTesting.Enabled {
+		fuzzer.RegisterTestProvider(NewPropertyTestCaseProvider())
+	}
+	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
+		// TODO: Add assertion test provider.
+	}
 	return fuzzer, nil
 }
 
@@ -181,12 +187,14 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 	// Otherwise now mark the test case as finished.
 	f.testCasesFinished[testCase.ID()] = testCase
 
-	// Print information about it.
-	fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+	// We only log here if we're not configured to stop on the first test failure. This is because the fuzzer prints
+	// results on exit, so we avoid duplicate messages.
+	if !f.config.Fuzzing.Testing.StopOnFailedTest {
+		fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+	}
 
-	// Stop the fuzzer after any failed result.
-	// TODO: Make this configurable
-	if testCase.Status() == TestCaseStatusFailed {
+	// If the config specifies, we stop after the first failed test reported.
+	if testCase.Status() == TestCaseStatusFailed && f.config.Fuzzing.Testing.StopOnFailedTest {
 		f.Stop()
 	}
 }
@@ -219,6 +227,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
 func (f *Fuzzer) Start() error {
+	// If we have no test providers, stop immediately as no tests will be run.
+	if len(f.testCaseProviders) == 0 {
+		return errors.New("no test providers were registered with the fuzzer")
+	}
+
 	// Create our running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
 
@@ -281,7 +294,7 @@ func (f *Fuzzer) Start() error {
 				testProvider.OnWorkerCreated(worker)
 			}
 
-			// Run the worker and check if we received a cancelled signal or we encountered an error.
+			// Run the worker and check if we received a cancelled signal, or we encountered an error.
 			ctxCancelled, workerErr := worker.run()
 			if workerErr != nil {
 				err = workerErr
@@ -305,6 +318,36 @@ func (f *Fuzzer) Start() error {
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
 			<-threadReserveChannel
 		}(workerIndex)
+	}
+
+	// Wait for every worker to be freed, so we don't have a race condition when reporting the order
+	// of events to our test provider.
+	for {
+		// Obtain the count of free workers.
+		availableWorkerIndexedLock.Lock()
+		freeWorkers := len(availableWorkerIndexes)
+		availableWorkerIndexedLock.Unlock()
+
+		// We keep waiting until every worker is free
+		if freeWorkers == len(f.workers) {
+			break
+		} else {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	// Signal to our test providers that we are stopping fuzzing.
+	for _, testProvider := range f.testCaseProviders {
+		testProvider.OnFuzzerStopping(f)
+	}
+
+	// Print our results
+	for _, testCase := range f.testCases {
+		if testCase.Status() == TestCaseStatusFailed {
+			fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+		} else {
+			fmt.Printf("\n[%s] %s\n", testCase.Status(), testCase.Name())
+		}
 	}
 
 	// Return any encountered error.
