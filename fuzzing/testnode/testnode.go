@@ -1,4 +1,4 @@
-package fuzzing
+package testnode
 
 import (
 	"encoding/hex"
@@ -49,7 +49,7 @@ type TestNode struct {
 
 	// tracer represents an execution trace provider for the VM. It observes VM execution for any notable events such
 	// as coverage map updates, etc.
-	tracer *tracing.FuzzerTracer
+	Tracer *tracing.FuzzerTracer
 
 	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
 	// such as whether certain fees should be charged and which execution tracer should be used (if any).
@@ -58,22 +58,22 @@ type TestNode struct {
 
 // TestNodeBlock represents a block or update within a TestNode
 type TestNodeBlock struct {
-	// header represents the block header for this current block.
-	header *types.Header
+	// Header represents the block header for this current block.
+	Header *types.Header
 
-	// message represents an internal EVM core.Message. Messages are derived from transactions after validation of a
+	// Message represents an internal EVM core.Message. Messages are derived from transactions after validation of a
 	// transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction fields
 	// plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field in a
 	// message).
-	message core.Message
+	Message core.Message
 
-	// receipt represents a transaction receipt received when the associated message in this structure was sent to the
+	// Receipt represents a transaction receipt received when the associated message in this structure was sent to the
 	// VM to perform a state update. It houses event logs and other information collected during the state transition
 	// when the transaction was applied.
-	receipt *types.Receipt
+	Receipt *types.Receipt
 
-	// blockHash represents a cached hash for this block.
-	blockHash common.Hash
+	// BlockHash represents a cached hash for this block.
+	BlockHash common.Hash
 }
 
 // NewTestNode creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -124,7 +124,7 @@ func NewTestNode(genesisAlloc core.GenesisAlloc, coverageEnabled bool) (*TestNod
 		kvstore:    kvstore,
 		db:         db,
 		state:      stateDb,
-		tracer:     tracer,
+		Tracer:     tracer,
 		vmConfig:   vmConfig,
 	}
 
@@ -191,7 +191,7 @@ func (t *TestNode) BlockNumber() uint64 {
 func (t *TestNode) BlockHeader() *types.Header {
 	// If we have any blocks on the test chain, return the latest
 	if len(t.chain) > 0 {
-		return t.chain[len(t.chain)-1].header
+		return t.chain[len(t.chain)-1].Header
 	}
 
 	// Otherwise return the genesis header
@@ -211,7 +211,7 @@ func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, er
 		genesisHash := t.dummyChain.CurrentBlock().Hash()
 		return genesisHash, nil
 	} else {
-		blockHash := t.chain[blockNumber-1].blockHash
+		blockHash := t.chain[blockNumber-1].BlockHash
 		return blockHash, nil
 	}
 }
@@ -377,10 +377,10 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 
 	// Create a new block for our test node
 	block := TestNodeBlock{
-		header:    header,
-		message:   msg,
-		receipt:   receipt,
-		blockHash: blockHash,
+		Header:    header,
+		Message:   msg,
+		Receipt:   receipt,
+		BlockHash: blockHash,
 	}
 
 	// Append it to our chain
@@ -409,10 +409,10 @@ func (t *TestNode) DeployContract(contract compilationTypes.CompiledContract, de
 	block := t.SendMessage(msg)
 
 	// Ensure our transaction succeeded
-	if block.receipt.Status != types.ReceiptStatusSuccessful {
+	if block.Receipt.Status != types.ReceiptStatusSuccessful {
 		return common.Address{}, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
 	// Return the address for the deployed contract.
-	return block.receipt.ContractAddress, nil
+	return block.Receipt.ContractAddress, nil
 }

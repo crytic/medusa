@@ -2,17 +2,16 @@ package fuzzing
 
 import (
 	"fmt"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/fuzzing/testnode"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/trailofbits/medusa/compilation/types"
 )
 
 // fuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -25,10 +24,10 @@ type fuzzerWorker struct {
 	fuzzer *Fuzzer
 
 	// testNode describes a testNode created by the fuzzerWorker to run tests against.
-	testNode *TestNode
+	testNode *testnode.TestNode
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
-	deployedContracts map[common.Address]types.CompiledContract
+	deployedContracts map[common.Address]compilationTypes.CompiledContract
 
 	// propertyTests describes the contract functions which represent properties to be tested.
 	// These should be read-only (pure/view) functions which take no input parameters and return a boolean variable.
@@ -49,7 +48,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) *fuzzerWorker {
 	worker := fuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
-		deployedContracts:    make(map[common.Address]types.CompiledContract),
+		deployedContracts:    make(map[common.Address]compilationTypes.CompiledContract),
 		propertyTests:        make([]fuzzerTypes.DeployedMethod, 0),
 		stateChangingMethods: make([]fuzzerTypes.DeployedMethod, 0),
 	}
@@ -81,7 +80,7 @@ func (fw *fuzzerWorker) IsPropertyTest(method abi.Method) bool {
 
 // registerDeployedContract registers an address with a compiled contract descriptor for it to be tracked by the
 // fuzzerWorker, both as methods of changing state and for properties to assert.
-func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address, contract types.CompiledContract) {
+func (fw *fuzzerWorker) registerDeployedContract(deployedAddress common.Address, contract compilationTypes.CompiledContract) {
 	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
 	fw.deployedContracts[deployedAddress] = contract
 
@@ -327,7 +326,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 	}()
 
 	// Loop for each transaction to execute
-	var testNodeBlockSequence []*TestNodeBlock
+	var testNodeBlockSequence []*testnode.TestNodeBlock
 	for i := 0; i < len(txSequence); i++ {
 		// If the transaction sequence element is nil, generate a new fuzzed tx in its place.
 		var err error
@@ -349,7 +348,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 
 		// Check if coverage has increased
 		if fw.fuzzer.config.Fuzzing.Coverage {
-			newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+			newCoverageMaps := fw.testNode.Tracer.CoverageMaps()
 			if newCoverageMaps != nil {
 				coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
 				if err != nil {
@@ -358,7 +357,13 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 
 				if coverageUpdated {
 					// New coverage has been found, add it to the corpus
-					err = fw.AddToCorpus(testNodeBlockSequence, txSequence[:i+1])
+					// First convert block sequence and tx sequence to a single corpus entry
+					entry, err := fw.fuzzer.corpus.TestSequenceToCorpusEntry(testNodeBlockSequence, txSequence[:i+1])
+					if err != nil {
+						return i, nil, err
+					}
+					// Add corpus entry
+					err = fw.fuzzer.corpus.AddEntry(entry)
 					if err != nil {
 						return i, nil, err
 					}
@@ -432,7 +437,7 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// Create a test node
 	var err error
-	fw.testNode, err = NewTestNode(genesisAlloc, fw.fuzzer.config.Fuzzing.Coverage)
+	fw.testNode, err = testnode.NewTestNode(genesisAlloc, fw.fuzzer.config.Fuzzing.Coverage)
 	if err != nil {
 		return false, err
 	}
@@ -507,54 +512,4 @@ func (fw *fuzzerWorker) run() (bool, error) {
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
 	return false, nil
-}
-
-// AddToCorpus intakes a list of TestNodeBlock and a list of CallMessage, pushes those values into a
-// fuzzerTypes.CorpusBlockSequence and adds that sequence to the corpus, assuming it was not there already.
-// Uniqueness is tested by taking the hash of the sequence.
-func (fw *fuzzerWorker) AddToCorpus(testNodeBlockSequence []*TestNodeBlock, txSequence []*fuzzerTypes.CallMessage) error {
-	var corpusBlockSequence fuzzerTypes.CorpusBlockSequence
-	// Create sequence of corpus blocks
-	for idx, testNodeBlock := range testNodeBlockSequence {
-		// TODO: This will change when more than one transaction goes in a block
-		corpusBlock := convertTestNodeBlockToCorpusBlock(testNodeBlock, txSequence[idx])
-		// Add corpus block to list
-		corpusBlockSequence = append(corpusBlockSequence, corpusBlock)
-	}
-
-	// Add to corpus, if we do not care about duplicates
-	fw.fuzzer.corpus.Mutex.Lock() // lock
-	fw.fuzzer.corpus.CorpusBlockSequences = append(fw.fuzzer.corpus.CorpusBlockSequences, &corpusBlockSequence)
-	fw.fuzzer.corpus.Mutex.Unlock() // unlock
-	return nil
-}
-
-// convertTestNodeBlockToCorpusBlock converts a TestNodeBlock to a fuzzerTypes.CorpusBlock. Components such as the
-// block timestamp, block number, block hash, transaction receipts, and the transactions are used during the
-// conversion
-func convertTestNodeBlockToCorpusBlock(testNodeBlock *TestNodeBlock, tx *fuzzerTypes.CallMessage) *fuzzerTypes.CorpusBlock {
-	// Create corpusBlock object
-	corpusBlock := fuzzerTypes.NewCorpusBlock()
-	// Set header fields
-	corpusBlock.Header.BlockTimestamp = testNodeBlock.header.Time
-	corpusBlock.Header.BlockNumber = testNodeBlock.header.Number
-	corpusBlock.Header.BlockHash = testNodeBlock.blockHash
-	// TODO: This will change when more than one receipt goes in a block
-	corpusBlock.Receipts = append(corpusBlock.Receipts, testNodeBlock.receipt)
-	checkReceipts(corpusBlock.Receipts)
-	// TODO: This will change when more than one transaction goes in a block
-	corpusBlock.Transactions = append(corpusBlock.Transactions, tx)
-	return corpusBlock
-}
-
-// checkReceipts ensures that each receipt has a Log object that is not nil. This is performed so that unmarshaling
-// works as expected
-func checkReceipts(receipts []*coreTypes.Receipt) []*coreTypes.Receipt {
-	// Iterate through receipts and if there is a nil receipt.Logs, update it to an empty list
-	for _, receipt := range receipts {
-		if receipt.Logs == nil {
-			receipt.Logs = []*coreTypes.Log{}
-		}
-	}
-	return receipts
 }

@@ -84,7 +84,7 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 	}
 }
 
-//Hash hashes all the contents of a CallMessage
+//Hash hashes the contents of a CallMessage
 func (m *CallMessage) Hash() (string, error) {
 	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
 		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),
@@ -99,16 +99,16 @@ func (m *CallMessage) Hash() (string, error) {
 }
 
 func (m *CallMessage) From() common.Address             { return m.MsgFrom }
-func (m *CallMessage) Nonce() uint64                    { return m.MsgNonce }
-func (m *CallMessage) IsFake() bool                     { return true }
 func (m *CallMessage) To() *common.Address              { return m.MsgTo }
 func (m *CallMessage) GasPrice() *big.Int               { return m.MsgGasPrice }
 func (m *CallMessage) GasFeeCap() *big.Int              { return m.MsgGasFeeCap }
 func (m *CallMessage) GasTipCap() *big.Int              { return m.MsgGasTipCap }
-func (m *CallMessage) Gas() uint64                      { return m.MsgGas }
 func (m *CallMessage) Value() *big.Int                  { return m.MsgValue }
+func (m *CallMessage) Gas() uint64                      { return m.MsgGas }
+func (m *CallMessage) Nonce() uint64                    { return m.MsgNonce }
 func (m *CallMessage) Data() []byte                     { return m.MsgData }
 func (m *CallMessage) AccessList() coreTypes.AccessList { return nil }
+func (m *CallMessage) IsFake() bool                     { return true }
 
 // ToEVMMessage returns a representation of the CallMessage that is compatible with EVM methods.
 func (m *CallMessage) ToEVMMessage() coreTypes.Message {

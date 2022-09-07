@@ -2,17 +2,16 @@ package fuzzing
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/compilation/types"
+	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/configs"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	simpleCorpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/simple_corpus"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -31,7 +30,7 @@ type Fuzzer struct {
 	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
 	ctxCancelFunc context.CancelFunc
 	// compilations describes the compiled targets produced by the last Start call for the Fuzzer to target.
-	compilations []types.Compilation
+	compilations []compilationTypes.Compilation
 
 	// baseValueSet represents a base_value_set.BaseValueSet containing input values for our fuzz tests.
 	baseValueSet *value_generation.BaseValueSet
@@ -44,7 +43,7 @@ type Fuzzer struct {
 	// results describes the results we track during our fuzzing campaign, such as failed property tests.
 	results *FuzzerResults
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
-	corpus *fuzzerTypes.Corpus
+	corpus corpusTypes.Corpus
 }
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
@@ -140,7 +139,7 @@ func (f *Fuzzer) Start() error {
 
 	// Setup corpus
 	if f.config.Fuzzing.Coverage {
-		f.corpus = fuzzerTypes.NewCorpus()
+		f.corpus = simpleCorpusTypes.NewSimpleCorpus()
 	}
 	if f.config.Fuzzing.Coverage && f.config.Fuzzing.CorpusDirectory != "" {
 		// Find out if corpus already exists
@@ -150,12 +149,12 @@ func (f *Fuzzer) Start() error {
 			return err
 		}
 		if corpusExists {
-			// do something
-			f.readFromCorpus()
+			// Read the corpus into memory
+			err = f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	if err != nil {
-		return err
 	}
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
@@ -213,7 +212,7 @@ func (f *Fuzzer) Start() error {
 func (f *Fuzzer) Stop() {
 	// Write corpus to disk if corpusDirectory is set and coverage is enabled
 	if f.config.Fuzzing.CorpusDirectory != "" && f.config.Fuzzing.Coverage {
-		err := f.writeCorpusToDisk()
+		err := f.corpus.WriteCorpusToDisk(f.config.Fuzzing.CorpusDirectory)
 		// TODO: Should I throw a panic?
 		if err != nil {
 			panic(err)
@@ -233,6 +232,7 @@ func (f *Fuzzer) Stop() {
 // TODO: Should there be a regex check to make sure it is a valid directory name?
 func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 	// Get info on corpus_dir directory existence
+	// Not doing any verification of the corpusDirectory config option
 	dirInfo, err := os.Stat(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		// If directory does not exist, make 'corpus', 'corpus/corpus', and 'corpus/coverage'
@@ -240,12 +240,13 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory, 0777); err != nil {
 				return false, fmt.Errorf("error while creating corpus directory. Make sure the config_dir config option is a valid directory name: %v\n", err)
 			}
-			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
+			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus"), 0777); err != nil {
 				return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
 			}
-			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
+			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage"), 0777); err != nil {
 				return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
 			}
+			// Directories did not exist but no errors
 			return false, nil
 		}
 
@@ -258,22 +259,24 @@ func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
 		return false, fmt.Errorf("there exists a conflicting file named %s in this directory.\n", f.config.Fuzzing.CorpusDirectory)
 	}
 
+	// Main corpus directory exists, but the subdirectories might not
 	// If corpus/corpus is not there, make it
-	if _, err = os.Stat(f.config.Fuzzing.CorpusDirectory + "/corpus"); os.IsNotExist(err) {
-		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/corpus"), 0777); err != nil {
+	if _, err = os.Stat(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus")); os.IsNotExist(err) {
+		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus"), 0777); err != nil {
 			return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
 		}
 	}
 
 	// if corpus/coverage is not there, make it
-	if _, err = os.Stat(f.config.Fuzzing.CorpusDirectory + "/coverage"); os.IsNotExist(err) {
-		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "/coverage"), 0777); err != nil {
+	if _, err = os.Stat(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")); os.IsNotExist(err) {
+		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage"), 0777); err != nil {
 			return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
 		}
 	}
 
 	// we will return true even if corpus/corpus is empty.
-	// There is no reason to check here whether there are files in there right now.
+	// There is no reason to check here whether there are files in there
+	// ReadCorpusFromDisk will handle that
 	return true, nil
 }
 
@@ -325,75 +328,4 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 			break
 		}
 	}
-}
-
-// writeCorpusToDisk will write the corpus to disk after the fuzzer finishes its work
-func (f *Fuzzer) writeCorpusToDisk() error {
-	// Get current working directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	// Move to corpus/corpus subdirectory
-	err = os.Chdir(filepath.Join(currentDir, f.config.Fuzzing.CorpusDirectory, "/corpus"))
-	if err != nil {
-		return err
-	}
-	// Write all sequences to corpus
-	for _, corpusBlockSequence := range f.corpus.CorpusBlockSequences {
-		// Get hash of the sequence
-		corpusBlockSequenceHash, err := corpusBlockSequence.Hash()
-		if err != nil {
-			return err
-		}
-		fileName := corpusBlockSequenceHash + ".json"
-		// If corpus file already exists, no need to write it again
-		if _, err := os.Stat(fileName); err == nil {
-			continue
-		}
-		// Marshal the sequence
-		jsonString, err := json.MarshalIndent(corpusBlockSequence, "", " ")
-		if err != nil {
-			return err
-		}
-		// Write the byte string
-		err = ioutil.WriteFile(fileName, jsonString, os.ModePerm)
-		if err != nil {
-			return err
-		}
-	}
-	// Change back to original directory
-	err = os.Chdir(currentDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// readFromCorpus reads all json files from the corpus/ subdirectory and populates the in-memory corpus
-func (f *Fuzzer) readFromCorpus() error {
-	// Get .json files from the corpus/corpus subdirectory
-	// These .json files are corpusBlock sequences
-	matches, err := filepath.Glob(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus", "*.json"))
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(matches); i++ {
-		// Read the JSON file data
-		b, err := ioutil.ReadFile(matches[i])
-		if err != nil {
-			return err
-		}
-		// Read JSON file into corpusBlockSequence
-		var corpusBlockSequence fuzzerTypes.CorpusBlockSequence
-		err = json.Unmarshal(b, &corpusBlockSequence)
-		if err != nil {
-			return err
-		}
-		// Add sequence to corpus
-		f.corpus.CorpusBlockSequences = append(f.corpus.CorpusBlockSequences, &corpusBlockSequence)
-	}
-
-	return nil
 }

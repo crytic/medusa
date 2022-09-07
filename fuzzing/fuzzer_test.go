@@ -7,7 +7,7 @@ import (
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/configs"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/corpus/simple_corpus"
 	"github.com/trailofbits/medusa/utils/test_utils"
 	"os"
 	"path/filepath"
@@ -84,7 +84,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 		}
 		// If default configuration is used, all test contracts should show some level of coverage
 		if fuzzingConfig.Coverage {
-			assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "No coverage was captured")
+			assert.True(t, len(fuzzer.corpus.Entries()) > 0, "No coverage was captured")
 			if fuzzingConfig.CorpusDirectory != "" {
 				testCoverageMarshalingAndUnmarsharling(t, fuzzer)
 				testReadWriteCorpus(t, fuzzer)
@@ -101,22 +101,22 @@ func testCoverageMarshalingAndUnmarsharling(t *testing.T, fuzzer *Fuzzer) {
 	// Move to corpus/corpus subdirectory
 	os.Chdir(filepath.Join(currentDir, fuzzer.config.Fuzzing.CorpusDirectory, "corpus"))
 	// Iterate through each sequence in the corpus
-	for _, seqOne := range fuzzer.corpus.CorpusBlockSequences {
+	for _, seqOne := range fuzzer.corpus.Entries() {
 		// Hash the seq
-		corpusBlockSequenceHash, err := seqOne.Hash()
+		corpusBlockSequenceHash, err := seqOne.(*simple_corpus.SimpleCorpusEntry).Hash()
 		if err != nil {
 			assert.False(t, false, "There was an error hashing a corpus sequence")
 		}
 		// Read corpus file
 		b, _ := os.ReadFile(corpusBlockSequenceHash + ".json")
 		// Unmarshal corpus file
-		var seqTwo types.CorpusBlockSequence
+		var seqTwo simple_corpus.SimpleCorpusEntry
 		err = json.Unmarshal(b, &seqTwo)
 		if err != nil {
 			assert.False(t, false, "JSON unmarshaling failed")
 		}
 		// Assert that the unmarshaled sequence is equal to the sequence (which was marshaled to begin with)
-		assert.True(t, test_utils.SequencesAreEqual(t, *seqOne, seqTwo), "marshaling and unmarshaling are not symmetric operations")
+		assert.True(t, test_utils.SequencesAreEqual(t, seqOne.(*simple_corpus.SimpleCorpusEntry), &seqTwo), "marshaling and unmarshaling are not symmetric operations")
 	}
 	// Go back to original directory
 	os.Chdir(currentDir)
@@ -131,7 +131,7 @@ func testReadWriteCorpus(t *testing.T, fuzzer *Fuzzer) {
 	// Stop the fuzzer immediately
 	fuzzer.Stop()
 	// Ensure that you can read from corpus directory
-	assert.True(t, len(fuzzer.corpus.CorpusBlockSequences) > 0, "Read from corpus not working")
+	assert.True(t, len(fuzzer.corpus.Entries()) > 0, "Read from corpus not working")
 }
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
