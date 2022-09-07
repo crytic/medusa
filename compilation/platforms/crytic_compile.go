@@ -151,8 +151,8 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			if !ok {
 				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]interface{} format: %s\n", compilationUnit)
 			}
-			// Get Asts for compilation unit
-			Asts := compilationUnitMap["asts"]
+			// Create mapping between each file in compilation unit and associated Ast
+			AstMap := compilationUnitMap["asts"].(map[string]interface{})
 			// Create mapping between key (file name) and value (associated contracts in that file)
 			contractsMap, ok := compilationUnitMap["contracts"].(map[string]interface{})
 			if !ok {
@@ -187,9 +187,10 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 					}
 					// Check if sourcePath has already been set (note that a sourcePath (i.e., file) can have more
 					// than one contract)
+					// sourcePath is also the key for the AstMap
 					if _, ok := compilation.Sources[sourcePath]; !ok {
 						compilation.Sources[sourcePath] = types.CompiledSource{
-							Ast:       Asts,
+							Ast:       AstMap[sourcePath],
 							Contracts: make(map[string]types.CompiledContract),
 						}
 					}
