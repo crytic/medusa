@@ -12,7 +12,7 @@ type PropertyTestCase struct {
 	status         string
 	targetContract *fuzzerTypes.Contract
 	targetMethod   abi.Method
-	callSequence   fuzzerTypes.CallSequence
+	callSequence   *fuzzerTypes.CallSequence
 }
 
 // Status describes the TestCaseStatus enum option used to define the current state of the test.
@@ -20,8 +20,9 @@ func (t *PropertyTestCase) Status() string {
 	return t.status
 }
 
-// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase.
-func (t *PropertyTestCase) CallSequence() fuzzerTypes.CallSequence {
+// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
+// This should be nil if the result is not related to the CallSequence.
+func (t *PropertyTestCase) CallSequence() *fuzzerTypes.CallSequence {
 	return t.callSequence
 }
 

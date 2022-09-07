@@ -19,8 +19,9 @@ type TestCase interface {
 	// Status describes the TestCaseStatus enum option used to define the current state of the test.
 	Status() string
 
-	// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase.
-	CallSequence() types.CallSequence
+	// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
+	// This should be nil if the result is not related to the CallSequence.
+	CallSequence() *types.CallSequence
 
 	// Name describes the name of the test case.
 	Name() string

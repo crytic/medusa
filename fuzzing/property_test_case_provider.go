@@ -256,7 +256,7 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) {
 					// When we're finished shrinking, update our test state and report it finalized.
 					testCase.status = TestCaseStatusFailed
-					testCase.callSequence = shrunkenCallSequence
+					testCase.callSequence = &shrunkenCallSequence
 					worker.Fuzzer().ReportTestCaseFinished(testCase)
 				},
 			}
