@@ -114,7 +114,9 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// Need to figure out the args to provide crytic-compile and the workingDirectory
 	workingDirectory, args, err := c.getWorkingDirectoryAndArgs()
-
+	if err != nil {
+		return nil, "", err
+	}
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
 	// Set working directory
