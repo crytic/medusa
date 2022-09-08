@@ -45,7 +45,7 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 // or the `--export-dir` arguments. This is because `--export-format` has to be `standard` for the `crytic-compile`
 // integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
 func (c *CryticCompilationConfig) ValidateArgs() error {
-	// If --export-format or --export-dir are specified in s.Args, throw an error
+	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {
 		if arg == "--export-format" {
 			return errors.New("do not specify `--export-format` as an argument since the standard export format is required by medusa")
@@ -166,7 +166,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	buildDirectory := c.BuildDirectory
 	// Default build directory is crytic-export
 	if buildDirectory == "" {
-		buildDirectory = "crytic-export" //filepath.Join(workingDirectory, "crytic-export")
+		buildDirectory = "crytic-export"
 	}
 	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
