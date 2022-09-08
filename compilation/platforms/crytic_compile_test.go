@@ -3,6 +3,7 @@ package platforms
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/test_utils"
 	"os"
 	"os/exec"
@@ -185,10 +186,10 @@ func TestDeleteBuildDirectory(t *testing.T) {
 		_, _, err := cryticConfig.Compile()
 		assert.Nil(t, err)
 		// Delete crytic-export
-		err = cryticConfig.DeleteBuildDirectory()
+		buildDir := "crytic-export"
+		err = utils.DeleteDirectory(buildDir)
 		assert.Nil(t, err)
 		// Check to see if it was deleted
-		buildDir := "crytic-export"
 		_, err = os.Stat(buildDir)
 		assert.True(t, err != nil, "Error cannot be nil")
 		assert.True(t, os.IsNotExist(err), "Error is something other than IsNotExist")
@@ -199,7 +200,7 @@ func TestDeleteBuildDirectory(t *testing.T) {
 		_, _, err = cryticConfig.Compile()
 		assert.Nil(t, err)
 		// Delete build_directory
-		err = cryticConfig.DeleteBuildDirectory()
+		err = utils.DeleteDirectory(buildDir)
 		assert.Nil(t, err)
 		// Check to see if it was deleted
 		_, err = os.Stat(buildDir)

@@ -55,7 +55,7 @@ type FuzzingConfig struct {
 	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
 	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
-	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
+	// TODO: This can probably be moved to a different config struct once we isolate property testing from assertion testing
 	TestPrefixes []string `json:"testPrefixes"`
 }
 

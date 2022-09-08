@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -41,10 +42,10 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	}
 }
 
-// ValidateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
+// validateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
 // or the `--export-dir` arguments. This is because `--export-format` has to be `standard` for the `crytic-compile`
 // integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
-func (c *CryticCompilationConfig) ValidateArgs() error {
+func (c *CryticCompilationConfig) validateArgs() error {
 	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {
 		if arg == "--export-format" {
@@ -57,42 +58,9 @@ func (c *CryticCompilationConfig) ValidateArgs() error {
 	return nil
 }
 
-// DeleteBuildDirectory will delete an old crytic-export (or BuildDirectory) so that the new artifacts can be analyzed.
-// This prevents cross-contamination of old and new compilation artifacts
-func (c *CryticCompilationConfig) DeleteBuildDirectory() error {
-	var dirToDelete string
-	if c.BuildDirectory == "" {
-		dirToDelete = "crytic-export"
-	} else {
-		dirToDelete = c.BuildDirectory
-	}
-	dirInfo, err := os.Stat(dirToDelete)
-
-	if err != nil {
-		// Directory does not exist, we are good and don't have to delete anything
-		if os.IsNotExist(err) {
-			return nil
-		}
-		// If any other type of error, return it
-		return err
-	}
-
-	// Arguably unnecessary check to make sure dirToDelete is a directory and not a file
-	if !dirInfo.IsDir() {
-		return fmt.Errorf("Build directory is a file, not a directory")
-	}
-
-	// Delete directory and its contents
-	err = os.RemoveAll(dirToDelete)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// GetWorkingDirectoryAndArgs sets the arguments that will be provided to crytic-compile, based on the configuration,
-// and identifies the current working directory based on c.Target.
-func (c *CryticCompilationConfig) GetWorkingDirectoryAndArgs() (string, []string, error) {
+// getWorkingDirectoryAndArgs sets the arguments that will be provided to crytic-compile and identifies the current
+// working directory based on c.Target.
+func (c *CryticCompilationConfig) getWorkingDirectoryAndArgs() (string, []string, error) {
 	// Get information on c.Target
 	// Using pathInfo to figure out if c.Target is a directory or not
 	pathInfo, err := os.Stat(c.Target)
@@ -129,19 +97,23 @@ func (c *CryticCompilationConfig) GetWorkingDirectoryAndArgs() (string, []string
 // Compile uses the CryticCompilationConfig provided to compile a given target, parse the artifacts, and then
 // create a list of types.Compilation.
 func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
-	// Delete buildDirectory if it already exists
-	err := c.DeleteBuildDirectory()
+	// Set buildDirectory and delete the one if it already exists
+	buildDirectory := c.BuildDirectory
+	if c.BuildDirectory == "" {
+		buildDirectory = "crytic-export"
+	}
+	err := utils.DeleteDirectory(buildDirectory)
 	if err != nil {
 		return nil, "", err
 	}
 	// Validate args to make sure --export-format and --export-dir are not specified
-	err = c.ValidateArgs()
+	err = c.validateArgs()
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Need to figure out the args to provide crytic-compile and the workingDirectory
-	workingDirectory, args, err := c.GetWorkingDirectoryAndArgs()
+	workingDirectory, args, err := c.getWorkingDirectoryAndArgs()
 
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
@@ -162,12 +134,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
 
-	// Get build directory
-	buildDirectory := c.BuildDirectory
-	// Default build directory is crytic-export
-	if buildDirectory == "" {
-		buildDirectory = "crytic-export"
-	}
+	// Find compilation artifacts in buildDirectory
 	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
 		return nil, "", err
