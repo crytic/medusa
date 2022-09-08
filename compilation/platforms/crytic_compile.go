@@ -90,6 +90,42 @@ func (c *CryticCompilationConfig) DeleteBuildDirectory() error {
 	return nil
 }
 
+// GetWorkingDirectoryAndArgs sets the arguments that will be provided to crytic-compile, based on the configuration,
+// and identifies the current working directory based on c.Target.
+func (c *CryticCompilationConfig) GetWorkingDirectoryAndArgs() (string, []string, error) {
+	// Get information on c.Target
+	// Using pathInfo to figure out if c.Target is a directory or not
+	pathInfo, err := os.Stat(c.Target)
+	if err != nil {
+		return "", nil, fmt.Errorf("error while trying to get information on directory %s\n", c.Target)
+	}
+	// args are the arguments to crytic-compile
+	var args []string
+	// workingDirectory is the current working dir
+	var workingDirectory string
+	if c.Target == "." {
+		// If c.Target is '.', then the current dir is the workingDirectory and args should use the '.'
+		// ignoring errors from os.Getwd()
+		workingDirectory, _ = os.Getwd()
+		args = append([]string{".", "--export-format", "standard"})
+	} else if !pathInfo.IsDir() {
+		// If c.Target is a single file, then the workingDirectory is the parent dir of the file and args should use c.Target
+		workingDirectory = filepath.Dir(c.Target)
+		args = append([]string{c.Target, "--export-format", "standard"})
+	} else {
+		// c.Target is a directory, so the workingDirectory is the current dir and args should use c.Target
+		workingDirectory = c.Target
+		args = append([]string{c.Target, "--export-format", "standard"})
+	}
+	// Add --export-dir option if BuildDirectory is specified
+	if c.BuildDirectory != "" {
+		args = append(args, []string{"--export-dir", c.BuildDirectory}...)
+	}
+	// Add remaining args
+	args = append(args, c.Args...)
+	return workingDirectory, args, nil
+}
+
 // Compile uses the CryticCompilationConfig provided to compile a given target, parse the artifacts, and then
 // create a list of types.Compilation.
 func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
@@ -103,35 +139,14 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	if err != nil {
 		return nil, "", err
 	}
-	// Get information on s.Target
-	// Primarily using pathInfo to figure out if s.Target is a directory or not
-	pathInfo, err := os.Stat(c.Target)
-	if err != nil {
-		return nil, "", fmt.Errorf("error while trying to get information on directory %s\n", c.Target)
-	}
 
-	// Figure out whether s.Target is a file or directory
-	// parentDirectory is s.Target if s.Target is a directory
-	parentDirectory := c.Target
-	// Since we are compiling a whole directory, use "." as the target
-	args := append([]string{".", "--export-format", "standard"})
-	if !pathInfo.IsDir() {
-		// If it is a file, get the parent directory of s.Target
-		parentDirectory = filepath.Dir(c.Target)
-		// Since we are compiling a file, use s.Target as the target
-		args = append([]string{c.Target, "--export-format", "standard"})
-	}
-	// Add --export-dir option if BuildDirectory is specified
-	if c.BuildDirectory != "" {
-		args = append(args, []string{"--export-dir", c.BuildDirectory}...)
-	}
-	// Add remaining args
-	args = append(args, c.Args...)
+	// Need to figure out the args to provide crytic-compile and the workingDirectory
+	workingDirectory, args, err := c.GetWorkingDirectoryAndArgs()
 
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
 	// Set working directory
-	cmd.Dir = parentDirectory
+	cmd.Dir = workingDirectory
 
 	// Install a specific `solc` version if requested in the config
 	if c.SolcVersion != "" {
@@ -147,11 +162,11 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
 
-	// Find build directory
+	// Get build directory
 	buildDirectory := c.BuildDirectory
-	// Default directory is parentDirectory/crytic-export
+	// Default build directory is crytic-export
 	if buildDirectory == "" {
-		buildDirectory = filepath.Join(parentDirectory, "crytic-export")
+		buildDirectory = "crytic-export" //filepath.Join(workingDirectory, "crytic-export")
 	}
 	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
