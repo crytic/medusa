@@ -340,8 +340,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 		// Obtain our transaction information
 		msg := txSequence[i]
 
-		// Send our message
-		// TODO: After more than one msg can go in a block, SendMessage should return an []*CallMessage as well
+		// Send our message and get back the TestNodeBlock
 		testNodeBlock := fw.testNode.SendMessage(msg)
 		// Append testNodeBlock to sequence
 		testNodeBlockSequence = append(testNodeBlockSequence, testNodeBlock)
@@ -357,7 +356,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 
 				if coverageUpdated {
 					// New coverage has been found, add it to the corpus
-					// First convert block sequence and tx sequence to a single corpus entry
+					// First convert block sequence to a single corpus entry
 					// TODO: should TestSequenceToCorpusEntry be the responsibility of `type Corpus`?
 					entry, err := fw.fuzzer.corpus.TestSequenceToCorpusEntry(testNodeBlockSequence)
 					if err != nil {
