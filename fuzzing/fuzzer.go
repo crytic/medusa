@@ -252,7 +252,7 @@ func (f *Fuzzer) Start() error {
 
 	// Read the corpus into memory
 	if f.config.Fuzzing.Coverage && f.config.Fuzzing.CorpusDirectory != "" {
-		err = f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
+		err := f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
 		if err != nil {
 			return err
 		}

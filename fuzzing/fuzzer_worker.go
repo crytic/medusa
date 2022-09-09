@@ -24,7 +24,7 @@ type FuzzerWorker struct {
 	fuzzer *Fuzzer
 
 	// testNode describes a testNode created by the FuzzerWorker to run tests against.
-	testNode *TestNode
+	testNode *testnode.TestNode
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
@@ -60,7 +60,7 @@ func (fw *FuzzerWorker) Fuzzer() *Fuzzer {
 }
 
 // TestNode returns the TestNode used by this worker as the backend for tests.
-func (fw *FuzzerWorker) TestNode() *TestNode {
+func (fw *FuzzerWorker) TestNode() *testnode.TestNode {
 	return fw.testNode
 }
 
@@ -311,7 +311,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		// TODO: Move everything below elsewhere
 
 		// If we encountered an invalid opcode error, it is indicative of an assertion failure
-		if _, hitInvalidOpcode := fw.testNode.tracer.VMError().(*vm.ErrInvalidOpCode); hitInvalidOpcode {
+		if _, hitInvalidOpcode := fw.testNode.Tracer.VMError().(*vm.ErrInvalidOpCode); hitInvalidOpcode {
 			// TODO: Report assertion failure
 		}
 	}
