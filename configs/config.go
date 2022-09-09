@@ -58,7 +58,7 @@ type FuzzingConfig struct {
 	Coverage bool `json:"coverage"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
-	CorpusDirectory string `json:"corpus_dir"`
+	CorpusDirectory string `json:"corpusDirectory"`
 
 	// TestPrefixes dictates what prefixes will determine that a fxn is a fuzz test
 	// This can probably be moved to a different config struct once we isolate property testing from assertion testing
