@@ -148,7 +148,7 @@ func (f *Fuzzer) TestCases() []TestCase {
 }
 
 // TestCasesWithStatus exposes the underlying tests with the provided status.
-func (f *Fuzzer) TestCasesWithStatus(status string) []TestCase {
+func (f *Fuzzer) TestCasesWithStatus(status TestCaseStatus) []TestCase {
 	// Acquire a thread lock to avoid race conditions
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()

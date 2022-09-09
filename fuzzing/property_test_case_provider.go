@@ -17,8 +17,8 @@ import (
 // before the fuzzing campaign ends, the test signals a passed status.
 type PropertyTestCaseProvider struct {
 	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
-	testCases map[string]*PropertyTestCase
-	
+	testCases map[types.ContractMethodID]*PropertyTestCase
+
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
 
@@ -33,7 +33,7 @@ type propertyTestCaseProviderWorkerState struct {
 	// Each deployed contract-method represents a property test method to call for evaluation. Property tests
 	// should be read-only (pure/view) functions which take no input parameters and return a boolean variable
 	// indicating if the property test passed.
-	propertyTestMethods map[string]types.DeployedContractMethod
+	propertyTestMethods map[types.ContractMethodID]types.DeployedContractMethod
 
 	// propertyTestMethodsLock is used for thread-synchronization when updating propertyTestMethods
 	propertyTestMethodsLock sync.Mutex
@@ -106,7 +106,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 // TestCase should be cleared from the provider and state should be reset.
 func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	// Reset our state
-	t.testCases = make(map[string]*PropertyTestCase)
+	t.testCases = make(map[types.ContractMethodID]*PropertyTestCase)
 	t.workerStates = make([]propertyTestCaseProviderWorkerState, fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every property test method.
@@ -153,7 +153,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) {
 	// Create a new state for this worker.
 	t.workerStates[worker.WorkerIndex()] = propertyTestCaseProviderWorkerState{
-		propertyTestMethods:     make(map[string]types.DeployedContractMethod),
+		propertyTestMethods:     make(map[types.ContractMethodID]types.DeployedContractMethod),
 		propertyTestMethodsLock: sync.Mutex{},
 	}
 }

@@ -40,11 +40,11 @@ type CallSequenceElement struct {
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
 func NewCallSequenceElement(contract *Contract, call *CallMessage) *CallSequenceElement {
-	failedTx := &CallSequenceElement{
+	callSequenceElement := &CallSequenceElement{
 		contract: contract,
 		call:     call,
 	}
-	return failedTx
+	return callSequenceElement
 }
 
 // Contract obtains the Contract instance which is being targeted by CallSequenceElement.Call.
@@ -60,7 +60,7 @@ func (cse *CallSequenceElement) Call() *CallMessage {
 // Method obtains the abi.Method targeted by the CallSequenceElement.Call, or an error if one occurred while obtaining
 // it.
 func (cse *CallSequenceElement) Method() (*abi.Method, error) {
-	// If there is no contract reference, we return no method.
+	// If there is no resolved contract definition, we return no method.
 	if cse.contract == nil {
 		return nil, nil
 	}
@@ -69,31 +69,40 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 
 // String returns a displayable string representing the CallSequenceElement.
 func (cse *CallSequenceElement) String() string {
-	// Obtain our tx and decode our method from this.
+	// Obtain our contract name
+	contract := cse.Contract()
+	contractName := "<unresolved contract>"
+	if contract != nil {
+		contractName = contract.Name()
+	}
+
+	// Obtain our method name
 	method, err := cse.Method()
-	if err != nil || method == nil {
-		panic("failed to evaluate failed test method from call sequence data")
+	methodName := "<unresolved method>"
+	if err == nil && method != nil {
+		methodName = method.Name
 	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	args, err := method.Inputs.Unpack(cse.Call().Data()[4:])
-	if err != nil {
-		panic("failed to unpack method args from transaction data")
+	argsText := "<unresolved args>"
+	if err == nil {
+		// Serialize our args to a JSON string and set it as our method name if we succeeded.
+		// TODO: Byte arrays are encoded as base64 strings, so this should be represented another way in the future:
+		//  Reference: https://stackoverflow.com/questions/14177862/how-to-marshal-a-byte-uint8-array-as-json-array-in-go
+		var argsJson []byte
+		argsJson, err = json.Marshal(args)
+		if err == nil {
+			argsText = string(argsJson)
+		}
 	}
 
-	// Serialize our args to a JSON string and set it as our tx method name for this index.
-	// TODO: Byte arrays are encoded as base64 strings, so this should be represented another way in the future:
-	//  Reference: https://stackoverflow.com/questions/14177862/how-to-marshal-a-byte-uint8-array-as-json-array-in-go
-	b, err := json.Marshal(args)
-	if err != nil {
-		b = []byte("<error resolving args>")
-	}
-
+	// Return a formatted string representing this element.
 	return fmt.Sprintf(
 		"%s.%s(%s) (gas=%d, gasprice=%s, value=%s, sender=%s)",
-		cse.Contract().Name(),
-		method.Name,
-		string(b),
+		contractName,
+		methodName,
+		argsText,
 		cse.Call().Gas(),
 		cse.Call().GasPrice().String(),
 		cse.Call().Value().String(),

@@ -388,7 +388,7 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	return &block
 }
 
-// DeployContract is a helper method used to deploy a given types.Contract to the current instance of the
+// DeployContract is a helper method used to deploy a given types.CompiledContract to the current instance of the
 // test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
 // otherwise returns an error.
 func (t *TestNode) DeployContract(contract *compilationTypes.CompiledContract, deployer common.Address) (common.Address, error) {
