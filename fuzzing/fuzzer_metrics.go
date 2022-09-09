@@ -4,7 +4,7 @@ import "github.com/trailofbits/medusa/fuzzing/tracing"
 
 // FuzzerMetrics represents a struct tracking metrics for a Fuzzer run.
 type FuzzerMetrics struct {
-	// coverageMaps describes the code coverage achieved across all transactions run by every fuzzerWorker.
+	// coverageMaps describes the code coverage achieved across all transactions run by every FuzzerWorker.
 	coverageMaps *tracing.CoverageMaps
 
 	// workerMetrics describes the metrics for each individual worker. This expands as needed and some slots may be nil
@@ -12,7 +12,7 @@ type FuzzerMetrics struct {
 	workerMetrics []fuzzerWorkerMetrics
 }
 
-// fuzzerWorkerMetrics represents metrics for a single fuzzerWorker instance.
+// fuzzerWorkerMetrics represents metrics for a single FuzzerWorker instance.
 type fuzzerWorkerMetrics struct {
 	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
 	sequencesTested uint64

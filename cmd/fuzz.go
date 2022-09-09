@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/configs"
 	"github.com/trailofbits/medusa/fuzzing"
+	"github.com/trailofbits/medusa/fuzzing/config"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,7 +37,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// Read our project configuration
-	projectConfig, err := configs.ReadProjectConfigFromFile(argFuzzConfigPath)
+	projectConfig, err := config.ReadProjectConfigFromFile(argFuzzConfigPath)
 	if err != nil {
 		return err
 	}

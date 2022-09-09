@@ -181,7 +181,7 @@ func (s *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 					// Create unique source path which is going to be absolute path
 					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
 					// Get ABI
-					contractAbi, err := types.InterfaceToABI(contractDataMap["abi"])
+					contractAbi, err := types.ParseABIFromInterface(contractDataMap["abi"])
 					if err != nil {
 						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
 					}

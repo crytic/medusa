@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-// TestNode represents a simulated Ethereum backend used for testing
+// TestNode represents a simulated Ethereum backend used for testing.
 type TestNode struct {
 	// chain represents the blocks post-genesis that were generated after sending messages.
 	chain []TestNodeBlock
@@ -391,7 +391,7 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 // DeployContract is a helper method used to deploy a given types.CompiledContract to the current instance of the
 // test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
 // otherwise returns an error.
-func (t *TestNode) DeployContract(contract compilationTypes.CompiledContract, deployer common.Address) (common.Address, error) {
+func (t *TestNode) DeployContract(contract *compilationTypes.CompiledContract, deployer common.Address) (common.Address, error) {
 	// Obtain the byte code as a byte array
 	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
 	if err != nil {
