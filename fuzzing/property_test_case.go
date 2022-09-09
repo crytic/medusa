@@ -15,7 +15,7 @@ type PropertyTestCase struct {
 	callSequence   *fuzzerTypes.CallSequence
 }
 
-// Status describes the TestCaseStatus enum option used to define the current state of the test.
+// Status describes the TestCaseStatus used to define the current state of the test.
 func (t *PropertyTestCase) Status() TestCaseStatus {
 	return t.status
 }
