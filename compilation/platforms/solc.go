@@ -118,7 +118,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		contractName := nameSplit[len(nameSplit)-1]
 
 		// Convert the abi structure to our parsed abi type
-		contractAbi, err := types.InterfaceToABI(contract.Info.AbiDefinition)
+		contractAbi, err := types.ParseABIFromInterface(contract.Info.AbiDefinition)
 		if err != nil {
 			continue
 		}

@@ -19,37 +19,43 @@ While the majority of the configuration structure is consistent, the `platform` 
 An example project configuration can be observed below:
 ```json
 {
-	"accounts": {
-		"generate": 5,
-		"predefined": [
-			"0xb28C44E977ED1CdE3f20de60b5C03c16BCA370Eb",
-			"0xD261ACF13cE381BA2FA9226392BC10238aF8A998"
-		]
-	},
 	"fuzzing": {
-		"workers": 20,
-		"workerDatabaseEntryLimit": 20000,
+		"workers": 10,
+		"workerDatabaseEntryLimit": 10000,
 		"timeout": 0,
-		"testLimit": 0,
-		"maxTxSequenceLength": 10,
-		"testPrefixes": [
-			"fuzz_"
-		]
+		"testLimit": 10000000,
+		"maxTxSequenceLength": 100,
+		"deployerAddress": "0x1111111111111111111111111111111111111111",
+		"senderAddresses": [
+			"0x1111111111111111111111111111111111111111",
+			"0x2222222222222222222222222222222222222222",
+			"0x3333333333333333333333333333333333333333"
+		],
+		"testing": {
+			"stopOnFailedTest": true,
+			"assertionTesting": {
+				"enabled": false,
+				"testViewMethods": false
+			},
+			"propertyTesting": {
+				"enabled": true,
+				"testPrefixes": [
+					"fuzz_"
+				]
+			}
+		}
 	},
 	"compilation": {
-		"platform": "truffle",
+		"platform": "crytic-compile",
 		"platformConfig": {
 			"target": ".",
-			"useNpx": true
+			"args": []
 		}
 	}
 }
 ```
 
 The structure is described below:
-- `accounts` defines which accounts will be used by `medusa` in a fuzzing campaign:
-  - `generate` specifies the number of accounts to create and fund. 
-  - `predefined` can be used to specify an array of hex strings which will be interpreted as externally owned account addresses to use in the fuzzing campaign.
 - `fuzzing` defines parameters for the fuzzing campaign:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
   - `workerDatabaseEntryLimit` defines how many keys a worker's memory database can contain before the worker is reset
@@ -57,7 +63,16 @@ The structure is described below:
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `testLimit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
   - `maxTxSequenceLength` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
-  - `testPrefixes` defines the list of prefixes that medusa will use to determine whether a given function is a property test or not. For example, if `fuzz_` is a test prefix, then any function name in the form `fuzz_*` may be a property test. There must be _at least_ one default test prefix. Note that if you are using Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.
+  - `deployerAddress` defines the account address used to deploy contracts on startup, represented as a hex string.
+  - `senderAddresses` defines the account addresses used to send transactions to deployed contracts in the fuzzing campaign.
+  - `testing` defines the configuration for built-in test case providers which can be leveraged for fuzzing campaign.
+    - `stopOnFailedTest` defines whether the fuzzer should exit after detecting the first failed test, or continue fuzzing to find other results.
+    - `assertionTesting` describes configuration for assertion-based testing.
+      - `enabled` describes whether assertion testing should be enabled.
+      - `testViewMethods` describes whether pure/view functions should be tested for assertion failures.
+    - `propertyTesting` describes configuration for property-based testing.
+      - `enabled` describes whether property testing should be enabled.
+      - `testPrefixes` defines the list of prefixes that medusa will use to determine whether a given function is a property test or not. For example, if `fuzz_` is a test prefix, then any function name in the form `fuzz_*` may be a property test. Note that if you are using Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.
 - `compilation` defines parameters used to compile a given target to be fuzzed:
   - `platform` refers to the type of platform to be used to compile the underlying target.
   - `platformConfig` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
@@ -100,10 +115,10 @@ Invoking a fuzzing campaign, `medusa` will:
 
 Upon discovery of a failed property test, `medusa` will halt, reporting the transaction sequence used to violate any property test(s):
 ```
-Failed property tests: fuzz_never_specific_values()
-Transaction Sequence:
-[1] setX([7]) (sender=0x73bAF44082D78657f204ABE15E5A00bAC56820aD, gas=4712388, gasprice=1000000000, value=0)
-[2] setY([71]) (sender=0x857371A82Cc85dA5CCcd68E4dffC6A5248c659b0, gas=4712388, gasprice=1000000000, value=0)
+[FAILED] Property Test: TestXY.fuzz_never_specific_values()
+Test "TestXY.fuzz_never_specific_values()" failed after the following call sequence:
+1) TestXY.setY([71]) (gas=4712388, gasprice=1, value=0, sender=0x2222222222222222222222222222222222222222)
+2) TestXY.setX([7]) (gas=4712388, gasprice=1, value=0, sender=0x3333333333333333333333333333333333333333)
 ```
 
 ## Contributing

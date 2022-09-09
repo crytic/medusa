@@ -16,8 +16,8 @@ type FuzzerTracer struct {
 
 	// tracing results
 	coverageMaps *CoverageMaps
-	returnData   []byte
-	vmErr        error
+	vmReturnData []byte
+	vmError      error
 	gasLimit     uint64
 	gasUsed      uint64
 }
@@ -31,14 +31,14 @@ func NewFuzzerTracer(coverageEnabled bool) *FuzzerTracer {
 	return tracer
 }
 
-// Error returns any EVM error which occurred during execution tracing.
-func (t *FuzzerTracer) Error() error {
-	return t.vmErr
+// VMError returns any EVM error which occurred during execution tracing.
+func (t *FuzzerTracer) VMError() error {
+	return t.vmError
 }
 
-// ReturnData returns any EVM return data obtained from execution tracing.
-func (t *FuzzerTracer) ReturnData() []byte {
-	return t.returnData
+// VMReturnData returns any EVM return data obtained from execution tracing.
+func (t *FuzzerTracer) VMReturnData() []byte {
+	return t.vmReturnData
 }
 
 // CoverageMaps returns the coverage maps collected by this tracer.
@@ -49,8 +49,8 @@ func (t *FuzzerTracer) CoverageMaps() *CoverageMaps {
 // Reset clears the state of the FuzzerTracer.
 func (t *FuzzerTracer) Reset() {
 	t.coverageMaps.Reset()
-	t.returnData = nil
-	t.vmErr = nil
+	t.vmReturnData = nil
+	t.vmError = nil
 	t.gasLimit = 0
 	t.gasUsed = 0
 }
@@ -77,8 +77,8 @@ func (t *FuzzerTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
 func (t *FuzzerTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
-	t.returnData = output
-	t.vmErr = err
+	t.vmReturnData = output
+	t.vmError = err
 }
 
 // CaptureEnter is called upon entering of the call frame, as defined by vm.EVMLogger.
