@@ -39,7 +39,7 @@ func TestSimpleCorpusEntry_MarshalJSONAndUnmarshalJSONAreMirrorOperations(t *tes
 	numEntries := 5
 	corpus := getMockSimpleCorpus(numEntries)
 	// For each entry, marshal it and then unmarshal the byte array
-	for _, entry := range corpus.CorpusEntries {
+	for _, entry := range corpus.corpusEntries {
 		// Marshal the entry
 		b, err := json.Marshal(entry)
 		assert.Nil(t, err)

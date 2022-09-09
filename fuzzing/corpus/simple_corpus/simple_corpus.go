@@ -14,23 +14,23 @@ import (
 
 // SimpleCorpus implements the generic Corpus interface and is the simplest implementation of a corpus for coverage-guided fuzzing.
 type SimpleCorpus struct {
-	// CorpusEntries is a list of SimpleCorpusEntry
-	CorpusEntries []*SimpleCorpusEntry
-	// Mutex is used to prevent races to write to corpus
-	Mutex sync.Mutex
+	// corpusEntries is a list of SimpleCorpusEntry
+	corpusEntries []*SimpleCorpusEntry
+	// mutex is used to prevent races to write to corpus
+	mutex sync.Mutex
 }
 
 // NewSimpleCorpus initializes a new SimpleCorpus object for the Fuzzer
 func NewSimpleCorpus() *SimpleCorpus {
 	return &SimpleCorpus{
-		CorpusEntries: []*SimpleCorpusEntry{},
+		corpusEntries: []*SimpleCorpusEntry{},
 	}
 }
 
 // Entries returns the list of SimpleCorpusEntry objects that are stored in the corpus
 func (m *SimpleCorpus) Entries() []corpusTypes.CorpusEntry {
 	var entries []corpusTypes.CorpusEntry
-	for _, simpleEntry := range m.CorpusEntries {
+	for _, simpleEntry := range m.corpusEntries {
 		entry := corpusTypes.CorpusEntry(simpleEntry)
 		entries = append(entries, entry)
 	}
@@ -40,9 +40,9 @@ func (m *SimpleCorpus) Entries() []corpusTypes.CorpusEntry {
 // AddEntry adds a SimpleCorpusEntry to the corpus and returns an error in case of an issue
 func (c *SimpleCorpus) AddEntry(corpusEntry corpusTypes.CorpusEntry) error {
 	// Add to corpus; we do not care about duplicates
-	c.Mutex.Lock() // lock
-	c.CorpusEntries = append(c.CorpusEntries, corpusEntry.(*SimpleCorpusEntry))
-	c.Mutex.Unlock() // unlock
+	c.mutex.Lock() // lock
+	c.corpusEntries = append(c.corpusEntries, corpusEntry.(*SimpleCorpusEntry))
+	c.mutex.Unlock() // unlock
 	return nil
 }
 
@@ -74,7 +74,7 @@ func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
 		return err
 	}
 	// Write all sequences to corpus
-	for _, simpleEntry := range c.CorpusEntries {
+	for _, simpleEntry := range c.corpusEntries {
 		// Get hash of the sequence
 		simpleEntryHash, err := simpleEntry.Hash()
 		if err != nil {

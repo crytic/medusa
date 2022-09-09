@@ -16,7 +16,7 @@ import (
 func getMockSimpleCorpus(numEntries int) *SimpleCorpus {
 	corpus := NewSimpleCorpus()
 	for i := 0; i < numEntries; i++ {
-		corpus.CorpusEntries = append(corpus.CorpusEntries, getMockSimpleCorpusEntry(numEntries))
+		corpus.corpusEntries = append(corpus.corpusEntries, getMockSimpleCorpusEntry(numEntries))
 	}
 	return corpus
 }
