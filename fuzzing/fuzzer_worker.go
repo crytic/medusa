@@ -394,9 +394,7 @@ func (fw *FuzzerWorker) run() (bool, error) {
 			return false, err
 		}
 
-		// Update our metrics
-		fw.workerMetrics().transactionsTested += uint64(txsTested)
-		fw.workerMetrics().sequencesTested++
+		// Update our coverage maps
 		newCoverageMaps := fw.testNode.tracer.CoverageMaps()
 		if newCoverageMaps != nil {
 			coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
@@ -415,6 +413,10 @@ func (fw *FuzzerWorker) run() (bool, error) {
 				return false, err
 			}
 		}
+
+		// Update our metrics
+		fw.workerMetrics().transactionsTested += uint64(txsTested)
+		fw.workerMetrics().sequencesTested++
 	}
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.

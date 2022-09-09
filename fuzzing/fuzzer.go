@@ -241,9 +241,8 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// Initialize our metrics, print loop, and generator.
+	// Initialize our metrics and generator.
 	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
-	go f.runMetricsPrintLoop()
 	f.generator = value_generation.NewValueGeneratorMutation(f.BaseValueSet) // TODO: make this configurable after adding more options
 
 	// Initialize our test cases and providers
@@ -264,6 +263,9 @@ func (f *Fuzzer) Start() error {
 	for i := 0; i < len(availableWorkerIndexes); i++ {
 		availableWorkerIndexes[i] = i
 	}
+
+	// Start our printing loop now that we're about to begin fuzzing.
+	go f.runMetricsPrintLoop()
 
 	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
@@ -342,7 +344,8 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Print our test case results
-	fmt.Printf("Fuzzer stopped, test results followed below ...\n")
+	fmt.Printf("\n")
+	fmt.Printf("Fuzzer stopped, test results follow below ...\n")
 	for _, testCase := range f.testCases {
 		if testCase.Status() == TestCaseStatusFailed {
 			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())

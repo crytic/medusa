@@ -18,15 +18,24 @@ import (
 type PropertyTestCaseProvider struct {
 	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
 	testCases map[string]*PropertyTestCase
+	
+	// testCasesLock is used for thread-synchronization when updating testCases
+	testCasesLock sync.Mutex
 
-	// propertyTestMethods is a slice of mappings from contract-method ID to deployed contract-method descriptors.
-	// each index of the slice corresponds to the worker index that maintains the deployed contracts. Each deployed
-	// contract-method represents a property test method to call for evaluation. Property tests should be read-only
-	// (pure/view) functions which take no input parameters and return a boolean variable indicating if the
-	// property test passed.
-	propertyTestMethods []map[string]types.DeployedContractMethod
+	// workerStates is a slice where each element stores state for a given worker index.
+	workerStates []propertyTestCaseProviderWorkerState
+}
 
-	// propertyTestMethodsLock is used for thread-synchronization when updating maps within propertyTestMethods
+// propertyTestCaseProviderWorkerState represents the state for an individual worker maintained by
+// PropertyTestCaseProvider.
+type propertyTestCaseProviderWorkerState struct {
+	// propertyTestMethods a mapping from contract-method ID to deployed contract-method descriptors.
+	// Each deployed contract-method represents a property test method to call for evaluation. Property tests
+	// should be read-only (pure/view) functions which take no input parameters and return a boolean variable
+	// indicating if the property test passed.
+	propertyTestMethods map[string]types.DeployedContractMethod
+
+	// propertyTestMethodsLock is used for thread-synchronization when updating propertyTestMethods
 	propertyTestMethodsLock sync.Mutex
 }
 
@@ -98,7 +107,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 	// Reset our state
 	t.testCases = make(map[string]*PropertyTestCase)
-	t.propertyTestMethods = make([]map[string]types.DeployedContractMethod, fuzzer.Config().Fuzzing.Workers)
+	t.workerStates = make([]propertyTestCaseProviderWorkerState, fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every property test method.
 	for _, contract := range fuzzer.Contracts() {
@@ -130,9 +139,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 // after all workers have been stopped.
 func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 	// Clear our property test methods
-	t.propertyTestMethodsLock.Lock()
-	t.propertyTestMethods = nil
-	t.propertyTestMethodsLock.Unlock()
+	t.workerStates = nil
 
 	// Loop through each test case and set any tests with a running status to a passed status.
 	for _, testCase := range t.testCases {
@@ -144,8 +151,11 @@ func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 
 // OnWorkerCreated is called when a new fuzzing.FuzzerWorker is created by the fuzzing.Fuzzer.
 func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) {
-	// Refresh our property test map for this worker
-	t.propertyTestMethods[worker.WorkerIndex()] = make(map[string]types.DeployedContractMethod)
+	// Create a new state for this worker.
+	t.workerStates[worker.WorkerIndex()] = propertyTestCaseProviderWorkerState{
+		propertyTestMethods:     make(map[string]types.DeployedContractMethod),
+		propertyTestMethodsLock: sync.Mutex{},
+	}
 }
 
 // OnWorkerDestroyed is called when a previously created fuzzing.FuzzerWorker is destroyed by the fuzzing.Fuzzer.
@@ -167,19 +177,24 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerW
 
 		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
 		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
-		if propertyTestCase, exists := t.testCases[methodId]; exists {
+		t.testCasesLock.Lock()
+		propertyTestCase, propertyTestCaseExists := t.testCases[methodId]
+		t.testCasesLock.Unlock()
+
+		if propertyTestCaseExists {
 			if propertyTestCase.Status() == TestCaseStatusNotStarted {
 				propertyTestCase.status = TestCaseStatusRunning
 			}
 			if propertyTestCase.Status() != TestCaseStatusFailed {
-				// Lock to avoid concurrent map access issues.
-				t.propertyTestMethodsLock.Lock()
-				t.propertyTestMethods[worker.WorkerIndex()][methodId] = types.DeployedContractMethod{
+				// Create our property test method reference.
+				workerState := &t.workerStates[worker.WorkerIndex()]
+				workerState.propertyTestMethodsLock.Lock()
+				workerState.propertyTestMethods[methodId] = types.DeployedContractMethod{
 					Address:  contractAddress,
 					Contract: contract,
 					Method:   method,
 				}
-				t.propertyTestMethodsLock.Unlock()
+				workerState.propertyTestMethodsLock.Unlock()
 			}
 		}
 	}
@@ -200,10 +215,16 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 
 		// If this identifier is in our test cases map, then we remove it from our property test method lookup for
 		// this worker index.
-		if _, isPropertyTestMethod := t.testCases[methodId]; isPropertyTestMethod {
-			t.propertyTestMethodsLock.Lock()
-			delete(t.propertyTestMethods[worker.WorkerIndex()], methodId)
-			t.propertyTestMethodsLock.Unlock()
+		t.testCasesLock.Lock()
+		_, isPropertyTestMethod := t.testCases[methodId]
+		t.testCasesLock.Unlock()
+
+		if isPropertyTestMethod {
+			// Delete our property test method reference.
+			workerState := &t.workerStates[worker.WorkerIndex()]
+			workerState.propertyTestMethodsLock.Lock()
+			delete(workerState.propertyTestMethods, methodId)
+			workerState.propertyTestMethodsLock.Unlock()
 		}
 	}
 }
@@ -227,12 +248,14 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Obtain the property test methods for this worker
-	workerPropertyTestMethods := t.propertyTestMethods[worker.WorkerIndex()]
+	workerState := &t.workerStates[worker.WorkerIndex()]
 
 	// Loop through all property test methods and test them.
-	for workerPropertyTestMethodId, workerPropertyTestMethod := range workerPropertyTestMethods {
+	for propertyTestMethodId, workerPropertyTestMethod := range workerState.propertyTestMethods {
 		// Obtain the test case for this property test method
-		testCase := t.testCases[workerPropertyTestMethodId]
+		t.testCasesLock.Lock()
+		testCase := t.testCases[propertyTestMethodId]
+		t.testCasesLock.Unlock()
 
 		// If the test case already failed, skip it
 		if testCase.Status() == TestCaseStatusFailed {
