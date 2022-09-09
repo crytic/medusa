@@ -11,9 +11,9 @@ import (
 
 type TruffleCompilationConfig struct {
 	Target         string `json:"target"`
-	UseNpx         bool   `json:"use_npx"`
+	UseNpx         bool   `json:"useNpx"`
 	Command        string `json:"command,omitempty"`
-	BuildDirectory string `json:"build_directory,omitempty"`
+	BuildDirectory string `json:"buildDirectory,omitempty"`
 }
 
 func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
@@ -91,7 +91,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 		}
 
 		// Convert the abi structure to our parsed abi type
-		contractAbi, err := types.InterfaceToABI(compiledJson.Abi)
+		contractAbi, err := types.ParseABIFromInterface(compiledJson.Abi)
 		if err != nil {
 			continue
 		}

@@ -8,6 +8,7 @@ func main() {
 
 	// Print any error we encountered
 	if err != nil {
+		// TODO: Replace this when we have an appropriate logger in place.
 		panic(err.Error())
 	}
 }

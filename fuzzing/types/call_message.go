@@ -12,8 +12,10 @@ import (
 	"strings"
 )
 
+// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
+// templates defined below. They should be preserved for re-use in case we change our structures.
 //go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_message_json.go
+//go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_call_message_json.go
 
 // CallMessage implements Ethereum's core.Message, used to apply EVM/state updates.
 type CallMessage struct {
@@ -36,15 +38,15 @@ type CallMessage struct {
 
 	// MsgGasPrice represents the price which the sender is willing to pay for each unit of gas used during execution
 	// of the message.
-	MsgGasPrice *big.Int `json:"gas_price"`
+	MsgGasPrice *big.Int `json:"gasPrice"`
 
 	// MsgGasFeeCap represents the maximum fee to enforce for gas related costs (related to 1559 transaction executed).
 	// The use of nil here indicates that the gas price oracle should be relied on instead.
-	MsgGasFeeCap *big.Int `json:"gas_fee_cap"`
+	MsgGasFeeCap *big.Int `json:"gasFeeCap"`
 
 	// MsgGasTipCap represents the fee cap to use for 1559 transaction. The use of nil here indicates that the gas price
 	// oracle should be relied on instead.
-	MsgGasTipCap *big.Int `json:"gas_tip_cap"`
+	MsgGasTipCap *big.Int `json:"gasTipCap"`
 
 	// MsgData represents the underlying message data to be sent to the receiver. If the receiver is a smart contract,
 	// this will likely house your call parameters and other serialized data.
