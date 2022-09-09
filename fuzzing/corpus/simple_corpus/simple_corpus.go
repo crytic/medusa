@@ -2,8 +2,10 @@ package simple_corpus
 
 import (
 	"encoding/json"
+	"fmt"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
 	"github.com/trailofbits/medusa/fuzzing/testnode"
+	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -66,13 +68,8 @@ func (c *SimpleCorpus) GetEntry(index uint64) (corpusTypes.CorpusEntry, error) {
 
 // WriteCorpusToDisk writes the SimpleCorpus to disk at writeDirectory and throws an error in case of an issue
 func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
-	// Get current working directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	// Move to corpus/corpus subdirectory
-	err = os.Chdir(filepath.Join(currentDir, writeDirectory, "/corpus"))
+	// Make the writeDirectory, if it does not exist
+	err := utils.MakeDirectory(writeDirectory)
 	if err != nil {
 		return err
 	}
@@ -94,28 +91,28 @@ func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
 			return err
 		}
 		// Write the byte string
-		err = ioutil.WriteFile(fileName, jsonString, os.ModePerm)
+		err = ioutil.WriteFile(filepath.Join(writeDirectory, fileName), jsonString, os.ModePerm)
 		if err != nil {
-			return err
+			return fmt.Errorf("Some error here: %v\n", err)
 		}
-	}
-	// Change back to original directory
-	err = os.Chdir(currentDir)
-	if err != nil {
-		return err
-	}
 
+	}
 	return nil
 }
 
-// ReadCorpusFromDisk reads the SimpleCorpus from disk at readDirectory and throws an error in case of an issue
+// ReadCorpusFromDisk reads the SimpleCorpus from disk at readDirectory/corpus and throws an error in case of an issue
 func (c *SimpleCorpus) ReadCorpusFromDisk(readDirectory string) error {
 	// Get .json files from the corpus/corpus subdirectory
 	// Each .json file is a SimpleCorpusEntry
-	matches, err := filepath.Glob(filepath.Join(readDirectory, "corpus", "*.json"))
+	matches, err := filepath.Glob(filepath.Join(readDirectory, "*.json"))
 	if err != nil {
 		return err
 	}
+	// If matches is nil, corpus (aka readDirectory) does not exist
+	if matches == nil {
+		return nil
+	}
+	// Found some matches
 	for i := 0; i < len(matches); i++ {
 		// Read the JSON file data
 		b, err := ioutil.ReadFile(matches[i])

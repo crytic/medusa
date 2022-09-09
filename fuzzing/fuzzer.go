@@ -12,8 +12,6 @@ import (
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -141,19 +139,12 @@ func (f *Fuzzer) Start() error {
 	if f.config.Fuzzing.Coverage {
 		f.corpus = simpleCorpusTypes.NewSimpleCorpus()
 	}
+
+	// Read the corpus into memory
 	if f.config.Fuzzing.Coverage && f.config.Fuzzing.CorpusDirectory != "" {
-		// Find out if corpus already exists
-		// Otherwise make the corpus directory and its subdirectories
-		corpusExists, err := f.checkAndSetupCorpusDirectory()
+		err = f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
 		if err != nil {
 			return err
-		}
-		if corpusExists {
-			// Read the corpus into memory
-			err = f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -223,61 +214,6 @@ func (f *Fuzzer) Stop() {
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
 	}
-}
-
-// checkAndSetupCorpusDirectory sets up the my_corpus/ directory and subdirectories. If the (sub)directories already exist
-// then return true so that corpus can be read into memory. Note that it will return true even if my_corpus/corpus is empty.
-// The function checks for directory existence and nothing more.
-// TODO: Are the directory permissions too lose? 0644 and 0666 did would lead to permission errors
-// TODO: Should there be a regex check to make sure it is a valid directory name?
-func (f *Fuzzer) checkAndSetupCorpusDirectory() (bool, error) {
-	// Get info on corpus_dir directory existence
-	// Not doing any verification of the corpusDirectory config option
-	dirInfo, err := os.Stat(f.config.Fuzzing.CorpusDirectory)
-	if err != nil {
-		// If directory does not exist, make 'corpus', 'corpus/corpus', and 'corpus/coverage'
-		if os.IsNotExist(err) {
-			if err = os.Mkdir(f.config.Fuzzing.CorpusDirectory, 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus directory. Make sure the config_dir config option is a valid directory name: %v\n", err)
-			}
-			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus"), 0777); err != nil {
-				return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
-			}
-			if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage"), 0777); err != nil {
-				return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
-			}
-			// Directories did not exist but no errors
-			return false, nil
-		}
-
-		// some other sort of error, throw it
-		return false, err
-	}
-
-	// if corpus is a file and not a directory, throw an error
-	if !dirInfo.IsDir() {
-		return false, fmt.Errorf("there exists a conflicting file named %s in this directory.\n", f.config.Fuzzing.CorpusDirectory)
-	}
-
-	// Main corpus directory exists, but the subdirectories might not
-	// If corpus/corpus is not there, make it
-	if _, err = os.Stat(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus")); os.IsNotExist(err) {
-		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "corpus"), 0777); err != nil {
-			return false, fmt.Errorf("error while creating corpus sub-directory: %v\n", err)
-		}
-	}
-
-	// if corpus/coverage is not there, make it
-	if _, err = os.Stat(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")); os.IsNotExist(err) {
-		if err = os.Mkdir(filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage"), 0777); err != nil {
-			return false, fmt.Errorf("error while creating coverage sub-directory: %v\n", err)
-		}
-	}
-
-	// we will return true even if corpus/corpus is empty.
-	// There is no reason to check here whether there are files in there
-	// ReadCorpusFromDisk will handle that
-	return true, nil
 }
 
 // runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.

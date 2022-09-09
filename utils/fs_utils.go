@@ -102,3 +102,30 @@ func CopyDirectory(sourcePath string, targetPath string, recursively bool) error
 	}
 	return nil
 }
+
+// MakeDirectory creates a directory at the given path
+func MakeDirectory(dirToMake string) error {
+	dirInfo, err := os.Stat(dirToMake)
+	if err != nil {
+		// Directory does not exist, this is what we expect
+		if os.IsNotExist(err) {
+			// TODO: Permissions are way too much but even 666 is not working
+			err = os.Mkdir(dirToMake, 0777)
+			if err != nil {
+				return err
+			}
+			// Successfully made the directory
+			return nil
+		}
+		// Some other sort of error, throw it
+		return err
+	}
+
+	// dirToMake is a file, throw an error accordingly
+	if !dirInfo.IsDir() {
+		return fmt.Errorf("there is a file with the same name as %s\n", dirInfo)
+	}
+
+	// Directory already exists, good to go
+	return nil
+}
