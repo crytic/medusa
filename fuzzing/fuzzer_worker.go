@@ -358,6 +358,7 @@ func (fw *fuzzerWorker) testTxSequence(txSequence []*fuzzerTypes.CallMessage) (i
 				if coverageUpdated {
 					// New coverage has been found, add it to the corpus
 					// First convert block sequence and tx sequence to a single corpus entry
+					// TODO: should TestSequenceToCorpusEntry be the responsibility of `type Corpus`?
 					entry, err := fw.fuzzer.corpus.TestSequenceToCorpusEntry(testNodeBlockSequence)
 					if err != nil {
 						return i, nil, err

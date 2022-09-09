@@ -18,6 +18,7 @@ func testNodeBlockToCorpusBlock(testNodeBlock *testnode.TestNodeBlock) corpusTyp
 		testNodeBlock.Header.Time,
 		testNodeBlock.Header.Number)
 	// TODO: This will change when more than one receipt goes in a block with ellipses
+	// TODO: Could also use *core.Receipts as the datatype since that is already a []*core.Receipt
 	simpleBlock.blockReceipts = append(simpleBlock.blockReceipts, testNodeBlock.Receipt)
 	// TODO: Can we check receipts upstream? maybe during block creation?
 	checkAndUpdateReceipts(simpleBlock.blockReceipts)
@@ -28,7 +29,8 @@ func testNodeBlockToCorpusBlock(testNodeBlock *testnode.TestNodeBlock) corpusTyp
 }
 
 // checkAndUpdateReceipts ensures that each receipt has a Log object that is not nil. This is performed so that unmarshaling
-// works as expected
+// works as expected when the corpus is read from disk. So you do this while marshaling so that unmarshaling works as expected
+// TODO: Is there a way to avoid this? It seems like receipts unmarshaling requires that Logs is not nil.
 func checkAndUpdateReceipts(receipts []*coreTypes.Receipt) {
 	// Iterate through receipts and if there is a nil receipt.Logs, update it to an empty list
 	for _, receipt := range receipts {
