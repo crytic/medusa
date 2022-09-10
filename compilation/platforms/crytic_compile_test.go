@@ -120,7 +120,11 @@ func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 		// One source because we specified one file
 		assert.EqualValues(t, 1, len(compilations[0].Sources))
 		// Two contracts in SimpleContract.sol
-		assert.EqualValues(t, 2, len(compilations[0].Sources[absoluteRelocatedPath].Contracts))
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
 
 		// Verify our build directory exists
 		dirInfo, err := os.Stat(config.ExportDirectory)
