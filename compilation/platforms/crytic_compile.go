@@ -104,13 +104,13 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// Install a specific `solc` version if requested in the config
 	if c.SolcVersion != "" {
-		err := exec.Command("solc-select", "install", c.SolcVersion).Run()
+		out, err := exec.Command("solc-select", "install", c.SolcVersion).CombinedOutput()
 		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select install`:\n\nERROR: %s\n", err.Error())
+			return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 		}
-		err = exec.Command("solc-select", "use", c.SolcVersion).Run()
+		out, err = exec.Command("solc-select", "use", c.SolcVersion).CombinedOutput()
 		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select use`:\n\nERROR: %s\n", err.Error())
+			return nil, "", fmt.Errorf("error while executing `solc-select use`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 		}
 	}
 
