@@ -55,7 +55,11 @@ func TestCryticSingleFileAbsolutePath(t *testing.T) {
 		// One source because we specified one file
 		assert.EqualValues(t, 1, len(compilations[0].Sources))
 		// Two contracts in SimpleContract.sol
-		assert.EqualValues(t, 2, len(compilations[0].Sources[contractPath].Contracts))
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
 	})
 }
 
@@ -80,7 +84,11 @@ func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 		// One source because we specified one file
 		assert.EqualValues(t, 1, len(compilations[0].Sources))
 		// Two contracts in SimpleContract.sol
-		assert.EqualValues(t, 2, len(compilations[0].Sources[contractPath].Contracts))
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
 	})
 }
 
@@ -276,7 +284,7 @@ func TestDeleteBuildDirectory(t *testing.T) {
 		// Delete our export directory
 		err = utils.DeleteDirectory(exportDirectory)
 		assert.NoError(t, err)
-		
+
 		// Check to see if it was deleted
 		_, err = os.Stat(exportDirectory)
 		assert.Error(t, err, "Error cannot be nil")
