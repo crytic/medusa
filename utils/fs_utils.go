@@ -103,27 +103,26 @@ func CopyDirectory(sourcePath string, targetPath string, recursively bool) error
 	return nil
 }
 
-// DeleteDirectory will delete a given directory
-func DeleteDirectory(dirToDelete string) error {
-	// Get information on directory
-	dirInfo, err := os.Stat(dirToDelete)
-
+// DeleteDirectory deletes a directory at the provided path. Returns an error if one occurred.
+func DeleteDirectory(directoryPath string) error {
+	// Get information on the directory
+	dirInfo, err := os.Stat(directoryPath)
 	if err != nil {
-		// Directory does not exist, we are good and don't have to delete anything
+		// If the directory does not exist, nothing needs to be done
 		if os.IsNotExist(err) {
 			return nil
 		}
-		// If any other type of error, return it
+		// If any other type of error occurred, return it
 		return err
 	}
 
-	// Arguably unnecessary check to make sure dirToDelete is a directory and not a file
+	// Make sure the path is a directory and not a file
 	if !dirInfo.IsDir() {
-		return fmt.Errorf("Build directory is a file, not a directory")
+		return fmt.Errorf("cannot delete directory as the provided path refers to a file")
 	}
 
 	// Delete directory and its contents
-	err = os.RemoveAll(dirToDelete)
+	err = os.RemoveAll(directoryPath)
 	if err != nil {
 		return err
 	}

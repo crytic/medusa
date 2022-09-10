@@ -7,7 +7,6 @@ import (
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
 )
@@ -17,12 +16,14 @@ import (
 type CryticCompilationConfig struct {
 	// Target is the object that is being compiled. It can be a single `.sol` file or a whole directory
 	Target string `json:"target"`
+
 	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
 	// no special version is installed prior to compilation.
 	SolcVersion string `json:"solcVersion,omitempty"`
-	// BuildDirectory is the location where medusa will search for build artifacts. By default, medusa will look in
-	// `./crytic-export`
-	BuildDirectory string `json:"buildDirectory,omitempty"`
+
+	// ExportDirectory is the location to search for exported build artifacts. By default, we look in `./crytic-export`
+	ExportDirectory string `json:"exportDirectory,omitempty"`
+
 	// Args are additional arguments that can be provided to `crytic-compile`
 	Args []string `json:"args"`
 }
@@ -35,10 +36,10 @@ func (c *CryticCompilationConfig) Platform() string {
 // NewCryticCompilationConfig returns the default configuration options while using `crytic-compile`
 func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 	return &CryticCompilationConfig{
-		Target:         target,
-		BuildDirectory: "",
-		Args:           []string{},
-		SolcVersion:    "",
+		Target:          target,
+		ExportDirectory: "",
+		Args:            []string{},
+		SolcVersion:     "",
 	}
 }
 
@@ -49,7 +50,7 @@ func (c *CryticCompilationConfig) validateArgs() error {
 	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {
 		if arg == "--export-format" {
-			return errors.New("do not specify `--export-format` as an argument since the standard export format is required by medusa")
+			return errors.New("do not specify `--export-format` within crytic-compile arguments as the standard export format is always used")
 		}
 		if arg == "--export-dir" {
 			return errors.New("do not specify `--export-dir` as an argument, use the BuildDirectory config variable instead")
@@ -58,75 +59,58 @@ func (c *CryticCompilationConfig) validateArgs() error {
 	return nil
 }
 
-// getWorkingDirectoryAndArgs sets the arguments that will be provided to crytic-compile and identifies the current
-// working directory based on c.Target.
-func (c *CryticCompilationConfig) getWorkingDirectoryAndArgs() (string, []string, error) {
-	// Get information on c.Target
-	// Using pathInfo to figure out if c.Target is a directory or not
-	pathInfo, err := os.Stat(c.Target)
-	if err != nil {
-		return "", nil, fmt.Errorf("error while trying to get information on directory %s\n", c.Target)
+// getArgs returns the arguments to be provided to crytic-compile during compilation, or an error if one occurs.
+func (c *CryticCompilationConfig) getArgs() ([]string, error) {
+	// By default we export in solc-standard mode.
+	args := []string{c.Target, "--export-format", "standard"}
+
+	// Add --export-dir option if ExportDirectory is specified
+	if c.ExportDirectory != "" {
+		args = append(args, "--export-dir", c.ExportDirectory)
 	}
-	// args are the arguments to crytic-compile
-	var args []string
-	// workingDirectory is the current working dir
-	var workingDirectory string
-	if c.Target == "." {
-		// If c.Target is '.', then the current dir is the workingDirectory and args should use the '.'
-		// ignoring errors from os.Getwd()
-		workingDirectory, _ = os.Getwd()
-		args = append([]string{".", "--export-format", "standard"})
-	} else if !pathInfo.IsDir() {
-		// If c.Target is a single file, then the workingDirectory is the parent dir of the file and args should use c.Target
-		workingDirectory = filepath.Dir(c.Target)
-		args = append([]string{c.Target, "--export-format", "standard"})
-	} else {
-		// c.Target is a directory, so the workingDirectory is the current dir and args should use c.Target
-		workingDirectory = c.Target
-		args = append([]string{c.Target, "--export-format", "standard"})
-	}
-	// Add --export-dir option if BuildDirectory is specified
-	if c.BuildDirectory != "" {
-		args = append(args, []string{"--export-dir", c.BuildDirectory}...)
-	}
+
 	// Add remaining args
 	args = append(args, c.Args...)
-	return workingDirectory, args, nil
+	return args, nil
 }
 
 // Compile uses the CryticCompilationConfig provided to compile a given target, parse the artifacts, and then
 // create a list of types.Compilation.
 func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
-	// Set buildDirectory and delete the one if it already exists
-	buildDirectory := c.BuildDirectory
-	if c.BuildDirectory == "" {
-		buildDirectory = "crytic-export"
+	// Resolve our export directory and delete it if already exists
+	exportDirectory := c.ExportDirectory
+	if exportDirectory == "" {
+		exportDirectory = "crytic-export"
 	}
-	err := utils.DeleteDirectory(buildDirectory)
+	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
 		return nil, "", err
 	}
+
 	// Validate args to make sure --export-format and --export-dir are not specified
 	err = c.validateArgs()
 	if err != nil {
 		return nil, "", err
 	}
 
-	// Need to figure out the args to provide crytic-compile and the workingDirectory
-	workingDirectory, args, err := c.getWorkingDirectoryAndArgs()
+	// Fetch the arguments to invoke crytic-compile with
+	args, err := c.getArgs()
 	if err != nil {
 		return nil, "", err
 	}
+
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
-	// Set working directory
-	cmd.Dir = workingDirectory
 
 	// Install a specific `solc` version if requested in the config
 	if c.SolcVersion != "" {
 		err := exec.Command("solc-select", "install", c.SolcVersion).Run()
 		if err != nil {
-			return nil, "", fmt.Errorf("error while executing solc-select:\n\nERROR: %s\n", err.Error())
+			return nil, "", fmt.Errorf("error while executing `solc-select install`:\n\nERROR: %s\n", err.Error())
+		}
+		err = exec.Command("solc-select", "use", c.SolcVersion).Run()
+		if err != nil {
+			return nil, "", fmt.Errorf("error while executing `solc-select use`:\n\nERROR: %s\n", err.Error())
 		}
 	}
 
@@ -136,8 +120,8 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 	}
 
-	// Find compilation artifacts in buildDirectory
-	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
+	// Find compilation artifacts in the export directory
+	matches, err := filepath.Glob(filepath.Join(exportDirectory, "*.json"))
 	if err != nil {
 		return nil, "", err
 	}
@@ -152,39 +136,47 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		if err != nil {
 			return nil, "", err
 		}
+
 		// Parse the JSON
 		var compiledJson map[string]interface{}
 		err = json.Unmarshal(b, &compiledJson)
 		if err != nil {
 			return nil, "", err
 		}
+
 		// Index into "compilation_units" key
 		compilationUnits, ok := compiledJson["compilation_units"]
 		if !ok {
 			// If our json file does not have any compilation units, it is not a file of interest
 			continue
 		}
+
 		// Create a mapping between key (filename) and value (contract and ast information) each compilation unit
 		compilationMap, ok := compilationUnits.(map[string]interface{})
 		if !ok {
 			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]interface{} format: %s\n", compilationUnits)
 		}
+
 		// Iterate through compilationUnits
 		for _, compilationUnit := range compilationMap {
 			// Create a compilation object that will store the contracts and asts for a single compilation unit
 			compilation := types.NewCompilation()
+
 			// Create mapping between key (compiler / asts / contracts) and associated values
 			compilationUnitMap, ok := compilationUnit.(map[string]interface{})
 			if !ok {
 				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]interface{} format: %s\n", compilationUnit)
 			}
+
 			// Create mapping between each file in compilation unit and associated Ast
 			AstMap := compilationUnitMap["asts"].(map[string]interface{})
+
 			// Create mapping between key (file name) and value (associated contracts in that file)
 			contractsMap, ok := compilationUnitMap["contracts"].(map[string]interface{})
 			if !ok {
 				return nil, "", fmt.Errorf("cannot find 'contracts' key in compilationUnitMap: %s\n", compilationUnitMap)
 			}
+
 			// Iterate through each contract FILE (note that each FILE might have more than one contract)
 			for _, contractsData := range contractsMap {
 				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
@@ -192,6 +184,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				if !ok {
 					return nil, "", fmt.Errorf("contractsData is not in the map[string]interface{} format: %s\n", contractsData)
 				}
+
 				// Iterate through each contract
 				for contractName, contractData := range contractMap {
 					// Create mapping between contract details (abi, bytecode) to actual values
@@ -199,19 +192,23 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 					if !ok {
 						return nil, "", fmt.Errorf("contractData is not in the map[string]interface{} format: %s\n", contractData)
 					}
+
 					// Create mapping between "filenames" (key) associated with the contract and the various filename
 					// types (absolute, relative, short, long)
 					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
 					if !ok {
 						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractDataMap: %s\n", contractDataMap)
 					}
+
 					// Create unique source path which is going to be absolute path
 					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
-					// Get ABI
+
+					// Parse the ABI
 					contractAbi, err := types.ParseABIFromInterface(contractDataMap["abi"])
 					if err != nil {
 						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
 					}
+
 					// Check if sourcePath has already been set (note that a sourcePath (i.e., file) can have more
 					// than one contract)
 					// sourcePath is also the key for the AstMap
@@ -221,6 +218,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 							Contracts: make(map[string]types.CompiledContract),
 						}
 					}
+
 					// Add contract details
 					compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 						Abi:             *contractAbi,
