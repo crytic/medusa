@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/trailofbits/medusa/chain"
+	"github.com/trailofbits/medusa/fuzzing/tracing"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"math/rand"
@@ -22,7 +24,7 @@ type FuzzerWorker struct {
 	fuzzer *Fuzzer
 
 	// testNode describes a testNode created by the FuzzerWorker to run tests against.
-	testNode *TestNode
+	testNode *chain.TestNode
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
@@ -31,6 +33,9 @@ type FuzzerWorker struct {
 	// (non-read-only). Each FuzzerWorker fuzzes a sequence of transactions targeting stateChangingMethods, while
 	// calling all propertyTests intermittently to verify state.
 	stateChangingMethods []fuzzerTypes.DeployedContractMethod
+
+	// fuzzerTracer describes the built-in tracer used to power the FuzzerWorker's coverage and execution information.
+	fuzzerTracer *tracing.FuzzerTracer
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -43,6 +48,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) *FuzzerWorker {
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
+		fuzzerTracer:         nil,
 	}
 	return &worker
 }
@@ -58,7 +64,7 @@ func (fw *FuzzerWorker) Fuzzer() *Fuzzer {
 }
 
 // TestNode returns the TestNode used by this worker as the backend for tests.
-func (fw *FuzzerWorker) TestNode() *TestNode {
+func (fw *FuzzerWorker) TestNode() *chain.TestNode {
 	return fw.testNode
 }
 
@@ -260,8 +266,11 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 			}
 		}
 
-		// Send our call
-		fw.testNode.SendMessage(callSequence[i].Call())
+		// Send our call to the test node to generate a new block with it.
+		_, err = fw.testNode.SendMessages(callSequence[i].Call())
+		if err != nil {
+			return i, nil, err
+		}
 
 		// Loop through each test provider, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
@@ -279,7 +288,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		// TODO: Move everything below elsewhere
 
 		// If we encountered an invalid opcode error, it is indicative of an assertion failure
-		if _, hitInvalidOpcode := fw.testNode.tracer.VMError().(*vm.ErrInvalidOpCode); hitInvalidOpcode {
+		if _, hitInvalidOpcode := fw.fuzzerTracer.VMError().(*vm.ErrInvalidOpCode); hitInvalidOpcode {
 			// TODO: Report assertion failure
 		}
 	}
@@ -291,7 +300,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
 // calls which can be removed that continue to satisfy the provided shrink verifier.
 // Returns a call sequence that was optimized to include as little calls as possible to trigger the
-// expected conditions.
+// expected conditions, or an error if one occurred.
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (fuzzerTypes.CallSequence, error) {
 	// Define another slice to store our tx sequence
 	optimizedSequence := callSequence
@@ -304,7 +313,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		// Replay the call sequence
 		for _, callSequenceElement := range testSeq {
 			// Send our message
-			fw.testNode.SendMessage(callSequenceElement.Call())
+			_, err := fw.testNode.SendMessages(callSequenceElement.Call())
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// Check if our verifier signalled that we met our conditions
@@ -312,7 +324,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 
 		// After testing the sequence, we'll want to rollback changes to reset our testing state.
 		if err := fw.testNode.RevertToSnapshot(); err != nil {
-			return optimizedSequence, err
+			return nil, err
 		}
 
 		// If this current sequence satisfied our conditions, set it as our optimized sequence.
@@ -324,9 +336,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		}
 	}
 
-	// After we finished shrinking, report our result
+	// After we finished shrinking, report our result and return it.
 	shrinkRequest.FinishedCallback(fw, optimizedSequence)
-
 	return optimizedSequence, nil
 }
 
@@ -353,13 +364,17 @@ func (fw *FuzzerWorker) run() (bool, error) {
 
 	// Create a test node
 	var err error
-	fw.testNode, err = NewTestNode(genesisAlloc)
+	fw.testNode, err = chain.NewTestNode(genesisAlloc)
 	if err != nil {
 		return false, err
 	}
 
 	// When exiting this function, stop the test node
 	defer fw.testNode.Stop()
+
+	// Create a new tracer to power our base-feature set. Register it with our test chain's tracer forwarder.
+	fw.fuzzerTracer = tracing.NewFuzzerTracer(true)
+	fw.testNode.TracerForwarder().AddTracer(fw.fuzzerTracer)
 
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount++
@@ -395,7 +410,7 @@ func (fw *FuzzerWorker) run() (bool, error) {
 		}
 
 		// Update our coverage maps
-		newCoverageMaps := fw.testNode.tracer.CoverageMaps()
+		newCoverageMaps := fw.fuzzerTracer.CoverageMaps()
 		if newCoverageMaps != nil {
 			coverageUpdated, err := fw.metrics().coverageMaps.Update(newCoverageMaps)
 			if err != nil {

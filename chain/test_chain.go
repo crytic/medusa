@@ -1,4 +1,4 @@
-package fuzzing
+package chain
 
 import (
 	"encoding/hex"
@@ -14,10 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/chain/vendored"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/fuzzing/tracing"
-	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/types"
-	"github.com/trailofbits/medusa/fuzzing/vendored"
 	"math/big"
 	"strings"
 )
@@ -25,7 +24,7 @@ import (
 // TestNode represents a simulated Ethereum backend used for testing.
 type TestNode struct {
 	// chain represents the blocks post-genesis that were generated after sending messages.
-	chain []TestNodeBlock
+	chain []*chainTypes.Block
 
 	// dummyChain is core.BlockChain instance which is used to construct the genesis state. After such point it is
 	// only used for reference to fulfill the needs of some methods.
@@ -47,33 +46,13 @@ type TestNode struct {
 	// on the chain which we should return to when RevertToSnapshot is used.
 	snapshot int
 
-	// tracer represents an execution trace provider for the VM. It observes VM execution for any notable events such
-	// as coverage map updates, etc.
-	tracer *tracing.FuzzerTracer
+	// tracerForwarder represents an execution trace provider for the VM which observes VM execution for any notable
+	// events and forwards them to underlying vm.EVMLogger tracers.
+	tracerForwarder *chainTypes.TracerForwarder
 
 	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
 	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
-}
-
-// TestNodeBlock represents a block or update within a TestNode
-type TestNodeBlock struct {
-	// header represents the block header for this current block.
-	header *types.Header
-
-	// message represents an internal EVM core.Message. Messages are derived from transactions after validation of a
-	// transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction fields
-	// plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field in a
-	// message).
-	message core.Message
-
-	// receipt represents a transaction receipt received when the associated message in this structure was sent to the
-	// VM to perform a state update. It houses event logs and other information collected during the state transition
-	// when the transaction was applied.
-	receipt *types.Receipt
-
-	// blockHash represents a cached hash for this block.
-	blockHash common.Hash
 }
 
 // NewTestNode creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -97,11 +76,11 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 	// Commit our genesis definition to get a block.
 	genesisDefinition.MustCommit(db)
 
-	// Create a VM config that traces execution, so we can establish a coverage map
-	tracer := tracing.NewFuzzerTracer(true)
+	// Create a multi-tracer to support the addition of multiple underlying tracers.
+	tracerForwarder := chainTypes.NewTracerForwarder()
 	vmConfig := &vm.Config{
 		Debug:     true,
-		Tracer:    tracer,
+		Tracer:    tracerForwarder,
 		NoBaseFee: true,
 	}
 
@@ -119,16 +98,56 @@ func NewTestNode(genesisAlloc core.GenesisAlloc) (*TestNode, error) {
 
 	// Create our instance
 	g := &TestNode{
-		chain:      make([]TestNodeBlock, 0),
-		dummyChain: dummyChain,
-		kvstore:    kvstore,
-		db:         db,
-		state:      stateDb,
-		tracer:     tracer,
-		vmConfig:   vmConfig,
+		chain:           make([]*chainTypes.Block, 0),
+		dummyChain:      dummyChain,
+		kvstore:         kvstore,
+		db:              db,
+		state:           stateDb,
+		tracerForwarder: tracerForwarder,
+		vmConfig:        vmConfig,
 	}
 
 	return g, nil
+}
+
+// TracerForwarder returns the tracer forwarder used to forward tracing calls to multiple underlying tracers.
+func (t *TestNode) TracerForwarder() *chainTypes.TracerForwarder {
+	return t.tracerForwarder
+}
+
+// BlockNumber returns the test chain head's block number, where zero is the genesis block.
+func (t *TestNode) BlockNumber() uint64 {
+	// Our chain length is genesis block + test node blocks
+	return uint64(len(t.chain))
+}
+
+// BlockHeader returns the block header of the current test chain head.
+func (t *TestNode) BlockHeader() *types.Header {
+	// If we have any blocks on the test chain, return the latest
+	if len(t.chain) > 0 {
+		return t.chain[len(t.chain)-1].Header()
+	}
+
+	// Otherwise return the genesis header
+	return t.dummyChain.CurrentHeader()
+}
+
+// BlockHashFromBlockNumber returns a block hash for a given block number. If the index is out of bounds, it returns
+// an error.
+func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, error) {
+	// If our block number references something too new, return an error
+	if blockNumber > uint64(len(t.chain)) {
+		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, len(t.chain)+1)
+	}
+
+	// Fetch either the genesis block hash or one of our later simulated block hashes.
+	if blockNumber == 0 {
+		genesisHash := t.dummyChain.CurrentBlock().Hash()
+		return genesisHash, nil
+	} else {
+		blockHash := t.chain[blockNumber-1].Hash()
+		return blockHash, nil
+	}
 }
 
 // MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
@@ -167,7 +186,7 @@ func (t *TestNode) RevertToSnapshot() error {
 
 // CreateMessage creates an object which satisfies the types.Message interface. It populates gas limit, price, nonce,
 // and other fields automatically, and sets fee/tip caps such that no base fee is charged (for testing).
-func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) *fuzzingTypes.CallMessage {
+func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value *big.Int, data []byte) *chainTypes.CallMessage {
 	// Obtain our message parameters
 	nonce := t.state.GetNonce(from)
 	gasLimit := t.dummyChain.GasLimit()
@@ -178,42 +197,7 @@ func (t *TestNode) CreateMessage(from common.Address, to *common.Address, value 
 	gasTipCap := big.NewInt(0)
 
 	// Construct and return a new message from our given parameters.
-	return fuzzingTypes.NewCallMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data)
-}
-
-// BlockNumber returns the test chain head's block number, where zero is the genesis block.
-func (t *TestNode) BlockNumber() uint64 {
-	// Our chain length is genesis block + test node blocks
-	return uint64(len(t.chain))
-}
-
-// BlockHeader returns the block header of the current test chain head.
-func (t *TestNode) BlockHeader() *types.Header {
-	// If we have any blocks on the test chain, return the latest
-	if len(t.chain) > 0 {
-		return t.chain[len(t.chain)-1].header
-	}
-
-	// Otherwise return the genesis header
-	return t.dummyChain.CurrentHeader()
-}
-
-// BlockHashFromBlockNumber returns a block hash for a given block number. If the index is out of bounds, it returns
-// an error.
-func (t *TestNode) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, error) {
-	// If our block number references something too new, return an error
-	if blockNumber > uint64(len(t.chain)) {
-		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, len(t.chain)+1)
-	}
-
-	// Fetch either the genesis block hash or one of our later simulated block hashes.
-	if blockNumber == 0 {
-		genesisHash := t.dummyChain.CurrentBlock().Hash()
-		return genesisHash, nil
-	} else {
-		blockHash := t.chain[blockNumber-1].blockHash
-		return blockHash, nil
-	}
+	return chainTypes.NewCallMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data)
 }
 
 // messageToTransaction derived a types.Transaction from a types.Message.
@@ -264,7 +248,7 @@ func (t *TestNode) evmOpBlockHash(n uint64) common.Hash {
 
 // CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
-func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionResult, error) {
+func (t *TestNode) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionResult, error) {
 	// Obtain our state snapshot (note: this is different from the test node snapshot)
 	snapshot := t.state.Snapshot()
 
@@ -295,20 +279,12 @@ func (t *TestNode) CallContract(msg *fuzzingTypes.CallMessage) (*core.ExecutionR
 	return res, err
 }
 
-// SendMessage is similar to Ethereum's SendTransaction, it takes a message (internal tx) and applies a state update
-// with it, as if a transaction were just received. Returns the TestNodeBlock representing the result of the state
-// transition.
-func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
+// SendMessages is similar to Ethereum's SendTransaction, it takes messages (internal txs) and applies state updates
+// with them, as if transactions were just received in a block. Returns the block representing the result of the state
+// transitions.
+func (t *TestNode) SendMessages(messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
 	// Set up some parameters used to construct our test block
-	blockNumber := big.NewInt(int64(t.BlockNumber()) + 1)
-	blockTimestamp := uint64(t.BlockNumber() + 1) // TODO: Determine proper timestamp advance logic
-	coinbase := t.BlockHeader().Coinbase
 	config := t.dummyChain.Config()
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is sensible
-	var usedGas uint64
-
-	// Use the default set gas limit from the dummy chain
-	gasLimit := t.dummyChain.GasLimit()
 
 	//parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
 	parentBlockHash := t.BlockHeader().Hash()
@@ -324,16 +300,16 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	header := &types.Header{
 		ParentHash:  parentBlockHash,
 		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    coinbase,
+		Coinbase:    t.BlockHeader().Coinbase, // reusing same coinbase throughout the chain
 		Root:        types.EmptyRootHash,
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
 		Bloom:       types.Bloom{},
 		Difficulty:  common.Big0,
-		Number:      blockNumber,
-		GasLimit:    gasLimit,
+		Number:      big.NewInt(int64(t.BlockNumber()) + 1),
+		GasLimit:    t.dummyChain.GasLimit(), // reusing same gas limit throughout the chain
 		GasUsed:     0,
-		Time:        blockTimestamp,
+		Time:        t.BlockNumber() + 1, // TODO: Determine proper timestamp advance logic
 		Extra:       []byte{},
 		MixDigest:   parentBlockHash,
 		Nonce:       types.BlockNonce{},
@@ -343,49 +319,54 @@ func (t *TestNode) SendMessage(msg *fuzzingTypes.CallMessage) *TestNodeBlock {
 	// Calculate our block hash for this block
 	blockHash := header.Hash()
 
-	// Create a tx from our msg, for hashing/receipt purposes
-	tx := messageToTransaction(msg)
+	// Process each message and collect transaction receipts
+	receipts := make(types.Receipts, 0)
+	for i := 0; i < len(messages); i++ {
+		// Create a tx from our msg, for hashing/receipt purposes
+		tx := messageToTransaction(messages[i])
 
-	// Create a new context to be used in the EVM environment
-	blockContext := core.NewEVMBlockContext(header, t.dummyChain, &coinbase)
+		// Create a new context to be used in the EVM environment
+		blockContext := core.NewEVMBlockContext(header, t.dummyChain, &header.Coinbase)
 
-	// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
-	// original implementation, as it is not maintained for the true chain state.
-	blockContext.GetHash = t.evmOpBlockHash
+		// Hook the method used for the BLOCKHASH opcode to get previous block hashes so the dummyChain is not used in the
+		// original implementation, as it is not maintained for the true chain state.
+		blockContext.GetHash = t.evmOpBlockHash
 
-	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
+		// Create our EVM instance.
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, config, *t.vmConfig)
 
-	// Apply our transaction
-	receipt, err := vendored.EVMApplyTransaction(msg.ToEVMMessage(), config, &coinbase, gasPool, t.state, blockNumber, blockHash, tx, &usedGas, evm)
-	if err != nil {
-		panic(fmt.Sprintf("state write error: %v", err))
+		// Apply our transaction
+		var usedGas uint64
+		gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is sensible
+		receipt, err := vendored.EVMApplyTransaction(messages[i].ToEVMMessage(), config, &header.Coinbase, gasPool, t.state, header.Number, blockHash, tx, &usedGas, evm)
+		if err != nil {
+			return nil, fmt.Errorf("test chain state write error: %v", err)
+		}
+
+		// Add our receipt to our list
+		receipts = append(receipts, receipt)
 	}
 
 	// Write state changes to db
 	root, err := t.state.Commit(config.IsEIP158(header.Number))
 	if err != nil {
-		panic(fmt.Sprintf("state write error: %v", err))
+		return nil, fmt.Errorf("test chain state write error: %v", err)
 	}
 	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
-		panic(fmt.Sprintf("trie write error: %v", err))
+		return nil, fmt.Errorf("test chain trie write error: %v", err)
 	}
 
 	// Update the header's state root hash
-	// Note: You could also retrieve the root with state.IntermediateRoot(config.IsEIP158(parentBlockNumber))
+	// Note: You could also retrieve the root without committing by using
+	// (state.IntermediateRoot(config.IsEIP158(parentBlockNumber)))
 	header.Root = root
 
 	// Create a new block for our test node
-	block := TestNodeBlock{
-		header:    header,
-		message:   msg,
-		receipt:   receipt,
-		blockHash: blockHash,
-	}
+	block, err := chainTypes.NewBlock(blockHash, header, messages, receipts)
 
-	// Append it to our chain
+	// Append our new block to our chain and return it.
 	t.chain = append(t.chain, block)
-	return &block
+	return block, nil
 }
 
 // DeployContract is a helper method used to deploy a given types.CompiledContract to the current instance of the
@@ -406,13 +387,16 @@ func (t *TestNode) DeployContract(contract *compilationTypes.CompiledContract, d
 	msg := t.CreateMessage(deployer, nil, value, b)
 
 	// Send our deployment transaction
-	block := t.SendMessage(msg)
+	block, err := t.SendMessages(msg)
+	if err != nil {
+		return common.Address{}, err
+	}
 
 	// Ensure our transaction succeeded
-	if block.receipt.Status != types.ReceiptStatusSuccessful {
+	if block.Receipts()[0].Status != types.ReceiptStatusSuccessful {
 		return common.Address{}, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
 	// Return the address for the deployed contract.
-	return block.receipt.ContractAddress, nil
+	return block.Receipts()[0].ContractAddress, nil
 }
