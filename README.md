@@ -108,8 +108,8 @@ To begin a fuzzing campaign, invoke `medusa fuzz` to compile and fuzz targets sp
 
 Invoking a fuzzing campaign, `medusa` will:
 - Compile the given targets
-- Start the configured number of worker threads, each with their own local Ethereum test node.
-- Deploy all contracts which contain no constructor arguments to each worker's test node.
+- Start the configured number of worker threads, each with their own local Ethereum test chain.
+- Deploy all contracts which contain no constructor arguments to each worker's test chain.
 - Begin to generate and send transaction sequences to update contract state.
 - Check property tests all succeed after each transaction executed.
 

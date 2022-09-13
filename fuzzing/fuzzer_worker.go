@@ -23,11 +23,14 @@ type FuzzerWorker struct {
 	// fuzzer describes the Fuzzer instance which this worker belongs to.
 	fuzzer *Fuzzer
 
-	// testNode describes a testNode created by the FuzzerWorker to run tests against.
-	testNode *chain.TestNode
+	// chain describes a test chain created by the FuzzerWorker to deploy contracts and run tests against.
+	chain *chain.TestChain
 
 	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
+
+	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed.
+	testingBaseBlockNumber uint64
 
 	// stateChangingMethods is a list of contract functions which are suspected of changing contract state
 	// (non-read-only). Each FuzzerWorker fuzzes a sequence of transactions targeting stateChangingMethods, while
@@ -63,9 +66,9 @@ func (fw *FuzzerWorker) Fuzzer() *Fuzzer {
 	return fw.fuzzer
 }
 
-// TestNode returns the TestNode used by this worker as the backend for tests.
-func (fw *FuzzerWorker) TestNode() *chain.TestNode {
-	return fw.testNode
+// Chain returns the Chain used by this worker as the backend for tests.
+func (fw *FuzzerWorker) Chain() *chain.TestChain {
+	return fw.chain
 }
 
 // metrics returns the FuzzerMetrics for the fuzzing campaign.
@@ -110,7 +113,7 @@ func (fw *FuzzerWorker) deployAndRegisterCompiledContracts() error {
 		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 			// Deploy the contract using our deployer address.
-			deployedAddress, err := fw.testNode.DeployContract(contract.CompiledContract(), fw.fuzzer.deployer)
+			deployedAddress, err := fw.chain.DeployContract(contract.CompiledContract(), fw.fuzzer.deployer)
 			if err != nil {
 				return err
 			}
@@ -201,7 +204,7 @@ func (fw *FuzzerWorker) generateFuzzedAbiValue(inputType *abi.Type) interface{} 
 }
 
 // generateFuzzedCall generates a new call sequence element which targets a state changing method in a contract
-// deployed to this FuzzerWorker's TestNode with fuzzed call data.
+// deployed to this FuzzerWorker's Chain with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, error) {
 	// Verify we have state changing methods to call
@@ -236,21 +239,21 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	if selectedMethod.Method.StateMutability == "payable" {
 		value = fw.fuzzer.generator.GenerateInteger(false, 64)
 	}
-	msg := fw.testNode.CreateMessage(selectedSender, &selectedMethod.Address, value, data)
+	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, data)
 
 	// Return our call sequence element.
 	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg), nil
 }
 
-// testCallSequence tests a call message sequence against the underlying FuzzerWorker's TestNode and calls every
+// testCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // TestCaseProvider registered with the parent Fuzzer to update any test results. If any call message in the sequence
 // is nil, a call message will be created in its place, targeting a state changing method of a contract deployed in the
-// TestNode.
+// Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) (int, []ShrinkCallSequenceRequest, error) {
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	defer func() {
-		if err := fw.testNode.RevertToSnapshot(); err != nil {
+		if err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
 			panic(err.Error())
 		}
 	}()
@@ -267,7 +270,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		}
 
 		// Send our call to the test node to generate a new block with it.
-		_, err = fw.testNode.SendMessages(callSequence[i].Call())
+		_, err = fw.chain.SendMessages(callSequence[i].Call())
 		if err != nil {
 			return i, nil, err
 		}
@@ -313,7 +316,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		// Replay the call sequence
 		for _, callSequenceElement := range testSeq {
 			// Send our message
-			_, err := fw.testNode.SendMessages(callSequenceElement.Call())
+			_, err := fw.chain.SendMessages(callSequenceElement.Call())
 			if err != nil {
 				return nil, err
 			}
@@ -323,7 +326,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		validShrunkSequence := shrinkRequest.VerifierFunction(fw, testSeq)
 
 		// After testing the sequence, we'll want to rollback changes to reset our testing state.
-		if err := fw.testNode.RevertToSnapshot(); err != nil {
+		if err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
 			return nil, err
 		}
 
@@ -341,7 +344,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 	return optimizedSequence, nil
 }
 
-// run sets up a TestNode and begins executing fuzzed transaction calls and asserting properties are upheld.
+// run sets up a Chain and begins executing fuzzed transaction calls and asserting properties are upheld.
 // This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
 func (fw *FuzzerWorker) run() (bool, error) {
@@ -362,19 +365,16 @@ func (fw *FuzzerWorker) run() (bool, error) {
 		Balance: initBalance,
 	}
 
-	// Create a test node
+	// Create a chain
 	var err error
-	fw.testNode, err = chain.NewTestNode(genesisAlloc)
+	fw.chain, err = chain.NewTestChain(genesisAlloc)
 	if err != nil {
 		return false, err
 	}
 
-	// When exiting this function, stop the test node
-	defer fw.testNode.Stop()
-
 	// Create a new tracer to power our base-feature set. Register it with our test chain's tracer forwarder.
 	fw.fuzzerTracer = tracing.NewFuzzerTracer(true)
-	fw.testNode.TracerForwarder().AddTracer(fw.fuzzerTracer)
+	fw.chain.TracerForwarder().AddTracer(fw.fuzzerTracer)
 
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount++
@@ -385,13 +385,14 @@ func (fw *FuzzerWorker) run() (bool, error) {
 		return false, err
 	}
 
-	// Snapshot so we can revert to our vanilla post-deployment state after each tx sequence test.
-	fw.testNode.Snapshot()
+	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
+	// to this state between testing.
+	fw.testingBaseBlockNumber = fw.chain.BlockNumber()
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
 	// this worker with a fresh memory database.
-	for fw.testNode.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
+	for fw.chain.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
 		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.
 		select {
 		case <-fw.fuzzer.ctx.Done():

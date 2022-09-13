@@ -70,8 +70,8 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	// Call the underlying contract
 	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the assertions.
 	value := big.NewInt(0)
-	msg := worker.TestNode().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, data)
-	res, err := worker.TestNode().CallContract(msg)
+	msg := worker.Chain().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, data)
+	res, err := worker.Chain().CallContract(msg)
 	if err != nil {
 		panic(err)
 	}
@@ -162,7 +162,7 @@ func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) {
 func (t *PropertyTestCaseProvider) OnWorkerDestroyed(worker *FuzzerWorker) {}
 
 // OnWorkerDeployedContractAdded is called when a fuzzing.FuzzerWorker detects a newly deployed contract in the
-// underlying TestNode. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
+// underlying Chain. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
 // it is provided as well. Otherwise, a nil contract definition is supplied.
 func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) {
 	// If we don't have a contract definition, we can't run property tests against the contract.
@@ -201,7 +201,7 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerW
 }
 
 // OnWorkerDeployedContractDeleted is called when a fuzzing.FuzzerWorker detects a previously reported deployed
-// contract that no longer exists in the underlying TestNode.
+// contract that no longer exists in the underlying Chain.
 func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) {
 	// If we don't have a contract definition, there's nothing to do.
 	if contract == nil {

@@ -24,12 +24,12 @@ type TestCaseProvider interface {
 	OnWorkerDestroyed(worker *FuzzerWorker)
 
 	// OnWorkerDeployedContractAdded is called when a fuzzing.FuzzerWorker detects a newly deployed contract in the
-	// underlying TestNode. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
+	// underlying test chain. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
 	// it is provided as well. Otherwise, a nil contract definition is supplied.
 	OnWorkerDeployedContractAdded(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract)
 
 	// OnWorkerDeployedContractDeleted is called when a fuzzing.FuzzerWorker detects a previously reported deployed
-	// contract that no longer exists in the underlying TestNode.
+	// contract that no longer exists in the underlying test chain.
 	OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract)
 
 	// OnWorkerCallSequenceTesting is called before a fuzzing.FuzzerWorker generates and tests a new call sequence.

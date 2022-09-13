@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// DeployedContractMethod describes a method which is accessible through a contract actively deployed on a fuzzing.TestNode.
+// DeployedContractMethod describes a method which is accessible through a contract actively deployed on-chain.
 type DeployedContractMethod struct {
 	// Address represents the Ethereum address where the deployed contract containing the method exists.
 	Address common.Address

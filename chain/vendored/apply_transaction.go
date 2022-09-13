@@ -29,7 +29,7 @@ import (
 
 // EVMApplyTransaction is a vendored version of go-ethereum's unexported applyTransaction method (not to be confused
 // with the exported method ApplyTransaction). This method was vendored to simply be exposed/exported, so it can be
-// used by the fuzzing.TestNode. This method offers greater control of parameters over the exposed ApplyTransaction
+// used by the test chain. This method offers greater control of parameters over the exposed ApplyTransaction
 // method. Its purpose is to take a message (internal transaction) and apply state transition updates to our current
 // state as if we had just previously received and validated a transaction which the message was derived from.
 // This executes on an underlying EVM and returns a transaction receipt, or an error if one occurs.
