@@ -84,28 +84,27 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	callMessages := make([]*chainTypes.CallMessage, 0)
-	for _, tx := range genesisBlock.Transactions() {
-		msg := chainTypes.NewCallMessage(common.Address{}, tx.To(), tx.Nonce(), tx.Value(), tx.Gas(), tx.GasPrice(), tx.GasFeeCap(), tx.GasTipCap(), tx.Data())
-		callMessages = append(callMessages, msg)
-	}
 	receipts := make(types.Receipts, 0)
 	testChainGenesisBlock, err := chainTypes.NewBlock(genesisBlock.Header().Hash(), genesisBlock.Header(), callMessages, receipts)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create our state database over-top our database.
+	stateDatabase := state.NewDatabaseWithConfig(db, &trie.Config{
+		Cache: 256,
+	})
+
 	// Create a tracer forwarder to support the addition of multiple underlying tracers.
 	tracerForwarder := chainTypes.NewTracerForwarder()
 
 	// Create our instance
 	g := &TestChain{
-		blocks:        []*chainTypes.Block{testChainGenesisBlock},
-		keyValueStore: keyValueStore,
-		db:            db,
-		state:         nil,
-		stateDatabase: state.NewDatabaseWithConfig(db, &trie.Config{
-			Cache: 256,
-		}),
+		blocks:          []*chainTypes.Block{testChainGenesisBlock},
+		keyValueStore:   keyValueStore,
+		db:              db,
+		state:           nil,
+		stateDatabase:   stateDatabase,
 		tracerForwarder: tracerForwarder,
 		chainConfig:     genesisDefinition.Config,
 		vmConfig: &vm.Config{
@@ -244,7 +243,7 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	// Create our EVM instance
 	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{NoBaseFee: true})
 
-	// Fund the gas pool for execution appropriately
+	// Fund the gas pool so it can execute endlessly (no block gas limit, etc).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	// Perform our state transition to obtain the result.
@@ -256,10 +255,9 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	return res, err
 }
 
-// SendMessages is similar to Ethereum's SendTransaction, it takes messages (internal txs) and applies state updates
-// with them, as if transactions were just received in a block. Returns the block representing the result of the state
-// transitions.
-func (t *TestChain) SendMessages(messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
+// CreateNewBlock takes messages (internal txs) and constructs a block with them, similar to a real chain using
+// transactions to construct a block. Returns the constructed block, or an error if one occurred.
+func (t *TestChain) CreateNewBlock(messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
 	//parentBlockNumber := big.NewInt(0).Sub(blockNumber, big.NewInt(1))
 	parentBlockHash := t.Head().Hash()
 
@@ -293,6 +291,9 @@ func (t *TestChain) SendMessages(messages ...*chainTypes.CallMessage) (*chainTyp
 	// Calculate our block hash for this block
 	blockHash := header.Hash()
 
+	// Create our gas pool that lets us execute up to the full gas limit.
+	gasPool := new(core.GasPool).AddGas(header.GasLimit)
+
 	// Process each message and collect transaction receipts
 	receipts := make(types.Receipts, 0)
 	for i := 0; i < len(messages); i++ {
@@ -307,7 +308,6 @@ func (t *TestChain) SendMessages(messages ...*chainTypes.CallMessage) (*chainTyp
 
 		// Apply our transaction
 		var usedGas uint64
-		gasPool := new(core.GasPool).AddGas(math.MaxUint64) // TODO: Verify this is sensible
 		receipt, err := vendored.EVMApplyTransaction(messages[i].ToEVMMessage(), t.chainConfig, &header.Coinbase, gasPool, t.state, header.Number, blockHash, tx, &usedGas, evm)
 		if err != nil {
 			return nil, fmt.Errorf("test chain state write error: %v", err)
@@ -356,8 +356,8 @@ func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, 
 	value := big.NewInt(0)
 	msg := t.CreateMessage(deployer, nil, value, b)
 
-	// Send our deployment transaction
-	block, err := t.SendMessages(msg)
+	// Create a new block with our deployment message/tx.
+	block, err := t.CreateNewBlock(msg)
 	if err != nil {
 		return common.Address{}, err
 	}

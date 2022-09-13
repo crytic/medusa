@@ -269,8 +269,8 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 			}
 		}
 
-		// Send our call to the test node to generate a new block with it.
-		_, err = fw.chain.SendMessages(callSequence[i].Call())
+		// Create a new block with our call.
+		_, err = fw.chain.CreateNewBlock(callSequence[i].Call())
 		if err != nil {
 			return i, nil, err
 		}
@@ -315,8 +315,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 
 		// Replay the call sequence
 		for _, callSequenceElement := range testSeq {
-			// Send our message
-			_, err := fw.chain.SendMessages(callSequenceElement.Call())
+			// Create a new block with our call
+			_, err := fw.chain.CreateNewBlock(callSequenceElement.Call())
 			if err != nil {
 				return nil, err
 			}

@@ -58,16 +58,9 @@ type Fuzzer struct {
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Parse the senders addresses from our account config.
-	senders := make([]common.Address, 0)
-	for _, sender := range config.Fuzzing.SenderAddresses {
-		// Parse our provided account string
-		address, err := utils.HexStringToAddress(sender)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add it to our senders list
-		senders = append(senders, *address)
+	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
+	if err != nil {
+		return nil, err
 	}
 
 	// Parse the deployer address from our account config
@@ -80,7 +73,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	fuzzer := &Fuzzer{
 		config:            config,
 		senders:           senders,
-		deployer:          *deployer,
+		deployer:          deployer,
 		BaseValueSet:      value_generation.NewBaseValueSet(),
 		contracts:         make([]fuzzerTypes.Contract, 0),
 		testCaseProviders: make([]TestCaseProvider, 0),

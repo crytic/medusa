@@ -12,7 +12,7 @@ import (
 func TestSolcVersion(t *testing.T) {
 	// Obtain our solc version and ensure we didn't encounter an error
 	_, err := GetSystemSolcVersion()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 // TestSimpleSolcCompilationAbsolutePath tests that a single contract should be able to be compiled
@@ -26,9 +26,9 @@ func TestSimpleSolcCompilationAbsolutePath(t *testing.T) {
 		// Create a solc provider
 		solc := NewSolcCompilationConfig(contractPath)
 
-		// Obtain our solc version and ensure we encountered an error
+		// Obtain our compilations and ensure we didn't encounter an error
 		compilations, _, err := solc.Compile()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.True(t, len(compilations) > 0)
 	})
 }
@@ -47,7 +47,7 @@ func TestSimpleSolcCompilationRelativePath(t *testing.T) {
 
 		// Obtain our solc version and ensure we didn't encounter an error
 		compilations, _, err := solc.Compile()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.True(t, len(compilations) > 0)
 	})
 }

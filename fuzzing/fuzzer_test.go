@@ -66,7 +66,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 	// Wrap the platform config in a compilation config
 	compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Create a project configuration to run the fuzzer with
 	projectConfig := &config.ProjectConfig{
@@ -76,11 +76,11 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 	// Create a fuzzer instance
 	fuzzer, err := NewFuzzer(*projectConfig)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Run the fuzzer against the compilation
 	err = fuzzer.Start()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Ensure we captured a failed test.
 	if expectFailure {

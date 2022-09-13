@@ -18,7 +18,7 @@ func TestTruffleCompilationAbsolutePath(t *testing.T) {
 
 		// Obtain our solc version and ensure we didn't encounter an error
 		compilations, _, err := truffleConfig.Compile()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.True(t, len(compilations) > 0)
 	})
 }

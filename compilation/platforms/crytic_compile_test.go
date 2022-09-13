@@ -49,7 +49,7 @@ func TestCryticSingleFileAbsolutePath(t *testing.T) {
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -78,7 +78,7 @@ func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -144,7 +144,7 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 		// Obtain the contract directory and cd to it.
 		contractDirectory := filepath.Dir(contractPath)
 		err := os.Chdir(contractDirectory)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Obtain the filename
 		contractName := filepath.Base(contractPath)
@@ -156,7 +156,7 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -207,14 +207,14 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 	test_utils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Run npm install
 		err := exec.Command("npm", "install").Run()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Create our platform configuration and compile the project
 		config := NewCryticCompilationConfig(contractDirectory)
 		compilations, _, err := config.Compile()
 
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Two compilation objects
 		assert.EqualValues(t, 2, len(compilations))
