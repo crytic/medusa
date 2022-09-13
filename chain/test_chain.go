@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/chain/vendored"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
@@ -169,7 +170,9 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 	// Obtain our existing state database or create a new one overlaid over our database.
 	var stateDatabase state.Database
 	if t.state == nil {
-		stateDatabase = state.NewDatabase(t.db)
+		stateDatabase = state.NewDatabaseWithConfig(t.db, &trie.Config{
+			Cache: 256,
+		})
 	} else {
 		stateDatabase = t.state.Database()
 	}
