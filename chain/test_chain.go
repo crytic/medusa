@@ -32,12 +32,15 @@ type TestChain struct {
 	// head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
 	state *state.StateDB
 
-	// kvstore represents the underlying key-value store used to construct the db.
-	kvstore *memorydb.Database
+	// stateDatabase refers to the database object which state uses to store data. It is constructed over db.
+	stateDatabase state.Database
 
-	// db represents the in-memory database used by the TestChain and its underlying chain and dummyChain objects to
-	// store state changes.
+	// db represents the in-memory database used by the TestChain and its underlying chain to store state changes.
+	// This is constructed over the kvstore.
 	db ethdb.Database
+
+	// keyValueStore represents the underlying key-value store used to construct the db.
+	keyValueStore *memorydb.Database
 
 	// tracerForwarder represents an execution trace provider for the VM which observes VM execution for any notable
 	// events and forwards them to underlying vm.EVMLogger tracers.
@@ -54,8 +57,8 @@ type TestChain struct {
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 	// Create an in-memory database
-	kvstore := memorydb.New()
-	db := rawdb.NewDatabase(kvstore)
+	keyValueStore := memorydb.New()
+	db := rawdb.NewDatabase(keyValueStore)
 
 	// Create our genesis block
 	genesisDefinition := &core.Genesis{
@@ -66,7 +69,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 			0x6D, 0x65, 0x64, 0x75, 0x24, 0x61,
 		},
 		GasLimit:   0, // TODO: Set this properly
-		Difficulty: nil,
+		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
 		Alloc:      genesisAlloc,
@@ -96,10 +99,13 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 
 	// Create our instance
 	g := &TestChain{
-		blocks:          []*chainTypes.Block{testChainGenesisBlock},
-		kvstore:         kvstore,
-		db:              db,
-		state:           nil,
+		blocks:        []*chainTypes.Block{testChainGenesisBlock},
+		keyValueStore: keyValueStore,
+		db:            db,
+		state:         nil,
+		stateDatabase: state.NewDatabaseWithConfig(db, &trie.Config{
+			Cache: 256,
+		}),
 		tracerForwarder: tracerForwarder,
 		chainConfig:     genesisDefinition.Config,
 		vmConfig: &vm.Config{
@@ -125,13 +131,18 @@ func (t *TestChain) TracerForwarder() *chainTypes.TracerForwarder {
 
 // MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
 func (t *TestChain) MemoryDatabaseEntryCount() int {
-	return t.kvstore.Len()
+	return t.keyValueStore.Len()
 }
 
 // Head returns the head of the chain (the latest block).
 func (t *TestChain) Head() *chainTypes.Block {
 	// Return the latest block header
 	return t.blocks[len(t.blocks)-1]
+}
+
+// Length returns the test chain in blocks.
+func (t *TestChain) Length() uint64 {
+	return uint64(len(t.blocks))
 }
 
 // GasLimit returns the current gas limit for the chain.
@@ -142,16 +153,15 @@ func (t *TestChain) GasLimit() uint64 {
 
 // BlockNumber returns the test chain head's block number, where zero is the genesis block.
 func (t *TestChain) BlockNumber() uint64 {
-	// The block number is the chain length minus 1 (will refer to the last block's number).
-	return uint64(len(t.blocks)) - 1
+	return t.Length() - 1
 }
 
-// BlockHashFromBlockNumber returns a block hash for a given block number. If the index is out of bounds, it returns
+// BlockHashFromNumber returns a block hash for a given block number. If the index is out of bounds, it returns
 // an error.
-func (t *TestChain) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, error) {
+func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.BlockNumber() {
-		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, t.BlockNumber()+1)
+		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current chain length of %d", blockNumber, t.Length())
 	}
 
 	// Fetch the block hash of a previously recorded block.
@@ -164,21 +174,11 @@ func (t *TestChain) BlockHashFromBlockNumber(blockNumber uint64) (common.Hash, e
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.BlockNumber() {
-		return nil, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current chain length of %d", blockNumber, t.BlockNumber()+1)
-	}
-
-	// Obtain our existing state database or create a new one overlaid over our database.
-	var stateDatabase state.Database
-	if t.state == nil {
-		stateDatabase = state.NewDatabaseWithConfig(t.db, &trie.Config{
-			Cache: 256,
-		})
-	} else {
-		stateDatabase = t.state.Database()
+		return nil, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current chain length of %d", blockNumber, t.Length())
 	}
 
 	// Load our state from the database
-	stateDB, err := state.New(t.blocks[blockNumber].Header().Root, stateDatabase, nil)
+	stateDB, err := state.New(t.blocks[blockNumber].Header().Root, t.stateDatabase, nil)
 	if err != nil {
 		return nil, err
 	}

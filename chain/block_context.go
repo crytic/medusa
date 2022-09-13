@@ -16,7 +16,7 @@ func newTestChainBlockContext(testChain *TestChain, header *types.Header) vm.Blo
 		GetHash: func(n uint64) common.Hash {
 			// Obtain our block hash from this number. If an error occurs, we ignore it and simply return an empty dummy
 			// hash.
-			hash, _ := testChain.BlockHashFromBlockNumber(n)
+			hash, _ := testChain.BlockHashFromNumber(n)
 			return hash
 		},
 		Coinbase:    header.Coinbase,
