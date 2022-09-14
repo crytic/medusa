@@ -17,6 +17,7 @@ import (
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/chain/vendored"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"strings"
 )
@@ -68,7 +69,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 		ExtraData: []byte{
 			0x6D, 0x65, 0x64, 0x75, 0x24, 0x61,
 		},
-		GasLimit:   0, // TODO: Set this properly
+		GasLimit:   0,
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
@@ -212,20 +213,6 @@ func (t *TestChain) CreateMessage(from common.Address, to *common.Address, value
 	return chainTypes.NewCallMessage(from, to, nonce, value, gasLimit, gasPrice, gasFeeCap, gasTipCap, data)
 }
 
-// messageToTransaction derived a types.Transaction from a types.Message.
-func messageToTransaction(msg core.Message) *types.Transaction {
-	// TODO: This might have issues in the future due to not being given a valid signatures.
-	//  This should probably be verified at some point.
-	return types.NewTx(&types.LegacyTx{
-		Nonce:    msg.Nonce(),
-		GasPrice: msg.GasPrice(),
-		Gas:      msg.Gas(),
-		To:       msg.To(),
-		Value:    msg.Value(),
-		Data:     msg.Data(),
-	})
-}
-
 // CallContract performs a message call over the current test chain  state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
 func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionResult, error) {
@@ -243,7 +230,7 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	// Create our EVM instance
 	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{NoBaseFee: true})
 
-	// Fund the gas pool so it can execute endlessly (no block gas limit, etc).
+	// Fund the gas pool so it can execute endlessly (no block gas limit).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	// Perform our state transition to obtain the result.
@@ -273,7 +260,7 @@ func (t *TestChain) CreateNewBlock(messages ...*chainTypes.CallMessage) (*chainT
 		ParentHash:  parentBlockHash,
 		UncleHash:   types.EmptyUncleHash,
 		Coinbase:    t.Head().Header().Coinbase, // reusing same coinbase throughout the chain
-		Root:        types.EmptyRootHash,
+		Root:        t.Head().Header().Root,
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
 		Bloom:       types.Bloom{},
@@ -298,7 +285,7 @@ func (t *TestChain) CreateNewBlock(messages ...*chainTypes.CallMessage) (*chainT
 	receipts := make(types.Receipts, 0)
 	for i := 0; i < len(messages); i++ {
 		// Create a tx from our msg, for hashing/receipt purposes
-		tx := messageToTransaction(messages[i])
+		tx := utils.MessageToTransaction(messages[i])
 
 		// Create a new context to be used in the EVM environment
 		blockContext := newTestChainBlockContext(t, header)

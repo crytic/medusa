@@ -46,7 +46,7 @@ func verifyChain(t *testing.T, chain *TestChain) {
 // semantics to be the same whenever run with the same messages being sent for all the same blocks.
 func TestCallSequenceReplayMatchSimple(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/contracts/DeploymentTest.sol")
+	contractPath := test_utils.CopyToTestDirectory(t, "testdata/contracts/deployment_test.sol")
 
 	// Execute our tests in the given test path
 	test_utils.ExecuteInDirectory(t, contractPath, func() {
@@ -87,8 +87,22 @@ func TestCallSequenceReplayMatchSimple(t *testing.T) {
 				for _, contract := range source.Contracts {
 					contract := contract
 					for i := 0; i < 10; i++ {
-						_, err := chain.DeployContract(&contract, senders[0])
+						// Deploy the currently indexed contract
+						_, err = chain.DeployContract(&contract, senders[0])
 						assert.NoError(t, err)
+
+						// Ensure we could get our state
+						_, err = chain.StateAfterBlockNumber(chain.BlockNumber())
+						assert.NoError(t, err)
+
+						// Create some empty blocks and ensure we can get our state for this block number.
+						for x := 0; x < i; x++ {
+							_, err = chain.CreateNewBlock()
+							assert.NoError(t, err)
+
+							_, err = chain.StateAfterBlockNumber(chain.BlockNumber())
+							assert.NoError(t, err)
+						}
 					}
 				}
 			}
