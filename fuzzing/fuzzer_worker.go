@@ -113,7 +113,7 @@ func (fw *FuzzerWorker) deployAndRegisterCompiledContracts() error {
 		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 			// Deploy the contract using our deployer address.
-			deployedAddress, err := fw.chain.DeployContract(contract.CompiledContract(), fw.fuzzer.deployer)
+			deployedAddress, _, err := fw.chain.DeployContract(contract.CompiledContract(), fw.fuzzer.deployer)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,6 @@ func (fw *FuzzerWorker) deployAndRegisterCompiledContracts() error {
 			fw.registerDeployedContract(deployedAddress, &contract)
 		}
 	}
-
 	return nil
 }
 
@@ -387,7 +386,7 @@ func (fw *FuzzerWorker) run() (bool, error) {
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
-	fw.testingBaseBlockNumber = fw.chain.BlockNumber()
+	fw.testingBaseBlockNumber = fw.chain.HeadBlockNumber()
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate

@@ -24,10 +24,13 @@ type Block struct {
 	// the VM to perform a state update. It houses event logs and other information collected during the state
 	// transitions when the messages were applied.
 	receipts types.Receipts
+
+	// messageResults represents the results of executing a CallMessage, as defined by the chain.TestChain executing it.
+	messageResults []*CallMessageResults
 }
 
 // NewBlock returns a new Block with the provided parameters.
-func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessage, receipts types.Receipts) (*Block, error) {
+func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessage, receipts types.Receipts, messageResults []*CallMessageResults) (*Block, error) {
 	// Verify our message count is valid
 	if len(messages) != len(receipts) {
 		return nil, fmt.Errorf("cannot created block with %d messages and %d receipts. one receipt should exist per message", len(messages), len(receipts))
@@ -35,10 +38,11 @@ func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessa
 
 	// Create our block and return it
 	block := &Block{
-		hash:     blockHash,
-		header:   header,
-		messages: messages,
-		receipts: receipts,
+		hash:           blockHash,
+		header:         header,
+		messages:       messages,
+		receipts:       receipts,
+		messageResults: messageResults,
 	}
 	return block, nil
 }
@@ -62,4 +66,9 @@ func (b *Block) Messages() []*CallMessage {
 // generated a receipt, the same index should be used into Messages as Receipts, as they are one-to-one.
 func (b *Block) Receipts() types.Receipts {
 	return b.receipts
+}
+
+// MessageResults provides execution results tracked by the chain.TestChain after processing each message in Messages.
+func (b *Block) MessageResults() []*CallMessageResults {
+	return b.messageResults
 }
