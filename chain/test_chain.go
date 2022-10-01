@@ -415,7 +415,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 	if blockNumber <= currentHeadBlockNumber {
 		return nil, fmt.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
 	}
-	
+
 	// Obtain our parent block hash to reference in our new block.
 	parentBlockHash := t.Head().Hash()
 
