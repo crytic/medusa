@@ -80,6 +80,67 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	return chain, senders
 }
 
+// TestChainReverting creates a TestChain and creates blocks and later reverts backward through all possible steps
+// to ensure no error occurs and the chain state is restored.
+func TestChainReverting(t *testing.T) {
+	// Define our probability of jumping
+	const blockNumberJumpProbability = 0.20
+	const blockNumberJumpMin = 1
+	const blockNumberJumpMax = 100
+	const blocksToProduce = 50
+
+	// Obtain our chain and senders
+	chain, _ := createChain(t)
+	chainBackups := make([]*TestChain, 0)
+
+	// Create some empty blocks and ensure we can get our state for this block number.
+	for x := 0; x < blocksToProduce; x++ {
+		// Determine if this will jump a certain number of blocks.
+		if rand.Float32() >= blockNumberJumpProbability {
+			// We decided not to jump, so we commit a block with a normal consecutive block number.
+			_, err := chain.CreateNewBlock()
+			assert.NoError(t, err)
+		} else {
+			// We decided to jump, so we commit a block with a random jump amount.
+			newBlockNumber := chain.HeadBlockNumber()
+			jumpDistance := (rand.Uint64() % (blockNumberJumpMax - blockNumberJumpMin)) + blockNumberJumpMin
+			newBlockNumber += jumpDistance
+
+			// Determine the jump amount, each block must have a unique timestamp, so we ensure it advanced by at least
+			// the diff.
+
+			// Create a block with our parameters
+			_, err := chain.CreateNewBlockWithParameters(newBlockNumber, chain.Head().Header().Time+jumpDistance)
+			assert.NoError(t, err)
+		}
+
+		// Clone our chain
+		backup, err := chain.Clone()
+		assert.NoError(t, err)
+		chainBackups = append(chainBackups, backup)
+	}
+
+	// Our chain backups should be in chronological order, so we loop backwards through them and test reverts.
+	for i := len(chainBackups) - 1; i >= 0; i-- {
+		// Alias our chain backup
+		chainBackup := chainBackups[i]
+
+		// Revert our main chain to this block height.
+		err := chain.RevertToBlockNumber(chainBackup.HeadBlockNumber())
+		assert.NoError(t, err)
+
+		// Verify state matches
+		// Verify both chains
+		verifyChain(t, chain)
+		verifyChain(t, chainBackup)
+
+		// Verify our final block hashes equal in both chains.
+		assert.EqualValues(t, chainBackup.Head().Hash(), chain.Head().Hash())
+		assert.EqualValues(t, chainBackup.Head().Header().Hash(), chain.Head().Header().Hash())
+		assert.EqualValues(t, chainBackup.Head().Header().Root, chain.Head().Header().Root)
+	}
+}
+
 // TestChainBlockNumberJumping creates a TestChain and creates blocks with block numbers which jumped (are
 // non-consecutive) to ensure the chain appropriately spoofs intermediate blocks.
 func TestChainBlockNumberJumping(t *testing.T) {

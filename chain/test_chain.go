@@ -203,25 +203,32 @@ func (t *TestChain) GasLimit() uint64 {
 	return t.Head().Header().GasLimit
 }
 
-func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) *chainTypes.Block {
+// fetchClosestInternalBlock obtains the closest preceding block that is internally committed to the TestChain.
+// When the TestChain creates a new block that jumps the block number forward, the existence of any intermediate
+// block will be spoofed based off of the closest preceding internally committed block.
+// Returns the index of the closest preceding block in blocks and the Block itself.
+func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTypes.Block) {
 	// Perform a binary search for this exact block number, or the closest preceding block we committed.
 	k := sort.Search(len(t.blocks), func(n int) bool {
 		return t.blocks[n].Header().Number.Uint64() >= blockNumber
 	})
 
-	// If our result is out of bounds, it means we supplied a block number too high, so we return our head
+	// Determine our closest block index
+	var blockIndex int
 	if k >= len(t.blocks) {
-		return t.blocks[len(t.blocks)-1]
+		// If our result is out of bounds, it means we supplied a block number too high, so we return our head
+		blockIndex = len(t.blocks) - 1
+	} else if t.blocks[k].Header().Number.Uint64() == blockNumber {
+		// If our result is an exact match, k is our block index
+		blockIndex = k
+	} else {
+		// If the result is not an exact match, binary search will return the index where the block number should've
+		// existed. This means the closest preceding block is just the index before
+		blockIndex = k - 1
 	}
 
-	// If our result is an exact match, return the index.
-	if t.blocks[k].Header().Number.Uint64() == blockNumber {
-		return t.blocks[k]
-	}
-
-	// If the result is not an exact match, binary search will return the index where the block number should've
-	// existed. This means the closest preceding block is just the index before
-	return t.blocks[k-1]
+	// Return the resulting block index and block.
+	return blockIndex, t.blocks[blockIndex]
 }
 
 func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
@@ -237,7 +244,7 @@ func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, erro
 
 	// First, search for this exact block number, or the closest preceding block we committed to derive information
 	// from. There will always be one, given the genesis block always exists.
-	closestBlock := t.fetchClosestInternalBlock(blockNumber)
+	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 	closestBlockNumber := closestBlock.Header().Number.Uint64()
 
 	// If we have an exact match, return it.
@@ -306,7 +313,7 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 	}
 
 	// Obtain our closest internally committed block
-	closestBlock := t.fetchClosestInternalBlock(blockNumber)
+	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 
 	// If the block is an exact match, return its hash.
 	if closestBlock.Header().Number.Uint64() == blockNumber {
@@ -327,7 +334,7 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 	}
 
 	// Obtain our closest internally committed block
-	closestBlock := t.fetchClosestInternalBlock(blockNumber)
+	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 
 	// Load our state from the database
 	stateDB, err := state.New(closestBlock.Header().Root, t.stateDatabase, nil)
@@ -340,9 +347,20 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 // RevertToBlockNumber sets the head of the chain to the block specified by the provided block number and reloads
 // the state from the underlying database.
 func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
+	// If our block number references something too new, return an error
+	if blockNumber > t.HeadBlockNumber() {
+		return fmt.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+	}
+
+	// Obtain our closest internally committed block, if it's not an exact match, it means we're trying to revert
+	// to a spoofed block, which we disallow for now.
+	closestBlockIndex, closestBlock := t.fetchClosestInternalBlock(blockNumber)
+	if closestBlock.Header().Number.Uint64() != blockNumber {
+		return fmt.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
+	}
+
 	// Adjust our chain length to match our snapshot
-	// TODO: Update logic here
-	t.blocks = t.blocks[:blockNumber+1]
+	t.blocks = t.blocks[:closestBlockIndex+1]
 
 	// Reload our state from our database
 	var err error
