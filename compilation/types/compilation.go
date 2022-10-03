@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
@@ -13,6 +14,16 @@ type CompiledContract struct {
 	RuntimeBytecode string
 	SrcMapsInit     string
 	SrcMapsRuntime  string
+}
+
+// InitBytecodeBytes returns the InitBytecode as a byte slice.
+func (c *CompiledContract) InitBytecodeBytes() ([]byte, error) {
+	return hex.DecodeString(strings.TrimPrefix(c.InitBytecode, "0x"))
+}
+
+// RuntimeBytecodeBytes returns the RuntimeBytecode as a byte slice.
+func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
+	return hex.DecodeString(strings.TrimPrefix(c.RuntimeBytecode, "0x"))
 }
 
 // CompiledSource represents a source descriptor for a smart contract compilation, including AST and contained

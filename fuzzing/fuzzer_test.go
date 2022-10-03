@@ -14,7 +14,7 @@ import (
 // getFuzzConfigDefault obtains the default configuration for tests.
 func getFuzzConfigDefault() *config.FuzzingConfig {
 	return &config.FuzzingConfig{
-		Workers:                  10,
+		Workers:                  1,
 		WorkerDatabaseEntryLimit: 10000,
 		Timeout:                  30,
 		TestLimit:                0,

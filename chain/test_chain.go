@@ -1,7 +1,7 @@
 package chain
 
 import (
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -22,7 +22,6 @@ import (
 	"golang.org/x/exp/slices"
 	"math/big"
 	"sort"
-	"strings"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
@@ -162,32 +161,65 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
-// but does not perform any other API-related changes such as adding additional tracers the original had.
+// but does not perform any other API-related changes such as adding additional tracers the original had, unless
+// otherwise specified in function input parameters.
 // Returns the new chain, or an error if one occurred.
-func (t *TestChain) Clone() (*TestChain, error) {
+func (t *TestChain) Clone(tracers ...vm.EVMLogger) (*TestChain, error) {
 	// Create a new chain with the same genesis definition
 	chain, err := NewTestChainWithGenesis(t.genesisDefinition)
 	if err != nil {
 		return nil, err
 	}
 
-	// Replay all messages after genesis onto it.
-	for i := 1; i < len(t.blocks); i++ {
-		blockHeader := t.blocks[i].Header()
-		blockNumber := blockHeader.Number.Uint64()
-		_, err := chain.CreateNewBlockWithParameters(blockNumber, blockHeader.Time, t.blocks[i].Messages()...)
-		if err != nil {
-			return nil, err
-		}
+	// Add our tracers to the new chain.
+	chain.TracerForwarder().AddTracers(tracers...)
+
+	// Copy our current chain state onto the new chain.
+	err = t.CopyTo(chain)
+	if err != nil {
+		return nil, err
 	}
 
 	// Return our new chain
 	return chain, nil
 }
 
+// CopyTo recreates the current TestChain state onto the provided one. This simply reconstructs the block/chain state
+// by sending the same call messages with the same block creation properties.
+// Returns an error if one occurred.
+func (t *TestChain) CopyTo(targetChain *TestChain) error {
+	if targetChain.blocks[0].Hash() != t.blocks[0].Hash() {
+		return errors.New("could not copy chain state onto a new chain because the genesis block hashes did not match")
+	}
+
+	// If the head block number is not genesis, revert
+	if targetChain.HeadBlockNumber() > 0 {
+		err := targetChain.RevertToBlockNumber(0)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Replay all messages after genesis onto it.
+	for i := 1; i < len(t.blocks); i++ {
+		blockHeader := t.blocks[i].Header()
+		blockNumber := blockHeader.Number.Uint64()
+		_, err := targetChain.CreateNewBlockWithParameters(blockNumber, blockHeader.Time, t.blocks[i].Messages()...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TracerForwarder returns the tracer forwarder used to forward tracing calls to multiple underlying tracers.
 func (t *TestChain) TracerForwarder() *chainTypes.TracerForwarder {
 	return t.tracerForwarder
+}
+
+// GenesisDefinition returns the core.Genesis definition used to initialize the chain.
+func (t *TestChain) GenesisDefinition() *core.Genesis {
+	return t.genesisDefinition
 }
 
 // MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
@@ -604,7 +636,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 // the resulting block the deployment transaction was processed in, and an error if one occurred.
 func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, deployer common.Address) (common.Address, *chainTypes.Block, error) {
 	// Obtain the byte code as a byte array
-	b, err := hex.DecodeString(strings.TrimPrefix(contract.InitBytecode, "0x"))
+	b, err := contract.InitBytecodeBytes()
 	if err != nil {
 		return common.Address{}, nil, fmt.Errorf("could not convert compiled contract bytecode from hex string to byte code")
 	}

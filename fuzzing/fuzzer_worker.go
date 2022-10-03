@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/tracing"
@@ -81,48 +80,87 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
-// registerDeployedContract registers an address with a compiled contract descriptor for it to be tracked by the
-// FuzzerWorker, both as methods of changing state and for properties to assert.
-func (fw *FuzzerWorker) registerDeployedContract(deployedAddress common.Address, contract *fuzzerTypes.Contract) {
-	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
-	fw.deployedContracts[deployedAddress] = contract
+// onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
+// It attempts bytecode matching and updates the list of deployed contracts the worker should use for fuzz testing.
+func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) {
+	// TODO: Optimizations to call updateStateChangingMethods less.
 
-	// If we deployed the contract, also enumerate property tests and state changing methods.
-	for _, method := range contract.CompiledContract().Abi.Methods {
-		if !method.IsConstant() {
-			// Any non-constant method should be tracked as a state changing method.
-			fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: deployedAddress, Contract: contract, Method: method})
+	// Loop through all deployed contracts
+	for _, deployedContract := range event.DeployedContracts {
+		// Loop through all our known contract definitions
+		matchedDeployment := false
+		for i := 0; i < len(fw.fuzzer.contracts); i++ {
+			contractDefinition := &fw.fuzzer.contracts[i]
+
+			// If we have a match, register the deployed contract.
+			if deployedContract.IsMatch(contractDefinition.CompiledContract()) {
+				// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
+				fw.deployedContracts[deployedContract.Address] = contractDefinition
+
+				// Update our state changing methods
+				fw.updateStateChangingMethods()
+
+				// Report our deployed contract to any test providers
+				for _, testProvider := range fw.fuzzer.testCaseProviders {
+					testProvider.OnWorkerDeployedContractAdded(fw, deployedContract.Address, contractDefinition)
+				}
+
+				// Skip to the next deployed contract to evaluate
+				matchedDeployment = true
+				break
+			}
 		}
-	}
 
-	// Report our deployed contract to any test providers
-	for _, testProvider := range fw.fuzzer.testCaseProviders {
-		testProvider.OnWorkerDeployedContractAdded(fw, deployedAddress, contract)
+		// If we didn't match any deployment, throw a warning
+		if !matchedDeployment {
+			// TODO: Figure out what to actually do here, we don't want to print errors as it could flood the console
+			//  in a tight execution loop if a contract that cannot be matched is repetitively deployed.
+		}
 	}
 }
 
-// deployAndRegisterCompiledContracts deploys all contracts in the parent Fuzzer.compilations to a test node and
-// registers their addresses to be tracked by the FuzzerWorker.
-// Returns an error if one is encountered.
-func (fw *FuzzerWorker) deployAndRegisterCompiledContracts() error {
-	// Loop for each contract in each compilation and deploy it to the test node.
-	for i := 0; i < len(fw.fuzzer.contracts); i++ {
-		// Obtain the currently indexed contract.
-		contract := fw.fuzzer.contracts[i]
+// onChainContractDeploymentRemovedEvent is the event callback used when the chain detects removal of a previously
+// deployed contract. It updates the list of deployed contracts the worker should use for fuzz testing.
+func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.ContractDeploymentsRemovedEvent) {
+	// TODO: Optimizations to call updateStateChangingMethods less.
 
-		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-			// Deploy the contract using our deployer address.
-			deployedAddress, _, err := fw.chain.DeployContract(contract.CompiledContract(), fw.fuzzer.deployer)
-			if err != nil {
-				return err
-			}
+	// Loop through all deployed contracts
+	for _, deployedContract := range event.DeployedContracts {
+		// Obtain our contract definition for this address
+		contractDefinition, previouslyRegistered := fw.deployedContracts[deployedContract.Address]
+		if !previouslyRegistered {
+			continue
+		}
 
-			// Ensure our worker tracks the deployed contract and any property tests
-			fw.registerDeployedContract(deployedAddress, &contract)
+		// Remove the contract from our deployed contracts mapping the worker maintains.
+		delete(fw.deployedContracts, deployedContract.Address)
+
+		// Update our state changing methods
+		fw.updateStateChangingMethods()
+
+		// Report our deployed contract to any test providers
+		for _, testProvider := range fw.fuzzer.testCaseProviders {
+			testProvider.OnWorkerDeployedContractDeleted(fw, deployedContract.Address, contractDefinition)
 		}
 	}
-	return nil
+}
+
+// updateStateChangingMethods updates the list of state changing methods used by the worker by re-evaluating them
+// from the deployedContracts lookup.
+func (fw *FuzzerWorker) updateStateChangingMethods() {
+	// Clear our list of state changing methods
+	fw.stateChangingMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
+
+	// Loop through each deployed contract
+	for contractAddress, contractDefinition := range fw.deployedContracts {
+		// If we deployed the contract, also enumerate property tests and state changing methods.
+		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+			if !method.IsConstant() {
+				// Any non-constant method should be tracked as a state changing method.
+				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+			}
+		}
+	}
 }
 
 // generateFuzzedAbiValue generates a value of the provided abi.Type.
@@ -343,46 +381,33 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 	return optimizedSequence, nil
 }
 
-// run sets up a Chain and begins executing fuzzed transaction calls and asserting properties are upheld.
-// This runs until Fuzzer.ctx cancels the operation.
+// run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
+// and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
-func (fw *FuzzerWorker) run() (bool, error) {
-	// Create our genesis allocations.
-	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
-
-	// Fund all of our sender addresses in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
-	for _, sender := range fw.fuzzer.senders {
-		genesisAlloc[sender] = core.GenesisAccount{
-			Balance: initBalance,
-		}
-	}
-
-	// Fund our deployer address in the genesis block
-	genesisAlloc[fw.fuzzer.deployer] = core.GenesisAccount{
-		Balance: initBalance,
-	}
-
-	// Create a chain
+func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
+	// Clone our setup base chain.
 	var err error
-	fw.chain, err = chain.NewTestChain(genesisAlloc)
+	fw.chain, err = chain.NewTestChainWithGenesis(baseTestChain.GenesisDefinition())
 	if err != nil {
 		return false, err
 	}
+
+	// Subscribe our event handlers to detect contract deployment changes
+	fw.chain.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
+	fw.chain.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
 	// Create a new tracer to power our base-feature set. Register it with our test chain's tracer forwarder.
 	fw.fuzzerTracer = tracing.NewFuzzerTracer(true)
 	fw.chain.TracerForwarder().AddTracer(fw.fuzzerTracer)
 
-	// Increase our generation metric as we successfully generated a test node
-	fw.workerMetrics().workerStartupCount++
-
-	// Deploy and track all compiled contracts
-	err = fw.deployAndRegisterCompiledContracts()
+	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).
+	err = baseTestChain.CopyTo(fw.chain)
 	if err != nil {
 		return false, err
 	}
+
+	// Increase our generation metric as we successfully generated a test node
+	fw.workerMetrics().workerStartupCount++
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.

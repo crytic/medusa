@@ -51,7 +51,7 @@ func (t *testChainTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	// we commit it).
 	if create {
 		deployedContract := &types.DeployedContract{
-			Address:         common.Address{},
+			Address:         to,
 			InitBytecode:    input,
 			RuntimeBytecode: nil,
 		}
@@ -83,7 +83,7 @@ func (t *testChainTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	// we commit it).
 	if typ == vm.CREATE || typ == vm.CREATE2 {
 		deployedContract := &types.DeployedContract{
-			Address:         common.Address{},
+			Address:         to,
 			InitBytecode:    input,
 			RuntimeBytecode: nil,
 		}

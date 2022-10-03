@@ -29,7 +29,12 @@ func NewTracerForwarderWithTracers(tracers []vm.EVMLogger) *TracerForwarder {
 
 // AddTracer adds a vm.EVMLogger implementation to the TracerForwarder so all other method calls are forwarded to it.
 func (t *TracerForwarder) AddTracer(tracer vm.EVMLogger) {
-	t.tracers = append(t.tracers, tracer)
+	t.AddTracers(tracer)
+}
+
+// AddTracers adds vm.EVMLogger implementations to the TracerForwarder so all other method calls are forwarded to them.
+func (t *TracerForwarder) AddTracers(tracers ...vm.EVMLogger) {
+	t.tracers = append(t.tracers, tracers...)
 }
 
 // Tracers returns the vm.EVMLogger instances added to the TracerForwarder.
