@@ -17,6 +17,7 @@ import (
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/chain/vendored"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
 	"math/big"
@@ -63,6 +64,17 @@ type TestChain struct {
 	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
 	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
+
+	// BlockAddedEventEmitter serves events indicating a block was added to the chain.
+	BlockAddedEventEmitter events.EventEmitter[BlockAddedEvent]
+	// BlockRemovedEventEmitter serves events indicating a block was removed from the chain.
+	BlockRemovedEventEmitter events.EventEmitter[BlockRemovedEvent]
+
+	// ContractDeploymentAddedEventEmitter serves events indicating a new contract was deployed to the chain.
+	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
+	// ContractDeploymentAddedEventEmitter serves events indicating a previously deployed contract was removed
+	// from the chain.
+	ContractDeploymentRemovedEventEmitter events.EventEmitter[ContractDeploymentsRemovedEvent]
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -359,8 +371,31 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 		return fmt.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
 	}
 
-	// Adjust our chain length to match our snapshot
+	// Slice off our blocks to be removed (to produce relevant events)
+	removedBlocks := t.blocks[closestBlockIndex+1:]
+
+	// Remove the relevant blocks from the chain
 	t.blocks = t.blocks[:closestBlockIndex+1]
+
+	// Emit our events for newly deployed contracts
+	for i := len(removedBlocks) - 1; i >= 0; i-- {
+		// Emit our event for removing a block
+		t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
+			Chain: t,
+			Block: removedBlocks[i],
+		})
+
+		// For each call message in our block, if we had any resulting deployed smart contracts, signal that they have
+		// now been removed.
+		for _, messageResult := range removedBlocks[i].MessageResults() {
+			if len(messageResult.DeployedContracts) > 0 {
+				t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
+					Chain:             t,
+					DeployedContracts: messageResult.DeployedContracts,
+				})
+			}
+		}
+	}
 
 	// Reload our state from our database
 	var err error
@@ -520,7 +555,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 		// Create our execution result and append it to the list.
 		// - We take the deployed contract addresses detected by the tracer and copy them into our results.
 		messageResults = append(messageResults, &chainTypes.CallMessageResults{
-			DeployedContractAddresses: slices.Clone(t.internalTracer.deployedContractAddresses),
+			DeployedContracts: slices.Clone(t.internalTracer.deployedContractAddresses),
 		})
 	}
 
@@ -541,8 +576,26 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 	// Create a new block for our test node
 	block, err := chainTypes.NewBlock(blockHash, header, messages, receipts, messageResults)
 
-	// Append our new block to our chain and return it.
+	// Append our new block to our chain.
 	t.blocks = append(t.blocks, block)
+
+	// Emit our event for adding a new block
+	t.BlockAddedEventEmitter.Publish(BlockAddedEvent{
+		Chain: t,
+		Block: block,
+	})
+
+	// Emit our events for newly deployed contracts
+	for _, messageResult := range messageResults {
+		if len(messageResult.DeployedContracts) > 0 {
+			t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
+				Chain:             t,
+				DeployedContracts: messageResult.DeployedContracts,
+			})
+		}
+	}
+
+	// Return our created block.
 	return block, nil
 }
 

@@ -225,7 +225,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 						// There should've been two address deployments, an outer and inner deployment.
 						// (tx deployment and dynamic deployment).
 						assert.EqualValues(t, 1, len(block.MessageResults()))
-						assert.EqualValues(t, 2, len(block.MessageResults()[0].DeployedContractAddresses))
+						assert.EqualValues(t, 2, len(block.MessageResults()[0].DeployedContracts))
 
 						// Ensure we could get our state
 						_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
