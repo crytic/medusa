@@ -100,10 +100,24 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *co
 }
 
 // TestDeploymentInnerDeployment runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
-// their properties are tested appropriately.
+// their properties are tested appropriately. This test contract deploys the inner contract which takes no constructor
+// arguments
 func TestDeploymentInnerDeployment(t *testing.T) {
-	// TODO: Re-enable this after implementing dynamic deployment matching
-	//testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment.sol", getFuzzConfigDefault(), true)
+}
+
+// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
+// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
+// constructor arguments, at construction time.
+func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol", getFuzzConfigDefault(), true)
+}
+
+// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
+// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
+// constructor arguments, during the fuzzing campaign.
+func TestDeploymentInnerInnerDeployment(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_inner_deployment.sol", getFuzzConfigDefault(), true)
 }
 
 // TestDeploymentInternalLibrary runs a test to ensure internal libraries behave correctly.

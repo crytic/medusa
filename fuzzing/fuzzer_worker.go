@@ -100,6 +100,12 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 				// Update our state changing methods
 				fw.updateStateChangingMethods()
 
+				// TODO: Remove this, testing for debugging purposes
+				state, err := fw.chain.StateAfterBlockNumber(fw.chain.HeadBlockNumber())
+				if err != nil || len(state.GetCode(deployedContract.Address)) <= 10 {
+					panic("dang")
+				}
+
 				// Report our deployed contract to any test providers
 				for _, testProvider := range fw.fuzzer.testCaseProviders {
 					testProvider.OnWorkerDeployedContractAdded(fw, deployedContract.Address, contractDefinition)
@@ -111,10 +117,11 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 			}
 		}
 
-		// If we didn't match any deployment, throw a warning
+		// If we didn't match any deployment, report it.
 		if !matchedDeployment {
 			// TODO: Figure out what to actually do here, we don't want to print errors as it could flood the console
 			//  in a tight execution loop if a contract that cannot be matched is repetitively deployed.
+			panic("could not match bytecode!")
 		}
 	}
 }

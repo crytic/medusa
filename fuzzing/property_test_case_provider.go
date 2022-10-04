@@ -272,7 +272,13 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
 				VerifierFunction: func(worker *FuzzerWorker, callSequence types.CallSequence) bool {
-					// The shrink verifier simply ensures the previously failed property test fails
+					// First verify the contract to property test is still deployed to call upon.
+					_, propertyTestContractDeployed := worker.deployedContracts[workerPropertyTestMethod.Address]
+					if !propertyTestContractDeployed {
+						return false
+					}
+
+					// Then the shrink verifier simply ensures the previously failed property test fails
 					// for the shrunk sequence as well.
 					return t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
 				},
