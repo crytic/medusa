@@ -2,7 +2,7 @@
 contract InnerDeployment {
     uint x;
 
-    constructor(uint dummyValue) {
+    constructor(uint dummyValue) public {
         x = dummyValue;
     }
 
@@ -13,7 +13,7 @@ contract InnerDeployment {
 
 contract InnerDeploymentFactory {
     InnerDeployment x;
-    constructor() {
+    constructor() public {
         x = new InnerDeployment(7);
         x.reset();
     }

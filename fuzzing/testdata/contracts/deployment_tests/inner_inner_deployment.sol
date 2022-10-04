@@ -4,7 +4,7 @@ contract InnerInnerDeployment {
     uint x;
 
     // We add a constructor here so it's not automatically deployed, this way we test dynamic deployment.
-    constructor(uint dummyValue) {
+    constructor(uint dummyValue) public {
         x = dummyValue;
     }
 
@@ -20,7 +20,7 @@ contract InnerDeployment {
     uint x;
 
     // We add a constructor here so it's not automatically deployed, this way we test dynamic deployment.
-    constructor(uint dummyValue) {
+    constructor(uint dummyValue) public {
         x = dummyValue;
     }
 
