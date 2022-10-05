@@ -51,9 +51,8 @@ func (t *testChainTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	// we commit it).
 	if create {
 		deployedContract := &types.DeployedContract{
-			Address:         to,
-			InitBytecode:    input,
-			RuntimeBytecode: nil,
+			Address:      to,
+			InitBytecode: input,
 		}
 		t.pendingContractAddresses[t.callDepth] = append(t.pendingContractAddresses[t.callDepth], deployedContract)
 	}
@@ -83,9 +82,8 @@ func (t *testChainTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	// we commit it).
 	if typ == vm.CREATE || typ == vm.CREATE2 {
 		deployedContract := &types.DeployedContract{
-			Address:         to,
-			InitBytecode:    input,
-			RuntimeBytecode: nil,
+			Address:      to,
+			InitBytecode: input,
 		}
 		t.pendingContractAddresses[t.callDepth] = append(t.pendingContractAddresses[t.callDepth], deployedContract)
 	}
