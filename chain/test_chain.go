@@ -420,10 +420,10 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 		// For each call message in our block, if we had any resulting deployed smart contracts, signal that they have
 		// now been removed.
 		for _, messageResult := range removedBlocks[i].MessageResults() {
-			if len(messageResult.DeployedContracts) > 0 {
+			if len(messageResult.DeployedContractBytecodes) > 0 {
 				t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
-					Chain:             t,
-					DeployedContracts: messageResult.DeployedContracts,
+					Chain:                     t,
+					DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 				})
 			}
 		}
@@ -587,7 +587,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 		// Create our execution result and append it to the list.
 		// - We take the deployed contract addresses detected by the tracer and copy them into our results.
 		messageResults = append(messageResults, &chainTypes.CallMessageResults{
-			DeployedContracts: slices.Clone(t.internalTracer.deployedContractAddresses),
+			DeployedContractBytecodes: slices.Clone(t.internalTracer.deployedContractBytecode),
 		})
 	}
 
@@ -619,10 +619,10 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 
 	// Emit our events for newly deployed contracts
 	for _, messageResult := range messageResults {
-		if len(messageResult.DeployedContracts) > 0 {
+		if len(messageResult.DeployedContractBytecodes) > 0 {
 			t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-				Chain:             t,
-				DeployedContracts: messageResult.DeployedContracts,
+				Chain:                     t,
+				DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 			})
 		}
 	}

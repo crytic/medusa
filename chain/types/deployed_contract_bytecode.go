@@ -6,8 +6,8 @@ import (
 	"github.com/trailofbits/medusa/compilation/types"
 )
 
-// DeployedContract describes a contract which is actively deployed on-chain at a given address.
-type DeployedContract struct {
+// DeployedContractBytecode describes contract bytecode which is actively deployed on-chain at a given address.
+type DeployedContractBytecode struct {
 	// Address represents the Ethereum address where the deployed contract containing the method exists.
 	Address common.Address
 
@@ -15,8 +15,9 @@ type DeployedContract struct {
 	InitBytecode []byte
 }
 
-// IsMatch returns a boolean indicating whether the deployed contract is a match with the provided compiled contract.
-func (c *DeployedContract) IsMatch(contract *types.CompiledContract) bool {
+// IsMatch returns a boolean indicating whether the deployed contract bytecode is a match with the provided compiled
+// contract.
+func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) bool {
 	// Obtain the contract byte code as a byte slice.
 	contractInitBytecode, err := contract.InitBytecodeBytes()
 	if err != nil {

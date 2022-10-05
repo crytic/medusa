@@ -85,24 +85,24 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) {
 	// TODO: Optimizations to call updateStateChangingMethods less.
 
-	// Loop through all deployed contracts
-	for _, deployedContract := range event.DeployedContracts {
+	// Loop through all deployed bytecode
+	for _, deployedBytecode := range event.DeployedContractBytecodes {
 		// Loop through all our known contract definitions
 		matchedDeployment := false
 		for i := 0; i < len(fw.fuzzer.contracts); i++ {
 			contractDefinition := &fw.fuzzer.contracts[i]
 
 			// If we have a match, register the deployed contract.
-			if deployedContract.IsMatch(contractDefinition.CompiledContract()) {
+			if deployedBytecode.IsMatch(contractDefinition.CompiledContract()) {
 				// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
-				fw.deployedContracts[deployedContract.Address] = contractDefinition
+				fw.deployedContracts[deployedBytecode.Address] = contractDefinition
 
 				// Update our state changing methods
 				fw.updateStateChangingMethods()
 
 				// Report our deployed contract to any test providers
 				for _, testProvider := range fw.fuzzer.testCaseProviders {
-					testProvider.OnWorkerDeployedContractAdded(fw, deployedContract.Address, contractDefinition)
+					testProvider.OnWorkerDeployedContractAdded(fw, deployedBytecode.Address, contractDefinition)
 				}
 
 				// Skip to the next deployed contract to evaluate
@@ -125,23 +125,23 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.ContractDeploymentsRemovedEvent) {
 	// TODO: Optimizations to call updateStateChangingMethods less.
 
-	// Loop through all deployed contracts
-	for _, deployedContract := range event.DeployedContracts {
+	// Loop through all deployed bytecode
+	for _, deployedBytecode := range event.DeployedContractBytecodes {
 		// Obtain our contract definition for this address
-		contractDefinition, previouslyRegistered := fw.deployedContracts[deployedContract.Address]
+		contractDefinition, previouslyRegistered := fw.deployedContracts[deployedBytecode.Address]
 		if !previouslyRegistered {
 			continue
 		}
 
 		// Remove the contract from our deployed contracts mapping the worker maintains.
-		delete(fw.deployedContracts, deployedContract.Address)
+		delete(fw.deployedContracts, deployedBytecode.Address)
 
 		// Update our state changing methods
 		fw.updateStateChangingMethods()
 
 		// Report our deployed contract to any test providers
 		for _, testProvider := range fw.fuzzer.testCaseProviders {
-			testProvider.OnWorkerDeployedContractDeleted(fw, deployedContract.Address, contractDefinition)
+			testProvider.OnWorkerDeployedContractDeleted(fw, deployedBytecode.Address, contractDefinition)
 		}
 	}
 }

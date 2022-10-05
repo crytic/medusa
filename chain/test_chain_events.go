@@ -18,14 +18,13 @@ type BlockRemovedEvent struct {
 
 // ContractDeploymentsAddedEvent describes an event where a new contract deployments are detected by the TestChain.
 type ContractDeploymentsAddedEvent struct {
-	Chain             *TestChain
-	DeployedContracts []*types.DeployedContract
+	Chain                     *TestChain
+	DeployedContractBytecodes []*types.DeployedContractBytecode
 }
 
 // ContractDeploymentsRemovedEvent describes an event where a previously deployed contract on the TestChain is removed,
 // possibly due to the chain reverting to a previous block or a self-destruct operation.
 type ContractDeploymentsRemovedEvent struct {
-	Chain             *TestChain
-	DeployedContracts []*types.DeployedContract
-	SelfDestructed    bool
+	Chain                     *TestChain
+	DeployedContractBytecodes []*types.DeployedContractBytecode
 }
