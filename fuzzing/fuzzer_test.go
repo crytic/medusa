@@ -6,7 +6,7 @@ import (
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/fuzzing/config"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"strconv"
 	"testing"
 )
@@ -59,7 +59,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	fmt.Printf("##############################################################\n")
 
 	// Copy our target file to our test directory
-	testContractPath := test_utils.CopyToTestDirectory(t, solidityFile)
+	testContractPath := testutils.CopyToTestDirectory(t, solidityFile)
 
 	// Create a default solc platform config
 	solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)

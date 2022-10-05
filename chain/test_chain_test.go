@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -194,10 +194,10 @@ func TestChainBlockNumberJumping(t *testing.T) {
 // verifies have no registered contract deployments.
 func TestChainDynamicDeployments(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/contracts/deployment_with_inner.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_with_inner.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create a solc provider
 		solc := platforms.NewSolcCompilationConfig(contractPath)
 
@@ -266,10 +266,10 @@ func TestChainDynamicDeployments(t *testing.T) {
 // that the ending state is the same.
 func TestChainCloning(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create a solc provider
 		solc := platforms.NewSolcCompilationConfig(contractPath)
 
@@ -332,10 +332,10 @@ func TestChainCloning(t *testing.T) {
 // semantics to be the same whenever run with the same messages being sent for all the same blocks.
 func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create a solc provider
 		solc := platforms.NewSolcCompilationConfig(contractPath)
 
