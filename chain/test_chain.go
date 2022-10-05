@@ -233,7 +233,6 @@ func (t *TestChain) Head() *chainTypes.Block {
 }
 
 // HeadBlockNumber returns the test chain head's block number, where zero is the genesis block.
-// TODO: Delete this method and use t.Head().Header().Number instead once we finish the rest of this merge.
 func (t *TestChain) HeadBlockNumber() uint64 {
 	return t.Head().Header().Number.Uint64()
 }
@@ -275,6 +274,10 @@ func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTy
 	return blockIndex, t.blocks[blockIndex]
 }
 
+// BlockFromNumber obtains the block with the provided block number from the current chain. If blocks committed to
+// the TestChain skip block numbers, this method will simulate the existence of well-formed intermediate blocks to
+// ensure chain validity throughout. Thus, this is a "simulated" chain API method.
+// Returns the block, or an error if one occurs.
 func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
 	// If the block number is past our current head, return an error.
 	if blockNumber > t.HeadBlockNumber() {
@@ -342,6 +345,9 @@ func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, erro
 	return block, err
 }
 
+// getSpoofedBlockHashFromNumber is a helper method used to create a deterministic hash for a spoofed block at a given
+// block number. This avoids costly calculation of potentially thousands of simulated blocks and allows us to generate
+// simulated blocks on demand, rather than storing them.
 func getSpoofedBlockHashFromNumber(blockNumber uint64) common.Hash {
 	// For blocks which were not internally committed, which we fake the existence of (for block number jumping), we use
 	// the block number as the block hash.

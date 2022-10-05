@@ -317,7 +317,10 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		// this call sequence.
 		shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 		for _, testProvider := range fw.fuzzer.testCaseProviders {
-			newShrinkRequests := testProvider.OnWorkerCallSequenceCallTested(fw, callSequence[:i+1])
+			newShrinkRequests, err := testProvider.OnWorkerCallSequenceCallTested(fw, callSequence[:i+1])
+			if err != nil {
+				return i, nil, err
+			}
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 
@@ -361,10 +364,13 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		}
 
 		// Check if our verifier signalled that we met our conditions
-		validShrunkSequence := shrinkRequest.VerifierFunction(fw, testSeq)
+		validShrunkSequence, err := shrinkRequest.VerifierFunction(fw, testSeq)
+		if err != nil {
+			return nil, err
+		}
 
 		// After testing the sequence, we'll want to rollback changes to reset our testing state.
-		if err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+		if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
 			return nil, err
 		}
 
@@ -378,7 +384,11 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 	}
 
 	// After we finished shrinking, report our result and return it.
-	shrinkRequest.FinishedCallback(fw, optimizedSequence)
+	err := shrinkRequest.FinishedCallback(fw, optimizedSequence)
+	if err != nil {
+		return nil, err
+	}
+
 	return optimizedSequence, nil
 }
 
@@ -426,11 +436,19 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			break // no signal to exit, break out of select to continue processing
 		}
 
-		// Define our transaction sequence slice to populate.
-		txSequence := make(fuzzerTypes.CallSequence, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
+		// Loop through each test provider, signal our worker is about to test a new call sequence.
+		for _, testProvider := range fw.fuzzer.testCaseProviders {
+			err = testProvider.OnWorkerCallSequenceTesting(fw)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		// Define our call sequence slice to populate.
+		callSequence := make(fuzzerTypes.CallSequence, fw.fuzzer.config.Fuzzing.MaxTxSequenceLength)
 
 		// Test a newly generated call sequence (nil entries are filled by the method during testing)
-		txsTested, shrinkVerifiers, err := fw.testCallSequence(txSequence)
+		txsTested, shrinkVerifiers, err := fw.testCallSequence(callSequence)
 		if err != nil {
 			return false, err
 		}
@@ -449,7 +467,15 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 		// If we have any requests to shrink call sequences, do so now.
 		for _, shrinkVerifier := range shrinkVerifiers {
-			_, err = fw.shrinkCallSequence(txSequence[:txsTested], shrinkVerifier)
+			_, err = fw.shrinkCallSequence(callSequence[:txsTested], shrinkVerifier)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		// Loop through each test provider, signal our worker completed testing of a call sequence.
+		for _, testProvider := range fw.fuzzer.testCaseProviders {
+			err = testProvider.OnWorkerCallSequenceTesting(fw)
 			if err != nil {
 				return false, err
 			}

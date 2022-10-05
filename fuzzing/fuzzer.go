@@ -300,7 +300,10 @@ func (f *Fuzzer) Start() error {
 	f.testCasesFinished = make(map[string]TestCase)
 	f.testCasesLock.Unlock()
 	for _, testProvider := range f.testCaseProviders {
-		testProvider.OnFuzzerStarting(f)
+		err := testProvider.OnFuzzerStarting(f)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create our test chain
@@ -345,7 +348,8 @@ func (f *Fuzzer) Start() error {
 		availableWorkerIndexedLock.Unlock()
 
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
-		// keeping us at our desired thread capacity.
+		// keeping us at our desired thread capacity. If we encounter an error, we store it and continue
+		// processing the cleanup logic to exit gracefully.
 		go func(workerIndex int) {
 			// Create a new worker for this fuzzing.
 			worker := newFuzzerWorker(f, workerIndex)
@@ -353,18 +357,24 @@ func (f *Fuzzer) Start() error {
 
 			// Update the type provider with our event
 			for _, testProvider := range f.testCaseProviders {
-				testProvider.OnWorkerCreated(worker)
+				workerCreatedErr := testProvider.OnWorkerCreated(worker)
+				if err == nil && workerCreatedErr != nil {
+					err = workerCreatedErr
+					break
+				}
 			}
 
 			// Run the worker and check if we received a cancelled signal, or we encountered an error.
-			ctxCancelled, workerErr := worker.run(baseTestChain)
-			if workerErr != nil {
-				err = workerErr
-			}
+			if err == nil {
+				ctxCancelled, workerErr := worker.run(baseTestChain)
+				if workerErr != nil {
+					err = workerErr
+				}
 
-			// If we received a cancelled signal, signal our exit from the working loop.
-			if working && ctxCancelled {
-				working = false
+				// If we received a cancelled signal, signal our exit from the working loop.
+				if working && ctxCancelled {
+					working = false
+				}
 			}
 
 			// Free our worker id before unblocking our channel, as a free one will be expected.
@@ -374,7 +384,11 @@ func (f *Fuzzer) Start() error {
 
 			// Update the type provider with our event
 			for _, testProvider := range f.testCaseProviders {
-				testProvider.OnWorkerDestroyed(worker)
+				workerDestroyedErr := testProvider.OnWorkerDestroyed(worker)
+				if err == nil && workerDestroyedErr != nil {
+					err = workerDestroyedErr
+					break
+				}
 			}
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
@@ -398,9 +412,18 @@ func (f *Fuzzer) Start() error {
 		}
 	}
 
+	// Now that we've gracefully ensured all goroutines have ceased, we can immediately return our error if we have
+	// one.
+	if err != nil {
+		return err
+	}
+
 	// Signal to our test providers that we are stopping fuzzing.
 	for _, testProvider := range f.testCaseProviders {
-		testProvider.OnFuzzerStopping(f)
+		err = testProvider.OnFuzzerStopping(f)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Print our test case results
