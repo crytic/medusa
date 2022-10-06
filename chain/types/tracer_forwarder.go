@@ -11,6 +11,7 @@ import (
 
 // TracerForwarder implements vm.EVMLogger and forwards all underlying calls to vm.EVMLoggers registered with it.
 type TracerForwarder struct {
+	// tracers refers to the internally recorded vm.EVMLogger instances to forward all calls to.
 	tracers []vm.EVMLogger
 }
 
