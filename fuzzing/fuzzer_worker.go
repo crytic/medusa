@@ -102,7 +102,10 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 
 				// Report our deployed contract to any test providers
 				for _, testProvider := range fw.fuzzer.testCaseProviders {
-					testProvider.OnWorkerDeployedContractAdded(fw, deployedBytecode.Address, contractDefinition)
+					err := testProvider.OnWorkerDeployedContractAdded(fw, deployedBytecode.Address, contractDefinition)
+					if err != nil {
+						panic(fmt.Sprintf("a test provider returned an error when alerted of a new contract deployment: %v", err))
+					}
 				}
 
 				// Skip to the next deployed contract to evaluate
@@ -141,7 +144,10 @@ func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.Contra
 
 		// Report our deployed contract to any test providers
 		for _, testProvider := range fw.fuzzer.testCaseProviders {
-			testProvider.OnWorkerDeployedContractDeleted(fw, deployedBytecode.Address, contractDefinition)
+			err := testProvider.OnWorkerDeployedContractDeleted(fw, deployedBytecode.Address, contractDefinition)
+			if err != nil {
+				panic(fmt.Sprintf("a test provider returned an error when alerted of a removed contract deployment: %v", err))
+			}
 		}
 	}
 }
