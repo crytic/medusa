@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
+	"math/big"
 	"sync"
 	"time"
 )
@@ -52,22 +56,21 @@ type Fuzzer struct {
 	testCasesLock sync.Mutex
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
+
+	// testChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
+	testChainSetupFunc TestChainSetupFunc
 }
+
+// TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
+type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Parse the senders addresses from our account config.
-	senders := make([]common.Address, 0)
-	for _, sender := range config.Fuzzing.SenderAddresses {
-		// Parse our provided account string
-		address, err := utils.HexStringToAddress(sender)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add it to our senders list
-		senders = append(senders, *address)
+	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
+	if err != nil {
+		return nil, err
 	}
 
 	// Parse the deployer address from our account config
@@ -78,14 +81,15 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
-		config:            config,
-		senders:           senders,
-		deployer:          *deployer,
-		BaseValueSet:      value_generation.NewBaseValueSet(),
-		contracts:         make([]fuzzerTypes.Contract, 0),
-		testCaseProviders: make([]TestCaseProvider, 0),
-		testCases:         make([]TestCase, 0),
-		testCasesFinished: make(map[string]TestCase),
+		config:             config,
+		senders:            senders,
+		deployer:           deployer,
+		BaseValueSet:       value_generation.NewBaseValueSet(),
+		contracts:          make([]fuzzerTypes.Contract, 0),
+		testCaseProviders:  make([]TestCaseProvider, 0),
+		testCases:          make([]TestCase, 0),
+		testCasesFinished:  make(map[string]TestCase),
+		testChainSetupFunc: deploymentStrategyCompilationConfig,
 	}
 
 	// If we have a compilation config
@@ -223,6 +227,51 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	}
 }
 
+// createTestChain creates a test chain with the account balance allocations specified by the config.
+func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
+	// Create our genesis allocations.
+	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
+	genesisAlloc := make(core.GenesisAlloc)
+
+	// Fund all of our sender addresses in the genesis block
+	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
+	for _, sender := range f.senders {
+		genesisAlloc[sender] = core.GenesisAccount{
+			Balance: initBalance,
+		}
+	}
+
+	// Fund our deployer address in the genesis block
+	genesisAlloc[f.deployer] = core.GenesisAccount{
+		Balance: initBalance,
+	}
+
+	// Create our test chain with our basic allocations.
+	testChain, err := chain.NewTestChain(genesisAlloc)
+	return testChain, err
+}
+
+// deploymentStrategyCompilationConfig is a TestChainSetupFunc which sets up the base test chain state by deploying
+// all contracts which take no constructor parameters to the chain using the config-specified deployer account address.
+// Returns an error if one occurs.
+func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+	// Loop for each contract in each compilation and deploy it to the test chain.
+	for i := 0; i < len(fuzzer.contracts); i++ {
+		// Obtain the currently indexed contract.
+		contract := fuzzer.contracts[i]
+
+		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
+		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
+			// Deploy the contract using our deployer address.
+			_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
@@ -251,7 +300,22 @@ func (f *Fuzzer) Start() error {
 	f.testCasesFinished = make(map[string]TestCase)
 	f.testCasesLock.Unlock()
 	for _, testProvider := range f.testCaseProviders {
-		testProvider.OnFuzzerStarting(f)
+		err := testProvider.OnFuzzerStarting(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create our test chain
+	baseTestChain, err := f.createTestChain()
+	if err != nil {
+		return err
+	}
+
+	// Set it up with our deployment/setup strategy defined by the fuzzer.
+	err = f.testChainSetupFunc(f, baseTestChain)
+	if err != nil {
+		return err
 	}
 
 	// We create a test node for each thread we intend to create. Fuzzer workers can stop if they hit some resource
@@ -272,7 +336,6 @@ func (f *Fuzzer) Start() error {
 	f.workers = make([]*FuzzerWorker, f.config.Fuzzing.Workers)
 	threadReserveChannel := make(chan struct{}, f.config.Fuzzing.Workers)
 	working := true
-	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
 		// slot is freed up.
@@ -285,7 +348,8 @@ func (f *Fuzzer) Start() error {
 		availableWorkerIndexedLock.Unlock()
 
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
-		// keeping us at our desired thread capacity.
+		// keeping us at our desired thread capacity. If we encounter an error, we store it and continue
+		// processing the cleanup logic to exit gracefully.
 		go func(workerIndex int) {
 			// Create a new worker for this fuzzing.
 			worker := newFuzzerWorker(f, workerIndex)
@@ -293,18 +357,24 @@ func (f *Fuzzer) Start() error {
 
 			// Update the type provider with our event
 			for _, testProvider := range f.testCaseProviders {
-				testProvider.OnWorkerCreated(worker)
+				workerCreatedErr := testProvider.OnWorkerCreated(worker)
+				if err == nil && workerCreatedErr != nil {
+					err = workerCreatedErr
+					break
+				}
 			}
 
 			// Run the worker and check if we received a cancelled signal, or we encountered an error.
-			ctxCancelled, workerErr := worker.run()
-			if workerErr != nil {
-				err = workerErr
-			}
+			if err == nil {
+				ctxCancelled, workerErr := worker.run(baseTestChain)
+				if workerErr != nil {
+					err = workerErr
+				}
 
-			// If we received a cancelled signal, signal our exit from the working loop.
-			if working && ctxCancelled {
-				working = false
+				// If we received a cancelled signal, signal our exit from the working loop.
+				if working && ctxCancelled {
+					working = false
+				}
 			}
 
 			// Free our worker id before unblocking our channel, as a free one will be expected.
@@ -314,7 +384,11 @@ func (f *Fuzzer) Start() error {
 
 			// Update the type provider with our event
 			for _, testProvider := range f.testCaseProviders {
-				testProvider.OnWorkerDestroyed(worker)
+				workerDestroyedErr := testProvider.OnWorkerDestroyed(worker)
+				if err == nil && workerDestroyedErr != nil {
+					err = workerDestroyedErr
+					break
+				}
 			}
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
@@ -338,9 +412,18 @@ func (f *Fuzzer) Start() error {
 		}
 	}
 
+	// Now that we've gracefully ensured all goroutines have ceased, we can immediately return our error if we have
+	// one.
+	if err != nil {
+		return err
+	}
+
 	// Signal to our test providers that we are stopping fuzzing.
 	for _, testProvider := range f.testCaseProviders {
-		testProvider.OnFuzzerStopping(f)
+		err = testProvider.OnFuzzerStopping(f)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Print our test case results

@@ -60,51 +60,51 @@ func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method, propertyTes
 }
 
 // checkPropertyTestFailed executes a given property test to see if it returns a failed status.
-func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker, propertyTestMethod *types.DeployedContractMethod) bool {
+func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker, propertyTestMethod *types.DeployedContractMethod) (bool, error) {
 	// Generate our ABI input data for the call (just the method ID, no args)
 	data, err := propertyTestMethod.Contract.CompiledContract().Abi.Pack(propertyTestMethod.Method.Name)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 
 	// Call the underlying contract
 	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the assertions.
 	value := big.NewInt(0)
-	msg := worker.TestNode().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, data)
-	res, err := worker.TestNode().CallContract(msg)
+	msg := worker.Chain().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, data)
+	res, err := worker.Chain().CallContract(msg)
 	if err != nil {
-		panic(err)
+		return false, fmt.Errorf("failed to call property test method: %v", err)
 	}
 
 	// If our property test method call failed, we flag a failed test.
 	if res.Failed() {
-		return true
+		return true, nil
 	}
 
 	// Decode our ABI outputs
 	retVals, err := propertyTestMethod.Method.Outputs.Unpack(res.Return())
 	if err != nil {
-		panic(err)
+		return false, fmt.Errorf("failed to decode property test method return value: %v", err)
 	}
 
 	// We should have one return value.
 	if len(retVals) != 1 {
-		panic(fmt.Sprintf("unexpected number of return values in property '%s'", propertyTestMethod.Method.Name))
+		return false, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// The one return value should be a bool
 	propertyTestMethodPassed, ok := retVals[0].(bool)
 	if !ok {
-		panic(fmt.Sprintf("could not obtain bool from first ABI output element in property '%s'", propertyTestMethod.Method.Name))
+		return false, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// Return our status from our property test method
-	return !propertyTestMethodPassed
+	return !propertyTestMethodPassed, nil
 }
 
 // OnFuzzerStarting is called by the fuzzing.Fuzzer upon the start of a fuzzing campaign. Any previously recorded
 // TestCase should be cleared from the provider and state should be reset.
-func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
+func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) error {
 	// Reset our state
 	t.testCases = make(map[types.ContractMethodID]*PropertyTestCase)
 	t.workerStates = make([]propertyTestCaseProviderWorkerState, fuzzer.Config().Fuzzing.Workers)
@@ -132,12 +132,13 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) {
 			}
 		}
 	}
+	return nil
 }
 
 // OnFuzzerStopping is called when a fuzzing.Fuzzer's campaign is being stopped. Any TestCase which is still in a
 // running state should be updated during this step and put into a finalized state. This is guaranteed to be called
 // after all workers have been stopped.
-func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
+func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) error {
 	// Clear our property test methods
 	t.workerStates = nil
 
@@ -147,27 +148,31 @@ func (t *PropertyTestCaseProvider) OnFuzzerStopping(fuzzer *Fuzzer) {
 			testCase.status = TestCaseStatusPassed
 		}
 	}
+	return nil
 }
 
 // OnWorkerCreated is called when a new fuzzing.FuzzerWorker is created by the fuzzing.Fuzzer.
-func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) {
+func (t *PropertyTestCaseProvider) OnWorkerCreated(worker *FuzzerWorker) error {
 	// Create a new state for this worker.
 	t.workerStates[worker.WorkerIndex()] = propertyTestCaseProviderWorkerState{
 		propertyTestMethods:     make(map[types.ContractMethodID]types.DeployedContractMethod),
 		propertyTestMethodsLock: sync.Mutex{},
 	}
+	return nil
 }
 
 // OnWorkerDestroyed is called when a previously created fuzzing.FuzzerWorker is destroyed by the fuzzing.Fuzzer.
-func (t *PropertyTestCaseProvider) OnWorkerDestroyed(worker *FuzzerWorker) {}
+func (t *PropertyTestCaseProvider) OnWorkerDestroyed(worker *FuzzerWorker) error {
+	return nil
+}
 
 // OnWorkerDeployedContractAdded is called when a fuzzing.FuzzerWorker detects a newly deployed contract in the
-// underlying TestNode. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
+// underlying Chain. If the  contract could be matched to a definition registered with the fuzzing.Fuzzer,
 // it is provided as well. Otherwise, a nil contract definition is supplied.
-func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) {
+func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) error {
 	// If we don't have a contract definition, we can't run property tests against the contract.
 	if contract == nil {
-		return
+		return nil
 	}
 
 	// Loop through all methods and find ones for which we have tests
@@ -198,14 +203,15 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractAdded(worker *FuzzerW
 			}
 		}
 	}
+	return nil
 }
 
 // OnWorkerDeployedContractDeleted is called when a fuzzing.FuzzerWorker detects a previously reported deployed
-// contract that no longer exists in the underlying TestNode.
-func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) {
+// contract that no longer exists in the underlying Chain.
+func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *FuzzerWorker, contractAddress common.Address, contract *types.Contract) error {
 	// If we don't have a contract definition, there's nothing to do.
 	if contract == nil {
-		return
+		return nil
 	}
 
 	// Loop through all methods and find ones for which we have tests
@@ -227,13 +233,18 @@ func (t *PropertyTestCaseProvider) OnWorkerDeployedContractDeleted(worker *Fuzze
 			workerState.propertyTestMethodsLock.Unlock()
 		}
 	}
+	return nil
 }
 
 // OnWorkerCallSequenceTesting is called before a fuzzing.FuzzerWorker generates and tests a new call sequence.
-func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTesting(worker *FuzzerWorker) {}
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTesting(worker *FuzzerWorker) error {
+	return nil
+}
 
 // OnWorkerCallSequenceTested is called after a fuzzing.FuzzerWorker generates and tests a new call sequence.
-func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTested(worker *FuzzerWorker) {}
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTested(worker *FuzzerWorker) error {
+	return nil
+}
 
 // OnWorkerCallSequenceCallTested is called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 // during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
@@ -242,7 +253,7 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceTested(worker *FuzzerWork
 // sequence that satisfies the conditions specified by the ShrinkCallSequenceRequest, before generating
 // entirely new call sequences. A TestCaseProvider provider should not unnecessarily make shrink requests
 // as this will cancel the current call sequence being further built upon.
-func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) []ShrinkCallSequenceRequest {
+func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 	// Create a list of shrink call sequence verifiers, which we populate for each failed property test we want a call
 	// sequence shrunk for.
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
@@ -264,23 +275,35 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 
 		// Test our property test method (create a local copy to avoid loop overwriting the method)
 		workerPropertyTestMethod := workerPropertyTestMethod
-		failedPropertyTest := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
+		failedPropertyTest, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
+		if err != nil {
+			return nil, err
+		}
 
 		// If we failed a test, we update our state immediately. We provide a shrink verifier which will update
 		// the call sequence for each shrunken sequence provided that fails the property test.
 		if failedPropertyTest {
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
-				VerifierFunction: func(worker *FuzzerWorker, callSequence types.CallSequence) bool {
-					// The shrink verifier simply ensures the previously failed property test fails
+				VerifierFunction: func(worker *FuzzerWorker, callSequence types.CallSequence) (bool, error) {
+					// First verify the contract to property test is still deployed to call upon.
+					_, propertyTestContractDeployed := worker.deployedContracts[workerPropertyTestMethod.Address]
+					if !propertyTestContractDeployed {
+						// If the contract isn't available, this shrunk sequence likely messed up deployment, so we
+						// report it as an invalid solution.
+						return false, nil
+					}
+
+					// Then the shrink verifier simply ensures the previously failed property test fails
 					// for the shrunk sequence as well.
 					return t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
 				},
-				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) {
+				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) error {
 					// When we're finished shrinking, update our test state and report it finalized.
 					testCase.status = TestCaseStatusFailed
 					testCase.callSequence = &shrunkenCallSequence
 					worker.Fuzzer().ReportTestCaseFinished(testCase)
+					return nil
 				},
 			}
 
@@ -289,5 +312,5 @@ func (t *PropertyTestCaseProvider) OnWorkerCallSequenceCallTested(worker *Fuzzer
 		}
 	}
 
-	return shrinkRequests
+	return shrinkRequests, nil
 }

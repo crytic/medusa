@@ -4,7 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,17 +39,17 @@ func testCryticGetCompiledSourceByBaseName(sources map[string]types.CompiledSour
 // file path.
 func TestCryticSingleFileAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create our platform configuration
 		config := NewCryticCompilationConfig(contractPath)
 
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -67,18 +67,18 @@ func TestCryticSingleFileAbsolutePath(t *testing.T) {
 // file path in the working directory.
 func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 	contractName := filepath.Base(contractPath)
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create our platform configuration
 		config := NewCryticCompilationConfig(contractName)
 
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -96,7 +96,7 @@ func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 // file path in a child directory of the working directory.
 func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Move it to a subdirectory
 	contractDirectory := filepath.Dir(contractPath)
@@ -106,7 +106,7 @@ func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractDirectory, func() {
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Create our platform configuration
 		config := NewCryticCompilationConfig(relativeRelocatedPath)
 		config.ExportDirectory = "custom_export_directory"
@@ -137,14 +137,14 @@ func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 // a relative path provided.
 func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Obtain the contract directory and cd to it.
 		contractDirectory := filepath.Dir(contractPath)
 		err := os.Chdir(contractDirectory)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Obtain the filename
 		contractName := filepath.Base(contractPath)
@@ -156,7 +156,7 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 		// Compile the file
 		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
@@ -172,10 +172,10 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 // (e.g. export-dir, export-format)
 func TestCryticSingleFileBadArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Create a config and verify it compiles without any bad arguments first.
 		config := NewCryticCompilationConfig(contractPath)
 		_, _, err := config.Compile()
@@ -201,20 +201,20 @@ func TestCryticSingleFileBadArgs(t *testing.T) {
 // TestCryticDirectoryNoArgs tests compilation of a hardhat directory with no addition arguments provided
 func TestCryticDirectoryNoArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractDirectory := test_utils.CopyToTestDirectory(t, "testdata/hardhat/basic_project/")
+	contractDirectory := testutils.CopyToTestDirectory(t, "testdata/hardhat/basic_project/")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractDirectory, func() {
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Run npm install
 		err := exec.Command("npm", "install").Run()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Create our platform configuration and compile the project
 		config := NewCryticCompilationConfig(contractDirectory)
 		compilations, _, err := config.Compile()
 
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Two compilation objects
 		assert.EqualValues(t, 2, len(compilations))

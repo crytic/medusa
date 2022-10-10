@@ -6,7 +6,7 @@ import (
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/fuzzing/config"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"strconv"
 	"testing"
 )
@@ -59,14 +59,14 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	fmt.Printf("##############################################################\n")
 
 	// Copy our target file to our test directory
-	testContractPath := test_utils.CopyToTestDirectory(t, solidityFile)
+	testContractPath := testutils.CopyToTestDirectory(t, solidityFile)
 
 	// Create a default solc platform config
 	solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
 
 	// Wrap the platform config in a compilation config
 	compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Create a project configuration to run the fuzzer with
 	projectConfig := &config.ProjectConfig{
@@ -76,11 +76,11 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 	// Create a fuzzer instance
 	fuzzer, err := NewFuzzer(*projectConfig)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Run the fuzzer against the compilation
 	err = fuzzer.Start()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Ensure we captured a failed test.
 	if expectFailure {
@@ -99,32 +99,53 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *co
 	}
 }
 
-// TestDeploymentInternalLibrary runs a test against internal_library.sol to ensure internal libraries behave correctly.
+// TestDeploymentInnerDeployment runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
+// their properties are tested appropriately. This test contract deploys the inner contract which takes no constructor
+// arguments
+func TestDeploymentInnerDeployment(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment.sol", getFuzzConfigDefault(), true)
+}
+
+// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
+// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
+// constructor arguments, at construction time.
+func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol", getFuzzConfigDefault(), true)
+}
+
+// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
+// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
+// constructor arguments, during the fuzzing campaign.
+func TestDeploymentInnerInnerDeployment(t *testing.T) {
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_inner_deployment.sol", getFuzzConfigDefault(), true)
+}
+
+// TestDeploymentInternalLibrary runs a test to ensure internal libraries behave correctly.
 func TestDeploymentInternalLibrary(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/internal_library.sol", getFuzzConfigCantSolveShortTime(), false)
 }
 
-// TestFuzzMagicNumbersSimpleXY runs a test against simple_xy.sol to solve specific function input parameters.
+// TestFuzzMagicNumbersSimpleXY runs a test to solve specific function input parameters.
 func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", getFuzzConfigDefault(), true)
 }
 
-// TestFuzzMagicNumbersSimpleXYPayable runs a test against simple_xy_payable.sol to solve specific payable values.
+// TestFuzzMagicNumbersSimpleXYPayable runs a test to solve specific payable values.
 func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy_payable.sol", getFuzzConfigDefault(), true)
 }
 
-// TestFuzzVMBlockNumber runs a test against block_number.sol to ensure block numbers behave correctly in the VM.
+// TestFuzzVMBlockNumber runs a test to ensure block numbers behave correctly in the VM.
 func TestFuzzVMBlockNumber(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", getFuzzConfigDefault(), true)
 }
 
-// TestFuzzVMTimestamp runs a test against block_number.sol to ensure block timestamps behave correctly in the VM.
+// TestFuzzVMTimestamp runs a test to ensure block timestamps behave correctly in the VM.
 func TestFuzzVMTimestamp(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", getFuzzConfigDefault(), true)
 }
 
-// TestFuzzVMBlockHash runs a test against block_hash.sol to ensure block hashes behave correctly in the VM.
+// TestFuzzVMBlockHash runs a test to ensure block hashes behave correctly in the VM.
 func TestFuzzVMBlockHash(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", getFuzzConfigCantSolveShortTime(), false)
 }
