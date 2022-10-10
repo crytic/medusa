@@ -61,10 +61,10 @@ The structure is described below:
   - `workerDatabaseEntryLimit` defines how many keys a worker's memory database can contain before the worker is reset
     - **Note**: this is a temporary logic for memory throttling
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
-  - `testLimit` refers to a threshold of the number of transactions to run before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no transaction limit will be enforced.
-  - `maxTxSequenceLength` defines the maximum number of transactions to generate in a single sequence that tries to violate property tests. For property tests which require many transactions to violate, this number should be set sufficiently high.
+  - `testLimit` refers to a threshold of the number of function calls to make before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no call limit will be enforced.
+  - `maxTxSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
   - `deployerAddress` defines the account address used to deploy contracts on startup, represented as a hex string.
-  - `senderAddresses` defines the account addresses used to send transactions to deployed contracts in the fuzzing campaign.
+  - `senderAddresses` defines the account addresses used to send function calls to deployed contracts in the fuzzing campaign.
   - `testing` defines the configuration for built-in test case providers which can be leveraged for fuzzing campaign.
     - `stopOnFailedTest` defines whether the fuzzer should exit after detecting the first failed test, or continue fuzzing to find other results.
     - `assertionTesting` describes configuration for assertion-based testing.
@@ -98,7 +98,7 @@ contract TestXY {
     }
 }
 ```
-`medusa` deploys your contract containing property tests and generates a sequence of transactions to execute against all publicly accessible methods. After each transaction, it calls upon your property tests to ensure they return a `true` (success) status.
+`medusa` deploys your contract containing property tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your property tests to ensure they return a `true` (success) status.
 
 **Note**: `medusa` only deploys smart contracts which do not take arguments in their constructor. If you wish to test a contract which takes arguments, create a contract which inherits from it and satisfies the constructor arguments.
 
@@ -108,12 +108,12 @@ To begin a fuzzing campaign, invoke `medusa fuzz` to compile and fuzz targets sp
 
 Invoking a fuzzing campaign, `medusa` will:
 - Compile the given targets
-- Start the configured number of worker threads, each with their own local Ethereum test node.
-- Deploy all contracts which contain no constructor arguments to each worker's test node.
-- Begin to generate and send transaction sequences to update contract state.
-- Check property tests all succeed after each transaction executed.
+- Start the configured number of worker threads, each with their own local Ethereum test chain.
+- Deploy all contracts which contain no constructor arguments to each worker's test chain.
+- Begin to generate and send call sequences to update contract state.
+- Check property tests all succeed after each call executed.
 
-Upon discovery of a failed property test, `medusa` will halt, reporting the transaction sequence used to violate any property test(s):
+Upon discovery of a failed property test, `medusa` will halt, reporting the call sequence used to violate any property test(s):
 ```
 [FAILED] Property Test: TestXY.fuzz_never_specific_values()
 Test "TestXY.fuzz_never_specific_values()" failed after the following call sequence:
