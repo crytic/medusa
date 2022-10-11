@@ -291,16 +291,16 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// Setup corpus
+	// If coverage is enabled, set up the corpus.
 	if f.config.Fuzzing.CoverageEnabled {
 		f.corpus = simpleCorpusTypes.NewSimpleCorpus() // TODO: make this configurable after adding more options
-	}
 
-	// Read the corpus into memory
-	if f.config.Fuzzing.CoverageEnabled && f.config.Fuzzing.CorpusDirectory != "" {
-		err := f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
-		if err != nil {
-			return err
+		// If we have a corpus directory set, read the corpus into memory.
+		if f.config.Fuzzing.CorpusDirectory != "" {
+			err := f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -426,8 +426,16 @@ func (f *Fuzzer) Start() error {
 		}
 	}
 
-	// Now that we've gracefully ensured all goroutines have ceased, we can immediately return our error if we have
-	// one.
+	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
+	// previous error, as we don't want to lose corpus entries.
+	if f.config.Fuzzing.CoverageEnabled && f.config.Fuzzing.CorpusDirectory != "" {
+		corpusFlushErr := f.corpus.WriteCorpusToDisk(f.config.Fuzzing.CorpusDirectory)
+		if err == nil {
+			err = corpusFlushErr
+		}
+	}
+
+	// Now that we've gracefully ensured all goroutines have ceased, we can immediately return any errors.
 	if err != nil {
 		return err
 	}
@@ -458,15 +466,6 @@ func (f *Fuzzer) Start() error {
 // Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
 // occurs.
 func (f *Fuzzer) Stop() {
-	// Write corpus to disk if corpusDirectory is set and coverage is enabled
-	if f.config.Fuzzing.CorpusDirectory != "" && f.config.Fuzzing.CoverageEnabled {
-		err := f.corpus.WriteCorpusToDisk(f.config.Fuzzing.CorpusDirectory)
-		// TODO: Should I throw a panic?
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
