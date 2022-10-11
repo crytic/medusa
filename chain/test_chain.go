@@ -450,6 +450,7 @@ func (t *TestChain) CreateMessage(from common.Address, to *common.Address, value
 	gasPrice := big.NewInt(1)
 
 	// Setting fee and tip cap to zero alongside the NoBaseFee for the vm.Config will bypass base fee validation.
+	// TODO: Set this appropriately for newer transaction types.
 	gasFeeCap := big.NewInt(0)
 	gasTipCap := big.NewInt(0)
 

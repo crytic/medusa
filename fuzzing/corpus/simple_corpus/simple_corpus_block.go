@@ -30,6 +30,33 @@ func NewSimpleCorpusBlock() *SimpleCorpusBlock {
 	}
 }
 
+// NewSimpleCorpusBlockFromTestChainBlock converts a test chain block to a SimpleCorpusBlock. Components such as the
+// block timestamp, block number, block hash, transaction receipts, and the transactions are maintained during conversion.
+func NewSimpleCorpusBlockFromTestChainBlock(block *chainTypes.Block) *SimpleCorpusBlock {
+	// Create our corpus block
+	corpusBlock := NewSimpleCorpusBlock()
+
+	// Set header fields
+	corpusBlock.blockHeader = NewSimpleCorpusBlockHeader(
+		block.Hash(),
+		block.Header().Time,
+		block.Header().Number)
+
+	// Update our transactions and receipts
+	corpusBlock.blockTransactions = block.Messages()
+	corpusBlock.blockReceipts = block.Receipts()
+
+	// TODO: Can we check receipts upstream? maybe during block creation?
+	// Iterate through receipts and if there is a nil receipt.Logs, update it to an empty list
+	for _, receipt := range corpusBlock.blockReceipts {
+		if receipt.Logs == nil {
+			receipt.Logs = []*coreTypes.Log{}
+		}
+	}
+
+	return corpusBlock
+}
+
 // Header returns the SimpleCorpusBlockHeader of the SimpleCorpusBlock
 func (m *SimpleCorpusBlock) Header() corpusTypes.CorpusBlockHeader {
 	corpusBlockHeader := corpusTypes.CorpusBlockHeader(m.blockHeader)

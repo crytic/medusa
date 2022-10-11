@@ -14,21 +14,13 @@ type Corpus interface {
 	Entries() []CorpusEntry
 	// AddEntry adds a CorpusEntry to the corpus and returns an error in case of an issue
 	AddEntry(entry CorpusEntry) error
-	// RemoveEntry removes a CorpusEntry from the corpus and returns an error in case of an issue
-	RemoveEntry(entry CorpusEntry) error
-	// RemoveEntryAt removes the CorpusEntry at index from the corpus and returns an error in case of an issue
-	RemoveEntryAt(index uint64) error
-	// GetRandomEntry returns a random CorpusEntry from the Corpus and throws an error in case of an issue
-	GetRandomEntry() (CorpusEntry, error)
-	// GetEntry returns the CorpusEntry at index and returns an error in case of an issue
-	GetEntry(index uint64) (CorpusEntry, error)
 	// WriteCorpusToDisk writes the Corpus to disk at writeDirectory and throws an error in case of an issue
 	WriteCorpusToDisk(writeDirectory string) error
 	// ReadCorpusFromDisk reads the Corpus from disk at readDirectory and throws an error in case of an issue
 	ReadCorpusFromDisk(readDirectory string) error
-	// TODO: Note for David - should this function be here? I added it here so that the corpus is responsible for this task
-	// but it is not a very generic function.
 	// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a CorpusEntry
+	// TODO: Note for David - should this function be here? I added it here so that the corpus is responsible for this task
+	//  but it is not a very generic function.
 	TestSequenceToCorpusEntry(testNodeBlockSequence []*chainTypes.Block) (CorpusEntry, error)
 }
 
@@ -36,8 +28,6 @@ type Corpus interface {
 type CorpusEntry interface {
 	// Blocks returns the list of CorpusBlock objects that are stored in the CorpusEntry
 	Blocks() []CorpusBlock
-	// AddCorpusBlock adds a CorpusBlock to the list of blocks in a CorpusEntry
-	AddCorpusBlock(block CorpusBlock) error
 	// Hash hashes the contents of a CorpusEntry
 	Hash() (string, error)
 	// MarshalJSON marshals the CorpusEntry object into a JSON object

@@ -25,7 +25,7 @@ func getMockSimpleCorpus(numEntries int) *SimpleCorpus {
 func getMockSimpleCorpusEntry(numBlocks int) *SimpleCorpusEntry {
 	entry := NewSimpleCorpusEntry()
 	for i := 0; i < numBlocks; i++ {
-		entry.corpusBlocks = append(entry.corpusBlocks, getMockSimpleBlockBlock(numBlocks))
+		entry.blocks = append(entry.blocks, getMockSimpleBlockBlock(numBlocks))
 	}
 	return entry
 }
@@ -82,9 +82,9 @@ func getMockReceipt() *coreTypes.Receipt {
 	return &receipt
 }
 
-// The functions below were used to test whether two corpus entries are equal to each other. However, realized that it is
-// way easier to just hash the entries and test like this. Keeping these functions in case they are useful for some other
-// case.
+// TODO: The functions below were used to test whether two corpus entries are equal to each other. However, realized that it is
+//  way easier to just hash the entries and test like this. Keeping these functions in case they are useful for some other
+//  case.
 
 // EntriesAreEqual tests whether two SimpleCorpusEntry objects are equal to each other
 func EntriesAreEqual(t *testing.T, seqOne *SimpleCorpusEntry, seqTwo *SimpleCorpusEntry) {

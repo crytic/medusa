@@ -110,7 +110,7 @@ func (t *PropertyTestCaseProvider) OnFuzzerStarting(fuzzer *Fuzzer) error {
 	t.workerStates = make([]propertyTestCaseProviderWorkerState, fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every property test method.
-	for _, contract := range fuzzer.Contracts() {
+	for _, contract := range fuzzer.ContractDefinitions() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes) {
 				// Create local variables to avoid pointer types in the loop being overridden.

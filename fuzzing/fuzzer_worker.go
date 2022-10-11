@@ -26,7 +26,7 @@ type FuzzerWorker struct {
 	// chain describes a test chain created by the FuzzerWorker to deploy contracts and run tests against.
 	chain *chain.TestChain
 
-	// deployedContracts describes a mapping of deployed contracts and the addresses they were deployed to.
+	// deployedContracts describes a mapping of deployed contractDefinitions and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
 
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed.
@@ -90,8 +90,8 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	for _, deployedBytecode := range event.DeployedContractBytecodes {
 		// Loop through all our known contract definitions
 		matchedDeployment := false
-		for i := 0; i < len(fw.fuzzer.contracts); i++ {
-			contractDefinition := &fw.fuzzer.contracts[i]
+		for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {
+			contractDefinition := &fw.fuzzer.contractDefinitions[i]
 
 			// If we have a match, register the deployed contract.
 			if deployedBytecode.IsMatch(contractDefinition.CompiledContract()) {

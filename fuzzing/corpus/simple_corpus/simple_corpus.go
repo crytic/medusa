@@ -46,26 +46,6 @@ func (c *SimpleCorpus) AddEntry(corpusEntry corpusTypes.CorpusEntry) error {
 	return nil
 }
 
-// RemoveEntry removes a SimpleCorpusEntry from the corpus and returns an error in case of an issue
-func (c *SimpleCorpus) RemoveEntry(entry corpusTypes.CorpusEntry) error {
-	return nil
-}
-
-// RemoveEntryAt removes the SimpleCorpusEntry at index from the corpus and returns an error in case of an issue
-func (c *SimpleCorpus) RemoveEntryAt(index uint64) error {
-	return nil
-}
-
-// GetRandomEntry returns a random SimpleCorpusEntry from the corpus and throws an error in case of an issue
-func (c *SimpleCorpus) GetRandomEntry() (corpusTypes.CorpusEntry, error) {
-	return nil, nil
-}
-
-// GetEntry returns the SimpleCorpusEntry at index and returns an error in case of an issue
-func (c *SimpleCorpus) GetEntry(index uint64) (corpusTypes.CorpusEntry, error) {
-	return nil, nil
-}
-
 // WriteCorpusToDisk writes the SimpleCorpus to disk at writeDirectory and throws an error in case of an issue
 func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
 	// Make the writeDirectory, if it does not exist
@@ -137,16 +117,12 @@ func (c *SimpleCorpus) ReadCorpusFromDisk(readDirectory string) error {
 }
 
 // TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a SimpleCorpusEntry
-func (c *SimpleCorpus) TestSequenceToCorpusEntry(testNodeBlockSequence []*chainTypes.Block) (corpusTypes.CorpusEntry, error) {
-	simpleEntry := NewSimpleCorpusEntry()
-	for _, testNodeBlock := range testNodeBlockSequence {
-		// Convert TestNodeBlock to SimpleCorpusBlock
-		simpleBlock := testNodeBlockToCorpusBlock(testNodeBlock)
-		// Add block to list
-		err := simpleEntry.AddCorpusBlock(simpleBlock)
-		if err != nil {
-			return simpleEntry, err
-		}
+func (c *SimpleCorpus) TestSequenceToCorpusEntry(blocks []*chainTypes.Block) (corpusTypes.CorpusEntry, error) {
+	// Create a new corpus entry from the provided blocks
+	corpusEntry := NewSimpleCorpusEntry()
+	for _, testNodeBlock := range blocks {
+		corpusBlock := NewSimpleCorpusBlockFromTestChainBlock(testNodeBlock)
+		corpusEntry.blocks = append(corpusEntry.blocks, corpusBlock)
 	}
-	return simpleEntry, nil
+	return corpusEntry, nil
 }

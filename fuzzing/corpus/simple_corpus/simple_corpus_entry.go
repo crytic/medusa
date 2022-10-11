@@ -9,37 +9,31 @@ import (
 
 // SimpleCorpusEntry implements the CorpusEntry interface and represents a block sequence that increased coverage.
 type SimpleCorpusEntry struct {
-	corpusBlocks []*SimpleCorpusBlock
+	blocks []*SimpleCorpusBlock
 }
 
 // NewSimpleCorpusEntry instantiates a new instance of SimpleCorpusEntry
 func NewSimpleCorpusEntry() *SimpleCorpusEntry {
 	return &SimpleCorpusEntry{
-		corpusBlocks: []*SimpleCorpusBlock{},
+		blocks: []*SimpleCorpusBlock{},
 	}
 }
 
 // Blocks returns the list of SimpleCorpusBlock objects that are stored in the SimpleCorpusEntry
 func (m *SimpleCorpusEntry) Blocks() []corpusTypes.CorpusBlock {
 	var blocks []corpusTypes.CorpusBlock
-	for _, simpleBlock := range m.corpusBlocks {
+	for _, simpleBlock := range m.blocks {
 		block := corpusTypes.CorpusBlock(simpleBlock)
 		blocks = append(blocks, block)
 	}
 	return blocks
 }
 
-// AddCorpusBlock adds a SimpleCorpusBlock to the list of blocks in a SimpleCorpusEntry
-func (m *SimpleCorpusEntry) AddCorpusBlock(block corpusTypes.CorpusBlock) error {
-	m.corpusBlocks = append(m.corpusBlocks, block.(*SimpleCorpusBlock))
-	return nil
-}
-
 // Hash hashes the list of SimpleCorpusBlock in the SimpleCorpusEntry
 func (m *SimpleCorpusEntry) Hash() (string, error) {
 	// Concatenate the hashes of each block
 	var simpleEntryHashString string
-	for _, simpleBlock := range m.corpusBlocks {
+	for _, simpleBlock := range m.blocks {
 		simpleBlockHash, err := simpleBlock.Hash()
 		if err != nil {
 			return "", err
@@ -61,7 +55,7 @@ func (m SimpleCorpusEntry) MarshalJSON() ([]byte, error) {
 		CorpusBlocks []*SimpleCorpusBlock `json:"sequence"`
 	}
 	var enc SimpleCorpusEntry
-	enc.CorpusBlocks = m.corpusBlocks
+	enc.CorpusBlocks = m.blocks
 	return json.Marshal(&enc)
 }
 
@@ -75,7 +69,7 @@ func (m *SimpleCorpusEntry) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	if dec.CorpusBlocks != nil {
-		m.corpusBlocks = dec.CorpusBlocks
+		m.blocks = dec.CorpusBlocks
 	}
 	return nil
 }

@@ -2,11 +2,18 @@ package config
 
 import "github.com/trailofbits/medusa/compilation"
 
-// GetDefaultProjectConfig obtains a default configuration for a project, given a platform.
+// GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
+// based on the provided platform, or a nil one if an empty string is provided.
 func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
-	compilationConfig, err := compilation.NewCompilationConfig(platform)
-	if err != nil {
-		return nil, err
+	var (
+		compilationConfig *compilation.CompilationConfig
+		err               error
+	)
+	if platform != "" {
+		compilationConfig, err = compilation.NewCompilationConfig(platform)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a project configuration

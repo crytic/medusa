@@ -13,36 +13,36 @@ import (
 // SimpleCorpusBlockHeader implements the CorpusBlockHeader interface and holds a few core components of a
 // fuzzing.TestNodeBlock header such as block hash, timestamp, and number
 type SimpleCorpusBlockHeader struct {
-	// blockHeaderHash is the block hash of a block
-	blockHeaderHash common.Hash
-	// blockHeaderTimestamp is the block timestamp of a block
-	blockHeaderTimestamp uint64
-	// blockHeaderNumber is the block number of a block
-	blockHeaderNumber *big.Int
+	// hash is the block hash of a block
+	hash common.Hash
+	// timestamp is the block timestamp of a block
+	timestamp uint64
+	// blockNumber is the block number of a block
+	blockNumber *big.Int
 }
 
 // NewSimpleCorpusBlockHeader instantiates a new instance of SimpleCorpusBlockHeader
 func NewSimpleCorpusBlockHeader(blockHash common.Hash, blockTimestamp uint64, blockNumber *big.Int) *SimpleCorpusBlockHeader {
 	return &SimpleCorpusBlockHeader{
-		blockHeaderHash:      blockHash,
-		blockHeaderTimestamp: blockTimestamp,
-		blockHeaderNumber:    blockNumber,
+		hash:        blockHash,
+		timestamp:   blockTimestamp,
+		blockNumber: blockNumber,
 	}
 }
 
 // BlockHash returns the block hash
 func (m *SimpleCorpusBlockHeader) BlockHash() common.Hash {
-	return m.blockHeaderHash
+	return m.hash
 }
 
 // BlockTimestamp returns the block timestamp
 func (m *SimpleCorpusBlockHeader) BlockTimestamp() uint64 {
-	return m.blockHeaderTimestamp
+	return m.timestamp
 }
 
 // BlockNumber returns the block number
 func (m *SimpleCorpusBlockHeader) BlockNumber() *big.Int {
-	return m.blockHeaderNumber
+	return m.blockNumber
 }
 
 // Hash hashes the contents of a SimpleCorpusBlockHeader
@@ -87,13 +87,13 @@ func (m *SimpleCorpusBlockHeader) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	if dec.BlockHeaderHash != nil {
-		m.blockHeaderHash = *dec.BlockHeaderHash
+		m.hash = *dec.BlockHeaderHash
 	}
 	if dec.BlockHeaderTimestamp != nil {
-		m.blockHeaderTimestamp = *dec.BlockHeaderTimestamp
+		m.timestamp = *dec.BlockHeaderTimestamp
 	}
 	if dec.BlockHeaderTimestamp != nil {
-		m.blockHeaderNumber = dec.BlockHeaderNumber
+		m.blockNumber = dec.BlockHeaderNumber
 	}
 	return nil
 }

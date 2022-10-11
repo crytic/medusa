@@ -94,8 +94,11 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 
 	// Parse the project configuration
-	var projectConfig ProjectConfig
-	err = json.Unmarshal(b, &projectConfig)
+	projectConfig, err := GetDefaultProjectConfig("")
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(b, projectConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +109,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &projectConfig, nil
+	return projectConfig, nil
 }
 
 // WriteToFile writes the ProjectConfig to a provided file path in a JSON-serialized format.
