@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/trailofbits/medusa/chain/types"
 	"strings"
 )
 
@@ -35,11 +36,11 @@ type CallSequenceElement struct {
 	contract *Contract
 
 	// call represents the underlying message call.
-	call *CallMessage
+	call *types.CallMessage
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
-func NewCallSequenceElement(contract *Contract, call *CallMessage) *CallSequenceElement {
+func NewCallSequenceElement(contract *Contract, call *types.CallMessage) *CallSequenceElement {
 	callSequenceElement := &CallSequenceElement{
 		contract: contract,
 		call:     call,
@@ -53,7 +54,7 @@ func (cse *CallSequenceElement) Contract() *Contract {
 }
 
 // Call obtains the CallMessage used in this CallSequenceElement.
-func (cse *CallSequenceElement) Call() *CallMessage {
+func (cse *CallSequenceElement) Call() *types.CallMessage {
 	return cse.call
 }
 

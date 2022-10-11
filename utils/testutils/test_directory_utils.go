@@ -1,4 +1,4 @@
-package test_utils
+package testutils
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -13,7 +13,7 @@ import (
 func CopyToTestDirectory(t *testing.T, filePath string) string {
 	// Construct our file path relative to our working directory
 	cwd, err := os.Getwd()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	sourcePath := filepath.Join(cwd, filePath)
 
 	// Verify the file path exists
@@ -31,11 +31,11 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 	} else {
 		err = utils.CopyFile(sourcePath, targetPath)
 	}
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Get a normalized absolute path
 	targetPath, err = filepath.Abs(targetPath)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return targetPath
 }
 
@@ -45,12 +45,12 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 func ExecuteInDirectory(t *testing.T, testPath string, method func()) {
 	// Backup our old working directory
 	cwd, err := os.Getwd()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Check if the test path refers to a file or directory, as we'll want to change our working directory to a
 	// directory path.
 	testPathInfo, err := os.Stat(testPath)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Ensure we obtained a directory from our path
 	testDirectory := testPath
@@ -60,12 +60,12 @@ func ExecuteInDirectory(t *testing.T, testPath string, method func()) {
 
 	// Change our working directory to the test directory
 	err = os.Chdir(testDirectory)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Execute the given method
 	method()
 
 	// Restore our working directory (we must leave the test directory or else clean up will fail post testing)
 	err = os.Chdir(cwd)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"golang.org/x/crypto/sha3"
 	"strings"
 )
@@ -16,7 +16,7 @@ type SimpleCorpusBlock struct {
 	// blockHeader is a pointer to a SimpleCorpusBlockHeader and holds the block hash, timestamp, and block number
 	blockHeader *SimpleCorpusBlockHeader
 	// blockTransactions is a list of CallMessages. This is the sequence of transactions that increased coverage.
-	blockTransactions []*fuzzerTypes.CallMessage
+	blockTransactions []*chainTypes.CallMessage
 	// blockReceipts is a list of core.Receipt.
 	blockReceipts []*coreTypes.Receipt
 }
@@ -25,7 +25,7 @@ type SimpleCorpusBlock struct {
 func NewSimpleCorpusBlock() *SimpleCorpusBlock {
 	return &SimpleCorpusBlock{
 		blockHeader:       &SimpleCorpusBlockHeader{},
-		blockTransactions: []*fuzzerTypes.CallMessage{},
+		blockTransactions: []*chainTypes.CallMessage{},
 		blockReceipts:     []*coreTypes.Receipt{},
 	}
 }
@@ -80,9 +80,9 @@ func (m *SimpleCorpusBlock) Hash() (string, error) {
 // MarshalJSON marshals the SimpleCorpusBlock object into JSON
 func (m SimpleCorpusBlock) MarshalJSON() ([]byte, error) {
 	type SimpleCorpusBlock struct {
-		BlockHeader       *SimpleCorpusBlockHeader   `json:"header"`
-		BlockTransactions []*fuzzerTypes.CallMessage `json:"transactions"`
-		BlockReceipts     []*coreTypes.Receipt       `json:"receipts"`
+		BlockHeader       *SimpleCorpusBlockHeader  `json:"header"`
+		BlockTransactions []*chainTypes.CallMessage `json:"transactions"`
+		BlockReceipts     []*coreTypes.Receipt      `json:"receipts"`
 	}
 	var enc SimpleCorpusBlock
 	enc.BlockHeader = m.blockHeader
@@ -94,9 +94,9 @@ func (m SimpleCorpusBlock) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals a byte string into a SimpleCorpusBlock object.
 func (m *SimpleCorpusBlock) UnmarshalJSON(input []byte) error {
 	type SimpleCorpusBlock struct {
-		BlockHeader       *SimpleCorpusBlockHeader   `json:"header"`
-		BlockTransactions []*fuzzerTypes.CallMessage `json:"transactions"`
-		BlockReceipts     []*coreTypes.Receipt       `json:"receipts"`
+		BlockHeader       *SimpleCorpusBlockHeader  `json:"header"`
+		BlockTransactions []*chainTypes.CallMessage `json:"transactions"`
+		BlockReceipts     []*coreTypes.Receipt      `json:"receipts"`
 	}
 	var dec SimpleCorpusBlock
 	if err := json.Unmarshal(input, &dec); err != nil {

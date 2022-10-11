@@ -2,30 +2,29 @@ package simple_corpus
 
 import (
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
-	"github.com/trailofbits/medusa/fuzzing/testnode"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 )
 
 // testNodeBlockToCorpusBlock converts a testnode.TestNodeBlock to a SimpleCorpusBlock. Components such as the
 // block timestamp, block number, block hash, transaction receipts, and the transactions are maintained during conversion.
-func testNodeBlockToCorpusBlock(testNodeBlock *testnode.TestNodeBlock) corpusTypes.CorpusBlock {
+func testNodeBlockToCorpusBlock(testNodeBlock *chainTypes.Block) corpusTypes.CorpusBlock {
 	// Create corpusBlock object
 	simpleBlock := NewSimpleCorpusBlock()
 	// Set header fields
 	simpleBlock.blockHeader = NewSimpleCorpusBlockHeader(
-		testNodeBlock.BlockHash,
-		testNodeBlock.Header.Time,
-		testNodeBlock.Header.Number)
-	// TODO: This will change when more than one receipt goes in a block with ellipses
-	// TODO: Could also use *core.Receipts as the datatype since that is already a []*core.Receipt
-	simpleBlock.blockReceipts = append(simpleBlock.blockReceipts, testNodeBlock.Receipt)
+		testNodeBlock.Hash(),
+		testNodeBlock.Header().Time,
+		testNodeBlock.Header().Number)
+
+	// Update our transactions and receipts
+	simpleBlock.blockTransactions = testNodeBlock.Messages()
+	simpleBlock.blockReceipts = testNodeBlock.Receipts()
+
 	// TODO: Can we check receipts upstream? maybe during block creation?
 	checkAndUpdateReceipts(simpleBlock.blockReceipts)
-	// TODO: This will change when more than one transaction goes in a block with ellipses
-	simpleBlock.blockTransactions = append(simpleBlock.blockTransactions, testNodeBlock.Message.(*fuzzerTypes.CallMessage))
-	block := corpusTypes.CorpusBlock(simpleBlock)
-	return block
+
+	return corpusTypes.CorpusBlock(simpleBlock)
 }
 
 // checkAndUpdateReceipts ensures that each receipt has a Log object that is not nil. This is performed so that unmarshaling

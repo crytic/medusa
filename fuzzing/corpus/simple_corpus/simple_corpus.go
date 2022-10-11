@@ -3,8 +3,8 @@ package simple_corpus
 import (
 	"encoding/json"
 	"fmt"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
-	"github.com/trailofbits/medusa/fuzzing/testnode"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
@@ -137,7 +137,7 @@ func (c *SimpleCorpus) ReadCorpusFromDisk(readDirectory string) error {
 }
 
 // TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a SimpleCorpusEntry
-func (c *SimpleCorpus) TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock) (corpusTypes.CorpusEntry, error) {
+func (c *SimpleCorpus) TestSequenceToCorpusEntry(testNodeBlockSequence []*chainTypes.Block) (corpusTypes.CorpusEntry, error) {
 	simpleEntry := NewSimpleCorpusEntry()
 	for _, testNodeBlock := range testNodeBlockSequence {
 		// Convert TestNodeBlock to SimpleCorpusBlock

@@ -3,7 +3,8 @@ package platforms
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,61 +35,136 @@ func testCryticGetCompiledSourceByBaseName(sources map[string]types.CompiledSour
 	return nil
 }
 
-// TestCryticSingleFileNoArgsAbsolutePath tests compilation of a single with no additional arguments and absolute path
-// provided.
-func TestCryticSingleFileNoArgsAbsolutePath(t *testing.T) {
+// TestCryticSingleFileAbsolutePath tests compilation of a single smart contract using an absolute
+// file path.
+func TestCryticSingleFileAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
-		// Create a cryticConfig object
-		cryticConfig := NewCryticCompilationConfig(contractPath)
+	testutils.ExecuteInDirectory(t, contractPath, func() {
+		// Create our platform configuration
+		config := NewCryticCompilationConfig(contractPath)
 
 		// Compile the file
-		compilations, _, err := cryticConfig.Compile()
+		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
-		assert.True(t, len(compilations) == 1)
+		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.True(t, len(compilations[0].Sources) == 1)
+		assert.EqualValues(t, 1, len(compilations[0].Sources))
 		// Two contracts in SimpleContract.sol
-		assert.True(t, len(compilations[0].Sources[contractPath].Contracts) == 2)
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
 	})
 }
 
-// TestCryticSingleFileNoArgsRelativePath tests compilation of a single contract with no additional arguments and
-// a relative path provided.
-func TestCryticSingleFileNoArgsRelativePath(t *testing.T) {
+// TestCryticSingleFileRelativePathSameDirectory tests compilation of a single smart contract using a relative
+// file path in the working directory.
+func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractName := filepath.Base(contractPath)
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractPath, func() {
+		// Create our platform configuration
+		config := NewCryticCompilationConfig(contractName)
+
+		// Compile the file
+		compilations, _, err := config.Compile()
+		// No failures
+		assert.NoError(t, err)
+		// One compilation object
+		assert.EqualValues(t, 1, len(compilations))
+		// One source because we specified one file
+		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		// Two contracts in SimpleContract.sol
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
+	})
+}
+
+// TestCryticSingleFileRelativePathChildDirectory tests compilation of a single smart contract using a relative
+// file path in a child directory of the working directory.
+func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
+	// Copy our testdata over to our testing directory
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+
+	// Move it to a subdirectory
+	contractDirectory := filepath.Dir(contractPath)
+	relativeRelocatedPath := filepath.Join("child_dir", "SimpleContract.sol")
+	absoluteRelocatedPath := filepath.Join(contractDirectory, relativeRelocatedPath)
+	err := utils.CopyFile(contractPath, absoluteRelocatedPath)
+	assert.NoError(t, err)
+
+	// Execute our tests in the given test path
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
+		// Create our platform configuration
+		config := NewCryticCompilationConfig(relativeRelocatedPath)
+		config.ExportDirectory = "custom_export_directory"
+
+		// Compile the file
+		compilations, _, err := config.Compile()
+		// No failures
+		assert.NoError(t, err)
+		// One compilation object
+		assert.EqualValues(t, 1, len(compilations))
+		// One source because we specified one file
+		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		// Two contracts in SimpleContract.sol
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 2, contractCount)
+
+		// Verify our build directory exists
+		dirInfo, err := os.Stat(config.ExportDirectory)
+		assert.NoError(t, err)
+		assert.True(t, dirInfo.IsDir())
+	})
+}
+
+// TestCryticSingleFileBuildDirectoryArgRelativePath tests compilation of a single contract with the buildDirectory arg and
+// a relative path provided.
+func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
+	// Copy our testdata over to our testing directory
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+
+	// Execute our tests in the given test path
+	testutils.ExecuteInDirectory(t, contractPath, func() {
 		// Obtain the contract directory and cd to it.
 		contractDirectory := filepath.Dir(contractPath)
 		err := os.Chdir(contractDirectory)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Obtain the filename
 		contractName := filepath.Base(contractPath)
 
-		// Create a cryticConfig object
-		cryticConfig := NewCryticCompilationConfig(contractName)
-
+		// Create our platform configuration
+		config := NewCryticCompilationConfig(contractName)
+		// Custom export directory
+		config.ExportDirectory = "export_directory"
 		// Compile the file
-		compilations, _, err := cryticConfig.Compile()
+		compilations, _, err := config.Compile()
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// One compilation object
-		assert.True(t, len(compilations) == 1)
+		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.True(t, len(compilations[0].Sources) == 1)
+		assert.EqualValues(t, 1, len(compilations[0].Sources))
 		// Two contracts in SimpleContract.sol.
 		compiledSource := testCryticGetCompiledSourceByBaseName(compilations[0].Sources, contractName)
 		assert.NotNil(t, compiledSource, "source file could not be resolved in compilation sources")
-		assert.True(t, len(compiledSource.Contracts) == 2)
+		assert.EqualValues(t, 2, len(compiledSource.Contracts))
 	})
 }
 
@@ -96,49 +172,55 @@ func TestCryticSingleFileNoArgsRelativePath(t *testing.T) {
 // (e.g. export-dir, export-format)
 func TestCryticSingleFileBadArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := test_utils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractPath, func() {
-		// Create a crytic-compile provider
-		cryticConfig := NewCryticCompilationConfig(contractPath)
-		// Make sure --export-format and --export-dir are not allowed
-		cryticConfig.Args = append(cryticConfig.Args, "--export-format")
-		_, _, err := cryticConfig.Compile()
-		// Should fail
-		assert.Error(t, err)
-		cryticConfig.Args = append(cryticConfig.Args, "--export-dir")
-		_, _, err = cryticConfig.Compile()
-		assert.Error(t, err)
-		cryticConfig.Args = append(cryticConfig.Args, "--bad-arg")
-		_, _, err = cryticConfig.Compile()
-		assert.Error(t, err)
+	testutils.ExecuteInDirectory(t, contractPath, func() {
+		// Create a config and verify it compiles without any bad arguments first.
+		config := NewCryticCompilationConfig(contractPath)
+		_, _, err := config.Compile()
+		assert.NoError(t, err)
+
+		// Define arguments to validate are not allowed on a config
+		failingArgs := []string{
+			"--export-format",
+			"--export-dir",
+			"--bad-arg", // arbitrary unknown argument
+		}
+
+		// Validate the use of each argument results in an error when compiling
+		for _, failingArg := range failingArgs {
+			config = NewCryticCompilationConfig(contractPath)
+			config.Args = append(config.Args, failingArg)
+			_, _, err := config.Compile()
+			assert.Error(t, err)
+		}
 	})
 }
 
 // TestCryticDirectoryNoArgs tests compilation of a hardhat directory with no addition arguments provided
 func TestCryticDirectoryNoArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractDirectory := test_utils.CopyToTestDirectory(t, "testdata/hardhat/basic_project/")
+	contractDirectory := testutils.CopyToTestDirectory(t, "testdata/hardhat/basic_project/")
 
 	// Execute our tests in the given test path
-	test_utils.ExecuteInDirectory(t, contractDirectory, func() {
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Run npm install
 		err := exec.Command("npm", "install").Run()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		// Create a crytic-compile provider
-		cryticConfig := NewCryticCompilationConfig(contractDirectory)
-		compilations, _, err := cryticConfig.Compile()
+		// Create our platform configuration and compile the project
+		config := NewCryticCompilationConfig(contractDirectory)
+		compilations, _, err := config.Compile()
 
 		// No failures
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Two compilation objects
-		assert.True(t, len(compilations) == 2)
+		assert.EqualValues(t, 2, len(compilations))
 		// One source per compilation unit
-		assert.True(t, len(compilations[0].Sources) == 1)
-		assert.True(t, len(compilations[1].Sources) == 1)
+		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[1].Sources))
 
 		// Obtain the compiled source from both compilation units
 		firstContractName := "FirstContract.sol"

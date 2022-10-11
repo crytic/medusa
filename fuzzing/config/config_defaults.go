@@ -36,7 +36,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
-			Coverage:        true,
+			CoverageEnabled: true,
 			CorpusDirectory: "corpus",
 		},
 		Compilation: compilationConfig,

@@ -5,8 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -47,9 +47,9 @@ func getMockSimpleCorpusBlockHeader() *SimpleCorpusBlockHeader {
 }
 
 // getMockTransaction creates a mock CallMessage for testing
-func getMockTransaction() *fuzzerTypes.CallMessage {
+func getMockTransaction() *chainTypes.CallMessage {
 	to := common.HexToAddress("ToAddress")
-	txn := fuzzerTypes.CallMessage{
+	txn := chainTypes.CallMessage{
 		MsgFrom:      common.HexToAddress("FromAddress"),
 		MsgTo:        &to,
 		MsgNonce:     rand.Uint64(),
@@ -114,8 +114,8 @@ func testTransactionsAreEqual(t *testing.T, txSeqOne []core.Message, txSeqTwo []
 	// Iterate across each transaction
 	for idx, txOneInterface := range txSeqOne {
 		// De-reference
-		txOne := txOneInterface.(*fuzzerTypes.CallMessage)
-		txTwo := txSeqTwo[idx].(*fuzzerTypes.CallMessage)
+		txOne := txOneInterface.(*chainTypes.CallMessage)
+		txTwo := txSeqTwo[idx].(*chainTypes.CallMessage)
 		// Check all fields of a types.CallMessage
 		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "MsgGasPrices are not equal")
 		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "MsgGasTips are not equal")

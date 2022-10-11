@@ -1,10 +1,10 @@
-package types
+package corpus
 
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/testnode"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"math/big"
 )
 
@@ -29,7 +29,7 @@ type Corpus interface {
 	// TODO: Note for David - should this function be here? I added it here so that the corpus is responsible for this task
 	// but it is not a very generic function.
 	// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a CorpusEntry
-	TestSequenceToCorpusEntry(testNodeBlockSequence []*testnode.TestNodeBlock) (CorpusEntry, error)
+	TestSequenceToCorpusEntry(testNodeBlockSequence []*chainTypes.Block) (CorpusEntry, error)
 }
 
 // CorpusEntry is the generic interface for a single entry in the Corpus. The Corpus is simply a list of corpus entries.

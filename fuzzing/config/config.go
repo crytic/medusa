@@ -46,8 +46,8 @@ type FuzzingConfig struct {
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
 
-	// Coverage describes whether to use coverage-guided fuzzing
-	Coverage bool `json:"coverage"`
+	// CoverageEnabled describes whether to use coverage-guided fuzzing
+	CoverageEnabled bool `json:"coverageEnabled"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
 	CorpusDirectory string `json:"corpusDirectory"`

@@ -3,7 +3,7 @@ package simple_corpus
 import (
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils/test_utils"
+	"github.com/trailofbits/medusa/utils/testutils"
 	"path/filepath"
 	"testing"
 )
@@ -13,7 +13,7 @@ func TestSimpleCorpus_WriteAndReadCorpus(t *testing.T) {
 	// Create a mock corpus
 	numEntries := 5
 	corpus := getMockSimpleCorpus(numEntries)
-	test_utils.ExecuteInDirectory(t, t.TempDir(), func() {
+	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// Write to disk
 		err := corpus.WriteCorpusToDisk("corpus")
 		assert.Nil(t, err)

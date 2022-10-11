@@ -3,7 +3,7 @@ package simple_corpus
 import (
 	"encoding/hex"
 	"encoding/json"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/types"
+	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"golang.org/x/crypto/sha3"
 )
 
