@@ -13,17 +13,20 @@ import (
 )
 
 // getMockSimpleCorpus creates a mock corpus with numEntries entries for testing
-func getMockSimpleCorpus(numEntries int) *SimpleCorpus {
+func getMockSimpleCorpus(numEntries int) (*SimpleCorpus, error) {
 	corpus := NewSimpleCorpus()
 	for i := 0; i < numEntries; i++ {
-		corpus.corpusEntries = append(corpus.corpusEntries, getMockSimpleCorpusEntry(numEntries))
+		err := corpus.AddEntry(common.BigToHash(big.NewInt(int64(i))), getMockSimpleCorpusEntry(numEntries))
+		if err != nil {
+			return nil, err
+		}
 	}
-	return corpus
+	return corpus, nil
 }
 
 // getMockSimpleCorpusEntry creates a mock SimpleCorpusEntry with numBlocks blocks for testing
 func getMockSimpleCorpusEntry(numBlocks int) *SimpleCorpusEntry {
-	entry := NewSimpleCorpusEntry()
+	entry := NewSimpleCorpusEntry(nil, []*chainTypes.Block{})
 	for i := 0; i < numBlocks; i++ {
 		entry.blocks = append(entry.blocks, getMockSimpleBlockBlock(numBlocks))
 	}
@@ -43,7 +46,7 @@ func getMockSimpleBlockBlock(numTransactions int) *SimpleCorpusBlock {
 
 // getMockSimpleCorpusBlockHeader creates a mock SimpleCorpusBlockHeader for testing
 func getMockSimpleCorpusBlockHeader() *SimpleCorpusBlockHeader {
-	return NewSimpleCorpusBlockHeader(common.HexToHash("BlockHash"), rand.Uint64(), big.NewInt(int64(rand.Int())))
+	return NewSimpleCorpusBlockHeader(rand.Uint64(), big.NewInt(int64(rand.Int())))
 }
 
 // getMockTransaction creates a mock CallMessage for testing
@@ -101,9 +104,8 @@ func EntriesAreEqual(t *testing.T, seqOne *SimpleCorpusEntry, seqTwo *SimpleCorp
 
 // testHeadersAreEqual tests whether two SimpleCorpusBlockHeader objects are equal to each other
 func testHeadersAreEqual(t *testing.T, headerOne corpusTypes.CorpusBlockHeader, headerTwo corpusTypes.CorpusBlockHeader) {
-	// Make sure that the block number, block hash, and block timestamp are the same
+	// Make sure that the block number, and block timestamp are the same
 	assert.True(t, headerOne.(*SimpleCorpusBlockHeader).BlockNumber().Cmp(headerTwo.(*SimpleCorpusBlockHeader).BlockNumber()) == 0, "Block numbers are not equal")
-	assert.True(t, headerOne.(*SimpleCorpusBlockHeader).BlockHash() == headerTwo.(*SimpleCorpusBlockHeader).BlockHash(), "Block hashes are not equal")
 	assert.True(t, headerOne.(*SimpleCorpusBlockHeader).BlockTimestamp() == headerTwo.(*SimpleCorpusBlockHeader).BlockTimestamp(), "Block timestamps are not equal")
 }
 

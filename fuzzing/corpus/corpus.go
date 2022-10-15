@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"math/big"
 )
 
@@ -18,18 +17,17 @@ type Corpus interface {
 	WriteCorpusToDisk(writeDirectory string) error
 	// ReadCorpusFromDisk reads the Corpus from disk at readDirectory and throws an error in case of an issue
 	ReadCorpusFromDisk(readDirectory string) error
-	// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a CorpusEntry
-	// TODO: Note for David - should this function be here? I added it here so that the corpus is responsible for this task
-	//  but it is not a very generic function.
-	TestSequenceToCorpusEntry(testNodeBlockSequence []*chainTypes.Block) (CorpusEntry, error)
 }
 
-// CorpusEntry is the generic interface for a single entry in the Corpus. The Corpus is simply a list of corpus entries.
+// CorpusEntry is the generic interface for a single entry in the Corpus. It represents a sequence of blocks processed
+// over some initial state that produced an interesting result (e.g., increased coverage).
 type CorpusEntry interface {
+	// StateRoot represents the ethereum state root hash of the world state prior to the processing of the first block
+	// in the Blocks sequence. This may be nil if it was not recorded, or validation of the pre-processing state root
+	// hash should not be enforced for this entry.
+	StateRoot() *common.Hash
 	// Blocks returns the list of CorpusBlock objects that are stored in the CorpusEntry
 	Blocks() []CorpusBlock
-	// Hash hashes the contents of a CorpusEntry
-	Hash() (string, error)
 	// MarshalJSON marshals the CorpusEntry object into a JSON object
 	MarshalJSON() ([]byte, error)
 	// UnmarshalJSON unmarshals a JSON object into a CorpusEntry object
@@ -44,26 +42,12 @@ type CorpusBlock interface {
 	Transactions() []core.Message
 	// Receipts returns the receipts of the CorpusBlock
 	Receipts() []*coreTypes.Receipt
-	// Hash hashes the contents of a CorpusBlock
-	Hash() (string, error)
-	// MarshalJSON marshals the CorpusBlock object into a JSON object
-	MarshalJSON() ([]byte, error)
-	// UnmarshalJSON unmarshals a JSON object into a CorpusBlock object
-	UnmarshalJSON(input []byte) error
 }
 
 // CorpusBlockHeader is the generic interface for the block header of a CorpusBlock.
 type CorpusBlockHeader interface {
-	// BlockHash returns the block hash
-	BlockHash() common.Hash
 	// BlockTimestamp returns the block timestamp
 	BlockTimestamp() uint64
 	// BlockNumber returns the block number
 	BlockNumber() *big.Int
-	// Hash hashes the contents of a CorpusBlockHeader
-	Hash() (string, error)
-	// MarshalJSON marshals the CorpusBlockHeader object into a JSON object
-	MarshalJSON() ([]byte, error)
-	// UnmarshalJSON unmarshals a JSON object into a CorpusBlockHeader object
-	UnmarshalJSON(input []byte) error
 }

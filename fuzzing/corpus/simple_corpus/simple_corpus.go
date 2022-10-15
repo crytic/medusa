@@ -3,7 +3,7 @@ package simple_corpus
 import (
 	"encoding/json"
 	"fmt"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
+	"github.com/ethereum/go-ethereum/common"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
@@ -14,23 +14,24 @@ import (
 
 // SimpleCorpus implements the generic Corpus interface and is the simplest implementation of a corpus for coverage-guided fuzzing.
 type SimpleCorpus struct {
-	// corpusEntries is a list of SimpleCorpusEntry
-	corpusEntries []*SimpleCorpusEntry
-	// mutex is used to prevent races to write to corpus
-	mutex sync.Mutex
+	// corpusEntries is a lookup of coverage map hashes to corpus entries which are responsible for that coverage.
+	corpusEntries map[string]*SimpleCorpusEntry
+
+	// corpusEntriesLock provides thread synchronization used to prevent concurrent access errors into corpusEntries.
+	corpusEntriesLock sync.Mutex
 }
 
 // NewSimpleCorpus initializes a new SimpleCorpus object for the Fuzzer
 func NewSimpleCorpus() *SimpleCorpus {
 	return &SimpleCorpus{
-		corpusEntries: []*SimpleCorpusEntry{},
+		corpusEntries: make(map[string]*SimpleCorpusEntry),
 	}
 }
 
 // Entries returns the list of SimpleCorpusEntry objects that are stored in the corpus
-func (m *SimpleCorpus) Entries() []corpusTypes.CorpusEntry {
+func (c *SimpleCorpus) Entries() []corpusTypes.CorpusEntry {
 	var entries []corpusTypes.CorpusEntry
-	for _, simpleEntry := range m.corpusEntries {
+	for _, simpleEntry := range c.corpusEntries {
 		entry := corpusTypes.CorpusEntry(simpleEntry)
 		entries = append(entries, entry)
 	}
@@ -38,11 +39,11 @@ func (m *SimpleCorpus) Entries() []corpusTypes.CorpusEntry {
 }
 
 // AddEntry adds a SimpleCorpusEntry to the corpus and returns an error in case of an issue
-func (c *SimpleCorpus) AddEntry(corpusEntry corpusTypes.CorpusEntry) error {
-	// Add to corpus; we do not care about duplicates
-	c.mutex.Lock() // lock
-	c.corpusEntries = append(c.corpusEntries, corpusEntry.(*SimpleCorpusEntry))
-	c.mutex.Unlock() // unlock
+func (c *SimpleCorpus) AddEntry(coverageHash common.Hash, corpusEntry corpusTypes.CorpusEntry) error {
+	// Add the corpus entry to our internal map.
+	c.corpusEntriesLock.Lock()
+	c.corpusEntries[string(coverageHash[:])] = corpusEntry.(*SimpleCorpusEntry)
+	c.corpusEntriesLock.Unlock()
 	return nil
 }
 
@@ -54,13 +55,11 @@ func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
 		return err
 	}
 	// Write all sequences to corpus
-	for _, simpleEntry := range c.corpusEntries {
-		// Get hash of the sequence
-		simpleEntryHash, err := simpleEntry.Hash()
+	for coverageHash, simpleEntry := range c.corpusEntries {
 		if err != nil {
 			return err
 		}
-		fileName := simpleEntryHash + ".json"
+		fileName := coverageHash + ".json"
 		// If corpus file already exists, no need to write it again
 		if _, err := os.Stat(fileName); err == nil {
 			continue
@@ -73,7 +72,7 @@ func (c *SimpleCorpus) WriteCorpusToDisk(writeDirectory string) error {
 		// Write the byte string
 		err = ioutil.WriteFile(filepath.Join(writeDirectory, fileName), jsonString, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("Some error here: %v\n", err)
+			return fmt.Errorf("An error occurred while writing corpus to disk: %v\n", err)
 		}
 
 	}
@@ -94,35 +93,29 @@ func (c *SimpleCorpus) ReadCorpusFromDisk(readDirectory string) error {
 	}
 	// Found some matches
 	for i := 0; i < len(matches); i++ {
+		// Obtain the coverage hash from the filename.
+		coverageHash := utils.GetFileNameWithoutExtension(matches[i])
+
 		// Read the JSON file data
 		b, err := ioutil.ReadFile(matches[i])
 		if err != nil {
 			return err
 		}
+
 		// Read JSON file into SimpleCorpusEntry
 		var simpleEntry SimpleCorpusEntry
 		err = json.Unmarshal(b, &simpleEntry)
 		if err != nil {
 			return err
 		}
+
 		// Add entry to corpus
 		entry := corpusTypes.CorpusEntry(&simpleEntry)
-		err = c.AddEntry(entry)
+		err = c.AddEntry(coverageHash, entry)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-// TestSequenceToCorpusEntry takes an array of TestNodeBlocks and converts it into a SimpleCorpusEntry
-func (c *SimpleCorpus) TestSequenceToCorpusEntry(blocks []*chainTypes.Block) (corpusTypes.CorpusEntry, error) {
-	// Create a new corpus entry from the provided blocks
-	corpusEntry := NewSimpleCorpusEntry()
-	for _, testNodeBlock := range blocks {
-		corpusBlock := NewSimpleCorpusBlockFromTestChainBlock(testNodeBlock)
-		corpusEntry.blocks = append(corpusEntry.blocks, corpusBlock)
-	}
-	return corpusEntry, nil
 }

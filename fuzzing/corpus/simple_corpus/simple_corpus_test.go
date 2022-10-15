@@ -12,7 +12,8 @@ import (
 func TestSimpleCorpus_WriteAndReadCorpus(t *testing.T) {
 	// Create a mock corpus
 	numEntries := 5
-	corpus := getMockSimpleCorpus(numEntries)
+	corpus, err := getMockSimpleCorpus(numEntries)
+	assert.NoError(t, err)
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// Write to disk
 		err := corpus.WriteCorpusToDisk("corpus")
@@ -37,7 +38,8 @@ func TestSimpleCorpus_WriteAndReadCorpus(t *testing.T) {
 func TestSimpleCorpusEntry_MarshalJSONAndUnmarshalJSONAreMirrorOperations(t *testing.T) {
 	// Create a mock corpus
 	numEntries := 5
-	corpus := getMockSimpleCorpus(numEntries)
+	corpus, err := getMockSimpleCorpus(numEntries)
+	assert.NoError(t, err)
 	// For each entry, marshal it and then unmarshal the byte array
 	for _, entry := range corpus.corpusEntries {
 		// Marshal the entry

@@ -1,14 +1,11 @@
 package simple_corpus
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
-	"golang.org/x/crypto/sha3"
-	"strings"
 )
 
 // SimpleCorpusBlock implements the CorpusBlock interface and is a simplified version of a fuzzing.TestNodeBlock.
@@ -38,7 +35,6 @@ func NewSimpleCorpusBlockFromTestChainBlock(block *chainTypes.Block) *SimpleCorp
 
 	// Set header fields
 	corpusBlock.blockHeader = NewSimpleCorpusBlockHeader(
-		block.Hash(),
 		block.Header().Time,
 		block.Header().Number)
 
@@ -76,32 +72,6 @@ func (m *SimpleCorpusBlock) Transactions() []core.Message {
 // Receipts returns the receipts of the SimpleCorpusBlock
 func (m *SimpleCorpusBlock) Receipts() []*coreTypes.Receipt {
 	return m.blockReceipts
-}
-
-// Hash hashes the fields of a SimpleCorpusBlock
-func (m *SimpleCorpusBlock) Hash() (string, error) {
-	// Concatenate the hashes of each CallMessage
-	var txnSequenceHashString string
-	for _, txn := range m.blockTransactions {
-		txnHash, err := txn.Hash()
-		if err != nil {
-			return "", err
-		}
-		txnSequenceHashString = txnSequenceHashString + txnHash
-	}
-	// Concatenate the hash of the header and txns
-	simpleHeaderHash, err := m.blockHeader.Hash()
-	if err != nil {
-		return "", err
-	}
-	simpleBlockString := strings.Join([]string{simpleHeaderHash, txnSequenceHashString}, ",")
-	hash := sha3.NewLegacyKeccak256()
-	// Hash the entire sequence
-	_, err = hash.Write([]byte(simpleBlockString))
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // MarshalJSON marshals the SimpleCorpusBlock object into JSON
