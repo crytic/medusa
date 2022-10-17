@@ -40,6 +40,7 @@ func getFuzzConfigDefault() *config.FuzzingConfig {
 			},
 		},
 		CoverageEnabled: true,
+		CorpusDirectory: "corpus",
 	}
 }
 
@@ -62,38 +63,40 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 	// Copy our target file to our test directory
 	testContractPath := testutils.CopyToTestDirectory(t, solidityFile)
+	// Run the test in our temporary test directory to avoid artifact pollution.
+	testutils.ExecuteInDirectory(t, testContractPath, func() {
+		// Create a default solc platform config
+		solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
 
-	// Create a default solc platform config
-	solcPlatformConfig := platforms.NewSolcCompilationConfig(testContractPath)
+		// Wrap the platform config in a compilation config
+		compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
+		assert.NoError(t, err)
 
-	// Wrap the platform config in a compilation config
-	compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
-	assert.NoError(t, err)
+		// Create a project configuration to run the fuzzer with
+		projectConfig := &config.ProjectConfig{
+			Fuzzing:     *fuzzingConfig,
+			Compilation: compilationConfig,
+		}
 
-	// Create a project configuration to run the fuzzer with
-	projectConfig := &config.ProjectConfig{
-		Fuzzing:     *fuzzingConfig,
-		Compilation: compilationConfig,
-	}
+		// Create a fuzzer instance
+		fuzzer, err := NewFuzzer(*projectConfig)
+		assert.NoError(t, err)
 
-	// Create a fuzzer instance
-	fuzzer, err := NewFuzzer(*projectConfig)
-	assert.NoError(t, err)
+		// Run the fuzzer against the compilation
+		err = fuzzer.Start()
+		assert.NoError(t, err)
 
-	// Run the fuzzer against the compilation
-	err = fuzzer.Start()
-	assert.NoError(t, err)
-
-	// Ensure we captured a failed test.
-	if expectFailure {
-		assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
-	} else {
-		assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) == 0, "Fuzz test found a violated property test when it should not have")
-	}
-	// If default configuration is used, all test contracts should show some level of coverage
-	if fuzzingConfig.CoverageEnabled {
-		assert.True(t, len(fuzzer.corpus.Entries()) > 0, "No coverage was captured")
-	}
+		// Ensure we captured a failed test.
+		if expectFailure {
+			assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
+		} else {
+			assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) == 0, "Fuzz test found a violated property test when it should not have")
+		}
+		// If default configuration is used, all test contracts should show some level of coverage
+		if fuzzingConfig.CoverageEnabled {
+			assert.True(t, fuzzer.corpus.CallSequenceCount() > 0, "No coverage was captured")
+		}
+	})
 }
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer

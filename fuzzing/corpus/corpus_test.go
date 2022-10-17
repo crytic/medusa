@@ -1,0 +1,172 @@
+package corpus
+
+import (
+	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/utils/testutils"
+	"math/big"
+	"math/rand"
+	"path/filepath"
+	"testing"
+)
+
+// getMockSimpleCorpus creates a mock corpus with numEntries callSequencesByFilePath for testing
+func getMockSimpleCorpus(numEntries int) (*Corpus, error) {
+	// Create a new corpus
+	corpus, err := NewCorpus("corpus")
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the requested number of entries.
+	for i := 0; i < numEntries; i++ {
+		err := corpus.AddCallSequence(*getMockSimpleCorpusEntry(numEntries))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return corpus, nil
+}
+
+// getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
+func getMockSimpleCorpusEntry(numBlocks int) *CorpusCallSequence {
+	entry := &CorpusCallSequence{
+		BaseStateRootHash: nil,
+		Blocks:            nil,
+	}
+	for i := 0; i < numBlocks; i++ {
+		entry.Blocks = append(entry.Blocks, *getMockSimpleBlockBlock(numBlocks))
+	}
+	return entry
+}
+
+// getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
+func getMockSimpleBlockBlock(numTransactions int) *CorpusBlock {
+	block := &CorpusBlock{
+		Header: CorpusBlockHeader{
+			Number:    big.NewInt(int64(rand.Int())),
+			Timestamp: rand.Uint64(),
+		},
+		Transactions: nil,
+	}
+	for i := 0; i < numTransactions; i++ {
+		block.Transactions = append(block.Transactions, *getMockTransaction())
+	}
+	return block
+}
+
+// getMockTransaction creates a mock CallMessage for testing
+func getMockTransaction() *chainTypes.CallMessage {
+	to := common.HexToAddress("ToAddress")
+	txn := chainTypes.CallMessage{
+		MsgFrom:      common.HexToAddress("FromAddress"),
+		MsgTo:        &to,
+		MsgNonce:     rand.Uint64(),
+		MsgValue:     big.NewInt(int64(rand.Int())),
+		MsgGas:       rand.Uint64(),
+		MsgGasPrice:  big.NewInt(int64(rand.Int())),
+		MsgGasFeeCap: big.NewInt(int64(rand.Int())),
+		MsgGasTipCap: big.NewInt(int64(rand.Int())),
+		MsgData:      []byte{uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64())},
+	}
+	return &txn
+}
+
+// testCorpusBlockSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
+func testCorpusBlockSequencesAreEqual(t *testing.T, seqOne *CorpusCallSequence, seqTwo *CorpusCallSequence) {
+	// Ensure the lengths of both sequences are the same
+	assert.EqualValues(t, len(seqOne.Blocks), len(seqTwo.Blocks), "Different number of blocks in sequences")
+
+	// Iterate through seqOne
+	for idx, corpusBlock := range seqOne.Blocks {
+		// Make sure the headers are equal
+		testCorpusBlockHeadersAreEqual(t, corpusBlock.Header, seqTwo.Blocks[idx].Header)
+		// Make sure transactions are equal
+		testCorpusBlockTransactionsAreEqual(t, corpusBlock.Transactions, seqTwo.Blocks[idx].Transactions)
+	}
+}
+
+// testCorpusBlockHeadersAreEqual tests whether two CorpusBlockHeader objects are equal to each other
+func testCorpusBlockHeadersAreEqual(t *testing.T, headerOne CorpusBlockHeader, headerTwo CorpusBlockHeader) {
+	// Make sure that the block number, and block timestamp are the same
+	assert.True(t, headerOne.Number.Cmp(headerTwo.Number) == 0, "Block numbers are not equal")
+	assert.True(t, headerOne.Timestamp == headerTwo.Timestamp, "Block timestamps are not equal")
+}
+
+// testCorpusBlockTransactionsAreEqual tests whether each transaction in two CorpusBlock objects are equal
+func testCorpusBlockTransactionsAreEqual(t *testing.T, txSeqOne []chainTypes.CallMessage, txSeqTwo []chainTypes.CallMessage) {
+	// Ensure the lengths of both transaction sequences are the same
+	assert.True(t, len(txSeqOne) == len(txSeqTwo), "Different number of transactions in blocks")
+	// Iterate across each transaction
+	for idx, txOne := range txSeqOne {
+		// De-reference our supposed parallel equivalent transaction.
+		txTwo := txSeqTwo[idx]
+
+		// Check all fields of a types.CallMessage
+		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "MsgGasPrices are not equal")
+		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "MsgGasTips are not equal")
+		assert.True(t, txOne.MsgGasFeeCap.Cmp(txTwo.MsgGasFeeCap) == 0, "MsgGasFeeCap are not equal")
+		assert.True(t, txOne.MsgNonce == txTwo.MsgNonce, "Nonces are not equal")
+		assert.True(t, string(txOne.MsgData) == string(txTwo.MsgData), "Data are not equal")
+		assert.True(t, txOne.MsgGas == txTwo.MsgGas, "Gas amounts are not equal")
+		assert.True(t, txOne.MsgValue.Cmp(txTwo.MsgValue) == 0, "Values are not equal")
+		assert.True(t, txOne.MsgTo.String() == txTwo.MsgTo.String(), "TO addresses are not equal")
+		assert.True(t, txOne.MsgFrom.String() == txTwo.MsgFrom.String(), "FROM addresses are not equal")
+	}
+}
+
+// TestCorpusReadWrite first writes the corpus to disk and then reads it back from the disk and ensures integrity.
+func TestCorpusReadWrite(t *testing.T) {
+	// Create a mock corpus
+	numEntries := 5
+	corpus, err := getMockSimpleCorpus(numEntries)
+	assert.NoError(t, err)
+	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
+		// Write to disk
+		err := corpus.Flush()
+		assert.NoError(t, err)
+
+		// Ensure that there are the correct number of call sequence files
+		matches, err := filepath.Glob(filepath.Join(corpus.CallSequencesDirectory(), "*.json"))
+		assert.NoError(t, err)
+		assert.True(t, len(matches) == numEntries, "Did not find numEntries matches")
+
+		// Wipe corpus clean so that you can now read it in from disk
+		corpus, err = NewCorpus("corpus")
+		assert.NoError(t, err)
+
+		// Create a new corpus object and read our previously read artifacts.
+		corpus, err = NewCorpus(corpus.storageDirectory)
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, numEntries, corpus.CallSequenceCount(), "Unexpected number of corpus entries when round-trip serializing the corpus")
+	})
+}
+
+// TestCorpusCallSequenceMarshaling ensures that a corpus entry that is round trip serialized retains its original
+// values.
+func TestCorpusCallSequenceMarshaling(t *testing.T) {
+	// Create a mock corpus
+	numEntries := 5
+	corpus, err := getMockSimpleCorpus(numEntries)
+	assert.NoError(t, err)
+
+	// Run the test in our temporary test directory to avoid artifact pollution.
+	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
+		// For each entry, marshal it and then unmarshal the byte array
+		for _, entry := range corpus.callSequencesByFilePath {
+			// Marshal the entry
+			b, err := json.Marshal(entry)
+			assert.NoError(t, err)
+			var sameEntry CorpusCallSequence
+			// Unmarshal byte array
+			err = json.Unmarshal(b, &sameEntry)
+			assert.NoError(t, err)
+
+			// Check equality
+			testCorpusBlockSequencesAreEqual(t, entry, &sameEntry)
+		}
+	})
+}

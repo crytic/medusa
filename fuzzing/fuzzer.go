@@ -11,7 +11,6 @@ import (
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
-	simpleCorpusTypes "github.com/trailofbits/medusa/fuzzing/corpus/simple_corpus"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
@@ -45,7 +44,7 @@ type Fuzzer struct {
 	// metrics represents the metrics for the fuzzing campaign.
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
-	corpus corpusTypes.Corpus
+	corpus *corpusTypes.Corpus
 
 	// BaseValueSet represents a value_generation.BaseValueSet containing input values for our fuzz tests.
 	BaseValueSet *value_generation.BaseValueSet
@@ -130,7 +129,7 @@ func (f *Fuzzer) Config() config.ProjectConfig {
 // SenderAddresses exposes the account addresses from which state changing fuzzed transactions will be sent by a
 // FuzzerWorker.
 func (f *Fuzzer) SenderAddresses() []common.Address {
-	return slices.Clone(f.senders)
+	return f.senders
 }
 
 // DeployerAddress exposes the account address from which contracts will be deployed by a FuzzerWorker.
@@ -140,16 +139,7 @@ func (f *Fuzzer) DeployerAddress() common.Address {
 
 // TestCases exposes the underlying tests run during the fuzzing campaign.
 func (f *Fuzzer) TestCases() []TestCase {
-	// Acquire a thread lock to avoid race conditions
-	f.testCasesLock.Lock()
-	defer f.testCasesLock.Unlock()
-
-	// Collect all test cases and return them.
-	testCases := make([]TestCase, 0)
-	for i := range f.testCases {
-		testCases = append(testCases, f.testCases[i])
-	}
-	return testCases
+	return f.testCases
 }
 
 // TestCasesWithStatus exposes the underlying tests with the provided status.
@@ -159,13 +149,9 @@ func (f *Fuzzer) TestCasesWithStatus(status TestCaseStatus) []TestCase {
 	defer f.testCasesLock.Unlock()
 
 	// Collect all test cases with matching statuses.
-	matchingTests := make([]TestCase, 0)
-	for i := range f.testCases {
-		if f.testCases[i].Status() == status {
-			matchingTests = append(matchingTests, f.testCases[i])
-		}
-	}
-	return matchingTests
+	return utils.SliceWhere(f.testCases, func(t TestCase) bool {
+		return t.Status() == status
+	})
 }
 
 // RegisterTestCase is used by TestCaseProvider to register a TestCase with the Fuzzer.
@@ -277,6 +263,9 @@ func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestCh
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
 func (f *Fuzzer) Start() error {
+	// Define our variable to catch errors
+	var err error
+
 	// If we have no test providers, stop immediately as no tests will be run.
 	if len(f.testCaseProviders) == 0 {
 		return errors.New("no test providers were registered with the fuzzer")
@@ -291,16 +280,11 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// If coverage is enabled, set up the corpus.
+	// If coverage is enabled, set up the coverage maps and corpus.
 	if f.config.Fuzzing.CoverageEnabled {
-		f.corpus = simpleCorpusTypes.NewSimpleCorpus() // TODO: make this configurable after adding more options
-
-		// If we have a corpus directory set, read the corpus into memory.
-		if f.config.Fuzzing.CorpusDirectory != "" {
-			err := f.corpus.ReadCorpusFromDisk(f.config.Fuzzing.CorpusDirectory)
-			if err != nil {
-				return err
-			}
+		f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -428,8 +412,8 @@ func (f *Fuzzer) Start() error {
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
 	// previous error, as we don't want to lose corpus entries.
-	if f.config.Fuzzing.CoverageEnabled && f.config.Fuzzing.CorpusDirectory != "" {
-		corpusFlushErr := f.corpus.WriteCorpusToDisk(f.config.Fuzzing.CorpusDirectory)
+	if f.config.Fuzzing.CoverageEnabled {
+		corpusFlushErr := f.corpus.Flush()
 		if err == nil {
 			err = corpusFlushErr
 		}

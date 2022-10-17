@@ -1,53 +1,185 @@
 package corpus
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"math/big"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/utils"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
-// Corpus is the generic interface that a corpus type should implement for coverage-based testing
-type Corpus interface {
-	// Entries returns the list of CorpusEntry objects that are stored in the Corpus
-	Entries() []CorpusEntry
-	// AddEntry adds a CorpusEntry to the corpus and returns an error in case of an issue
-	AddEntry(entry CorpusEntry) error
-	// WriteCorpusToDisk writes the Corpus to disk at writeDirectory and throws an error in case of an issue
-	WriteCorpusToDisk(writeDirectory string) error
-	// ReadCorpusFromDisk reads the Corpus from disk at readDirectory and throws an error in case of an issue
-	ReadCorpusFromDisk(readDirectory string) error
+// Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
+// reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
+// may create incompatibilities with corpus items.
+type Corpus struct {
+	// storageDirectory describes the directory to save corpus callSequencesByFilePath within.
+	storageDirectory string
+
+	// coverageMaps describes the total code coverage known to be achieved across all runs.
+	coverageMaps *fuzzerTypes.CoverageMaps
+
+	// callSequencesByFilePath is a mapping of file paths to corpus call sequences stored at those paths.
+	callSequencesByFilePath map[string]*CorpusCallSequence
+
+	// corpusEntriesLock provides thread synchronization used to prevent concurrent access errors into callSequencesByFilePath.
+	corpusEntriesLock sync.Mutex
 }
 
-// CorpusEntry is the generic interface for a single entry in the Corpus. It represents a sequence of blocks processed
-// over some initial state that produced an interesting result (e.g., increased coverage).
-type CorpusEntry interface {
-	// StateRoot represents the ethereum state root hash of the world state prior to the processing of the first block
-	// in the Blocks sequence. This may be nil if it was not recorded, or validation of the pre-processing state root
-	// hash should not be enforced for this entry.
-	StateRoot() *common.Hash
-	// Blocks returns the list of CorpusBlock objects that are stored in the CorpusEntry
-	Blocks() []CorpusBlock
-	// MarshalJSON marshals the CorpusEntry object into a JSON object
-	MarshalJSON() ([]byte, error)
-	// UnmarshalJSON unmarshals a JSON object into a CorpusEntry object
-	UnmarshalJSON(input []byte) error
+// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
+// to an empty path, artifacts will not be persistently stored.
+func NewCorpus(corpusDirectory string) (*Corpus, error) {
+	corpus := &Corpus{
+		storageDirectory:        corpusDirectory,
+		coverageMaps:            fuzzerTypes.NewCoverageMaps(),
+		callSequencesByFilePath: make(map[string]*CorpusCallSequence),
+	}
+
+	// If we have a corpus directory set, parse it.
+	if corpus.storageDirectory != "" {
+		// If coverage maps file exists, read it.
+		if _, err := os.Stat(corpus.CoverageMapsFilePath()); err == nil {
+			// Read the coverage maps file.
+			b, err := ioutil.ReadFile(corpus.CoverageMapsFilePath())
+			if err != nil {
+				return nil, err
+			}
+
+			// Parse the coverage maps.
+			err = json.Unmarshal(b, &corpus.coverageMaps)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Read all call sequences discovered in the relevant corpus directory.
+		matches, err := filepath.Glob(filepath.Join(corpus.CallSequencesDirectory(), "*.json"))
+		if err != nil {
+			return nil, err
+		}
+		for i := 0; i < len(matches); i++ {
+			// Alias our file path.
+			filePath := matches[i]
+
+			// Read the call sequence data.
+			b, err := ioutil.ReadFile(filePath)
+			if err != nil {
+				return nil, err
+			}
+
+			// Parse the call sequence data.
+			var entry CorpusCallSequence
+			err = json.Unmarshal(b, &entry)
+			if err != nil {
+				return nil, err
+			}
+
+			// Add entry to corpus
+			corpus.callSequencesByFilePath[filePath] = &entry
+		}
+	}
+	return corpus, nil
 }
 
-// CorpusBlock is the generic interface for a single block in a CorpusEntry. A CorpusEntry is simply a list of corpus blocks
-type CorpusBlock interface {
-	// Header returns the CorpusBlockHeader of the CorpusBlock
-	Header() CorpusBlockHeader
-	// Transactions returns the transactions of the CorpusBlock
-	Transactions() []core.Message
-	// Receipts returns the receipts of the CorpusBlock
-	Receipts() []*coreTypes.Receipt
+// StorageDirectory returns the root directory path of the corpus. If this is empty, it indicates persistent storage
+// will not be used.
+func (c *Corpus) StorageDirectory() string {
+	return c.storageDirectory
 }
 
-// CorpusBlockHeader is the generic interface for the block header of a CorpusBlock.
-type CorpusBlockHeader interface {
-	// BlockTimestamp returns the block timestamp
-	BlockTimestamp() uint64
-	// BlockNumber returns the block number
-	BlockNumber() *big.Int
+// CallSequencesDirectory returns the directory path where coverage increasing call sequences should be stored.
+// This is a subdirectory of StorageDirectory. If StorageDirectory is empty, this is as well, indicating persistent
+// storage will not be used.
+func (c *Corpus) CallSequencesDirectory() string {
+	if c.storageDirectory == "" {
+		return ""
+	}
+
+	return filepath.Join(c.StorageDirectory(), "call_sequences")
+}
+
+// CoverageMapsFilePath returns the file path where coverage maps describing the known coverage to be achieved is saved.
+// If StorageDirectory is empty, this is as well, indicating persistent storage will not be used.
+func (c *Corpus) CoverageMapsFilePath() string {
+	if c.storageDirectory == "" {
+		return ""
+	}
+
+	return filepath.Join(c.StorageDirectory(), "coverage_maps.json")
+}
+
+// CoverageMaps returns the total coverage collected across all runs.
+func (c *Corpus) CoverageMaps() *fuzzerTypes.CoverageMaps {
+	return c.coverageMaps
+}
+
+// CallSequenceCount returns the count of call sequences recorded by the corpus which increased coverage.
+func (c *Corpus) CallSequenceCount() int {
+	return len(c.callSequencesByFilePath)
+}
+
+// AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
+func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
+	// Determine the filepath to write our corpus entry to.
+	filePath := filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
+
+	// Update our map with the new entry.
+	c.corpusEntriesLock.Lock()
+	c.callSequencesByFilePath[filePath] = &corpusEntry
+	c.corpusEntriesLock.Unlock()
+	return nil
+}
+
+// Flush writes corpus changes to disk. Returns an error if one occurs.
+func (c *Corpus) Flush() error {
+	// If our corpus directory is empty, it indicates we do not want to write corpus artifacts to persistent storage.
+	if c.storageDirectory == "" {
+		return nil
+	}
+
+	// Ensure the corpus directories exists.
+	err := utils.MakeDirectory(c.storageDirectory)
+	if err != nil {
+		return err
+	}
+	err = utils.MakeDirectory(c.CallSequencesDirectory())
+	if err != nil {
+		return err
+	}
+
+	// Encode the coverage maps
+	jsonEncodedData, err := json.MarshalIndent(c.coverageMaps, "", " ")
+	if err != nil {
+		return err
+	}
+
+	// Write the JSON encoded coverage maps
+	err = ioutil.WriteFile(c.CoverageMapsFilePath(), jsonEncodedData, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("An error occurred while writing coverage maps to disk: %v\n", err)
+	}
+
+	// Write all call sequences to disk
+	for filePath, simpleEntry := range c.callSequencesByFilePath {
+		// If call sequence file already exists, no need to write it again
+		if _, err := os.Stat(filePath); err == nil {
+			continue
+		}
+
+		// Marshal the call sequence
+		jsonEncodedData, err = json.MarshalIndent(simpleEntry, "", " ")
+		if err != nil {
+			return err
+		}
+
+		// Write the JSON encoded data.
+		err = ioutil.WriteFile(filePath, jsonEncodedData, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
+		}
+	}
+	return nil
 }
