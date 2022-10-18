@@ -23,7 +23,7 @@ func (c CallMessage) MarshalJSON() ([]byte, error) {
 		MsgGasPrice  *hexutil.Big    `json:"gasPrice"`
 		MsgGasFeeCap *hexutil.Big    `json:"gasFeeCap"`
 		MsgGasTipCap *hexutil.Big    `json:"gasTipCap"`
-		MsgData      []byte          `json:"data"`
+		MsgData      hexutil.Bytes   `json:"data"`
 	}
 	var enc CallMessage
 	enc.MsgFrom = c.MsgFrom
@@ -49,7 +49,7 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 		MsgGasPrice  *hexutil.Big    `json:"gasPrice"`
 		MsgGasFeeCap *hexutil.Big    `json:"gasFeeCap"`
 		MsgGasTipCap *hexutil.Big    `json:"gasTipCap"`
-		MsgData      []byte          `json:"data"`
+		MsgData      *hexutil.Bytes  `json:"data"`
 	}
 	var dec CallMessage
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -80,7 +80,7 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 		c.MsgGasTipCap = (*big.Int)(dec.MsgGasTipCap)
 	}
 	if dec.MsgData != nil {
-		c.MsgData = dec.MsgData
+		c.MsgData = *dec.MsgData
 	}
 	return nil
 }

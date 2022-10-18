@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"sync"
 )
 
@@ -164,6 +165,9 @@ func (cm *CoverageMap) Update(coverageMap *CoverageMap) (bool, error) {
 
 // SetCoveredAt sets the coverage state of a given program counter location within a CoverageMap.
 func (cm *CoverageMap) SetCoveredAt(pc uint64) (bool, error) {
+	// If our program counter is in range, determine if we achieved new coverage for the first time, and update it.
+	// We do not worry about race conditions here as the end result would not change and synchronizing threads here
+	// could be costly.
 	if pc < uint64(len(cm.mapData)) {
 		if cm.mapData[pc] == 0 {
 			cm.mapData[pc] = 1
@@ -182,7 +186,7 @@ func (cm *CoverageMap) Reset() {
 // MarshalJSON encodes the current CoverageMap as JSON data.
 func (cm *CoverageMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		MapData []byte `json:"mapData"`
+		MapData hexutil.Bytes `json:"mapData"`
 	}{
 		MapData: cm.mapData,
 	})
@@ -192,7 +196,7 @@ func (cm *CoverageMap) MarshalJSON() ([]byte, error) {
 func (cm *CoverageMap) UnmarshalJSON(b []byte) error {
 	// Unmarshal our data into our temp struct.
 	var tmp struct {
-		MapData []byte `json:"mapData"`
+		MapData hexutil.Bytes `json:"mapData"`
 	}
 	err := json.Unmarshal(b, &tmp)
 	if err != nil {

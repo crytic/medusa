@@ -124,11 +124,17 @@ func (c *Corpus) CallSequenceCount() int {
 // AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
 func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 	// Determine the filepath to write our corpus entry to.
-	filePath := filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
 
-	// Update our map with the new entry.
+	// Update our map with the new entry. We generate a random UUID until we have a unique one for the filename.
 	c.corpusEntriesLock.Lock()
-	c.callSequencesByFilePath[filePath] = &corpusEntry
+	for {
+		filePath := filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
+		if _, existsAlready := c.callSequencesByFilePath[filePath]; existsAlready {
+			continue
+		}
+		c.callSequencesByFilePath[filePath] = &corpusEntry
+		break
+	}
 	c.corpusEntriesLock.Unlock()
 	return nil
 }

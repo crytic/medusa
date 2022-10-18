@@ -16,7 +16,7 @@ type fuzzerWorkerTracer struct {
 	// fuzzerWorker describes the parent worker which this tracer belongs to.
 	fuzzerWorker *FuzzerWorker
 
-	// tracing results
+	// capturedTransactionInfo contains information captured per transaction.
 	capturedTransactionInfo []*fuzzerTracerTransactionInfo
 
 	// callDepth refers to the current EVM depth during tracing.
@@ -29,13 +29,26 @@ type fuzzerWorkerTracer struct {
 	cachedCodeHashResolved common.Hash
 }
 
+// fuzzerTracerTransactionInfo contains information captured by the tracer per transaction.
 type fuzzerTracerTransactionInfo struct {
-	coverageMaps        *types.CoverageMaps
+	// coverageMaps describes the coverage achieved during this transaction. Call frames which errored are not counted.
+	coverageMaps *types.CoverageMaps
+
+	// pendingCoverageMaps describes the coverage maps per call frame of the transaction during its execution. This is
+	// used to filter coverage only for call scopes which did not error/revert.
 	pendingCoverageMaps []*types.CoverageMaps
-	returnData          []byte
-	err                 error
-	gasLimit            uint64
-	gasUsed             uint64
+
+	// returnData describes the data returned after executing the transaction.
+	returnData []byte
+
+	// err describes the error returned after executing the transaction.
+	err error
+
+	// gasLimit describes the gas limit when executing the transaction.
+	gasLimit uint64
+
+	// gasUsed describes the amount of gas used to execute the transaction.
+	gasUsed uint64
 }
 
 // newFuzzerWorkerTracer returns a new execution tracer for the fuzzer
@@ -52,8 +65,22 @@ func (t *fuzzerWorkerTracer) CoverageEnabled() bool {
 	return t.fuzzerWorker.fuzzer.config.Fuzzing.CoverageEnabled
 }
 
-// ClearCoverageMaps clears the state of the fuzzerWorkerTracer.
-func (t *fuzzerWorkerTracer) ClearCoverageMaps() {
+// CoverageMaps returns a new coverage map with data aggregated from all captured transactions in the tracer.
+func (t *fuzzerWorkerTracer) CoverageMaps() (*types.CoverageMaps, error) {
+	// Merge coverage across all transactions executed in our last block.
+	aggregatedCoverageMap := types.NewCoverageMaps()
+	for _, tracerCallInfo := range t.capturedTransactionInfo {
+		_, err := aggregatedCoverageMap.Update(tracerCallInfo.coverageMaps)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return aggregatedCoverageMap, nil
+}
+
+// Reset clears the state of the fuzzerWorkerTracer.
+func (t *fuzzerWorkerTracer) Reset() {
+	t.callDepth = 0
 	t.capturedTransactionInfo = make([]*fuzzerTracerTransactionInfo, 0)
 	t.cachedCodeHashOriginal = common.Hash{}
 }

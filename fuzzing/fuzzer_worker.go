@@ -82,9 +82,9 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 
 // onChainBlockMiningEvent is the event callback used when the chain is attempting to mine a new block.
 func (fw *FuzzerWorker) onChainBlockMiningEvent(event chain.BlockMiningEvent) {
-	// Clear any coverage maps in our tracer after the creation of each block. This way, we know the tracer's coverage
-	// maps will only be per-block.
-	fw.fuzzerTracer.ClearCoverageMaps()
+	// Clear any of our tracer state prior to mining any new blocks. This way, we know information we capture, such as
+	// coverage maps, will be per-block.
+	fw.fuzzerTracer.Reset()
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
@@ -177,17 +177,16 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	}
 }
 
-// updateCoverageAndCorpus updates the corpus given current collected coverage maps from the FuzzerWorkerTracer.
+// updateCoverageAndCorpus updates the corpus with the provided corpus input variables if new coverage was achieved
+// when executing the last block. Coverage is measured on the transactions in the last executed block, thus the last
+// block provided in the sequence is expected to be the last block constructed by the worker.
 func (fw *FuzzerWorker) updateCoverageAndCorpus(initialStateRoot *common.Hash, callSequenceBlocks []*types.Block) error {
 	// If we have coverage-guided fuzzing enabled, we check if coverage has increased
 	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
-		// Merge coverage across all transactions in this block.
-		blockCoverageMaps := fuzzerTypes.NewCoverageMaps()
-		for _, tracerCallInfo := range fw.fuzzerTracer.capturedTransactionInfo {
-			_, err := blockCoverageMaps.Update(tracerCallInfo.coverageMaps)
-			if err != nil {
-				return err
-			}
+		// Merge coverage across all transactions executed in our last block.
+		blockCoverageMaps, err := fw.fuzzerTracer.CoverageMaps()
+		if err != nil {
+			return err
 		}
 
 		// Merge our block coverage maps into our total coverage maps and check if we had an update.

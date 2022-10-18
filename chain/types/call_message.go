@@ -55,19 +55,13 @@ type CallMessage struct {
 
 // callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of big.Int but specifying a different field type to serialize it as.
+// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
 type callMessageMarshaling struct {
-	// MsgValue represents the marshaling rules for CallMessage.MsgValue.
-	MsgValue *hexutil.Big
-
-	// MsgGasPrice represents the marshaling rules for CallMessage.MsgGasPrice.
-	MsgGasPrice *hexutil.Big
-
-	// MsgGasFeeCap represents the marshaling rules for CallMessage.MsgGasFeeCap.
+	MsgValue     *hexutil.Big
+	MsgGasPrice  *hexutil.Big
 	MsgGasFeeCap *hexutil.Big
-
-	// MsgGasTipCap represents the marshaling rules for CallMessage.MsgGasTipCap.
 	MsgGasTipCap *hexutil.Big
+	MsgData      hexutil.Bytes
 }
 
 // NewCallMessage instantiates a new call message from a given set of parameters.

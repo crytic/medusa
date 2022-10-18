@@ -13,7 +13,7 @@ import (
 )
 
 // getMockSimpleCorpus creates a mock corpus with numEntries callSequencesByFilePath for testing
-func getMockSimpleCorpus(numEntries int) (*Corpus, error) {
+func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlocks int) (*Corpus, error) {
 	// Create a new corpus
 	corpus, err := NewCorpus("corpus")
 	if err != nil {
@@ -21,8 +21,9 @@ func getMockSimpleCorpus(numEntries int) (*Corpus, error) {
 	}
 
 	// Add the requested number of entries.
-	for i := 0; i < numEntries; i++ {
-		err := corpus.AddCallSequence(*getMockSimpleCorpusEntry(numEntries))
+	numSequences := minSequences + (rand.Int() % (maxSequences - minSequences))
+	for i := 0; i < numSequences; i++ {
+		err := corpus.AddCallSequence(*getMockSimpleCorpusEntry(minBlocks + (rand.Int() % (maxBlocks - minBlocks))))
 		if err != nil {
 			return nil, err
 		}
@@ -32,8 +33,9 @@ func getMockSimpleCorpus(numEntries int) (*Corpus, error) {
 
 // getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
 func getMockSimpleCorpusEntry(numBlocks int) *CorpusCallSequence {
+	stateRootHash := common.BigToHash(big.NewInt(rand.Int63()))
 	entry := &CorpusCallSequence{
-		BaseStateRootHash: nil,
+		BaseStateRootHash: &stateRootHash,
 		Blocks:            nil,
 	}
 	for i := 0; i < numBlocks; i++ {
@@ -59,9 +61,9 @@ func getMockSimpleBlockBlock(numTransactions int) *CorpusBlock {
 
 // getMockTransaction creates a mock CallMessage for testing
 func getMockTransaction() *chainTypes.CallMessage {
-	to := common.HexToAddress("ToAddress")
+	to := common.BigToAddress(big.NewInt(rand.Int63()))
 	txn := chainTypes.CallMessage{
-		MsgFrom:      common.HexToAddress("FromAddress"),
+		MsgFrom:      common.BigToAddress(big.NewInt(rand.Int63())),
 		MsgTo:        &to,
 		MsgNonce:     rand.Uint64(),
 		MsgValue:     big.NewInt(int64(rand.Int())),
@@ -92,7 +94,7 @@ func testCorpusBlockSequencesAreEqual(t *testing.T, seqOne *CorpusCallSequence, 
 func testCorpusBlockHeadersAreEqual(t *testing.T, headerOne CorpusBlockHeader, headerTwo CorpusBlockHeader) {
 	// Make sure that the block number, and block timestamp are the same
 	assert.True(t, headerOne.Number.Cmp(headerTwo.Number) == 0, "Block numbers are not equal")
-	assert.True(t, headerOne.Timestamp == headerTwo.Timestamp, "Block timestamps are not equal")
+	assert.EqualValues(t, headerOne.Timestamp, headerTwo.Timestamp, "Block timestamps are not equal")
 }
 
 // testCorpusBlockTransactionsAreEqual tests whether each transaction in two CorpusBlock objects are equal
@@ -105,23 +107,22 @@ func testCorpusBlockTransactionsAreEqual(t *testing.T, txSeqOne []chainTypes.Cal
 		txTwo := txSeqTwo[idx]
 
 		// Check all fields of a types.CallMessage
-		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "MsgGasPrices are not equal")
-		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "MsgGasTips are not equal")
-		assert.True(t, txOne.MsgGasFeeCap.Cmp(txTwo.MsgGasFeeCap) == 0, "MsgGasFeeCap are not equal")
-		assert.True(t, txOne.MsgNonce == txTwo.MsgNonce, "Nonces are not equal")
-		assert.True(t, string(txOne.MsgData) == string(txTwo.MsgData), "Data are not equal")
-		assert.True(t, txOne.MsgGas == txTwo.MsgGas, "Gas amounts are not equal")
-		assert.True(t, txOne.MsgValue.Cmp(txTwo.MsgValue) == 0, "Values are not equal")
-		assert.True(t, txOne.MsgTo.String() == txTwo.MsgTo.String(), "TO addresses are not equal")
-		assert.True(t, txOne.MsgFrom.String() == txTwo.MsgFrom.String(), "FROM addresses are not equal")
+		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "Gas prices field is not equal")
+		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "GasTipCaps field is not equal")
+		assert.True(t, txOne.MsgGasFeeCap.Cmp(txTwo.MsgGasFeeCap) == 0, "GasFeeCaps field is not equal")
+		assert.EqualValues(t, txOne.MsgNonce, txTwo.MsgNonce, "Nonces field is not equal")
+		assert.EqualValues(t, txOne.MsgData, txTwo.MsgData, "Data field is not equal")
+		assert.EqualValues(t, txOne.MsgGas, txTwo.MsgGas, "Gas field is not equal")
+		assert.True(t, txOne.MsgValue.Cmp(txTwo.MsgValue) == 0, "Value field is not equal")
+		assert.EqualValues(t, txOne.MsgTo.String(), txTwo.MsgTo.String(), "To field is not equal")
+		assert.EqualValues(t, txOne.MsgFrom.String(), txTwo.MsgFrom.String(), "From field is not equal")
 	}
 }
 
 // TestCorpusReadWrite first writes the corpus to disk and then reads it back from the disk and ensures integrity.
 func TestCorpusReadWrite(t *testing.T) {
 	// Create a mock corpus
-	numEntries := 5
-	corpus, err := getMockSimpleCorpus(numEntries)
+	corpus, err := getMockSimpleCorpus(10, 20, 1, 7)
 	assert.NoError(t, err)
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// Write to disk
@@ -131,7 +132,7 @@ func TestCorpusReadWrite(t *testing.T) {
 		// Ensure that there are the correct number of call sequence files
 		matches, err := filepath.Glob(filepath.Join(corpus.CallSequencesDirectory(), "*.json"))
 		assert.NoError(t, err)
-		assert.True(t, len(matches) == numEntries, "Did not find numEntries matches")
+		assert.EqualValues(t, corpus.CallSequenceCount(), len(matches), "Did not find numEntries matches")
 
 		// Wipe corpus clean so that you can now read it in from disk
 		corpus, err = NewCorpus("corpus")
@@ -140,8 +141,6 @@ func TestCorpusReadWrite(t *testing.T) {
 		// Create a new corpus object and read our previously read artifacts.
 		corpus, err = NewCorpus(corpus.storageDirectory)
 		assert.NoError(t, err)
-
-		assert.EqualValues(t, numEntries, corpus.CallSequenceCount(), "Unexpected number of corpus entries when round-trip serializing the corpus")
 	})
 }
 
@@ -149,8 +148,7 @@ func TestCorpusReadWrite(t *testing.T) {
 // values.
 func TestCorpusCallSequenceMarshaling(t *testing.T) {
 	// Create a mock corpus
-	numEntries := 5
-	corpus, err := getMockSimpleCorpus(numEntries)
+	corpus, err := getMockSimpleCorpus(10, 20, 1, 7)
 	assert.NoError(t, err)
 
 	// Run the test in our temporary test directory to avoid artifact pollution.
