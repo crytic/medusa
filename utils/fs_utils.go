@@ -67,13 +67,14 @@ func GetFilePathWithoutExtension(filePath string) string {
 func MakeDirectory(dirToMake string) error {
 	dirInfo, err := os.Stat(dirToMake)
 	if err != nil {
-		// Directory does not exist, this is what we expect
+		// Directory does not exist, as expected.
 		if os.IsNotExist(err) {
 			// TODO: Permissions are way too much but even 666 is not working
 			err = os.Mkdir(dirToMake, 0777)
 			if err != nil {
 				return err
 			}
+
 			// Successfully made the directory
 			return nil
 		}
