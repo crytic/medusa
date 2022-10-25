@@ -588,7 +588,7 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 		blockContext := newTestChainBlockContext(t, header)
 
 		// Create our EVM instance.
-		evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, t.chainConfig, *t.vmConfig)
+		evm := vm.NewEVM(blockContext, core.NewEVMTxContext(messages[i]), t.state, t.chainConfig, *t.vmConfig)
 
 		// Apply our transaction
 		var usedGas uint64
