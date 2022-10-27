@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
@@ -40,21 +40,6 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 
 	// If we have a corpus directory set, parse it.
 	if corpus.storageDirectory != "" {
-		// If coverage maps file exists, read it.
-		if _, err := os.Stat(corpus.CoverageMapsFilePath()); err == nil {
-			// Read the coverage maps file.
-			b, err := ioutil.ReadFile(corpus.CoverageMapsFilePath())
-			if err != nil {
-				return nil, err
-			}
-
-			// Parse the coverage maps.
-			err = json.Unmarshal(b, &corpus.coverageMaps)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		// Read all call sequences discovered in the relevant corpus directory.
 		matches, err := filepath.Glob(filepath.Join(corpus.CallSequencesDirectory(), "*.json"))
 		if err != nil {
@@ -99,16 +84,6 @@ func (c *Corpus) CallSequencesDirectory() string {
 	}
 
 	return filepath.Join(c.StorageDirectory(), "call_sequences")
-}
-
-// CoverageMapsFilePath returns the file path where coverage maps describing the known coverage to be achieved is saved.
-// If StorageDirectory is empty, this is as well, indicating persistent storage will not be used.
-func (c *Corpus) CoverageMapsFilePath() string {
-	if c.storageDirectory == "" {
-		return ""
-	}
-
-	return filepath.Join(c.StorageDirectory(), "coverage_maps.json")
 }
 
 // CoverageMaps returns the total coverage collected across all runs.
@@ -156,18 +131,6 @@ func (c *Corpus) Flush() error {
 		return err
 	}
 
-	// Encode the coverage maps
-	jsonEncodedData, err := json.MarshalIndent(c.coverageMaps, "", " ")
-	if err != nil {
-		return err
-	}
-
-	// Write the JSON encoded coverage maps
-	err = ioutil.WriteFile(c.CoverageMapsFilePath(), jsonEncodedData, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("An error occurred while writing coverage maps to disk: %v\n", err)
-	}
-
 	// Write all call sequences to disk
 	for filePath, simpleEntry := range c.callSequencesByFilePath {
 		// If call sequence file already exists, no need to write it again
@@ -176,7 +139,7 @@ func (c *Corpus) Flush() error {
 		}
 
 		// Marshal the call sequence
-		jsonEncodedData, err = json.MarshalIndent(simpleEntry, "", " ")
+		jsonEncodedData, err := json.MarshalIndent(simpleEntry, "", " ")
 		if err != nil {
 			return err
 		}

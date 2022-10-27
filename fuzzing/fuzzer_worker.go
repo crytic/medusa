@@ -7,6 +7,7 @@ import (
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
+	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"math/rand"
@@ -25,8 +26,8 @@ type FuzzerWorker struct {
 	// chain describes a test chain created by the FuzzerWorker to deploy contracts and run tests against.
 	chain *chain.TestChain
 
-	// fuzzerTracer describes the built-in tracer used to power the FuzzerWorker's coverage and execution information.
-	fuzzerTracer *fuzzerWorkerTracer
+	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
+	coverageTracer *coverage.CoverageTracer
 
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed.
 	testingBaseBlockNumber uint64
@@ -50,7 +51,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) *FuzzerWorker {
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
-		fuzzerTracer:         nil,
+		coverageTracer:       nil,
 	}
 	return &worker
 }
@@ -82,9 +83,9 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 
 // onChainBlockMiningEvent is the event callback used when the chain is attempting to mine a new block.
 func (fw *FuzzerWorker) onChainBlockMiningEvent(event chain.BlockMiningEvent) {
-	// Clear any of our tracer state prior to mining any new blocks. This way, we know information we capture, such as
-	// coverage maps, will be per-block.
-	fw.fuzzerTracer.Reset()
+	// Clear any of our tracer's coverage maps prior to mining any new blocks. This way, coverage maps will be
+	// per-block.
+	fw.coverageTracer.Reset()
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
@@ -180,14 +181,11 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // updateCoverageAndCorpus updates the corpus with the provided corpus input variables if new coverage was achieved
 // when executing the last block. Coverage is measured on the transactions in the last executed block, thus the last
 // block provided in the sequence is expected to be the last block constructed by the worker.
-func (fw *FuzzerWorker) updateCoverageAndCorpus(initialStateRoot *common.Hash, callSequenceBlocks []*types.Block) error {
+func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Block) error {
 	// If we have coverage-guided fuzzing enabled, we check if coverage has increased
 	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 		// Merge coverage across all transactions executed in our last block.
-		blockCoverageMaps, err := fw.fuzzerTracer.CoverageMaps()
-		if err != nil {
-			return err
-		}
+		blockCoverageMaps := fw.coverageTracer.CoverageMaps()
 
 		// Merge our block coverage maps into our total coverage maps and check if we had an update.
 		coverageUpdated, err := fw.fuzzer.corpus.CoverageMaps().Update(blockCoverageMaps)
@@ -197,7 +195,7 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(initialStateRoot *common.Hash, c
 		if coverageUpdated {
 			// New coverage has been found, add it to the corpus
 			// First convert block sequence to a single corpus entry
-			entry := corpus.NewCorpusEntry(initialStateRoot, callSequenceBlocks)
+			entry := corpus.NewCorpusEntry(callSequenceBlocks)
 
 			// Add corpus entry
 			err = fw.fuzzer.corpus.AddCallSequence(*entry)
@@ -297,7 +295,6 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	}
 
 	// Select a random method and sender
-	// TODO: Determine if we should bias towards certain senders
 	// TODO: Don't use rand.Intn here as we'll want to use a seeded rng for reproducibility.
 	selectedMethod := &fw.stateChangingMethods[rand.Intn(len(fw.stateChangingMethods))]
 	selectedSender := fw.fuzzer.senders[rand.Intn(len(fw.fuzzer.senders))]
@@ -342,10 +339,8 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		}
 	}()
 
-	// Define the pre-testing state root hash and a list of resulting blocks produced by our call sequence, used to
-	// record corpus entries.
+	// Define the list of resulting blocks produced by our call sequence, used to record corpus entries.
 	callSequenceBlocks := make([]*types.Block, 0)
-	stateRoot := fw.chain.Head().Header().Root
 
 	// Loop for each call to send
 	for i := 0; i < len(callSequence); i++ {
@@ -366,7 +361,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 
 		// Record the resulting block and check for updates to coverage and corpus.
 		callSequenceBlocks = append(callSequenceBlocks, block)
-		err = fw.updateCoverageAndCorpus(&stateRoot, callSequenceBlocks)
+		err = fw.updateCoverageAndCorpus(callSequenceBlocks)
 		if err != nil {
 			return i, nil, err
 		}
@@ -409,10 +404,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		testSeq = append(testSeq, optimizedSequence[:i]...)
 		testSeq = append(testSeq, optimizedSequence[i+1:]...)
 
-		// Define the pre-testing state root hash and a list of resulting blocks produced by our call sequence, used to
-		// record corpus entries.
+		// Define the list of resulting blocks produced by our call sequence, used to record corpus entries.
 		callSequenceBlocks := make([]*types.Block, 0)
-		stateRoot := fw.chain.Head().Header().Root
 
 		// Replay the call sequence
 		for _, callSequenceElement := range testSeq {
@@ -424,7 +417,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 
 			// Record the resulting block and check for updates to coverage and corpus.
 			callSequenceBlocks = append(callSequenceBlocks, block)
-			err = fw.updateCoverageAndCorpus(&stateRoot, callSequenceBlocks)
+			err = fw.updateCoverageAndCorpus(callSequenceBlocks)
 			if err != nil {
 				return nil, err
 			}
@@ -475,9 +468,9 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	fw.chain.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 	fw.chain.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-	// Create a new tracer to power our base-feature set. Register it with our test chain's tracer forwarder.
-	fw.fuzzerTracer = newFuzzerWorkerTracer(fw)
-	fw.chain.TracerForwarder().AddTracer(fw.fuzzerTracer)
+	// Create a tracer to collect coverage and connect it to the chain.
+	fw.coverageTracer = coverage.NewCoverageTracer()
+	fw.chain.TracerForwarder().AddTracer(fw.coverageTracer)
 
 	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).
 	err = baseTestChain.CopyTo(fw.chain)

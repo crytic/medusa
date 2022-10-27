@@ -33,10 +33,8 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 
 // getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
 func getMockSimpleCorpusEntry(numBlocks int) *CorpusCallSequence {
-	stateRootHash := common.BigToHash(big.NewInt(rand.Int63()))
 	entry := &CorpusCallSequence{
-		BaseStateRootHash: &stateRootHash,
-		Blocks:            nil,
+		Blocks: nil,
 	}
 	for i := 0; i < numBlocks; i++ {
 		entry.Blocks = append(entry.Blocks, *getMockSimpleBlockBlock(numBlocks))

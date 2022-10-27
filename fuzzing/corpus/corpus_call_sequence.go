@@ -1,7 +1,6 @@
 package corpus
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/utils"
@@ -11,15 +10,10 @@ import (
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
 // templates defined below. They should be preserved for re-use in case we change our structures.
 //go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type CorpusBlockHeader -field-override corpusBlockHeaderMarshaling -out gen_corpus_block_sequence.go
+//go:generate go run github.com/fjl/gencodec -type CorpusBlockHeader -field-override corpusBlockHeaderMarshaling -out gen_corpus_call_sequence.go
 
 // CorpusCallSequence represents a Corpus structure that contains a coverage increasing block sequence.
 type CorpusCallSequence struct {
-	// BaseStateRootHash represents the ethereum state root hash of the world state prior to the processing of the first
-	// block in the Blocks sequence. This may be nil if validation of the pre-processing state root hash should not
-	// be enforced prior to its use.
-	BaseStateRootHash *common.Hash `json:"baseStateRootHash"`
-
 	// Blocks represents the corpus representation of a block sequence provided by this entry.
 	Blocks []CorpusBlock `json:"blocks"`
 }
@@ -48,7 +42,7 @@ type corpusBlockHeaderMarshaling struct {
 
 // NewCorpusEntry returns a new instance of CorpusCallSequence with the provided block sequence and state root hash prior to
 // the inclusion of the blocks.
-func NewCorpusEntry(baseStateRootHash *common.Hash, blocks []*chainTypes.Block) *CorpusCallSequence {
+func NewCorpusEntry(blocks []*chainTypes.Block) *CorpusCallSequence {
 	// Convert the provided chain blocks to corpus block structures.
 	corpusBlocks := make([]CorpusBlock, len(blocks))
 	for i := 0; i < len(blocks); i++ {
@@ -63,7 +57,6 @@ func NewCorpusEntry(baseStateRootHash *common.Hash, blocks []*chainTypes.Block) 
 
 	// Create our corpus entry with the provided state root hash and the corpus blocks.
 	return &CorpusCallSequence{
-		BaseStateRootHash: baseStateRootHash,
-		Blocks:            corpusBlocks,
+		Blocks: corpusBlocks,
 	}
 }

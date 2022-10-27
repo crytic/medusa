@@ -1,10 +1,8 @@
-package types
+package coverage
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"sync"
 )
 
@@ -97,37 +95,14 @@ func (cm *CoverageMaps) Reset() {
 	cm.maps = make(map[common.Hash]*CoverageMap)
 }
 
-// MarshalJSON encodes the current CoverageMaps as JSON data.
-func (cm *CoverageMaps) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Maps map[common.Hash]*CoverageMap `json:"maps"`
-	}{
-		Maps: cm.maps,
-	})
-}
-
-// UnmarshalJSON parses JSON encoded data from the provided bytes into the current CoverageMaps.
-func (cm *CoverageMaps) UnmarshalJSON(b []byte) error {
-	// Unmarshal our data into our temp struct.
-	var tmp struct {
-		Maps map[common.Hash]*CoverageMap `json:"maps"`
-	}
-	err := json.Unmarshal(b, &tmp)
-	if err != nil {
-		return err
-	}
-
-	// If we succeeded, set our data.
-	cm.maps = tmp.Maps
-	return nil
-}
-
 // CoverageMap represents a data structure used to identify instruction execution coverage of smart contract byte code.
 type CoverageMap struct {
-	// mapData represents a list of bytes for each byte of a deployed smart contract where zero values indicate
-	// execution did not occur at the given position, while any other value indicates code execution occurred at the
-	// given smart contract offset.
-	mapData []byte
+	// initBytecodeCoverageData represents a list of bytes for each byte of a contract's init bytecode. Non-zero values
+	// indicate the program counter executed an instruction at that offset.
+	initBytecodeCoverageData []byte
+	// deployedBytecodeCoverageData represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero values
+	// indicate the program counter executed an instruction at that offset.
+	deployedBytecodeCoverageData []byte
 }
 
 // NewCoverageMap initializes a new CoverageMap object.
@@ -139,7 +114,7 @@ func NewCoverageMap(size int) (*CoverageMap, error) {
 
 	// Create a coverage map of the requested size
 	coverageMap := &CoverageMap{
-		mapData: make([]byte, size),
+		deployedBytecodeCoverageData: make([]byte, size),
 	}
 	return coverageMap, nil
 }
@@ -148,15 +123,15 @@ func NewCoverageMap(size int) (*CoverageMap, error) {
 // new coverage was achieved, or an error if one was encountered.
 func (cm *CoverageMap) Update(coverageMap *CoverageMap) (bool, error) {
 	// Ensure our coverage maps match in size
-	if len(cm.mapData) != len(coverageMap.mapData) {
-		return false, fmt.Errorf("failed to add/merge coverage maps. Map of size %d cannot be merged into map of size %d", len(coverageMap.mapData), len(cm.mapData))
+	if len(cm.deployedBytecodeCoverageData) != len(coverageMap.deployedBytecodeCoverageData) {
+		return false, fmt.Errorf("failed to add/merge coverage maps. Map of size %d cannot be merged into map of size %d", len(coverageMap.deployedBytecodeCoverageData), len(cm.deployedBytecodeCoverageData))
 	}
 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
-	for i := 0; i < len(cm.mapData); i++ {
-		if cm.mapData[i] == 0 && coverageMap.mapData[i] != 0 {
-			cm.mapData[i] = 1
+	for i := 0; i < len(cm.deployedBytecodeCoverageData); i++ {
+		if cm.deployedBytecodeCoverageData[i] == 0 && coverageMap.deployedBytecodeCoverageData[i] != 0 {
+			cm.deployedBytecodeCoverageData[i] = 1
 			changed = true
 		}
 	}
@@ -168,42 +143,17 @@ func (cm *CoverageMap) SetCoveredAt(pc uint64) (bool, error) {
 	// If our program counter is in range, determine if we achieved new coverage for the first time, and update it.
 	// We do not worry about race conditions here as the end result would not change and synchronizing threads here
 	// could be costly.
-	if pc < uint64(len(cm.mapData)) {
-		if cm.mapData[pc] == 0 {
-			cm.mapData[pc] = 1
+	if pc < uint64(len(cm.deployedBytecodeCoverageData)) {
+		if cm.deployedBytecodeCoverageData[pc] == 0 {
+			cm.deployedBytecodeCoverageData[pc] = 1
 			return true, nil
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.mapData))
+	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.deployedBytecodeCoverageData))
 }
 
 // Reset clears the coverage state for the CoverageMap.
 func (cm *CoverageMap) Reset() {
-	cm.mapData = make([]byte, len(cm.mapData))
-}
-
-// MarshalJSON encodes the current CoverageMap as JSON data.
-func (cm *CoverageMap) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		MapData hexutil.Bytes `json:"mapData"`
-	}{
-		MapData: cm.mapData,
-	})
-}
-
-// UnmarshalJSON parses JSON encoded data from the provided bytes into the current CoverageMap.
-func (cm *CoverageMap) UnmarshalJSON(b []byte) error {
-	// Unmarshal our data into our temp struct.
-	var tmp struct {
-		MapData hexutil.Bytes `json:"mapData"`
-	}
-	err := json.Unmarshal(b, &tmp)
-	if err != nil {
-		return err
-	}
-
-	// If we succeeded, set our data.
-	cm.mapData = tmp.MapData
-	return nil
+	cm.deployedBytecodeCoverageData = make([]byte, len(cm.deployedBytecodeCoverageData))
 }
