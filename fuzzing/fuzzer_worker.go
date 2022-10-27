@@ -85,7 +85,9 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 func (fw *FuzzerWorker) onChainBlockMiningEvent(event chain.BlockMiningEvent) {
 	// Clear any of our tracer's coverage maps prior to mining any new blocks. This way, coverage maps will be
 	// per-block.
-	fw.coverageTracer.Reset()
+	if fw.coverageTracer != nil {
+		fw.coverageTracer.Reset()
+	}
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
@@ -183,7 +185,7 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // block provided in the sequence is expected to be the last block constructed by the worker.
 func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Block) error {
 	// If we have coverage-guided fuzzing enabled, we check if coverage has increased
-	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
+	if fw.coverageTracer != nil {
 		// Merge coverage across all transactions executed in our last block.
 		blockCoverageMaps := fw.coverageTracer.CoverageMaps()
 
@@ -468,9 +470,11 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	fw.chain.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 	fw.chain.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-	// Create a tracer to collect coverage and connect it to the chain.
-	fw.coverageTracer = coverage.NewCoverageTracer()
-	fw.chain.TracerForwarder().AddTracer(fw.coverageTracer)
+	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
+	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
+		fw.coverageTracer = coverage.NewCoverageTracer()
+		fw.chain.TracerForwarder().AddTracer(fw.coverageTracer)
+	}
 
 	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).
 	err = baseTestChain.CopyTo(fw.chain)

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/coverage"
+	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
@@ -20,13 +20,14 @@ type Corpus struct {
 	storageDirectory string
 
 	// coverageMaps describes the total code coverage known to be achieved across all runs.
-	coverageMaps *fuzzerTypes.CoverageMaps
+	coverageMaps *coverage.CoverageMaps
 
 	// callSequencesByFilePath is a mapping of file paths to corpus call sequences stored at those paths.
 	callSequencesByFilePath map[string]*CorpusCallSequence
 
-	// corpusEntriesLock provides thread synchronization used to prevent concurrent access errors into callSequencesByFilePath.
-	corpusEntriesLock sync.Mutex
+	// callSequencesByFilePathLock provides thread synchronization used to prevent concurrent access errors into
+	// callSequencesByFilePath.
+	callSequencesByFilePathLock sync.Mutex
 }
 
 // NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
@@ -34,7 +35,7 @@ type Corpus struct {
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory:        corpusDirectory,
-		coverageMaps:            fuzzerTypes.NewCoverageMaps(),
+		coverageMaps:            coverage.NewCoverageMaps(),
 		callSequencesByFilePath: make(map[string]*CorpusCallSequence),
 	}
 
@@ -87,7 +88,7 @@ func (c *Corpus) CallSequencesDirectory() string {
 }
 
 // CoverageMaps returns the total coverage collected across all runs.
-func (c *Corpus) CoverageMaps() *fuzzerTypes.CoverageMaps {
+func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 	return c.coverageMaps
 }
 
@@ -101,7 +102,7 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 	// Determine the filepath to write our corpus entry to.
 
 	// Update our map with the new entry. We generate a random UUID until we have a unique one for the filename.
-	c.corpusEntriesLock.Lock()
+	c.callSequencesByFilePathLock.Lock()
 	for {
 		filePath := filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
 		if _, existsAlready := c.callSequencesByFilePath[filePath]; existsAlready {
@@ -110,7 +111,7 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 		c.callSequencesByFilePath[filePath] = &corpusEntry
 		break
 	}
-	c.corpusEntriesLock.Unlock()
+	c.callSequencesByFilePathLock.Unlock()
 	return nil
 }
 
