@@ -115,6 +115,18 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 	return nil
 }
 
+// CallSequences returns all the CorpusCallSequence known to the corpus. This should not be called frequently,
+// as the slice returned by this method is computed each time it is called.
+func (c *Corpus) CallSequences() []*CorpusCallSequence {
+	sequences := make([]*CorpusCallSequence, len(c.callSequencesByFilePath))
+	i := 0
+	for _, sequence := range c.callSequencesByFilePath {
+		sequences[i] = sequence
+		i++
+	}
+	return sequences
+}
+
 // Flush writes corpus changes to disk. Returns an error if one occurs.
 func (c *Corpus) Flush() error {
 	// If our corpus directory is empty, it indicates we do not want to write corpus artifacts to persistent storage.

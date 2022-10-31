@@ -11,6 +11,7 @@ import (
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
+	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/value_generation"
 	"github.com/trailofbits/medusa/utils"
@@ -238,6 +239,43 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	return testChain, err
 }
 
+// initializeCoverageMaps initializes our coverage maps by tracing initial deployments in the test chain and replaying
+// all call sequences stored in the corpus.
+func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
+	// Create a coverage tracer
+	coverageTracer := coverage.NewCoverageTracer()
+
+	// Clone our test chain with our coverage tracer.
+	testChain, err := baseTestChain.Clone(coverageTracer)
+	if err != nil {
+		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+	}
+
+	// Add our coverage recorded during chain setup to our coverage maps.
+	_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
+	if err != nil {
+		return fmt.Errorf("failed to initialize coverage maps, base test chain coverage update encountered error: %v", err)
+	}
+
+	// Next we measure coverage for every corpus call sequence.
+	corpusCallSequences := f.corpus.CallSequences()
+	for _, sequence := range corpusCallSequences {
+		// Reset our tracer's coverage maps.
+		coverageTracer.Reset()
+
+		// TODO: Replay call sequence, record coverage
+		_ = testChain
+		_ = sequence
+
+		// Add our coverage recorded during call sequence execution to our coverage maps.
+		_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
+		if err != nil {
+			return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
+		}
+	}
+	return nil
+}
+
 // deploymentStrategyCompilationConfig is a TestChainSetupFunc which sets up the base test chain state by deploying
 // all contracts which take no constructor parameters to the chain using the config-specified deployer account address.
 // Returns an error if one occurs.
@@ -280,12 +318,10 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// If coverage is enabled, set up the coverage maps and corpus.
-	if f.config.Fuzzing.CoverageEnabled {
-		f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
-		if err != nil {
-			return err
-		}
+	// Set up the corpus
+	f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		return err
 	}
 
 	// Initialize our metrics and generator.
@@ -312,6 +348,12 @@ func (f *Fuzzer) Start() error {
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	err = f.chainSetupFunc(f, baseTestChain)
+	if err != nil {
+		return err
+	}
+
+	// Initialize our coverage maps
+	err = f.initializeCoverageMaps(baseTestChain)
 	if err != nil {
 		return err
 	}

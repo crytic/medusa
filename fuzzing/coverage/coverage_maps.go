@@ -9,10 +9,22 @@ import (
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
 // across a transaction or multiple transactions.
 type CoverageMaps struct {
-	maps map[common.Hash]*CoverageMap
+	// maps represents a structure used to track every codeCoverageData by a given deployed address/code hash.
+	maps map[common.Address]map[common.Hash]*codeCoverageData
 
+	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
+	// expensive lookup in maps. If cachedCodeHash does not match the current code address for which we are updating
+	// coverage for, it, along with other cache variables are updated.
+	cachedCodeAddress common.Address
+
+	// cachedCodeHash represents the last code hash which coverage was updated for. This is used to prevent an expensive
+	// lookup in maps. If cachedCodeHash does not match the current code hash for which we are updating coverage for,
+	// it, along with other cache variables are updated.
 	cachedCodeHash common.Hash
-	cachedMap      *CoverageMap
+
+	// cachedMap represents the last coverage map which was updated. If the coverage to update resides at the
+	// cachedCodeAddress and matches the cachedCodeHash, then this map is used to avoid an expensive lookup into maps.
+	cachedMap *codeCoverageData
 
 	// updateLock is a lock to offer concurrent thread safety for map accesses.
 	updateLock sync.Mutex
@@ -20,9 +32,14 @@ type CoverageMaps struct {
 
 // NewCoverageMaps initializes a new CoverageMaps object.
 func NewCoverageMaps() *CoverageMaps {
-	return &CoverageMaps{
-		maps: make(map[common.Hash]*CoverageMap),
-	}
+	maps := &CoverageMaps{}
+	maps.Reset()
+	return maps
+}
+
+// Reset clears the coverage state for the CoverageMaps.
+func (cm *CoverageMaps) Reset() {
+	cm.maps = make(map[common.Address]map[common.Hash]*codeCoverageData)
 }
 
 // Update updates the current coverage maps with the provided ones. It returns a boolean indicating whether
@@ -36,18 +53,27 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	changed := false
 
 	// Loop for each coverage map provided
-	for codeHash, coverageMap := range coverageMaps.maps {
-		// If the code hash has an existing coverage map, add to it. Otherwise, create a new entry using the provided
-		// coverage map.
-		if existingCoverageMap, ok := cm.maps[codeHash]; ok {
-			coverageMapChanged, err := existingCoverageMap.Update(coverageMap)
-			if err != nil {
-				return false, err
+	for codeAddressToMerge, mapsByCodeHashToMerge := range coverageMaps.maps {
+		for codeHashToMerge, coverageMapToMerge := range mapsByCodeHashToMerge {
+			// If a coverage map lookup for this code address doesn't exist, create the mapping.
+			mapsByCodeHash, codeAddressExists := cm.maps[codeAddressToMerge]
+			if !codeAddressExists {
+				mapsByCodeHash = make(map[common.Hash]*codeCoverageData)
+				cm.maps[codeAddressToMerge] = mapsByCodeHash
 			}
-			changed = changed || coverageMapChanged
-		} else {
-			cm.maps[codeHash] = coverageMap
-			changed = true
+
+			// If a coverage map for this code hash already exists in our current mapping, update it with the one
+			// to merge. If it doesn't exist, set it to the one to merge.
+			if existingCoverageMap, codeHashExists := mapsByCodeHash[codeHashToMerge]; codeHashExists {
+				coverageMapChanged, err := existingCoverageMap.updateCodeCoverageData(coverageMapToMerge)
+				changed = changed || coverageMapChanged
+				if err != nil {
+					return changed, err
+				}
+			} else {
+				mapsByCodeHash[codeHashToMerge] = coverageMapToMerge
+				changed = true
+			}
 		}
 	}
 
@@ -55,105 +81,126 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	return changed, nil
 }
 
-// SetCoveredAt sets the coverage state of a given program counter location within a CoverageMap.
-func (cm *CoverageMaps) SetCoveredAt(codeHash common.Hash, codeSize int, pc uint64) (bool, error) {
+// SetCoveredAt sets the coverage state of a given program counter location within a codeCoverageData.
+func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common.Hash, init bool, codeSize int, pc uint64) (bool, error) {
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
 		changedInMap bool
-		coverageMap  *CoverageMap
+		coverageMap  *codeCoverageData
 		err          error
 	)
 
 	// Try to obtain a coverage map for the given code hash from our cache
-	if cm.cachedMap != nil && cm.cachedCodeHash == codeHash {
+	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeHash {
 		coverageMap = cm.cachedMap
 	} else {
-		// If the cached map is not the one we're looking for, we perform a lookup, or create one if one doesn't
-		// exist.
-		if m, ok := cm.maps[codeHash]; ok {
-			coverageMap = m
+		// If a coverage map lookup for this code address doesn't exist, create the mapping.
+		coverageMapsByCodeHash, codeAddressExists := cm.maps[codeAddress]
+		if !codeAddressExists {
+			coverageMapsByCodeHash = make(map[common.Hash]*codeCoverageData)
+			cm.maps[codeAddress] = coverageMapsByCodeHash
+		}
+
+		// Obtain the coverage map for this code hash if it already exists. If it does not, create a new one.
+		if existingCoverageMap, codeHashExists := coverageMapsByCodeHash[codeHash]; codeHashExists {
+			coverageMap = existingCoverageMap
 		} else {
-			coverageMap, err = NewCoverageMap(codeSize)
-			if err != nil {
-				return false, nil
+			coverageMap = &codeCoverageData{
+				initBytecodeCoverageData:     nil,
+				deployedBytecodeCoverageData: nil,
 			}
-			cm.maps[codeHash] = coverageMap
+			cm.maps[codeAddress][codeHash] = coverageMap
 			addedNewMap = true
 		}
+
+		// Set our cached variables for faster coverage setting next time this method is called.
 		cm.cachedMap = coverageMap
 		cm.cachedCodeHash = codeHash
+		cm.cachedCodeAddress = codeAddress
 	}
 
 	// Set our coverage in the map and return our change state
-	changedInMap, err = coverageMap.SetCoveredAt(pc)
+	changedInMap, err = coverageMap.setCodeCoverageDataAt(init, codeSize, pc)
 	return addedNewMap || changedInMap, err
 }
 
-// Reset clears the coverage state for the CoverageMaps.
-func (cm *CoverageMaps) Reset() {
-	cm.maps = make(map[common.Hash]*CoverageMap)
-}
-
-// CoverageMap represents a data structure used to identify instruction execution coverage of smart contract byte code.
-type CoverageMap struct {
+// codeCoverageData represents a data structure used to identify instruction execution coverage of contract byte code.
+type codeCoverageData struct {
 	// initBytecodeCoverageData represents a list of bytes for each byte of a contract's init bytecode. Non-zero values
 	// indicate the program counter executed an instruction at that offset.
 	initBytecodeCoverageData []byte
-	// deployedBytecodeCoverageData represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero values
-	// indicate the program counter executed an instruction at that offset.
+	// deployedBytecodeCoverageData represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero
+	// values indicate the program counter executed an instruction at that offset.
 	deployedBytecodeCoverageData []byte
 }
 
-// NewCoverageMap initializes a new CoverageMap object.
-func NewCoverageMap(size int) (*CoverageMap, error) {
-	// If the size is negative, throw an error
-	if size < 0 {
-		return nil, fmt.Errorf("cannot create a coverage map with a negative byte code size (%d)", size)
-	}
-
-	// Create a coverage map of the requested size
-	coverageMap := &CoverageMap{
-		deployedBytecodeCoverageData: make([]byte, size),
-	}
-	return coverageMap, nil
-}
-
-// Update creates updates the current coverage map with the provided one. It returns a boolean indicating whether
+// updateCodeCoverageData creates updates the current coverage map with the provided one. It returns a boolean indicating whether
 // new coverage was achieved, or an error if one was encountered.
-func (cm *CoverageMap) Update(coverageMap *CoverageMap) (bool, error) {
-	// Ensure our coverage maps match in size
-	if len(cm.deployedBytecodeCoverageData) != len(coverageMap.deployedBytecodeCoverageData) {
-		return false, fmt.Errorf("failed to add/merge coverage maps. Map of size %d cannot be merged into map of size %d", len(coverageMap.deployedBytecodeCoverageData), len(cm.deployedBytecodeCoverageData))
-	}
-
-	// Update each byte which represents a position in the bytecode which was covered.
+func (cm *codeCoverageData) updateCodeCoverageData(coverageMap *codeCoverageData) (bool, error) {
+	// Define our return variable
 	changed := false
-	for i := 0; i < len(cm.deployedBytecodeCoverageData); i++ {
-		if cm.deployedBytecodeCoverageData[i] == 0 && coverageMap.deployedBytecodeCoverageData[i] != 0 {
-			cm.deployedBytecodeCoverageData[i] = 1
+
+	// Update our init bytecode coverage data.
+	if coverageMap.initBytecodeCoverageData != nil {
+		if cm.initBytecodeCoverageData == nil {
+			cm.initBytecodeCoverageData = coverageMap.initBytecodeCoverageData
 			changed = true
+		} else {
+			// Update each byte which represents a position in the bytecode which was covered. We ignore any size
+			// differences as init bytecode can have arbitrary length arguments appended.
+			for i := 0; i < len(cm.initBytecodeCoverageData) || i < len(coverageMap.initBytecodeCoverageData); i++ {
+				if cm.initBytecodeCoverageData[i] == 0 && coverageMap.initBytecodeCoverageData[i] != 0 {
+					cm.initBytecodeCoverageData[i] = 1
+					changed = true
+				}
+			}
 		}
 	}
+
+	// Update our deployed bytecode coverage data.
+	if coverageMap.deployedBytecodeCoverageData != nil {
+		if cm.deployedBytecodeCoverageData == nil {
+			cm.deployedBytecodeCoverageData = coverageMap.deployedBytecodeCoverageData
+			changed = true
+		} else {
+			// Update each byte which represents a position in the bytecode which was covered.
+			for i := 0; i < len(cm.deployedBytecodeCoverageData); i++ {
+				if cm.deployedBytecodeCoverageData[i] == 0 && coverageMap.deployedBytecodeCoverageData[i] != 0 {
+					cm.deployedBytecodeCoverageData[i] = 1
+					changed = true
+				}
+			}
+		}
+	}
+
 	return changed, nil
 }
 
-// SetCoveredAt sets the coverage state of a given program counter location within a CoverageMap.
-func (cm *CoverageMap) SetCoveredAt(pc uint64) (bool, error) {
+// setCodeCoverageDataAt sets the coverage state of a given program counter location within a codeCoverageData.
+func (cm *codeCoverageData) setCodeCoverageDataAt(init bool, codeSize int, pc uint64) (bool, error) {
+	// Obtain our coverage data depending on if we're initializing/deploying a contract now. If coverage data doesn't
+	// exist, we create it.
+	var coverageData []byte
+	if init {
+		if cm.initBytecodeCoverageData == nil {
+			cm.initBytecodeCoverageData = make([]byte, codeSize)
+		}
+		coverageData = cm.initBytecodeCoverageData
+	} else {
+		if cm.deployedBytecodeCoverageData == nil {
+			cm.deployedBytecodeCoverageData = make([]byte, codeSize)
+		}
+		coverageData = cm.deployedBytecodeCoverageData
+	}
+
 	// If our program counter is in range, determine if we achieved new coverage for the first time, and update it.
-	// We do not worry about race conditions here as the end result would not change and synchronizing threads here
-	// could be costly.
-	if pc < uint64(len(cm.deployedBytecodeCoverageData)) {
-		if cm.deployedBytecodeCoverageData[pc] == 0 {
-			cm.deployedBytecodeCoverageData[pc] = 1
+	if pc < uint64(len(coverageData)) {
+		if coverageData[pc] == 0 {
+			coverageData[pc] = 1
 			return true, nil
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.deployedBytecodeCoverageData))
-}
-
-// Reset clears the coverage state for the CoverageMap.
-func (cm *CoverageMap) Reset() {
-	cm.deployedBytecodeCoverageData = make([]byte, len(cm.deployedBytecodeCoverageData))
+	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(coverageData))
 }
