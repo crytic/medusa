@@ -263,7 +263,10 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 		// Reset our tracer's coverage maps.
 		coverageTracer.Reset()
 
-		// TODO: Replay call sequence, record coverage
+		// TODO: Replay call sequence, record coverage. Each sequence will need to recalculate block numbers and
+		//  timestamps to be of the same distance apart, but have a new starting base, based on the test chain's
+		//  last block number and timestamp. We want to maintain our chain semantics so we replay with valid
+		//  block numbers and timestamps.
 		_ = testChain
 		_ = sequence
 
@@ -280,6 +283,9 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 // all contracts which take no constructor parameters to the chain using the config-specified deployer account address.
 // Returns an error if one occurs.
 func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+	// TODO: Loop for each contract in our configured contract deployment order and deploy them in order, using these
+	//  existing loops to resolve each one.
+
 	// Loop for each contract in each compilation and deploy it to the test chain.
 	for i := 0; i < len(fuzzer.contractDefinitions); i++ {
 		// Obtain the currently indexed contract.

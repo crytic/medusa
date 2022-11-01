@@ -20,9 +20,9 @@ type CorpusCallSequence struct {
 
 // CorpusBlock implements the CorpusBlock interface and is a simplified version of a fuzzing.TestNodeBlock.
 type CorpusBlock struct {
-	// blockHeader is a pointer to a CorpusBlockHeader and holds the block hash, timestamp, and block number
+	// Header is a pointer to a CorpusBlockHeader and holds the block hash, timestamp, and block number
 	Header CorpusBlockHeader `json:"header"`
-	// blockTransactions is a list of CallMessages. This is the sequence of transactions that increased coverage.
+	// Transactions is a list of CallMessages. This is the sequence of transactions that increased coverage.
 	Transactions []chainTypes.CallMessage `json:"transactions"`
 }
 
