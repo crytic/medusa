@@ -36,16 +36,16 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 	}
 
 	// If the init byte code size is larger than what we initialized with, it is not a match.
-	if len(c.InitBytecode) > len(contractInitBytecode) {
+	if len(contractInitBytecode) > len(c.InitBytecode) {
 		return false
 	}
 
 	// As a last ditch effort, cut down the contract init bytecode to the size of the definition's to attempt to strip
 	// away constructor arguments before performing a direct compare.
-	contractInitBytecode = contractInitBytecode[:len(c.InitBytecode)]
+	cutDeployedInitBytecode := c.InitBytecode[:len(contractInitBytecode)]
 
 	// If the byte code matches exactly, we treat this as a match.
-	if bytes.Compare(c.InitBytecode, contractInitBytecode) == 0 {
+	if bytes.Compare(cutDeployedInitBytecode, contractInitBytecode) == 0 {
 		return true
 	}
 
