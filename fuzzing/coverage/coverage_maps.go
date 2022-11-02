@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"sync"
@@ -35,12 +36,6 @@ func NewCoverageMaps() *CoverageMaps {
 	maps := &CoverageMaps{}
 	maps.Reset()
 	return maps
-}
-
-// TODO: maybe rename maps to something like data?
-// CoverageData gets the coverage data for all deployed contracts
-func (cm *CoverageMaps) CoverageData() map[common.Address]map[common.Hash]*codeCoverageData {
-	return cm.maps
 }
 
 // Reset clears the coverage state for the CoverageMaps.
@@ -131,6 +126,38 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 	return addedNewMap || changedInMap, err
 }
 
+// Equals checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
+// Note that the `map` field is what is being tested for equality. Not the cached values
+func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
+	// Iterate through all maps
+	for addr, aHashToCoverage := range a.maps {
+		bHashToCoverage, ok := b.maps[addr]
+		// Address is not in b - we're done
+		if !ok {
+			return false
+		}
+		for hash, aCoverage := range aHashToCoverage {
+			bCoverage, ok := bHashToCoverage[hash]
+			// Hash is not in b - we're done
+			if !ok {
+				return false
+			}
+			// Compare that the deployed bytecode coverages are the same
+			equal := bytes.Compare(aCoverage.deployedBytecodeCoverageData, bCoverage.deployedBytecodeCoverageData)
+			if equal != 0 {
+				return false
+			}
+			// Compare that the init bytecode coverages are the same
+			equal = bytes.Compare(aCoverage.initBytecodeCoverageData, bCoverage.initBytecodeCoverageData)
+			// Both must not be zero for equality to be met
+			if equal != 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // codeCoverageData represents a data structure used to identify instruction execution coverage of contract byte code.
 type codeCoverageData struct {
 	// initBytecodeCoverageData represents a list of bytes for each byte of a contract's init bytecode. Non-zero values
@@ -139,16 +166,6 @@ type codeCoverageData struct {
 	// deployedBytecodeCoverageData represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero
 	// values indicate the program counter executed an instruction at that offset.
 	deployedBytecodeCoverageData []byte
-}
-
-// DeployedBytecodeCoverageData get the coverage data for deployed bytecode
-func (cm *codeCoverageData) DeployedBytecodeCoverageData() []byte {
-	return cm.deployedBytecodeCoverageData
-}
-
-// InitBytecodeCoverageData get the coverage data for init bytecode
-func (cm *codeCoverageData) InitBytecodeCoverageData() []byte {
-	return cm.initBytecodeCoverageData
 }
 
 // updateCodeCoverageData creates updates the current coverage map with the provided one. It returns a boolean indicating whether

@@ -2,7 +2,6 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"strconv"
 	"testing"
 
@@ -185,22 +184,5 @@ func TestInitializeCoverageMaps(t *testing.T) {
 	assert.NoError(t, err)
 	// Now, we will compare the new coverage data
 	newCoverage := fuzzer.corpus.CoverageMaps()
-	testCoverageParity(t, originalCoverage, newCoverage)
-}
-
-// TODO: Test that running on simple_xy and then initializing the corpus on simple_xyz doesn't create additional magic coverage
-
-func testCoverageParity(t *testing.T, a *coverage.CoverageMaps, b *coverage.CoverageMaps) {
-	aData := a.CoverageData()
-	bData := b.CoverageData()
-	for addr, bHashToNewCoverage := range bData {
-		for hash, bCoverage := range bHashToNewCoverage {
-			aDeployed := aData[addr][hash].DeployedBytecodeCoverageData()
-			aInit := aData[addr][hash].InitBytecodeCoverageData()
-			bDeployed := bCoverage.DeployedBytecodeCoverageData()
-			bInit := bCoverage.InitBytecodeCoverageData()
-			assert.Equal(t, aDeployed, bDeployed)
-			assert.Equal(t, aInit, bInit)
-		}
-	}
+	assert.True(t, originalCoverage.Equals(newCoverage))
 }
