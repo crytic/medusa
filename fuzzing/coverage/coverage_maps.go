@@ -37,6 +37,12 @@ func NewCoverageMaps() *CoverageMaps {
 	return maps
 }
 
+// TODO: maybe rename maps to something like data?
+// CoverageData gets the coverage data for all deployed contracts
+func (cm *CoverageMaps) CoverageData() map[common.Address]map[common.Hash]*codeCoverageData {
+	return cm.maps
+}
+
 // Reset clears the coverage state for the CoverageMaps.
 func (cm *CoverageMaps) Reset() {
 	cm.maps = make(map[common.Address]map[common.Hash]*codeCoverageData)
@@ -133,6 +139,16 @@ type codeCoverageData struct {
 	// deployedBytecodeCoverageData represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero
 	// values indicate the program counter executed an instruction at that offset.
 	deployedBytecodeCoverageData []byte
+}
+
+// DeployedBytecodeCoverageData get the coverage data for deployed bytecode
+func (cm *codeCoverageData) DeployedBytecodeCoverageData() []byte {
+	return cm.deployedBytecodeCoverageData
+}
+
+// InitBytecodeCoverageData get the coverage data for init bytecode
+func (cm *codeCoverageData) InitBytecodeCoverageData() []byte {
+	return cm.initBytecodeCoverageData
 }
 
 // updateCodeCoverageData creates updates the current coverage map with the provided one. It returns a boolean indicating whether

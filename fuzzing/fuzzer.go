@@ -68,6 +68,7 @@ type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
+	// TODO: Validate config variables (e.g. worker count > 0)
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
 	if err != nil {
@@ -262,16 +263,35 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	for _, sequence := range corpusCallSequences {
 		// Reset our tracer's coverage maps.
 		coverageTracer.Reset()
+		// Loop through each block in the sequence
+		// Note that `block`'s blockNumber may be less/greater/equal to `testChain.HeadBlockNumber()`
+		// To maintain chain semantics we have to find the absolute difference in blockNum (and timestamp)
+		// and use that to mine the new block
+		for _, block := range sequence.Blocks {
+			// Must separately evaluate difference in block number and timestamp because once we fuzz those values
+			// it is non-trivial to assume that if (a-b > 0) for block number, then that must be true for timestamp
+			blockNumberDiff := utils.GetAbsoluteDifferenceUint64(testChain.HeadBlockNumber(), block.Header.Number.Uint64())
+			tsDiff := utils.GetAbsoluteDifferenceUint64(testChain.Head().Header().Time, block.Header.Timestamp)
+			// For simplicity, if the values are equal for the current head and the new block, set the diff to 1
+			// TODO: Maybe we want to change this simplification in the future?
+			if blockNumberDiff == 0 {
+				blockNumberDiff = 1
+			}
+			if tsDiff == 0 {
+				tsDiff = 1
+			}
+			// Mine the block with the new block number + timestamp, and messages from the corpus block
+			nextBlockNumber := testChain.HeadBlockNumber() + blockNumberDiff
+			nextTs := testChain.Head().Header().Time + tsDiff
+			_, err = testChain.MineBlockWithParameters(nextBlockNumber, nextTs, utils.SliceValuesToPointers(block.Transactions)...)
+			if err != nil {
+				return fmt.Errorf("failed to mine block, mining encountered an error: %v", err)
+			}
 
-		// TODO: Replay call sequence, record coverage. Each sequence will need to recalculate block numbers and
-		//  timestamps to be of the same distance apart, but have a new starting base, based on the test chain's
-		//  last block number and timestamp. We want to maintain our chain semantics so we replay with valid
-		//  block numbers and timestamps.
-		_ = testChain
-		_ = sequence
-
+		}
 		// Add our coverage recorded during call sequence execution to our coverage maps.
 		_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
+
 		if err != nil {
 			return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
 		}

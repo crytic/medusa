@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"strconv"
 	"testing"
 
@@ -55,7 +56,7 @@ func getFuzzConfigCantSolveShortTime() *config.FuzzingConfig {
 
 // FuzzSolcTarget copies a given solidity file to a temporary test directory, compiles it, and runs the fuzzer
 // against it. It asserts that the fuzzer should find a result prior to timeout/cancellation.
-func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) {
+func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) *Fuzzer {
 	// Print a status message
 	fmt.Printf("##############################################################\n")
 	fmt.Printf("Fuzzing '%s'...\n", solidityFile)
@@ -63,6 +64,9 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 	// Copy our target file to our test directory
 	testContractPath := testutils.CopyToTestDirectory(t, solidityFile)
+	// Declare the fuzzer here so that we can return a pointer to it at the end of the function
+
+	var fuzzer *Fuzzer
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, testContractPath, func() {
 		// Create a default solc platform config
@@ -79,7 +83,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 		}
 
 		// Create a fuzzer instance
-		fuzzer, err := NewFuzzer(*projectConfig)
+		fuzzer, err = NewFuzzer(*projectConfig)
 		assert.NoError(t, err)
 
 		// Run the fuzzer against the compilation
@@ -97,6 +101,7 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 			assert.True(t, fuzzer.corpus.CallSequenceCount() > 0, "No coverage was captured")
 		}
 	})
+	return fuzzer
 }
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
@@ -157,4 +162,45 @@ func TestFuzzVMTimestamp(t *testing.T) {
 // TestFuzzVMBlockHash runs a test to ensure block hashes behave correctly in the VM.
 func TestFuzzVMBlockHash(t *testing.T) {
 	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", getFuzzConfigCantSolveShortTime(), false)
+}
+
+// TestInitializeCoverageMaps will test whether the corpus can be "replayed" to seed the fuzzer with coverage from previous runs
+func TestInitializeCoverageMaps(t *testing.T) {
+	// First need to fuzz simple_xy and retrieve the fuzzer pointer
+	fuzzer := testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", getFuzzConfigDefault(), true)
+	callSequences := fuzzer.corpus.CallSequences()
+	assert.True(t, len(callSequences) > 0) // Loose assertion here but just want to make sure there is something to "replay"
+	// Get the original coverage data
+	originalCoverage := fuzzer.corpus.CoverageMaps()
+	// Now we will reset the coverage maps
+	fuzzer.corpus.CoverageMaps().Reset()
+	// Note that we don't care about testing the ability to read in the corpus here, so we will allow the in-memory corpus to persist
+	testChain, err := fuzzer.createTestChain()
+	assert.NoError(t, err)
+	// First, re-deploy the contracts
+	err = fuzzer.chainSetupFunc(fuzzer, testChain)
+	assert.NoError(t, err)
+	// Now, initializeCoverageMaps should result in the same coverage bitmaps
+	err = fuzzer.initializeCoverageMaps(testChain)
+	assert.NoError(t, err)
+	// Now, we will compare the new coverage data
+	newCoverage := fuzzer.corpus.CoverageMaps()
+	testCoverageParity(t, originalCoverage, newCoverage)
+}
+
+// TODO: Test that running on simple_xy and then initializing the corpus on simple_xyz doesn't create additional magic coverage
+
+func testCoverageParity(t *testing.T, a *coverage.CoverageMaps, b *coverage.CoverageMaps) {
+	aData := a.CoverageData()
+	bData := b.CoverageData()
+	for addr, bHashToNewCoverage := range bData {
+		for hash, bCoverage := range bHashToNewCoverage {
+			aDeployed := aData[addr][hash].DeployedBytecodeCoverageData()
+			aInit := aData[addr][hash].InitBytecodeCoverageData()
+			bDeployed := bCoverage.DeployedBytecodeCoverageData()
+			bInit := bCoverage.InitBytecodeCoverageData()
+			assert.Equal(t, aDeployed, bDeployed)
+			assert.Equal(t, aInit, bInit)
+		}
+	}
 }

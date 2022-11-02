@@ -54,7 +54,7 @@ func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
 	if signed {
 		// Set max as 2^(bitLen - 1) - 1
 		max = big.NewInt(2)
-		max.Exp(max, big.NewInt(int64(bitLength - 1)), nil)
+		max.Exp(max, big.NewInt(int64(bitLength-1)), nil)
 		max.Sub(max, big.NewInt(1))
 
 		// Set min as -(2^(bitLen - 1))
@@ -70,4 +70,14 @@ func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
 		min = big.NewInt(0)
 	}
 	return min, max
+}
+
+// GetAbsoluteDifferenceUint64 gets the absolute different between two uint values.
+// Useful because math.Abs() requires conversions to float
+func GetAbsoluteDifferenceUint64(a uint64, b uint64) uint64 {
+	if a >= b {
+		return a - b
+	} else {
+		return b - a
+	}
 }
