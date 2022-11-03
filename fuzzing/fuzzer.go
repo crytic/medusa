@@ -363,6 +363,7 @@ func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestCh
 					}
 				}
 				// Set the dirty bit
+				// TODO: Should we throw an error if we already set the byte?
 				alreadyDeployedIndices[i] = 1
 			}
 		}

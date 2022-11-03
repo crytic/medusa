@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"os/exec"
 	"strconv"
 	"testing"
@@ -223,7 +224,8 @@ func TestInitializeCoverageMaps(t *testing.T) {
 	// Get the original coverage data
 	originalCoverage := fuzzer.corpus.CoverageMaps()
 	// Now we will reset the coverage maps
-	fuzzer.corpus.CoverageMaps().Reset()
+	newCorpus, err := corpus.NewCorpus(fuzzer.corpus.StorageDirectory())
+	fuzzer.corpus = newCorpus
 	// Note that we don't care about testing the ability to read in the corpus here, so we will allow the in-memory corpus to persist
 	// and just test the replayability of the corpus items
 	testChain, err := fuzzer.createTestChain()
@@ -251,7 +253,8 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 	// Get the original coverage data
 	originalCoverage := fuzzer.corpus.CoverageMaps()
 	// Now we will reset the coverage maps
-	fuzzer.corpus.CoverageMaps().Reset()
+	newCorpus, err := corpus.NewCorpus(fuzzer.corpus.StorageDirectory())
+	fuzzer.corpus = newCorpus
 	// Create new test chain
 	testChain, err := fuzzer.createTestChain()
 	assert.NoError(t, err)
