@@ -149,7 +149,6 @@ func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
 			}
 			// Compare that the init bytecode coverages are the same
 			equal = bytes.Compare(aCoverage.initBytecodeCoverageData, bCoverage.initBytecodeCoverageData)
-			// Both must not be zero for equality to be met
 			if equal != 0 {
 				return false
 			}

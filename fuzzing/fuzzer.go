@@ -271,26 +271,45 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 		}
 		// Loop through each block in the sequence
 		// Note that `block`'s blockNumber may be less/greater/equal to `testChain.HeadBlockNumber()`
-		// To maintain chain semantics we have to find the difference in blockNum (and timestamp)
+		// To maintain chain semantics we have to find the difference in block number (and timestamp)
 		// and use that to mine the new block
-		for _, block := range sequence.Blocks {
+		// Additionally, it is important to note that original block number preservation is prioritized over block gaps.
+		for i, block := range sequence.Blocks {
 			// If the next corpus block is ahead of the chain's head, that will be the `nextBlockNumber`
-			// If not, then set the `nextBlockNumber` to the corpus blockNum plus the absolute value of the difference plus 1
-			// The same logic applies to the block timestamp
+			// Same reasoning for `nextTs`
 			nextBlockNumber := block.Header.Number.Uint64()
 			nextTs := block.Header.Timestamp
-			blockNumberDiff := int64(block.Header.Number.Uint64()) - int64(testChain.HeadBlockNumber())
-			tsDiff := int64(block.Header.Timestamp) - int64(testChain.Head().Header().Time)
+			// TODO: Create a generic sub() for `constraints.Integer`. I tried doing it and failed. Not going
+			//  to bother about it for now.
+			// Get block number and timestamp differences b/w chain head and corpus block
+			blockNumberDiff := int(block.Header.Number.Uint64()) - int(testChain.HeadBlockNumber())
+			tsDiff := int(block.Header.Timestamp) - int(testChain.Head().Header().Time)
+			// If the chain head is ahead of the corpus block, we need to identify the gap between the current
+			// corpus block and the previous one. This way the next mined block will account for the difference between
+			// the chain head and corpus block as well as the gap between corpus blocks.
+			// A similar point can be made for timestamp
 			if blockNumberDiff <= 0 {
-				nextBlockNumber = block.Header.Number.Uint64() + uint64(utils.Abs(blockNumberDiff)) + 1
-				nextTs = block.Header.Number.Uint64() + uint64(utils.Abs(tsDiff)) + 1
+				// Get the gap between the current and previous corpus block
+				// If this is the first block in the corpus sequence, the gap is assumed to be one
+				blockGap := 1
+				tsGap := 1
+				if i > 0 {
+					blockGap = int(block.Header.Number.Uint64()) - int(sequence.Blocks[i-1].Header.Number.Uint64())
+					tsGap = int(block.Header.Timestamp) - int(sequence.Blocks[i-1].Header.Timestamp)
+				}
+				// The `nextBlockNumber` is the current corpus block's number fast-forwarded `abs(blockNumberDiff)`
+				// and then fast-forwarded the gap between the corpus blocks (`blockGap`)
+				// Same argument for timestamp
+				// TODO: This could be simplified to testChain.HeadBlockNumber() + blockGap
+				//  but will worry about this only after the go-ahead from David
+				nextBlockNumber = block.Header.Number.Uint64() + uint64(utils.Abs(blockNumberDiff)) + uint64(blockGap)
+				nextTs = block.Header.Timestamp + uint64(utils.Abs(tsDiff)) + uint64(tsGap)
 			}
 			// Mine the block with the new block number + timestamp, and messages from the corpus block
 			_, err = testChain.MineBlockWithParameters(nextBlockNumber, nextTs, utils.SliceValuesToPointers(block.Transactions)...)
 			if err != nil {
 				return fmt.Errorf("failed to mine block, mining encountered an error: %v", err)
 			}
-
 		}
 		// Add our coverage recorded during call sequence execution to our coverage maps.
 		_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())

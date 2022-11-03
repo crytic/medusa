@@ -174,6 +174,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 	// Now we will reset the coverage maps
 	fuzzer.corpus.CoverageMaps().Reset()
 	// Note that we don't care about testing the ability to read in the corpus here, so we will allow the in-memory corpus to persist
+	// and just test the replayability of the corpus items
 	testChain, err := fuzzer.createTestChain()
 	assert.NoError(t, err)
 	// First, re-deploy the contracts
