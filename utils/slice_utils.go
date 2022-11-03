@@ -37,3 +37,13 @@ func SliceWhere[T any](x []T, f func(x T) bool) []T {
 	}
 	return r
 }
+
+// SliceContains checks for existence of y in slice x. If found it returns true and the index
+func SliceContains[T comparable](x []T, y T) (bool, int) {
+	for i, v := range x {
+		if v == y {
+			return true, i
+		}
+	}
+	return false, -1
+}

@@ -51,6 +51,10 @@ type FuzzingConfig struct {
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
 	CorpusDirectory string `json:"corpusDirectory"`
+
+	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
+	// configuration variable are deployed, any remaining contracts will then be deployed
+	DeploymentOrder []string `json:"deploymentOrder"`
 }
 
 // TestingConfig describes the configuration options used for testing

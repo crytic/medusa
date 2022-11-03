@@ -321,18 +321,65 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	return nil
 }
 
-// deploymentStrategyCompilationConfig is a TestChainSetupFunc which sets up the base test chain state by deploying
-// all contracts which take no constructor parameters to the chain using the config-specified deployer account address.
-// Returns an error if one occurs.
-func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// TODO: Loop for each contract in our configured contract deployment order and deploy them in order, using these
-	//  existing loops to resolve each one.
+// deployContract is a helper function that will deploy a contract using the test chain.
+// This function handles cases where there are constructor arguments and when there aren't
+func deployContract(fuzzer *Fuzzer, testChain *chain.TestChain, contract fuzzerTypes.Contract) error {
+	if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
+		// Deploy the contract using our deployer address.
+		_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+		if err != nil {
+			return err
+		}
+	}
+	// TODO: We could deploy contracts with constructor arguments here.r
+	return nil
+}
 
-	// Loop for each contract in each compilation and deploy it to the test chain.
+// deploymentStrategyCompilationConfig is a TestChainSetupFunc which sets up the base test chain state by deploying
+// all contracts. First, the contracts in the DeploymentOrder config variable are deployed. Then, any remaining
+// contracts are deployed. Currently, only contracts with no constructor arguments are deployed to the chain.
+func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+	// Create a "dirty bit" array that will be used to mark off the contracts that were already deployed when parsing
+	// through the deployment order
+	alreadyDeployedIndices := make([]byte, len(fuzzer.contractDefinitions))
+	// Do a double loop to find the deployment order contracts first
+	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
+		// Invariant: each contract in the DeploymentOrder must be found for this function to succeed.
+		found := false
+		// Loop through contractDefinitions
+		for i, contract := range fuzzer.contractDefinitions {
+			if contract.Name() == contractName {
+				found = true // We found the contract
+				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
+				// TODO: We might want to abstract this out since we are calling this twice and we will want to support
+				//  constructor arguments down the line. I have created a hook for it `deployContract` (above) but am not
+				//  using it at the moment.
+				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
+					// Deploy the contract using our deployer address.
+					addr, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+					fmt.Printf("deploying %v at %v\n", contract.Name(), addr)
+					if err != nil {
+						return err
+					}
+				}
+				// Set the dirty bit
+				alreadyDeployedIndices[i] = 1
+			}
+		}
+		if !found {
+			return fmt.Errorf("failed to find contract name: %v in the target\n", contractName)
+		}
+	}
+
+	// Loop for each contract in each compilation and deploy it to the test chain, assuming it has already not been
+	// deployed.
 	for i := 0; i < len(fuzzer.contractDefinitions); i++ {
+		// Guard clause to move on to the next index if the contract has already been deployed
+		if alreadyDeployedIndices[i] == 1 {
+			continue
+		}
 		// Obtain the currently indexed contract.
 		contract := fuzzer.contractDefinitions[i]
-
 		// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 		if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 			// Deploy the contract using our deployer address.

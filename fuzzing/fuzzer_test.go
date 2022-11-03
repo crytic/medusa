@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"testing"
 
@@ -112,6 +113,56 @@ func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *co
 	}
 }
 
+func testFuzzProject(t *testing.T, projectDirectory string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) *Fuzzer {
+	// Print a status message
+	fmt.Printf("##############################################################\n")
+	fmt.Printf("Fuzzing '%s'...\n", projectDirectory)
+	fmt.Printf("##############################################################\n")
+	// Copy our testdata over to our testing directory
+	contractDirectory := testutils.CopyToTestDirectory(t, projectDirectory)
+
+	var fuzzer *Fuzzer
+	// Execute our tests in the given test path
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
+		// Run npm install
+		err := exec.Command("npm", "install").Run()
+		assert.NoError(t, err)
+
+		// Create a default crytic-compile platform config
+		cryticCompilationConfig := platforms.NewCryticCompilationConfig(contractDirectory)
+
+		// Wrap the platform config in a compilation config
+		compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(cryticCompilationConfig)
+		assert.NoError(t, err)
+
+		// Create a project configuration to run the fuzzer with
+		projectConfig := &config.ProjectConfig{
+			Fuzzing:     *fuzzingConfig,
+			Compilation: compilationConfig,
+		}
+
+		// Create a fuzzer instance
+		fuzzer, err = NewFuzzer(*projectConfig)
+		assert.NoError(t, err)
+
+		// Run the fuzzer against the compilation
+		err = fuzzer.Start()
+		assert.NoError(t, err)
+
+		// Ensure we captured a failed test.
+		if expectFailure {
+			assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
+		} else {
+			assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) == 0, "Fuzz test found a violated property test when it should not have")
+		}
+		// If default configuration is used, all test contracts should show some level of coverage
+		if fuzzingConfig.CoverageEnabled {
+			assert.True(t, fuzzer.corpus.CallSequenceCount() > 0, "No coverage was captured")
+		}
+	})
+	return fuzzer
+}
+
 // TestDeploymentInnerDeployment runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately. This test contract deploys the inner contract which takes no constructor
 // arguments
@@ -186,4 +237,34 @@ func TestInitializeCoverageMaps(t *testing.T) {
 	// Now, we will compare the new coverage data
 	newCoverage := fuzzer.corpus.CoverageMaps()
 	assert.True(t, originalCoverage.Equals(newCoverage))
+}
+
+func TestDeploymentOrderWithCoverage(t *testing.T) {
+	// First, set the deployment order
+	fuzzConfig := getFuzzConfigDefault()
+	fuzzConfig.DeploymentOrder = []string{"InheritedFirstContract", "TestMagicNumbersXYPayable"}
+	projectDirectory := "testdata/hardhat/basic_project/"
+	// We will fuzz test both contracts
+	fuzzer := testFuzzProject(t, projectDirectory, fuzzConfig, true)
+	callSequences := fuzzer.corpus.CallSequences()
+	assert.True(t, len(callSequences) > 0) // Loose assertion here but just want to make sure there is something to "replay"
+	// Get the original coverage data
+	originalCoverage := fuzzer.corpus.CoverageMaps()
+	// Now we will reset the coverage maps
+	fuzzer.corpus.CoverageMaps().Reset()
+	// Create new test chain
+	testChain, err := fuzzer.createTestChain()
+	assert.NoError(t, err)
+	// Change deployment order and deploy contracts
+	fuzzer.config.Fuzzing.DeploymentOrder = []string{"TestMagicNumbersXYPayable", "InheritedFirstContract"}
+	err = fuzzer.chainSetupFunc(fuzzer, testChain)
+	assert.NoError(t, err)
+	// No coverage should be found since deployment order has changed
+	err = fuzzer.initializeCoverageMaps(testChain)
+	assert.NoError(t, err)
+	// Compare coverages
+	newCoverage := fuzzer.corpus.CoverageMaps()
+	fmt.Printf("original coverage is %v\n", originalCoverage)
+	fmt.Printf("new coverage is %v\n", newCoverage)
+	assert.False(t, originalCoverage.Equals(newCoverage))
 }
