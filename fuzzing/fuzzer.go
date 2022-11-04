@@ -356,8 +356,7 @@ func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestCh
 				//  using it at the moment.
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 					// Deploy the contract using our deployer address.
-					addr, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
-					fmt.Printf("deploying %v at %v\n", contract.Name(), addr)
+					_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
 					if err != nil {
 						return err
 					}

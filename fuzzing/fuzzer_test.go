@@ -2,7 +2,6 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"os/exec"
 	"strconv"
 	"testing"
@@ -57,7 +56,7 @@ func getFuzzConfigCantSolveShortTime() *config.FuzzingConfig {
 
 // FuzzSolcTarget copies a given solidity file to a temporary test directory, compiles it, and runs the fuzzer
 // against it. It asserts that the fuzzer should find a result prior to timeout/cancellation.
-func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) *Fuzzer {
+func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzer *Fuzzer, fuzzingConfig *config.FuzzingConfig, expectFailure bool, stop bool) *Fuzzer {
 	// Print a status message
 	fmt.Printf("##############################################################\n")
 	fmt.Printf("Fuzzing '%s'...\n", solidityFile)
@@ -67,7 +66,6 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 	testContractPath := testutils.CopyToTestDirectory(t, solidityFile)
 	// Declare the fuzzer here so that we can return a pointer to it at the end of the function
 
-	var fuzzer *Fuzzer
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, testContractPath, func() {
 		// Create a default solc platform config
@@ -83,14 +81,20 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 			Compilation: compilationConfig,
 		}
 
-		// Create a fuzzer instance
-		fuzzer, err = NewFuzzer(*projectConfig)
-		assert.NoError(t, err)
+		// Create a fuzzer instance if one has not been provided
+		if fuzzer == nil {
+			fuzzer, err = NewFuzzer(*projectConfig)
+			assert.NoError(t, err)
+		}
 
 		// Run the fuzzer against the compilation
 		err = fuzzer.Start()
 		assert.NoError(t, err)
-
+		// if stop is true, immediately shut down the fuzzer and return
+		if stop {
+			fuzzer.Stop()
+			return
+		}
 		// Ensure we captured a failed test.
 		if expectFailure {
 			assert.True(t, len(fuzzer.TestCasesWithStatus(TestCaseStatusFailed)) > 0, "Fuzz test could not be solved before timeout ("+strconv.Itoa(projectConfig.Fuzzing.Timeout)+" seconds)")
@@ -107,14 +111,14 @@ func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config
 
 // testFuzzSolcTargets copies the given solidity files to a temporary test directory, compiles them, and runs the fuzzer
 // against them. It asserts that the fuzzer should find a result prior to timeout/cancellation for each test.
-func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) {
+func testFuzzSolcTargets(t *testing.T, solidityFiles []string, fuzzingConfig *config.FuzzingConfig, expectFailure bool, stop bool) {
 	// For each solidity file, we invoke fuzzing.
 	for _, solidityFile := range solidityFiles {
-		testFuzzSolcTarget(t, solidityFile, fuzzingConfig, expectFailure)
+		testFuzzSolcTarget(t, solidityFile, nil, fuzzingConfig, expectFailure, stop)
 	}
 }
 
-func testFuzzProject(t *testing.T, projectDirectory string, fuzzingConfig *config.FuzzingConfig, expectFailure bool) *Fuzzer {
+func testFuzzProject(t *testing.T, projectDirectory string, fuzzingConfig *config.FuzzingConfig, expectFailure bool, stop bool) *Fuzzer {
 	// Print a status message
 	fmt.Printf("##############################################################\n")
 	fmt.Printf("Fuzzing '%s'...\n", projectDirectory)
@@ -168,86 +172,77 @@ func testFuzzProject(t *testing.T, projectDirectory string, fuzzingConfig *confi
 // their properties are tested appropriately. This test contract deploys the inner contract which takes no constructor
 // arguments
 func TestDeploymentInnerDeployment(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
 // Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
 // constructor arguments, at construction time.
 func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
 // Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
 // constructor arguments, during the fuzzing campaign.
 func TestDeploymentInnerInnerDeployment(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_inner_deployment.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/inner_inner_deployment.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestDeploymentInternalLibrary runs a test to ensure internal libraries behave correctly.
 func TestDeploymentInternalLibrary(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/internal_library.sol", getFuzzConfigCantSolveShortTime(), false)
+	testFuzzSolcTarget(t, "testdata/contracts/deployment_tests/internal_library.sol", nil, getFuzzConfigCantSolveShortTime(), false, false)
 }
 
 // TestFuzzMagicNumbersSimpleXY runs a test to solve specific function input parameters.
 func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestFuzzMagicNumbersSimpleXYPayable runs a test to solve specific payable values.
 func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy_payable.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy_payable.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestFuzzVMBlockNumber runs a test to ensure block numbers behave correctly in the VM.
 func TestFuzzVMBlockNumber(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_number.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestFuzzVMTimestamp runs a test to ensure block timestamps behave correctly in the VM.
 func TestFuzzVMTimestamp(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", getFuzzConfigDefault(), true)
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_timestamp.sol", nil, getFuzzConfigDefault(), true, false)
 }
 
 // TestFuzzVMBlockHash runs a test to ensure block hashes behave correctly in the VM.
 func TestFuzzVMBlockHash(t *testing.T) {
-	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", getFuzzConfigCantSolveShortTime(), false)
+	testFuzzSolcTarget(t, "testdata/contracts/vm_tests/block_hash.sol", nil, getFuzzConfigCantSolveShortTime(), false, false)
 }
 
 // TestInitializeCoverageMaps will test whether the corpus can be "replayed" to seed the fuzzer with coverage from previous runs
 func TestInitializeCoverageMaps(t *testing.T) {
 	// First need to fuzz simple_xy and retrieve the fuzzer pointer
-	fuzzer := testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", getFuzzConfigDefault(), true)
+	fuzzer := testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", nil, getFuzzConfigDefault(), true, false)
 	callSequences := fuzzer.corpus.CallSequences()
 	assert.True(t, len(callSequences) > 0) // Loose assertion here but just want to make sure there is something to "replay"
 	// Get the original coverage data
 	originalCoverage := fuzzer.corpus.CoverageMaps()
-	// Now we will reset the coverage maps
-	newCorpus, err := corpus.NewCorpus(fuzzer.corpus.StorageDirectory())
-	fuzzer.corpus = newCorpus
-	// Note that we don't care about testing the ability to read in the corpus here, so we will allow the in-memory corpus to persist
-	// and just test the replayability of the corpus items
-	testChain, err := fuzzer.createTestChain()
-	assert.NoError(t, err)
-	// First, re-deploy the contracts
-	err = fuzzer.chainSetupFunc(fuzzer, testChain)
-	assert.NoError(t, err)
-	// Now, initializeCoverageMaps should result in the same coverage bitmaps
-	err = fuzzer.initializeCoverageMaps(testChain)
-	assert.NoError(t, err)
-	// Now, we will compare the new coverage data
+	// Now we will re-run the fuzzer on simple_xy with the same `fuzzer` pointer and immediately stop `stop=true`
+	// Note that after this point, we can't access fuzzer data from the first run
+	testFuzzSolcTarget(t, "testdata/contracts/magic_numbers/simple_xy.sol", fuzzer, getFuzzConfigDefault(), true, true)
+	// Get the new coverage
 	newCoverage := fuzzer.corpus.CoverageMaps()
 	assert.True(t, originalCoverage.Equals(newCoverage))
 }
 
+/*
 func TestDeploymentOrderWithCoverage(t *testing.T) {
 	// First, set the deployment order
 	fuzzConfig := getFuzzConfigDefault()
 	fuzzConfig.DeploymentOrder = []string{"InheritedFirstContract", "TestMagicNumbersXYPayable"}
 	projectDirectory := "testdata/hardhat/basic_project/"
 	// We will fuzz test both contracts
-	fuzzer := testFuzzProject(t, projectDirectory, fuzzConfig, true)
+	fuzzer := testFuzzProject(t, projectDirectory, fuzzConfig, true, false)
 	callSequences := fuzzer.corpus.CallSequences()
 	assert.True(t, len(callSequences) > 0) // Loose assertion here but just want to make sure there is something to "replay"
 	// Get the original coverage data
@@ -267,7 +262,5 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 	assert.NoError(t, err)
 	// Compare coverages
 	newCoverage := fuzzer.corpus.CoverageMaps()
-	fmt.Printf("original coverage is %v\n", originalCoverage)
-	fmt.Printf("new coverage is %v\n", newCoverage)
 	assert.False(t, originalCoverage.Equals(newCoverage))
-}
+}*/
