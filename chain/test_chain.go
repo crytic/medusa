@@ -562,7 +562,7 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 		Bloom:       types.Bloom{},
 		Difficulty:  common.Big0,
 		Number:      big.NewInt(int64(blockNumber)),
-		GasLimit:    t.GasLimit(), // re-used from previous block
+		GasLimit:    t.GasLimit(),
 		GasUsed:     0,
 		Time:        blockTime,
 		Extra:       []byte{},
