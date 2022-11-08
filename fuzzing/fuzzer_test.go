@@ -13,6 +13,7 @@ import (
 	"github.com/trailofbits/medusa/utils/testutils"
 )
 
+// TODO: Feel free to delete
 // FuzzSolcTarget copies a given solidity file to a temporary test directory, compiles it, and runs the fuzzer
 // against it. It asserts that the fuzzer should find a result prior to timeout/cancellation.
 func testFuzzSolcTarget(t *testing.T, solidityFile string, fuzzingConfig *config.FuzzingConfig, expectFailure bool, stop bool) *Fuzzer {
