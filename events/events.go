@@ -8,6 +8,11 @@ import (
 // EventHandler defines a function type where its input type is the generic type.
 type EventHandler[T any] func(T)
 
+// EventType returns the event type given an EventHandler object
+func (e *EventHandler[T]) EventType() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
 // globalEventHandlers describes a mapping of event types to EventHandler objects. These callbacks are called
 // any time any EventEmitter publishes an event of that type.
 var globalEventHandlers map[string][]any
@@ -22,7 +27,7 @@ var globalEventHandlersLock sync.Mutex
 // memory should not use this method to avoid memory leaks.
 func SubscribeAny[T any](callback EventHandler[T]) {
 	// Reflect on a nil object to get the generic type.
-	eventType := reflect.TypeOf((*T)(nil)).Elem()
+	eventType := callback.EventType()
 
 	// If our global event handlers are nil, instantiate them.
 	if globalEventHandlers == nil {
@@ -48,6 +53,11 @@ type EventEmitter[T any] struct {
 	// subscriptions defines the EventHandler methods which should be invoked when a new event is published to this
 	// emitter.
 	subscriptions []EventHandler[T]
+}
+
+// EventType returns the event type given an EventEmitter object
+func (e *EventEmitter[T]) EventType() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
 // Publish emits the provided event by calling every EventHandler subscribed.

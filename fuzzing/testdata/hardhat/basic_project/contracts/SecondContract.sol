@@ -1,22 +1,27 @@
-contract TestMagicNumbersXYPayable {
-    uint paidAmount;
-    uint paidAmount2;
-    bool calledOnce;
+pragma solidity ^0.7.1;
 
-    function p1() public payable {
-        paidAmount = msg.value;
+contract SecondContract {
+    uint a;
+    uint b;
+
+    function setA(uint value) public {
+        a = value + 3;
     }
 
-    function p2() public payable {
-        paidAmount2 = msg.value;
+    function setB(uint value) public {
+        b = value + 9;
+    }
+}
+
+contract InheritedSecondContract is SecondContract {
+    uint c;
+
+    function setC(uint value) public {
+        c = value + 7;
     }
 
-    function calledAtLeastOnce() public {
-        calledOnce = true;
-    }
-
-    function fuzz_never_pay_exact_amounts() public view returns (bool) {
-        // ASSERTION: p1 will never be last paid 7777, p2 8888, when calledAtLeastOnce was called.
-        return !(paidAmount == 7777 && paidAmount2 == 8888 && calledOnce);
+    function fuzz_never_specific_values() public view returns (bool) {
+        // ASSERTION: a should never be 10 at the same time b is 80 at the same time c is 14
+        return !(a == 10 && b == 80 && c == 14);
     }
 }
