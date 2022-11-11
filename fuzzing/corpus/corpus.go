@@ -23,11 +23,23 @@ type Corpus struct {
 	coverageMaps *coverage.CoverageMaps
 
 	// callSequencesByFilePath is a mapping of file paths to corpus call sequences stored at those paths.
-	callSequencesByFilePath map[string]*CorpusCallSequence
+	callSequencesByFilePath map[string]corpusFile[*CorpusCallSequence]
 
-	// callSequencesByFilePathLock provides thread synchronization used to prevent concurrent access errors into
+	// callSequencesByFilePathLock provides thread synchronization to prevent concurrent access errors into
 	// callSequencesByFilePath.
 	callSequencesByFilePathLock sync.Mutex
+
+	// flushLock provides thread synchronization to prevent concurrent access errors when calling Flush.
+	flushLock sync.Mutex
+}
+
+// corpusFile represents corpus data and its state on the filesystem.
+type corpusFile[T any] struct {
+	// data describes an object whose data should be written to the file.
+	data T
+
+	// pendingWrite indicates whether the file has been flushed to disk yet.
+	pendingWrite bool
 }
 
 // NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
@@ -36,7 +48,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory:        corpusDirectory,
 		coverageMaps:            coverage.NewCoverageMaps(),
-		callSequencesByFilePath: make(map[string]*CorpusCallSequence),
+		callSequencesByFilePath: make(map[string]corpusFile[*CorpusCallSequence]),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -64,7 +76,10 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			}
 
 			// Add entry to corpus
-			corpus.callSequencesByFilePath[filePath] = &entry
+			corpus.callSequencesByFilePath[filePath] = corpusFile[*CorpusCallSequence]{
+				data:         &entry,
+				pendingWrite: false,
+			}
 		}
 	}
 	return corpus, nil
@@ -99,8 +114,6 @@ func (c *Corpus) CallSequenceCount() int {
 
 // AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
 func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
-	// Determine the filepath to write our corpus entry to.
-
 	// Update our map with the new entry. We generate a random UUID until we have a unique one for the filename.
 	c.callSequencesByFilePathLock.Lock()
 	for {
@@ -108,7 +121,10 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 		if _, existsAlready := c.callSequencesByFilePath[filePath]; existsAlready {
 			continue
 		}
-		c.callSequencesByFilePath[filePath] = &corpusEntry
+		c.callSequencesByFilePath[filePath] = corpusFile[*CorpusCallSequence]{
+			data:         &corpusEntry,
+			pendingWrite: true,
+		}
 		break
 	}
 	c.callSequencesByFilePathLock.Unlock()
@@ -120,8 +136,8 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 func (c *Corpus) CallSequences() []*CorpusCallSequence {
 	sequences := make([]*CorpusCallSequence, len(c.callSequencesByFilePath))
 	i := 0
-	for _, sequence := range c.callSequencesByFilePath {
-		sequences[i] = sequence
+	for _, sequenceFile := range c.callSequencesByFilePath {
+		sequences[i] = sequenceFile.data
 		i++
 	}
 	return sequences
@@ -134,6 +150,12 @@ func (c *Corpus) Flush() error {
 		return nil
 	}
 
+	// Lock while flushing the corpus items to avoid concurrent access issues.
+	c.flushLock.Lock()
+	defer c.flushLock.Unlock()
+	c.callSequencesByFilePathLock.Lock()
+	defer c.callSequencesByFilePathLock.Unlock()
+
 	// Ensure the corpus directories exists.
 	err := utils.MakeDirectory(c.storageDirectory)
 	if err != nil {
@@ -145,22 +167,22 @@ func (c *Corpus) Flush() error {
 	}
 
 	// Write all call sequences to disk
-	for filePath, simpleEntry := range c.callSequencesByFilePath {
-		// If call sequence file already exists, no need to write it again
-		if _, err := os.Stat(filePath); err == nil {
-			continue
-		}
+	for filePath, sequenceFile := range c.callSequencesByFilePath {
+		if sequenceFile.pendingWrite {
+			// Marshal the call sequence
+			jsonEncodedData, err := json.MarshalIndent(sequenceFile.data, "", " ")
+			if err != nil {
+				return err
+			}
 
-		// Marshal the call sequence
-		jsonEncodedData, err := json.MarshalIndent(simpleEntry, "", " ")
-		if err != nil {
-			return err
-		}
+			// Write the JSON encoded data.
+			err = ioutil.WriteFile(filePath, jsonEncodedData, os.ModePerm)
+			if err != nil {
+				return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
+			}
 
-		// Write the JSON encoded data.
-		err = ioutil.WriteFile(filePath, jsonEncodedData, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
+			// We no longer need to write this item.
+			sequenceFile.pendingWrite = false
 		}
 	}
 	return nil

@@ -204,6 +204,13 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Bloc
 			if err != nil {
 				return err
 			}
+
+			// TODO: For now we flush immediately but later we'll want to move this to another routine that flushes
+			//  periodically so fuzzer workers don't collide with mutex locks.
+			err = fw.fuzzer.corpus.Flush()
+			if err != nil {
+				return err
+			}
 		}
 	}
 

@@ -152,17 +152,18 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// For each entry, marshal it and then unmarshal the byte array
-		for _, entry := range corpus.callSequencesByFilePath {
+		for _, entryFile := range corpus.callSequencesByFilePath {
 			// Marshal the entry
-			b, err := json.Marshal(entry)
+			b, err := json.Marshal(entryFile.data)
 			assert.NoError(t, err)
-			var sameEntry CorpusCallSequence
+
 			// Unmarshal byte array
+			var sameEntry CorpusCallSequence
 			err = json.Unmarshal(b, &sameEntry)
 			assert.NoError(t, err)
 
 			// Check equality
-			testCorpusBlockSequencesAreEqual(t, entry, &sameEntry)
+			testCorpusBlockSequencesAreEqual(t, entryFile.data, &sameEntry)
 		}
 	})
 }
