@@ -24,6 +24,9 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Timeout:                  0,
 			TestLimit:                0,
 			MaxTxSequenceLength:      100,
+			DeploymentOrder:          []string{},
+			CorpusDirectory:          "corpus",
+			CoverageEnabled:          true,
 			SenderAddresses: []string{
 				"0x1111111111111111111111111111111111111111",
 				"0x2222222222222222222222222222222222222222",
@@ -43,8 +46,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
-			CoverageEnabled: true,
-			CorpusDirectory: "corpus",
 		},
 		Compilation: compilationConfig,
 	}

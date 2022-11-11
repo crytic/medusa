@@ -9,6 +9,7 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -126,8 +127,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 
 		// If we didn't match any deployment, report it.
 		if !matchedDeployment {
-			// TODO: Figure out what to actually do here, we don't want to print errors as it could flood the console
-			//  in a tight execution loop if a contract that cannot be matched is repetitively deployed.
+			// TODO: More elegant error handling/messaging
 			panic("could not match bytecode!")
 		}
 	}
@@ -494,11 +494,8 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// this worker with a fresh memory database.
 	for fw.chain.MemoryDatabaseEntryCount() <= fw.fuzzer.config.Fuzzing.WorkerDatabaseEntryLimit {
 		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.
-		select {
-		case <-fw.fuzzer.ctx.Done():
+		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil
-		default:
-			break // no signal to exit, break out of select to continue processing
 		}
 
 		// Loop through each test provider, signal our worker is about to test a new call sequence.

@@ -13,12 +13,14 @@ contract InnerDeployment {
 }
 
 contract InnerDeploymentFactory {
+    address a;
+
     constructor() {
-        new InnerDeployment();
+        a = address(new InnerDeployment());
     }
 
     function dummyFunction(uint x) public {
         // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
-        x = 7;
+        x = 8;
     }
 }

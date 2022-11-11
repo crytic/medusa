@@ -38,7 +38,6 @@ func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
-			config.Fuzzing.Workers = 1
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer

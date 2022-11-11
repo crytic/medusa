@@ -442,21 +442,14 @@ func (f *Fuzzer) Start() error {
 	f.workers = make([]*FuzzerWorker, f.config.Fuzzing.Workers)
 	threadReserveChannel := make(chan struct{}, f.config.Fuzzing.Workers)
 
-	// We will set working to true and then emit the OnFuzzerStarting event. If the user wishes to cancel the fuzzing
-	// loop or perform some additional setup, they can do so here.
-	working := true
+	// Emit the OnFuzzerStarting event. If the user wishes to cancel the fuzzing loop or perform some additional setup,
+	// they can do so here.
 	f.OnFuzzerStartingEventEmitter.Publish(OnFuzzerStarting{
 		Fuzzer: f,
 	})
-	
-	// If our context is cancelled for some reason, exit, don't spin up the fuzzer workers, and do fuzzer cleanup
-	// TODO: potentially abstract this logic out to a helper function
-	select {
-	case <-f.ctx.Done():
-		working = false
-	default:
-		break // no signal to exit, break out of select to continue processing
-	}
+
+	// If our context is cancelled, perform cleanup and exit instead of entering the fuzzing loop.
+	working := !utils.CheckContextDone(f.ctx)
 
 	// Log that we are about to create the workers and start fuzzing
 	fmt.Printf("Creating %d workers ...\n", f.config.Fuzzing.Workers)
@@ -626,11 +619,8 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		time.Sleep(time.Second * 3)
 
 		// If ctx signalled to stop the operation, return immediately.
-		select {
-		case <-f.ctx.Done():
+		if utils.CheckContextDone(f.ctx) {
 			return
-		default:
-			break
 		}
 	}
 }
