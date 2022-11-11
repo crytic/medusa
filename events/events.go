@@ -26,7 +26,7 @@ var globalEventHandlersLock sync.Mutex
 // Note: An EventHandler subscribed here will remain throughout program execution. Objects which should be freed from
 // memory should not use this method to avoid memory leaks.
 func SubscribeAny[T any](callback EventHandler[T]) {
-	// Reflect on a nil object to get the generic type.
+	// Obtain the type of event this handler handles.
 	eventType := callback.EventType()
 
 	// If our global event handlers are nil, instantiate them.

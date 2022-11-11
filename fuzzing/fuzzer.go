@@ -250,11 +250,13 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	// Create a coverage tracer
 	coverageTracer := coverage.NewCoverageTracer()
+
 	// Clone our test chain with our coverage tracer.
 	testChain, err := baseTestChain.Clone(coverageTracer)
 	if err != nil {
 		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
+
 	// Add our coverage recorded during chain setup to our coverage maps.
 	_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
 	if err != nil {
@@ -263,71 +265,67 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 
 	// Next we measure coverage for every corpus call sequence.
 	corpusCallSequences := f.corpus.CallSequences()
+
 	// Cache current HeadBlockNumber so that you can reset back to it after every sequence
 	baseBlockNumber := testChain.HeadBlockNumber()
+
 	for _, sequence := range corpusCallSequences {
-		// Reset our tracer's coverage maps and testChain.
+		// Reset our tracer's coverage maps.
 		coverageTracer.Reset()
-		err = testChain.RevertToBlockNumber(baseBlockNumber)
-		if err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
-		}
+
 		// Loop through each block in the sequence
 		// Note that `block`'s blockNumber may be less/greater/equal to `testChain.HeadBlockNumber()`
 		// To maintain chain semantics we have to find the difference in block number (and timestamp)
-		// and use that to mine the new block
-		// Note: original corpus block number preservation is prioritized over block gaps b/w corpus blocks.
+		// and may need to rebase blocks.
+		// Note: original corpus block number preservation is prioritized over block gaps between corpus blocks.
 		for i, block := range sequence.Blocks {
 			// If the next corpus block is ahead of the chain's head, that will be the `nextBlockNumber`
 			// Same reasoning for `nextTs`
-			nextBlockNumber := block.Header.Number.Uint64()
-			nextTs := block.Header.Timestamp
-			// TODO: Maybe create a generic sub() for `constraints.Integer
-			// Get difference in head and corpus block block numbers
+			rebasedBlockNumber := block.Header.Number.Uint64()
+			rebasedTimestamp := block.Header.Timestamp
+
+			// Get difference in head and corpus block numbers
 			blockNumberDiff := int(block.Header.Number.Uint64()) - int(testChain.HeadBlockNumber())
-			// If the chain head is ahead, or at the same level, of the corpus block (blockNumberDiff <= 0)
-			// The next block number should be the head's block number plus the gap b/w the current corpus block
+
+			// If the chain head is ahead, or at the same level, as the corpus block (blockNumberDiff <= 0)
+			// The next block number should be the head's block number plus the gap between the current corpus block
 			// and the previous one
 			if blockNumberDiff <= 0 {
-				// At minimum, or if this is the first block in the corpus sequence, the blockGap must be 1
+				// At minimum, the timestamp and block must be shifted 1 block past the HEAD (in the diff==0 case).
 				blockGap := 1
-				tsGap := 1
+				timestampGap := 1
+
+				// If this isn't the first block we're trying to add, we evaluate the gap between blocks to ensure
+				// we maintain it.
 				if i > 0 {
 					blockGap = int(block.Header.Number.Uint64()) - int(sequence.Blocks[i-1].Header.Number.Uint64())
-					tsGap = int(block.Header.Timestamp) - int(sequence.Blocks[i-1].Header.Timestamp)
+					timestampGap = int(block.Header.Timestamp) - int(sequence.Blocks[i-1].Header.Timestamp)
 				}
-				// Otherwise, next block is head block number plus the gap. Same applies to timestamp
-				nextBlockNumber = testChain.HeadBlockNumber() + uint64(blockGap)
-				nextTs = testChain.Head().Header().Time + uint64(tsGap)
+
+				// The next block is head block number plus the gap. Same applies to timestamp.
+				rebasedBlockNumber = testChain.HeadBlockNumber() + uint64(blockGap)
+				rebasedTimestamp = testChain.Head().Header().Time + uint64(timestampGap)
 			}
+
 			// Mine the block with the new block number + timestamp, and messages from the corpus block
-			_, err = testChain.MineBlockWithParameters(nextBlockNumber, nextTs, utils.SliceValuesToPointers(block.Transactions)...)
+			_, err = testChain.MineBlockWithParameters(rebasedBlockNumber, rebasedTimestamp, utils.SliceValuesToPointers(block.Transactions)...)
 			if err != nil {
 				return fmt.Errorf("failed to mine block, mining encountered an error: %v", err)
 			}
 		}
+
 		// Add our coverage recorded during call sequence execution to our coverage maps.
 		_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
 		if err != nil {
 			return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
 		}
-	}
-	return nil
-}
 
-// TODO: Feel free to burn this function to the ground if it doesn't make sense
-// deployContract will deploy a contract using the testChain and the deployer address provided by the fuzzer.
-// Currently, only contracts with no constructor args are supported.
-func deployContract(testChain *chain.TestChain, fuzzer *Fuzzer, contract fuzzerTypes.Contract) error {
-	// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-	if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-		// Deploy the contract using our deployer address.
-		_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+		// Revert chain state to our starting point to test the next sequence.
+		err = testChain.RevertToBlockNumber(baseBlockNumber)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
 		}
 	}
-	// TODO: Can add logic for deploying contracts w/ constructor args here
 	return nil
 }
 
@@ -335,54 +333,32 @@ func deployContract(testChain *chain.TestChain, fuzzer *Fuzzer, contract fuzzerT
 // all contracts. First, the contracts in the DeploymentOrder config variable are deployed. Then, any remaining
 // contracts are deployed.
 func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// Create a "dirty byte" array that will be used to mark off the contracts that were already deployed when parsing
-	// through the deployment order
-	alreadyDeployedIndices := make([]byte, len(fuzzer.contractDefinitions))
-
-	// Do a double loop to find the deployment order contracts first
+	// Loop for all contracts to deploy
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
-		// Invariant: each contract in the DeploymentOrder must be found for this function to succeed.
+		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
-		// Loop through contractDefinitions
-		for i, contract := range fuzzer.contractDefinitions {
+		for _, contract := range fuzzer.contractDefinitions {
+			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				// We found the contract
-				found = true
-				// Deploy the contract
-				err := deployContract(testChain, fuzzer, contract)
-				if err != nil {
-					return err
-				}
-				// TODO: Should we throw an error if the dirty byte was already set?
-				//  Could happen if there is a dup in the deployment order or there is a name collision in the
-				//  contract definitions
-				/*
-					if alreadyDeployedIndices[i] == 1 {
-					 return fmt.Errorf("contract %v was already deployed. ensure there are no duplicates in the deployment order\n", contractName)
+				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
+				// TODO: We can add logic for deploying contracts with constructor arguments here.
+				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
+					// Deploy the contract using our deployer address.
+					_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+					if err != nil {
+						return err
 					}
-				*/
-				// Set the dirty byte
-				alreadyDeployedIndices[i] = 1
+				}
+
+				// Set our found flag to true.
+				found = true
+				break
 			}
 		}
-		if !found {
-			return fmt.Errorf("failed to find contract name: %v in the target\n", contractName)
-		}
-	}
 
-	// Loop for each contract in each compilation and deploy it to the test chain, assuming it has already not been
-	// deployed.
-	for i := 0; i < len(fuzzer.contractDefinitions); i++ {
-		// Guard clause to move on to the next index if the contract has already been deployed
-		if alreadyDeployedIndices[i] == 1 {
-			continue
-		}
-		// Obtain the currently indexed contract.
-		contract := fuzzer.contractDefinitions[i]
-		// Deploy the contract
-		err := deployContract(testChain, fuzzer, contract)
-		if err != nil {
-			return err
+		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
+		if !found {
+			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
 		}
 	}
 	return nil
@@ -472,6 +448,7 @@ func (f *Fuzzer) Start() error {
 	f.OnFuzzerStartingEventEmitter.Publish(OnFuzzerStarting{
 		Fuzzer: f,
 	})
+	
 	// If our context is cancelled for some reason, exit, don't spin up the fuzzer workers, and do fuzzer cleanup
 	// TODO: potentially abstract this logic out to a helper function
 	select {
@@ -501,6 +478,7 @@ func (f *Fuzzer) Start() error {
 			// Create a new worker for this fuzzing.
 			worker := newFuzzerWorker(f, workerIndex)
 			f.workers[workerIndex] = worker
+
 			// Update the type provider with our event
 			for _, testProvider := range f.testCaseProviders {
 				workerCreatedErr := testProvider.OnWorkerCreated(worker)
@@ -509,6 +487,7 @@ func (f *Fuzzer) Start() error {
 					break
 				}
 			}
+
 			// Run the worker and check if we received a cancelled signal, or we encountered an error.
 			if err == nil {
 				ctxCancelled, workerErr := worker.run(baseTestChain)

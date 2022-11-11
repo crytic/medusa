@@ -18,7 +18,7 @@ func SliceValuesToPointers[T any](x []T) []*T {
 	return r
 }
 
-// SliceSelect provides a way of querying specific values from a slice's elements into a slice of its own.
+// SliceSelect provides a way of querying a specific element from a slice's elements into a slice of its own.
 func SliceSelect[T any, K any](x []T, f func(x T) K) []K {
 	r := make([]K, len(x))
 	for i := 0; i < len(x); i++ {
@@ -36,14 +36,4 @@ func SliceWhere[T any](x []T, f func(x T) bool) []T {
 		}
 	}
 	return r
-}
-
-// SliceContains checks for existence of y in slice x. If found it returns true and the index
-func SliceContains[T comparable](x []T, y T) (bool, int) {
-	for i, v := range x {
-		if v == y {
-			return true, i
-		}
-	}
-	return false, -1
 }
