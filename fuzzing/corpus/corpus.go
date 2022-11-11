@@ -24,11 +24,11 @@ type Corpus struct {
 
 	// callSequences is a list of call sequences that increased coverage or otherwise were found to be valuable
 	// to the fuzzer.
-	callSequences []corpusFile[*CorpusCallSequence]
+	callSequences []*corpusFile[*CorpusCallSequence]
 
-	// callSequencesByFilePathLock provides thread synchronization to prevent concurrent access errors into
-	// callSequencesByFilePath.
-	callSequencesByFilePathLock sync.Mutex
+	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
+	// callSequences.
+	callSequencesLock sync.Mutex
 
 	// flushLock provides thread synchronization to prevent concurrent access errors when calling Flush.
 	flushLock sync.Mutex
@@ -49,7 +49,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory: corpusDirectory,
 		coverageMaps:     coverage.NewCoverageMaps(),
-		callSequences:    make([]corpusFile[*CorpusCallSequence], 0),
+		callSequences:    make([]*corpusFile[*CorpusCallSequence], 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -77,7 +77,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			}
 
 			// Add entry to corpus
-			corpus.callSequences = append(corpus.callSequences, corpusFile[*CorpusCallSequence]{
+			corpus.callSequences = append(corpus.callSequences, &corpusFile[*CorpusCallSequence]{
 				filePath: filePath,
 				data:     &entry,
 			})
@@ -116,19 +116,19 @@ func (c *Corpus) CallSequenceCount() int {
 // AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
 func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 	// Update our sequences with the new entry.
-	c.callSequencesByFilePathLock.Lock()
-	c.callSequences = append(c.callSequences, corpusFile[*CorpusCallSequence]{
+	c.callSequencesLock.Lock()
+	c.callSequences = append(c.callSequences, &corpusFile[*CorpusCallSequence]{
 		filePath: "",
 		data:     &corpusEntry,
 	})
-	c.callSequencesByFilePathLock.Unlock()
+	c.callSequencesLock.Unlock()
 	return nil
 }
 
 // CallSequences returns all the CorpusCallSequence known to the corpus. This should not be called frequently,
 // as the slice returned by this method is computed each time it is called.
 func (c *Corpus) CallSequences() []*CorpusCallSequence {
-	return utils.SliceSelect(c.callSequences, func(file corpusFile[*CorpusCallSequence]) *CorpusCallSequence {
+	return utils.SliceSelect(c.callSequences, func(file *corpusFile[*CorpusCallSequence]) *CorpusCallSequence {
 		return file.data
 	})
 }
@@ -143,8 +143,8 @@ func (c *Corpus) Flush() error {
 	// Lock while flushing the corpus items to avoid concurrent access issues.
 	c.flushLock.Lock()
 	defer c.flushLock.Unlock()
-	c.callSequencesByFilePathLock.Lock()
-	defer c.callSequencesByFilePathLock.Unlock()
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
 
 	// Ensure the corpus directories exists.
 	err := utils.MakeDirectory(c.storageDirectory)

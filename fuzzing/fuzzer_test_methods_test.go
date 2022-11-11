@@ -103,6 +103,7 @@ func assertCoverageCollected(f *fuzzerTestContext, expectCoverage bool) {
 	if expectCoverage {
 		assert.Greater(f.t, f.fuzzer.corpus.CallSequenceCount(), 0, "No coverage was captured")
 	}
+	
 	// If we don't expect coverage, or it is not enabled, we should not get any coverage
 	if !expectCoverage || !f.fuzzer.config.Fuzzing.CoverageEnabled {
 		assert.EqualValues(f.t, 0, f.fuzzer.corpus.CallSequenceCount(), "Coverage was captured")
@@ -114,10 +115,12 @@ func assertCoverageCollected(f *fuzzerTestContext, expectCoverage bool) {
 func expectEventEmitted[T any](f *fuzzerTestContext, eventEmitter *events.EventEmitter[T]) {
 	// Get the stringified event type for the mapping
 	eventType := eventEmitter.EventType().String()
+
 	// Subscribe to the event T and update the counter when the event is published
 	eventEmitter.Subscribe(func(event T) {
 		f.eventCounter[eventType] += 1
 	})
+
 	// Add a check to make sure that event T was published at least once
 	f.postExecutionChecks = append(f.postExecutionChecks, func(t *testing.T, fctx *fuzzerTestContext) {
 		assert.Greater(f.t, f.eventCounter[eventType], 0, "Event was not emitted at all")
