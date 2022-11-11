@@ -157,6 +157,7 @@ func (c *Corpus) Flush() error {
 	}
 
 	// Write all call sequences to disk
+	// TODO: This can be optimized by storing/indexing unwritten sequences separately and only iterating over those.
 	for _, sequenceFile := range c.callSequences {
 		if sequenceFile.filePath == "" {
 			// Determine the file path to write this to.
