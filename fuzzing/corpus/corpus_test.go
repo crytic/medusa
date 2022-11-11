@@ -152,7 +152,7 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// For each entry, marshal it and then unmarshal the byte array
-		for _, entryFile := range corpus.callSequencesByFilePath {
+		for _, entryFile := range corpus.callSequences {
 			// Marshal the entry
 			b, err := json.Marshal(entryFile.data)
 			assert.NoError(t, err)

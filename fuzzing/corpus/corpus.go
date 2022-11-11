@@ -22,8 +22,9 @@ type Corpus struct {
 	// coverageMaps describes the total code coverage known to be achieved across all runs.
 	coverageMaps *coverage.CoverageMaps
 
-	// callSequencesByFilePath is a mapping of file paths to corpus call sequences stored at those paths.
-	callSequencesByFilePath map[string]corpusFile[*CorpusCallSequence]
+	// callSequences is a list of call sequences that increased coverage or otherwise were found to be valuable
+	// to the fuzzer.
+	callSequences []corpusFile[*CorpusCallSequence]
 
 	// callSequencesByFilePathLock provides thread synchronization to prevent concurrent access errors into
 	// callSequencesByFilePath.
@@ -35,20 +36,20 @@ type Corpus struct {
 
 // corpusFile represents corpus data and its state on the filesystem.
 type corpusFile[T any] struct {
+	// filePath describes the path the file should be written to. If blank, this indicates it has not yet been written.
+	filePath string
+
 	// data describes an object whose data should be written to the file.
 	data T
-
-	// pendingWrite indicates whether the file has been flushed to disk yet.
-	pendingWrite bool
 }
 
 // NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
 // to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
-		storageDirectory:        corpusDirectory,
-		coverageMaps:            coverage.NewCoverageMaps(),
-		callSequencesByFilePath: make(map[string]corpusFile[*CorpusCallSequence]),
+		storageDirectory: corpusDirectory,
+		coverageMaps:     coverage.NewCoverageMaps(),
+		callSequences:    make([]corpusFile[*CorpusCallSequence], 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -76,10 +77,10 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			}
 
 			// Add entry to corpus
-			corpus.callSequencesByFilePath[filePath] = corpusFile[*CorpusCallSequence]{
-				data:         &entry,
-				pendingWrite: false,
-			}
+			corpus.callSequences = append(corpus.callSequences, corpusFile[*CorpusCallSequence]{
+				filePath: filePath,
+				data:     &entry,
+			})
 		}
 	}
 	return corpus, nil
@@ -107,26 +108,19 @@ func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 	return c.coverageMaps
 }
 
-// CallSequenceCount returns the count of call sequences recorded by the corpus which increased coverage.
+// CallSequenceCount returns the count of call sequences recorded in the corpus.
 func (c *Corpus) CallSequenceCount() int {
-	return len(c.callSequencesByFilePath)
+	return len(c.callSequences)
 }
 
 // AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
 func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
-	// Update our map with the new entry. We generate a random UUID until we have a unique one for the filename.
+	// Update our sequences with the new entry.
 	c.callSequencesByFilePathLock.Lock()
-	for {
-		filePath := filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
-		if _, existsAlready := c.callSequencesByFilePath[filePath]; existsAlready {
-			continue
-		}
-		c.callSequencesByFilePath[filePath] = corpusFile[*CorpusCallSequence]{
-			data:         &corpusEntry,
-			pendingWrite: true,
-		}
-		break
-	}
+	c.callSequences = append(c.callSequences, corpusFile[*CorpusCallSequence]{
+		filePath: "",
+		data:     &corpusEntry,
+	})
 	c.callSequencesByFilePathLock.Unlock()
 	return nil
 }
@@ -134,13 +128,9 @@ func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
 // CallSequences returns all the CorpusCallSequence known to the corpus. This should not be called frequently,
 // as the slice returned by this method is computed each time it is called.
 func (c *Corpus) CallSequences() []*CorpusCallSequence {
-	sequences := make([]*CorpusCallSequence, len(c.callSequencesByFilePath))
-	i := 0
-	for _, sequenceFile := range c.callSequencesByFilePath {
-		sequences[i] = sequenceFile.data
-		i++
-	}
-	return sequences
+	return utils.SliceSelect(c.callSequences, func(file corpusFile[*CorpusCallSequence]) *CorpusCallSequence {
+		return file.data
+	})
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.
@@ -167,8 +157,11 @@ func (c *Corpus) Flush() error {
 	}
 
 	// Write all call sequences to disk
-	for filePath, sequenceFile := range c.callSequencesByFilePath {
-		if sequenceFile.pendingWrite {
+	for _, sequenceFile := range c.callSequences {
+		if sequenceFile.filePath == "" {
+			// Determine the file path to write this to.
+			sequenceFile.filePath = filepath.Join(c.CallSequencesDirectory(), uuid.New().String()+".json")
+
 			// Marshal the call sequence
 			jsonEncodedData, err := json.MarshalIndent(sequenceFile.data, "", " ")
 			if err != nil {
@@ -176,13 +169,10 @@ func (c *Corpus) Flush() error {
 			}
 
 			// Write the JSON encoded data.
-			err = ioutil.WriteFile(filePath, jsonEncodedData, os.ModePerm)
+			err = ioutil.WriteFile(sequenceFile.filePath, jsonEncodedData, os.ModePerm)
 			if err != nil {
 				return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
 			}
-
-			// We no longer need to write this item.
-			sequenceFile.pendingWrite = false
 		}
 	}
 	return nil
