@@ -27,23 +27,29 @@ func TestEventPublishingAndSubscribing(t *testing.T) {
 		eventBEmitterGlobalPublishCount int
 
 	// Create our callback methods for each event, where we update our count of published events.
-	eventAEmitter1.Subscribe(func(event TestEventA) {
+	eventAEmitter1.Subscribe(func(event TestEventA) error {
 		eventAEmitter1PublishCount++
+		return nil
 	})
-	eventAEmitter2.Subscribe(func(event TestEventA) {
+	eventAEmitter2.Subscribe(func(event TestEventA) error {
 		eventAEmitter2PublishCount++
+		return nil
 	})
-	eventBEmitter1.Subscribe(func(event TestEventB) {
+	eventBEmitter1.Subscribe(func(event TestEventB) error {
 		eventBEmitter1PublishCount++
+		return nil
 	})
-	eventBEmitter2.Subscribe(func(event TestEventB) {
+	eventBEmitter2.Subscribe(func(event TestEventB) error {
 		eventBEmitter2PublishCount++
+		return nil
 	})
-	SubscribeAny(func(event TestEventA) {
+	SubscribeAny(func(event TestEventA) error {
 		eventAEmitterGlobalPublishCount++
+		return nil
 	})
-	SubscribeAny(func(event TestEventB) {
+	SubscribeAny(func(event TestEventB) error {
 		eventBEmitterGlobalPublishCount++
+		return nil
 	})
 
 	// Publish events a given amount of times.
@@ -54,16 +60,20 @@ func TestEventPublishingAndSubscribing(t *testing.T) {
 		expectedEventBEmitter2PublishCount = 13
 	)
 	for i := 0; i < expectedEventAEmitter1PublishCount; i++ {
-		eventAEmitter1.Publish(TestEventA{})
+		err := eventAEmitter1.Publish(TestEventA{})
+		assert.NoError(t, err)
 	}
 	for i := 0; i < expectedEventAEmitter2PublishCount; i++ {
-		eventAEmitter2.Publish(TestEventA{})
+		err := eventAEmitter2.Publish(TestEventA{})
+		assert.NoError(t, err)
 	}
 	for i := 0; i < expectedEventBEmitter1PublishCount; i++ {
-		eventBEmitter1.Publish(TestEventB{})
+		err := eventBEmitter1.Publish(TestEventB{})
+		assert.NoError(t, err)
 	}
 	for i := 0; i < expectedEventBEmitter2PublishCount; i++ {
-		eventBEmitter2.Publish(TestEventB{})
+		err := eventBEmitter2.Publish(TestEventB{})
+		assert.NoError(t, err)
 	}
 
 	// Assert we received the expected amount of callbacks.

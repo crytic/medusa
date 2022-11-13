@@ -198,7 +198,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
-			expectEventEmitted(f, &f.fuzzer.OnFuzzerStartingEventEmitter)
+			expectEventEmitted(f, &f.fuzzer.OnStartingEventEmitter)
 
 			// Start the fuzzer
 			err := f.fuzzer.Start()
@@ -211,9 +211,10 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.OnFuzzerStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) {
+			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
 				// Simply stop the fuzzer
 				event.Fuzzer.Stop()
+				return nil
 			})
 
 			// Note that the fuzzer won't spin up any workers or fuzz anything. We just want to test that we seeded
@@ -242,7 +243,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
-			expectEventEmitted(f, &f.fuzzer.OnFuzzerStartingEventEmitter)
+			expectEventEmitted(f, &f.fuzzer.OnStartingEventEmitter)
 
 			// Start the fuzzer
 			err := f.fuzzer.Start()
@@ -255,9 +256,10 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.OnFuzzerStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) {
+			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
 				// Simply stop the fuzzer
 				event.Fuzzer.Stop()
+				return nil
 			})
 
 			// Update the deployment order

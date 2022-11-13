@@ -99,7 +99,6 @@ func (c *Corpus) CallSequencesDirectory() string {
 	if c.storageDirectory == "" {
 		return ""
 	}
-
 	return filepath.Join(c.StorageDirectory(), "call_sequences")
 }
 

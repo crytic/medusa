@@ -64,16 +64,16 @@ type TestChain struct {
 	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
 
-	// BlockMiningEventEmitter serves events indicating a block was added to the chain.
+	// BlockMiningEventEmitter emits events indicating a block was added to the chain.
 	BlockMiningEventEmitter events.EventEmitter[BlockMiningEvent]
-	// BlockMinedEventEmitter serves events indicating a block was added to the chain.
+	// BlockMinedEventEmitter emits events indicating a block was added to the chain.
 	BlockMinedEventEmitter events.EventEmitter[BlockMinedEvent]
-	// BlockRemovedEventEmitter serves events indicating a block was removed from the chain.
+	// BlockRemovedEventEmitter emits events indicating a block was removed from the chain.
 	BlockRemovedEventEmitter events.EventEmitter[BlockRemovedEvent]
 
-	// ContractDeploymentAddedEventEmitter serves events indicating a new contract was deployed to the chain.
+	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was deployed to the chain.
 	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
-	// ContractDeploymentAddedEventEmitter serves events indicating a previously deployed contract was removed
+	// ContractDeploymentAddedEventEmitter emits events indicating a previously deployed contract was removed
 	// from the chain.
 	ContractDeploymentRemovedEventEmitter events.EventEmitter[ContractDeploymentsRemovedEvent]
 }
@@ -426,19 +426,25 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 	// Emit our events for newly deployed contracts
 	for i := len(removedBlocks) - 1; i >= 0; i-- {
 		// Emit our event for removing a block
-		t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
+		err := t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
 			Chain: t,
 			Block: removedBlocks[i],
 		})
+		if err != nil {
+			return err
+		}
 
 		// For each call message in our block, if we had any resulting deployed smart contracts, signal that they have
 		// now been removed.
 		for _, messageResult := range removedBlocks[i].MessageResults() {
 			if len(messageResult.DeployedContractBytecodes) > 0 {
-				t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
+				err = t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
 					Chain:                     t,
 					DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -513,9 +519,12 @@ func (t *TestChain) MineBlock(messages ...*chainTypes.CallMessage) (*chainTypes.
 // Returns the constructed block, or an error if one occurred.
 func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64, messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
 	// Emit our event for mining a new block
-	t.BlockMiningEventEmitter.Publish(BlockMiningEvent{
+	err := t.BlockMiningEventEmitter.Publish(BlockMiningEvent{
 		Chain: t,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Validate our block number exceeds our previous head
 	currentHeadBlockNumber := t.Head().Header().Number.Uint64()
@@ -634,18 +643,24 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 	t.blocks = append(t.blocks, block)
 
 	// Emit our event for mining a new block
-	t.BlockMinedEventEmitter.Publish(BlockMinedEvent{
+	err = t.BlockMinedEventEmitter.Publish(BlockMinedEvent{
 		Chain: t,
 		Block: block,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Emit our events for newly deployed contracts
 	for _, messageResult := range messageResults {
 		if len(messageResult.DeployedContractBytecodes) > 0 {
-			t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
+			err = t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
 				Chain:                     t,
 				DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
