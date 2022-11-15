@@ -64,14 +64,16 @@ type TestChain struct {
 	// such as whether certain fees should be charged and which execution tracer should be used (if any).
 	vmConfig *vm.Config
 
-	// BlockAddedEventEmitter serves events indicating a block was added to the chain.
-	BlockAddedEventEmitter events.EventEmitter[BlockAddedEvent]
-	// BlockRemovedEventEmitter serves events indicating a block was removed from the chain.
+	// BlockMiningEventEmitter emits events indicating a block was added to the chain.
+	BlockMiningEventEmitter events.EventEmitter[BlockMiningEvent]
+	// BlockMinedEventEmitter emits events indicating a block was added to the chain.
+	BlockMinedEventEmitter events.EventEmitter[BlockMinedEvent]
+	// BlockRemovedEventEmitter emits events indicating a block was removed from the chain.
 	BlockRemovedEventEmitter events.EventEmitter[BlockRemovedEvent]
 
-	// ContractDeploymentAddedEventEmitter serves events indicating a new contract was deployed to the chain.
+	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was deployed to the chain.
 	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
-	// ContractDeploymentAddedEventEmitter serves events indicating a previously deployed contract was removed
+	// ContractDeploymentAddedEventEmitter emits events indicating a previously deployed contract was removed
 	// from the chain.
 	ContractDeploymentRemovedEventEmitter events.EventEmitter[ContractDeploymentsRemovedEvent]
 }
@@ -204,7 +206,7 @@ func (t *TestChain) CopyTo(targetChain *TestChain) error {
 	for i := 1; i < len(t.blocks); i++ {
 		blockHeader := t.blocks[i].Header()
 		blockNumber := blockHeader.Number.Uint64()
-		_, err := targetChain.CreateNewBlockWithParameters(blockNumber, blockHeader.Time, t.blocks[i].Messages()...)
+		_, err := targetChain.MineBlockWithParameters(blockNumber, blockHeader.Time, t.blocks[i].Messages()...)
 		if err != nil {
 			return err
 		}
@@ -225,6 +227,12 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 // MemoryDatabaseEntryCount returns the count of entries in the key-value store which backs the chain.
 func (t *TestChain) MemoryDatabaseEntryCount() int {
 	return t.keyValueStore.Len()
+}
+
+// CommittedBlocks returns the real blocks which were committed to the chain, where methods such as BlockFromNumber
+// return the simulated chain state with intermediate blocks injected for block number jumps, etc.
+func (t *TestChain) CommittedBlocks() []*chainTypes.Block {
+	return t.blocks
 }
 
 // Head returns the head of the chain (the latest block).
@@ -418,19 +426,25 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 	// Emit our events for newly deployed contracts
 	for i := len(removedBlocks) - 1; i >= 0; i-- {
 		// Emit our event for removing a block
-		t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
+		err := t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
 			Chain: t,
 			Block: removedBlocks[i],
 		})
+		if err != nil {
+			return err
+		}
 
 		// For each call message in our block, if we had any resulting deployed smart contracts, signal that they have
 		// now been removed.
 		for _, messageResult := range removedBlocks[i].MessageResults() {
 			if len(messageResult.DeployedContractBytecodes) > 0 {
-				t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
+				err = t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
 					Chain:                     t,
 					DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -450,6 +464,7 @@ func (t *TestChain) CreateMessage(from common.Address, to *common.Address, value
 	gasPrice := big.NewInt(1)
 
 	// Setting fee and tip cap to zero alongside the NoBaseFee for the vm.Config will bypass base fee validation.
+	// TODO: Set this appropriately for newer transaction types.
 	gasFeeCap := big.NewInt(0)
 	gasTipCap := big.NewInt(0)
 
@@ -471,7 +486,7 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	txContext := core.NewEVMTxContext(msg)
 	blockContext := newTestChainBlockContext(t, t.Head().Header())
 
-	// Create our EVM instance
+	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{NoBaseFee: true})
 
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
@@ -486,21 +501,31 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	return res, err
 }
 
-// CreateNewBlock takes messages (internal txs) and constructs a block with them, similar to a real chain using
-// transactions to construct a block. Returns the constructed block, or an error if one occurred.
-func (t *TestChain) CreateNewBlock(messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
+// MineBlock takes messages (internal txs), constructs a block with them, and updates the chain head, similar to a
+// real chain using  transactions to construct a block.
+// Returns the constructed block, or an error if one occurred.
+func (t *TestChain) MineBlock(messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
 	// Create a block with default parameters
 	blockNumber := t.HeadBlockNumber() + 1
 	timestamp := t.Head().Header().Time + 1 // TODO: Find a sensible default step for timestamp.
-	return t.CreateNewBlockWithParameters(blockNumber, timestamp, messages...)
+	return t.MineBlockWithParameters(blockNumber, timestamp, messages...)
 }
 
-// CreateNewBlockWithParameters takes messages (internal txs) and constructs a block with them, similar to a real chain
-// using transactions to construct a block. It accepts block header parameters used to produce the block. Values
-// should be sensibly chosen (e.g., block number and timestamps should be greater than the previous block).
-// Providing a block number that is greater than the previous block number plus one will simulate empty blocks between.
+// MineBlockWithParameters takes messages (internal txs), constructs a block with them, and updates the chain head,
+// similar to a real chain using transactions to construct a block. It accepts block header parameters used to produce
+// the block. Values should be sensibly chosen (e.g., block number and timestamps should be greater than the previous
+// block). Providing a block number that is greater than the previous block number plus one will simulate empty blocks
+// between.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime uint64, messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
+func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64, messages ...*chainTypes.CallMessage) (*chainTypes.Block, error) {
+	// Emit our event for mining a new block
+	err := t.BlockMiningEventEmitter.Publish(BlockMiningEvent{
+		Chain: t,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// Validate our block number exceeds our previous head
 	currentHeadBlockNumber := t.Head().Header().Number.Uint64()
 	if blockNumber <= currentHeadBlockNumber {
@@ -546,7 +571,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 		Bloom:       types.Bloom{},
 		Difficulty:  common.Big0,
 		Number:      big.NewInt(int64(blockNumber)),
-		GasLimit:    t.GasLimit(), // re-used from previous block
+		GasLimit:    t.GasLimit(),
 		GasUsed:     0,
 		Time:        blockTime,
 		Extra:       []byte{},
@@ -572,7 +597,7 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 		blockContext := newTestChainBlockContext(t, header)
 
 		// Create our EVM instance.
-		evm := vm.NewEVM(blockContext, vm.TxContext{}, t.state, t.chainConfig, *t.vmConfig)
+		evm := vm.NewEVM(blockContext, core.NewEVMTxContext(messages[i]), t.state, t.chainConfig, *t.vmConfig)
 
 		// Apply our transaction
 		var usedGas uint64
@@ -617,19 +642,25 @@ func (t *TestChain) CreateNewBlockWithParameters(blockNumber uint64, blockTime u
 	// Append our new block to our chain.
 	t.blocks = append(t.blocks, block)
 
-	// Emit our event for adding a new block
-	t.BlockAddedEventEmitter.Publish(BlockAddedEvent{
+	// Emit our event for mining a new block
+	err = t.BlockMinedEventEmitter.Publish(BlockMinedEvent{
 		Chain: t,
 		Block: block,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Emit our events for newly deployed contracts
 	for _, messageResult := range messageResults {
 		if len(messageResult.DeployedContractBytecodes) > 0 {
-			t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
+			err = t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
 				Chain:                     t,
 				DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -655,7 +686,7 @@ func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, 
 	msg := t.CreateMessage(deployer, nil, value, b)
 
 	// Create a new block with our deployment message/tx.
-	block, err := t.CreateNewBlock(msg)
+	block, err := t.MineBlock(msg)
 	if err != nil {
 		return common.Address{}, nil, err
 	}

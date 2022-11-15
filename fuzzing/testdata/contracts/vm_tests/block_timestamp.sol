@@ -7,11 +7,11 @@ contract TestBlockTimestamp {
     }
 
     function waitTimestamp() public {
-        // This method does nothing but is left exposed so it can be called by the fuzzer to advance blocks
+        // This method does nothing but is left exposed so it can be called by the fuzzer to advance blocks/timestamps.
     }
 
     function fuzz_increase_block_timestamp() public view returns (bool) {
-        // ASSERTION: block number should never increase more than 10
+        // ASSERTION: block timestamp should never increase more than 10
         return !(block.timestamp - startingBlockTimestamp >= 10);
     }
 }

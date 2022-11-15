@@ -1,22 +1,26 @@
-// InnerDeployment takes constructor arguments so it will not be deployed automatically by the fuzzer.
-// We use InnerDeploymentFactory to deploy InnerDeployment and verify the fuzzer detects this appropriately.
+// InnerDeploymentFactory deploys a InnerDeployment on construction and verifies the fuzzer can match bytecode and
+// fail the test appropriately.
 contract InnerDeployment {
-    uint x;
-
-    // We add a constructor here so it's not automatically deployed, this way we test dynamic deployment.
-    constructor(uint dummyValue) public {
-        x = dummyValue;
+    function dummyFunction(uint x) public {
+        // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+        x = 7;
     }
-    
+
     function fuzz_inner_deployment() public view returns (bool) {
         // ASSERTION: Fail immediately.
         return false;
     }
 }
 
-// InnerDeploymentFactory deploys InnerDeployment to test inner deployments.
 contract InnerDeploymentFactory {
-    function deployInner() public returns (address) {
-        return address(new InnerDeployment(7));
+    address a;
+
+    constructor() {
+        a = address(new InnerDeployment());
+    }
+
+    function dummyFunction(uint x) public {
+        // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+        x = 8;
     }
 }

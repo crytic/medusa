@@ -1,22 +1,27 @@
 pragma solidity ^0.7.1;
 
 contract SecondContract {
-    uint x;
-    uint y;
+    uint a;
+    uint b;
 
-    function setX(uint value) public {
-        x = value;
+    function setA(uint value) public {
+        a = value + 3;
     }
 
-    function setY(uint value) public {
-        y = value;
+    function setB(uint value) public {
+        b = value + 9;
     }
 }
 
 contract InheritedSecondContract is SecondContract {
-    uint z;
+    uint c;
 
-    function setZ(uint value) public {
-        z = value;
+    function setC(uint value) public {
+        c = value + 7;
+    }
+
+    function fuzz_never_specific_values() public view returns (bool) {
+        // ASSERTION: a should never be 10 at the same time b is 80 at the same time c is 14
+        return !(a == 10 && b == 80 && c == 14);
     }
 }

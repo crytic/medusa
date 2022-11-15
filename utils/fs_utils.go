@@ -52,6 +52,45 @@ func CopyFile(sourcePath string, targetPath string) error {
 	return os.Chmod(targetPath, sourceInfo.Mode())
 }
 
+// GetFileNameWithoutExtension obtains a filename without the extension. This does not contain any preceding directory
+// paths.
+func GetFileNameWithoutExtension(filePath string) string {
+	return GetFilePathWithoutExtension(filepath.Base(filePath))
+}
+
+// GetFilePathWithoutExtension obtains a file path without the extension. This retains all preceding directory paths.
+func GetFilePathWithoutExtension(filePath string) string {
+	return filePath[:len(filePath)-len(filepath.Ext(filePath))]
+}
+
+// MakeDirectory creates a directory at the given path
+func MakeDirectory(dirToMake string) error {
+	dirInfo, err := os.Stat(dirToMake)
+	if err != nil {
+		// Directory does not exist, as expected.
+		if os.IsNotExist(err) {
+			// TODO: Permissions are way too much but even 666 is not working
+			err = os.Mkdir(dirToMake, 0777)
+			if err != nil {
+				return err
+			}
+
+			// Successfully made the directory
+			return nil
+		}
+		// Some other sort of error, throw it
+		return err
+	}
+
+	// dirToMake is a file, throw an error accordingly
+	if !dirInfo.IsDir() {
+		return fmt.Errorf("there is a file with the same name as %s\n", dirInfo)
+	}
+
+	// Directory already exists, good to go
+	return nil
+}
+
 // CopyDirectory copies a directory from a source path to a destination path. If recursively, all subdirectories will be
 // copied. If not, only files within the directory will be copied. Returns an error if one occurs.
 func CopyDirectory(sourcePath string, targetPath string, recursively bool) error {
@@ -123,8 +162,5 @@ func DeleteDirectory(directoryPath string) error {
 
 	// Delete directory and its contents
 	err = os.RemoveAll(directoryPath)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }

@@ -2,9 +2,15 @@ package chain
 
 import "github.com/trailofbits/medusa/chain/types"
 
-// BlockAddedEvent describes an event where a new block is added to the TestChain. This only considers internally
-// committed blocks, not ones spoofed in between block number jumps.
-type BlockAddedEvent struct {
+// BlockMiningEvent describes an event where a new block has been requested to be mined in the TestChain. This only
+// considers committed blocks.
+type BlockMiningEvent struct {
+	// Chain refers to the TestChain which emitted the event.
+	Chain *TestChain
+}
+
+// BlockMinedEvent describes an event where a new block is added to the TestChain. This only considers committed blocks.
+type BlockMinedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 

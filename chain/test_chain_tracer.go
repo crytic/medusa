@@ -14,6 +14,9 @@ type testChainTracer struct {
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth uint64
 
+	// evm refers to the EVM instance last captured.
+	evm *vm.EVM
+
 	// deployedContractBytecode is a list of all bytecode deployments found from the current/last transaction
 	// executed.
 	deployedContractBytecode []*types.DeployedContractBytecode
@@ -44,6 +47,9 @@ func (t *testChainTracer) CaptureTxEnd(restGas uint64) {
 
 // CaptureStart initializes the tracing operation for the top of a call frame, as defined by vm.EVMLogger.
 func (t *testChainTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	// Store our evm reference
+	t.evm = env
+
 	// Create our stack item for pending deployments discovered at this call frame depth.
 	t.pendingDeployedContractBytecode = append(t.pendingDeployedContractBytecode, make([]*types.DeployedContractBytecode, 0))
 
@@ -64,6 +70,11 @@ func (t *testChainTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Durat
 	// If we encountered an error, we reverted, so we don't consider the deployments.
 	if err == nil {
 		t.deployedContractBytecode = append(t.deployedContractBytecode, t.pendingDeployedContractBytecode[t.callDepth]...)
+
+		// Fetch runtime bytecode for all verified deployments.
+		for _, singleDeployment := range t.deployedContractBytecode {
+			singleDeployment.RuntimeBytecode = t.evm.StateDB.GetCode(singleDeployment.Address)
+		}
 	}
 
 	// Pop the pending contracts for this frame off the stack.

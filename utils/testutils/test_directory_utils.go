@@ -24,7 +24,6 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 	// Obtain an isolated test directory path.
 	targetDirectory := filepath.Join(t.TempDir(), "medusaTest")
 	targetPath := filepath.Join(targetDirectory, sourcePathInfo.Name())
-
 	// Copy our source to the target destination
 	if sourcePathInfo.IsDir() {
 		err = utils.CopyDirectory(sourcePath, targetPath, true)

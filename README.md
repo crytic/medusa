@@ -25,6 +25,9 @@ An example project configuration can be observed below:
 		"timeout": 0,
 		"testLimit": 10000000,
 		"maxTxSequenceLength": 100,
+		"corpusDirectory": "corpus",
+		"coverageEnabled": true,
+		"deploymentOrder": ["TestXY", "TestContract2"],
 		"deployerAddress": "0x1111111111111111111111111111111111111111",
 		"senderAddresses": [
 			"0x1111111111111111111111111111111111111111",
@@ -63,8 +66,14 @@ The structure is described below:
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `testLimit` refers to a threshold of the number of function calls to make before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no call limit will be enforced.
   - `maxTxSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
+  - `corpusDirectory` refers to the path where the corpus should be saved. The corpus collects artifacts during a fuzzing campaign that help drive fuzzer features (e.g. coverage-increasing call sequences which the fuzzer collects to be mutates).
+  - `coverageEnabled` refers to whether coverage-increasing call sequences should be saved in the corpus for the fuzzer to mutate. This aims to help achieve greater coverage across contracts when testing.
+  - `deploymentOrder` refers to the order in which compiled contracts (contracts resulting from compilation, as specified by the `compilation` config) should be deployed to the fuzzer on startup. At least one contract name must be specified here. 
+    - **Note**: Changing this order may render entries in the corpus invalid. It is recommended to clear your corpus when doing so.
   - `deployerAddress` defines the account address used to deploy contracts on startup, represented as a hex string.
+      - **Note**: Changing this address may render entries in the corpus invalid. It is recommended to clear your corpus when doing so.
   - `senderAddresses` defines the account addresses used to send function calls to deployed contracts in the fuzzing campaign.
+      - **Note**: Removing previously existing addresses may render entries in the corpus invalid. It is recommended to clear your corpus when doing so.
   - `testing` defines the configuration for built-in test case providers which can be leveraged for fuzzing campaign.
     - `stopOnFailedTest` defines whether the fuzzer should exit after detecting the first failed test, or continue fuzzing to find other results.
     - `assertionTesting` describes configuration for assertion-based testing.

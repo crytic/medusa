@@ -1,6 +1,9 @@
 package utils
 
-import "math/big"
+import (
+	"golang.org/x/exp/constraints"
+	"math/big"
+)
 
 // ConstrainIntegerToBounds takes a provided big integer and minimum/maximum bounds (inclusive) and ensures
 // that the provided integer is represented in those bounds. In effect, this simulates overflow and underflow.
@@ -54,7 +57,7 @@ func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
 	if signed {
 		// Set max as 2^(bitLen - 1) - 1
 		max = big.NewInt(2)
-		max.Exp(max, big.NewInt(int64(bitLength - 1)), nil)
+		max.Exp(max, big.NewInt(int64(bitLength-1)), nil)
 		max.Sub(max, big.NewInt(1))
 
 		// Set min as -(2^(bitLen - 1))
@@ -70,4 +73,21 @@ func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
 		min = big.NewInt(0)
 	}
 	return min, max
+}
+
+// AbsDiff provides a way of taking the absolute difference between two integers
+func AbsDiff[T constraints.Integer](x T, y T) T {
+	if x >= y {
+		return x - y
+	} else {
+		return y - x
+	}
+}
+
+// Abs provides a way of taking the absolute value of an integer
+func Abs[T constraints.Integer](x T) T {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
