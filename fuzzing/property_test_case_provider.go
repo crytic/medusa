@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// PropertyTestCaseProvider implements TestCaseProvider which reports the results of on-chain property tests.
+// PropertyTestCaseProvider is a provider for on-chain property tests.
 // Property tests are represented as publicly-accessible view functions which have a name prefix specified by a
 // config.FuzzingConfig. They take no input arguments and return a boolean indicating whether the test passed.
 // If a call to any on-chain property test returns false, the test signals a failed status. If no failure is found
