@@ -45,8 +45,7 @@ func (t *PropertyTestCase) Message() string {
 	return ""
 }
 
-// ID obtains a unique identifier for a test result. If the same test fails, this ID should match for both
-// PropertyTestResult instances (even if the CallSequence differs or has not been shrunk).
+// ID obtains a unique identifier for a test result.
 func (t *PropertyTestCase) ID() string {
 	return strings.Replace(fmt.Sprintf("PROPTEST-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
 }

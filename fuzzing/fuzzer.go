@@ -63,7 +63,7 @@ type Fuzzer struct {
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
 
-	// OnStartingEventEmitter emits events when the Fuzzer initialized state and is ready to about to begin the  main
+	// OnStartingEventEmitter emits events when the Fuzzer initialized state and is ready to about to begin the main
 	// execution loop for the fuzzing campaign.
 	OnStartingEventEmitter events.EventEmitter[OnFuzzerStarting]
 	// OnStoppingEventEmitter emits events when the Fuzzer is exiting its main fuzzing loop.

@@ -48,7 +48,7 @@ func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
 	fuzzer.OnStoppingEventEmitter.Subscribe(t.onFuzzerStopping)
 	fuzzer.OnWorkerCreatedEventEmitter.Subscribe(t.onWorkerCreated)
 
-	// Add the provider's call sequence test function to the
+	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.CallSequenceTestFunctions = append(fuzzer.CallSequenceTestFunctions, t.callSequencePostCallTest)
 	return t
 }
