@@ -97,8 +97,17 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	if sources, ok := results["sources"]; ok {
 		if sourcesMap, ok := sources.(map[string]interface{}); ok {
 			for name, source := range sourcesMap {
+				// Treat our source as a key-value lookup
+				sourceDict, sourceCorrectType := source.(map[string]interface{})
+				if !sourceCorrectType {
+					return nil, "", fmt.Errorf("could not parse compiled source artifact because it could not be casted to a dictionary")
+				}
+
 				// Try to obtain our AST key
-				ast, _ := source.(map[string]interface{})
+				ast, hasAST := sourceDict["AST"]
+				if !hasAST {
+					return nil, "", fmt.Errorf("could not parse AST from sources, AST field could not be found")
+				}
 
 				// Construct our compiled source object
 				compilation.Sources[name] = types.CompiledSource{

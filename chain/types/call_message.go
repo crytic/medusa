@@ -1,10 +1,15 @@
 package types
 
 import (
+	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/crypto/sha3"
 	"math/big"
+	"strconv"
+	"strings"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -50,19 +55,13 @@ type CallMessage struct {
 
 // callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of big.Int but specifying a different field type to serialize it as.
+// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
 type callMessageMarshaling struct {
-	// MsgValue represents the marshaling rules for CallMessage.MsgValue.
-	MsgValue *hexutil.Big
-
-	// MsgGasPrice represents the marshaling rules for CallMessage.MsgGasPrice.
-	MsgGasPrice *hexutil.Big
-
-	// MsgGasFeeCap represents the marshaling rules for CallMessage.MsgGasFeeCap.
+	MsgValue     *hexutil.Big
+	MsgGasPrice  *hexutil.Big
 	MsgGasFeeCap *hexutil.Big
-
-	// MsgGasTipCap represents the marshaling rules for CallMessage.MsgGasTipCap.
 	MsgGasTipCap *hexutil.Big
+	MsgData      hexutil.Bytes
 }
 
 // NewCallMessage instantiates a new call message from a given set of parameters.
@@ -81,17 +80,31 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 	}
 }
 
+//Hash hashes the contents of a CallMessage
+func (m *CallMessage) Hash() (string, error) {
+	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
+		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),
+		strconv.FormatUint(m.Gas(), 10), m.GasFeeCap().String(), m.GasTipCap().String(),
+		m.GasPrice().String()}, ",")
+	hash := sha3.NewLegacyKeccak256()
+	_, err := hash.Write([]byte(msgSequenceString))
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 func (m *CallMessage) From() common.Address             { return m.MsgFrom }
-func (m *CallMessage) Nonce() uint64                    { return m.MsgNonce }
-func (m *CallMessage) IsFake() bool                     { return true }
 func (m *CallMessage) To() *common.Address              { return m.MsgTo }
 func (m *CallMessage) GasPrice() *big.Int               { return m.MsgGasPrice }
 func (m *CallMessage) GasFeeCap() *big.Int              { return m.MsgGasFeeCap }
 func (m *CallMessage) GasTipCap() *big.Int              { return m.MsgGasTipCap }
-func (m *CallMessage) Gas() uint64                      { return m.MsgGas }
 func (m *CallMessage) Value() *big.Int                  { return m.MsgValue }
+func (m *CallMessage) Gas() uint64                      { return m.MsgGas }
+func (m *CallMessage) Nonce() uint64                    { return m.MsgNonce }
 func (m *CallMessage) Data() []byte                     { return m.MsgData }
 func (m *CallMessage) AccessList() coreTypes.AccessList { return nil }
+func (m *CallMessage) IsFake() bool                     { return true }
 
 // ToEVMMessage returns a representation of the CallMessage that is compatible with EVM methods.
 func (m *CallMessage) ToEVMMessage() coreTypes.Message {

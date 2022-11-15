@@ -6,7 +6,12 @@ import (
 )
 
 // EventHandler defines a function type where its input type is the generic type.
-type EventHandler[T any] func(T)
+type EventHandler[T any] func(T) error
+
+// EventType returns the event type given an EventHandler object
+func (e *EventHandler[T]) EventType() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
 
 // globalEventHandlers describes a mapping of event types to EventHandler objects. These callbacks are called
 // any time any EventEmitter publishes an event of that type.
@@ -21,8 +26,8 @@ var globalEventHandlersLock sync.Mutex
 // Note: An EventHandler subscribed here will remain throughout program execution. Objects which should be freed from
 // memory should not use this method to avoid memory leaks.
 func SubscribeAny[T any](callback EventHandler[T]) {
-	// Reflect on a nil object to get the generic type.
-	eventType := reflect.TypeOf((*T)(nil)).Elem()
+	// Obtain the type of event this handler handles.
+	eventType := callback.EventType()
 
 	// If our global event handlers are nil, instantiate them.
 	if globalEventHandlers == nil {
@@ -50,11 +55,19 @@ type EventEmitter[T any] struct {
 	subscriptions []EventHandler[T]
 }
 
+// EventType returns the event type given an EventEmitter object
+func (e *EventEmitter[T]) EventType() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
 // Publish emits the provided event by calling every EventHandler subscribed.
-func (e *EventEmitter[T]) Publish(event T) {
+func (e *EventEmitter[T]) Publish(event T) error {
 	// Call every subscribed EventHandler
 	for _, subscription := range e.subscriptions {
-		subscription(event)
+		err := subscription(event)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Determine the event type
@@ -70,10 +83,13 @@ func (e *EventEmitter[T]) Publish(event T) {
 		// Call all relevant event handlers.
 		for i := 0; i < len(callbacks); i++ {
 			callback := callbacks[i].(EventHandler[T])
-			callback(event)
+			err := callback(event)
+			if err != nil {
+				return err
+			}
 		}
-
 	}
+	return nil
 }
 
 // Subscribe adds an EventHandler to the list of subscribed EventHandler objects for this emitter. When an event is

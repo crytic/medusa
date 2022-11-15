@@ -36,6 +36,17 @@ type FuzzingConfig struct {
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
+	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
+	// the in-memory corpus will be used, but not flush to disk.
+	CorpusDirectory string `json:"corpusDirectory"`
+
+	// CoverageEnabled describes whether to use coverage-guided fuzzing
+	CoverageEnabled bool `json:"coverageEnabled"`
+
+	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
+	// configuration variable are deployed, any remaining contracts will then be deployed
+	DeploymentOrder []string `json:"deploymentOrder"`
+
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
 
@@ -88,8 +99,11 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 
 	// Parse the project configuration
-	var projectConfig ProjectConfig
-	err = json.Unmarshal(b, &projectConfig)
+	projectConfig, err := GetDefaultProjectConfig("")
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(b, projectConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +114,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &projectConfig, nil
+	return projectConfig, nil
 }
 
 // WriteToFile writes the ProjectConfig to a provided file path in a JSON-serialized format.
@@ -127,6 +141,11 @@ func (p *ProjectConfig) Validate() error {
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
+	}
+
+	// Verify contract deployment order is not empty.
+	if len(p.Fuzzing.DeploymentOrder) == 0 {
+		return errors.New("project configuration must specify at least one contract to be deployed")
 	}
 
 	// Verify property testing fields.
