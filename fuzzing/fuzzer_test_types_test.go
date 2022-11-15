@@ -37,7 +37,7 @@ type fuzzerSolcFileTest struct {
 	method func(fc *fuzzerTestContext)
 }
 
-// run implements fuzzerTest.Run for a single Solidity test file described by the fuzzerSolcFileTest.
+// run implements fuzzerTest.run for a single Solidity test file described by the fuzzerSolcFileTest.
 func (c *fuzzerSolcFileTest) run(t *testing.T) {
 	// Print a status message
 	fmt.Printf("##############################################################\n")

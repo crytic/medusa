@@ -24,7 +24,7 @@ func TestDeploymentInnerDeployment(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -67,7 +67,7 @@ func TestDeploymentInnerInnerDeployment(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -87,7 +87,7 @@ func TestDeploymentInternalLibrary(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, false)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -106,7 +106,7 @@ func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -125,7 +125,7 @@ func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -144,7 +144,7 @@ func TestFuzzVMBlockNumber(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -163,7 +163,7 @@ func TestFuzzVMTimestamp(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -183,7 +183,7 @@ func TestFuzzVMBlockHash(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, false)
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
 }
@@ -205,7 +205,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Make sure we have some coverage
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
@@ -223,7 +223,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if we have some coverage
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same
@@ -250,7 +250,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Make sure we have some coverage
-			assertCoverageCollected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()

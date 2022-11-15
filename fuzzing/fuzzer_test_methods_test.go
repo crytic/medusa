@@ -85,8 +85,8 @@ func getFuzzerTestingProjectConfig(compilationConfig *compilation.CompilationCon
 	return projectConfig
 }
 
-// assertFailedTestsExpected will check to see whether there are any failed tests. If `expectFailure` is false, then there should
-// be no failed tests
+// assertFailedTestsExpected will check to see whether there are any failed tests. If `expectFailure` is false, then
+// there should be no failed tests
 func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 	// Ensure we captured a failed test, if expected
 	if expectFailure {
@@ -96,16 +96,16 @@ func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 	}
 }
 
-// assertCoverageCollected will check to see whether we captured some corpus items. If `expectCoverage` is false or
-// coverage is not enabled, then there should be no coverage
-func assertCoverageCollected(f *fuzzerTestContext, expectCoverage bool) {
-	// Ensure we captured some coverage
-	if expectCoverage {
+// assertCorpusCallSequencesCollected will check to see whether we captured coverage-increasing call sequences in the
+// corpus. It asserts that the actual result matches the provided expected result.
+func assertCorpusCallSequencesCollected(f *fuzzerTestContext, expectCallSequences bool) {
+	// Ensure we captured some coverage-increasing call sequences.
+	if expectCallSequences {
 		assert.Greater(f.t, f.fuzzer.corpus.CallSequenceCount(), 0, "No coverage was captured")
 	}
 
-	// If we don't expect coverage, or it is not enabled, we should not get any coverage
-	if !expectCoverage || !f.fuzzer.config.Fuzzing.CoverageEnabled {
+	// If we don't expect coverage-increasing call sequences, or it is not enabled, we should not get any coverage
+	if !expectCallSequences || !f.fuzzer.config.Fuzzing.CoverageEnabled {
 		assert.EqualValues(f.t, 0, f.fuzzer.corpus.CallSequenceCount(), "Coverage was captured")
 	}
 }
