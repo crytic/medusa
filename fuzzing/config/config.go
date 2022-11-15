@@ -36,6 +36,17 @@ type FuzzingConfig struct {
 	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
 	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
 
+	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
+	// the in-memory corpus will be used, but not flush to disk.
+	CorpusDirectory string `json:"corpusDirectory"`
+
+	// CoverageEnabled describes whether to use coverage-guided fuzzing
+	CoverageEnabled bool `json:"coverageEnabled"`
+
+	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
+	// configuration variable are deployed, any remaining contracts will then be deployed
+	DeploymentOrder []string `json:"deploymentOrder"`
+
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
 
@@ -45,16 +56,6 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
-
-	// CoverageEnabled describes whether to use coverage-guided fuzzing
-	CoverageEnabled bool `json:"coverageEnabled"`
-
-	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files
-	CorpusDirectory string `json:"corpusDirectory"`
-
-	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
-	// configuration variable are deployed, any remaining contracts will then be deployed
-	DeploymentOrder []string `json:"deploymentOrder"`
 }
 
 // TestingConfig describes the configuration options used for testing
