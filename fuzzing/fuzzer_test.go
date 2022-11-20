@@ -130,6 +130,26 @@ func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
 	})
 }
 
+// TestValueGenerationGenerateAllTypes runs a test to solve specific function input parameters.
+func TestValueGenerationGenerateAllTypes(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/value_generation/generate_all_types.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"GenerateAllTypes"}
+			config.Fuzzing.TestLimit = 10_000
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
 // TestFuzzVMBlockNumber runs a test to ensure block numbers behave correctly in the VM.
 func TestFuzzVMBlockNumber(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{

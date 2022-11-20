@@ -11,12 +11,6 @@ import (
 // CallSequence describes a sequence of calls sent to a chain.
 type CallSequence []*CallSequenceElement
 
-// NewCallSequence returns a new CallSequence struct to track a sequence of calls made to a chain.
-func NewCallSequence() *CallSequence {
-	callSequence := make(CallSequence, 0)
-	return &callSequence
-}
-
 // String returns a displayable string representing the CallSequence.
 func (cs CallSequence) String() string {
 	// Construct a list of strings for each CallSequenceElement.
