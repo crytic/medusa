@@ -2,7 +2,6 @@
 contract TestContract {
     uint paidAmount;
     uint paidAmount2;
-    bool calledOnce;
 
     function p1() public payable {
         paidAmount = msg.value;
@@ -12,12 +11,8 @@ contract TestContract {
         paidAmount2 = msg.value;
     }
 
-    function calledAtLeastOnce() public {
-        calledOnce = true;
-    }
-
     function fuzz_never_pay_exact_amounts() public view returns (bool) {
-        // ASSERTION: p1 will never be last paid 7777, p2 8888, when calledAtLeastOnce was called.
-        return !(paidAmount == 7777 && paidAmount2 == 8888 && calledOnce);
+        // ASSERTION: paid amounts should never equal the exact numbers below.
+        return !(paidAmount == 7777 && paidAmount2 == 8888);
     }
 }

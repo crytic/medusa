@@ -1,6 +1,7 @@
 package value_generation
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strings"
 )
@@ -21,8 +22,16 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 
 			// Seed ValueSet with literals
 			if literalKind == "number" {
-				if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
-					vs.AddInteger(b)
+				if strings.HasPrefix(literalValue, "0x") {
+					if b, ok := big.NewInt(0).SetString(literalValue[2:], 16); ok {
+						vs.AddInteger(b)
+						vs.AddAddress(common.BigToAddress(b))
+					}
+				} else {
+					if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
+						vs.AddInteger(b)
+						vs.AddAddress(common.BigToAddress(b))
+					}
 				}
 			} else if literalKind == "string" {
 				vs.AddString(literalValue)
