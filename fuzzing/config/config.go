@@ -148,11 +148,6 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the worker reset limit")
 	}
 
-	// Verify contract deployment order is not empty.
-	if len(p.Fuzzing.DeploymentOrder) == 0 {
-		return errors.New("project configuration must specify at least one contract to be deployed")
-	}
-
 	// Verify property testing fields.
 	if p.Fuzzing.Testing.PropertyTesting.Enabled {
 		// Test prefixes must be supplied if property testing is enabled.

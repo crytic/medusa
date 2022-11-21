@@ -92,45 +92,36 @@ func TestDeploymentInternalLibrary(t *testing.T) {
 	})
 }
 
-// TestFuzzMagicNumbersSimpleXY runs a test to solve specific function input parameters.
-func TestFuzzMagicNumbersSimpleXY(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/magic_numbers/simple_xy.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestMagicNumbersXY"}
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
+// TestFuzzValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
+func TestFuzzValueGenerationSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/value_generation/match_addr_contract.sol",
+		"testdata/contracts/value_generation/match_addr_sender.sol",
+		"testdata/contracts/value_generation/match_string_exact.sol",
+		"testdata/contracts/value_generation/match_ints_xy.sol",
+		"testdata/contracts/value_generation/match_uints_xy.sol",
+		"testdata/contracts/value_generation/match_payable_xy.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
 
-			// Check for any failed tests and verify coverage was captured
-			assertFailedTestsExpected(f, true)
-			assertCorpusCallSequencesCollected(f, true)
-		},
-	})
+				// Check for any failed tests and verify coverage was captured
+				assertFailedTestsExpected(f, true)
+				assertCorpusCallSequencesCollected(f, true)
+			},
+		})
+	}
 }
 
-// TestFuzzMagicNumbersSimpleXYPayable runs a test to solve specific payable values.
-func TestFuzzMagicNumbersSimpleXYPayable(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/magic_numbers/simple_xy_payable.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestMagicNumbersXYPayable"}
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
-
-			// Check for any failed tests and verify coverage was captured
-			assertFailedTestsExpected(f, true)
-			assertCorpusCallSequencesCollected(f, true)
-		},
-	})
-}
-
-// TestValueGenerationGenerateAllTypes runs a test to solve specific function input parameters.
+// TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
 func TestValueGenerationGenerateAllTypes(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/value_generation/generate_all_types.sol",
@@ -212,9 +203,9 @@ func TestFuzzVMBlockHash(t *testing.T) {
 // previous run.
 func TestInitializeCoverageMaps(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/magic_numbers/simple_xy.sol",
+		filePath: "testdata/contracts/value_generation/match_uints_xy.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestMagicNumbersXY"}
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions

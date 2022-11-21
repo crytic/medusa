@@ -1,4 +1,5 @@
-contract TestMagicNumbersXY {
+// This contract verifies two different, but specific uint function arguments will be provided by the fuzzer.
+contract TestContract {
     uint x;
     uint y;
 

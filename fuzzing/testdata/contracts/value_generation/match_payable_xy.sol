@@ -1,4 +1,5 @@
-contract TestMagicNumbersXYPayable {
+// This contract verifies two different, but specific payable calls will be provided by the fuzzer.
+contract TestContract {
     uint paidAmount;
     uint paidAmount2;
     bool calledOnce;

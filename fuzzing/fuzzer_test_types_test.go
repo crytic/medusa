@@ -39,32 +39,34 @@ type fuzzerSolcFileTest struct {
 
 // run implements fuzzerTest.run for a single Solidity test file described by the fuzzerSolcFileTest.
 func (c *fuzzerSolcFileTest) run(t *testing.T) {
-	// Print a status message
-	fmt.Printf("##############################################################\n")
-	fmt.Printf("Fuzzing '%s'...\n", c.filePath)
-	fmt.Printf("##############################################################\n")
+	t.Run(c.filePath, func(t *testing.T) {
+		// Print a status message
+		fmt.Printf("##############################################################\n")
+		fmt.Printf("Fuzzing '%s'...\n", c.filePath)
+		fmt.Printf("##############################################################\n")
 
-	// Copy our target file to our test directory
-	contractTestPath := testutils.CopyToTestDirectory(t, c.filePath)
+		// Copy our target file to our test directory
+		contractTestPath := testutils.CopyToTestDirectory(t, c.filePath)
 
-	// Run the test in our temporary test directory to avoid artifact pollution.
-	testutils.ExecuteInDirectory(t, contractTestPath, func() {
-		// Create a default solc platform config
-		solcPlatformConfig := platforms.NewSolcCompilationConfig(contractTestPath)
+		// Run the test in our temporary test directory to avoid artifact pollution.
+		testutils.ExecuteInDirectory(t, contractTestPath, func() {
+			// Create a default solc platform config
+			solcPlatformConfig := platforms.NewSolcCompilationConfig(contractTestPath)
 
-		// Wrap the platform config in a compilation config
-		compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
-		assert.NoError(t, err)
+			// Wrap the platform config in a compilation config
+			compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
+			assert.NoError(t, err)
 
-		// Now create a project configuration.
-		projectConfig := getFuzzerTestingProjectConfig(compilationConfig)
+			// Now create a project configuration.
+			projectConfig := getFuzzerTestingProjectConfig(compilationConfig)
 
-		// Run our config updates method provided for this test case.
-		if c.configUpdates != nil {
-			c.configUpdates(projectConfig)
-		}
+			// Run our config updates method provided for this test case.
+			if c.configUpdates != nil {
+				c.configUpdates(projectConfig)
+			}
 
-		// Run our test case
-		executeFuzzerTestMethodInternal(t, projectConfig, c.method)
+			// Run our test case
+			executeFuzzerTestMethodInternal(t, projectConfig, c.method)
+		})
 	})
 }

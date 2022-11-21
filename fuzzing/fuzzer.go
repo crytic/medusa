@@ -78,7 +78,7 @@ type Fuzzer struct {
 // NewValueGeneratorFunc defines a method which is called to create a value_generation.ValueGenerator for a worker
 // when it is created. It takes the current fuzzer as an argument for context, and is expected to return a generator,
 // or an error if one is encountered.
-type NewValueGeneratorFunc func(fuzzer *Fuzzer) (value_generation.ValueGenerator, error)
+type NewValueGeneratorFunc func(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error)
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
@@ -86,7 +86,12 @@ type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// TODO: Validate config variables (e.g. worker count > 0)
+	// Validate our provided config
+	err := config.Validate()
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
 	if err != nil {
@@ -111,6 +116,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		NewValueGeneratorFunc:     defaultValueGeneratorFunc,
 		ChainSetupFunc:            chainSetupFromCompilations,
 		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
+	}
+
+	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
+	// address arguments in fuzzing campaigns.
+	fuzzer.baseValueSet.AddAddress(fuzzer.deployer)
+	for _, sender := range fuzzer.senders {
+		fuzzer.baseValueSet.AddAddress(sender)
 	}
 
 	// If we have a compilation config
@@ -349,6 +361,11 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+	// Verify contract deployment order is not empty.
+	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
+		return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+	}
+
 	// Loop for all contracts to deploy
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
@@ -382,10 +399,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 // defaultValueGeneratorFunc is a NewValueGeneratorFunc which creates a value_generation.MutatingValueGenerator with a
 // default configuration. Returns the generator or an error, if one occurs.
-func defaultValueGeneratorFunc(fuzzer *Fuzzer) (value_generation.ValueGenerator, error) {
+func defaultValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error) {
 	valueGenConfig := &value_generation.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 3,
+		RandomAddressBias: 0.2,
 		RandomIntegerBias: 0.2,
 		RandomStringBias:  0.2,
 		RandomBytesBias:   0.2,
@@ -397,9 +415,8 @@ func defaultValueGeneratorFunc(fuzzer *Fuzzer) (value_generation.ValueGenerator,
 			RandomStringMinSize: 0,
 			RandomStringMaxSize: 100,
 		},
-		ValueSet: fuzzer.baseValueSet.Clone(),
 	}
-	valueGenerator := value_generation.NewMutatingValueGenerator(valueGenConfig)
+	valueGenerator := value_generation.NewMutatingValueGenerator(valueGenConfig, valueSet)
 	return valueGenerator, nil
 }
 
@@ -606,11 +623,11 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 	startTime := time.Now()
 
 	// Define cached variables for our metrics to calculate deltas.
-	var lastTransactionsTested, lastSequencesTested, lastWorkerStartupCount uint64
+	var lastCallsTested, lastSequencesTested, lastWorkerStartupCount uint64
 	lastPrintedTime := time.Time{}
 	for !utils.CheckContextDone(f.ctx) {
 		// Obtain our metrics
-		transactionsTested := f.metrics.TransactionsTested()
+		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 
@@ -621,21 +638,21 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		fmt.Printf(
 			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, worker resets: %d/s\n",
 			time.Now().Sub(startTime).Round(time.Second),
-			transactionsTested,
-			uint64(float64(transactionsTested-lastTransactionsTested)/secondsSinceLastUpdate),
+			callsTested,
+			uint64(float64(callsTested-lastCallsTested)/secondsSinceLastUpdate),
 			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
 			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
 		)
 
 		// Update our delta tracking metrics
 		lastPrintedTime = time.Now()
-		lastTransactionsTested = transactionsTested
+		lastCallsTested = callsTested
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt
 		testLimit := f.config.Fuzzing.TestLimit
-		if testLimit > 0 && transactionsTested >= testLimit {
+		if testLimit > 0 && callsTested >= testLimit {
 			fmt.Printf("transaction test limit reached, halting now ...\n")
 			f.Stop()
 			break
