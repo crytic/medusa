@@ -53,11 +53,11 @@ func executeFuzzerTestMethodInternal(t *testing.T, config *config.ProjectConfig,
 func getFuzzerTestingProjectConfig(compilationConfig *compilation.CompilationConfig) *config.ProjectConfig {
 	projectConfig := &config.ProjectConfig{
 		Fuzzing: config.FuzzingConfig{
-			Workers:                  3,
-			WorkerDatabaseEntryLimit: 10000,
-			Timeout:                  0,
-			TestLimit:                1_500_000,
-			CallSequenceLength:       100,
+			Workers:            3,
+			WorkerResetLimit:   50,
+			Timeout:            0,
+			TestLimit:          1_500_000,
+			CallSequenceLength: 100,
 			SenderAddresses: []string{
 				"0x1111111111111111111111111111111111111111",
 				"0x2222222222222222222222222222222222222222",

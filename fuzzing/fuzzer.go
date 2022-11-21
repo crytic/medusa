@@ -619,7 +619,7 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, hitmemlimit: %d/s\n",
+			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, worker resets: %d/s\n",
 			time.Now().Sub(startTime).Round(time.Second),
 			transactionsTested,
 			uint64(float64(transactionsTested-lastTransactionsTested)/secondsSinceLastUpdate),

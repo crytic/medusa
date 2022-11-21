@@ -21,9 +21,9 @@ type FuzzingConfig struct {
 	// Workers describes the amount of threads to use in fuzzing campaigns.
 	Workers int `json:"workers"`
 
-	// WorkerDatabaseEntryLimit describes an upper bound on the amount of entries that can exist in a worker database
-	// before it is pruned and recreated.
-	WorkerDatabaseEntryLimit int `json:"workerDatabaseEntryLimit"`
+	// WorkerResetLimit describes how many call sequences a worker should test before it is destroyed and recreated
+	// so that memory from its underlying chain is freed.
+	WorkerResetLimit int `json:"workerResetLimit"`
 
 	// Timeout describes a time in seconds for which the fuzzing operation should run. Providing negative or zero value
 	// will result in no timeout.
@@ -141,6 +141,11 @@ func (p *ProjectConfig) Validate() error {
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
+	}
+
+	// Verify the worker reset limit is a positive number
+	if p.Fuzzing.WorkerResetLimit <= 0 {
+		return errors.New("project configuration must specify a positive number for the worker reset limit")
 	}
 
 	// Verify contract deployment order is not empty.

@@ -21,7 +21,7 @@ An example project configuration can be observed below:
 {
 	"fuzzing": {
 		"workers": 10,
-		"workerDatabaseEntryLimit": 10000,
+		"workerResetLimit": 50,
 		"timeout": 0,
 		"testLimit": 10000000,
 		"callSequenceLength": 100,
@@ -61,8 +61,8 @@ An example project configuration can be observed below:
 The structure is described below:
 - `fuzzing` defines parameters for the fuzzing campaign:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
-  - `workerDatabaseEntryLimit` defines how many keys a worker's memory database can contain before the worker is reset
-    - **Note**: this is a temporary logic for memory throttling
+  - `workerResetLimit` defines how many call sequences a worker should process on its underlying chain before being fully reset, freeing memory.
+    - **Note**: The default settings should be appropriate for most cases. Setting this higher will result in greater memory consumption per worker. Setting it too high will result in the in-memory chain's database growing to a size that is slower to process. Setting it too low may result in frequent worker resets that are computationally expensive for complex contract deployments that need to be replayed during worker reconstruction.
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `testLimit` refers to a threshold of the number of function calls to make before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no call limit will be enforced.
   - `callSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
