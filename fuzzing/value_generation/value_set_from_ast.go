@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// SeedFromAst allows a BaseValueSet to be seeded from an AST interface.
-func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
+// SeedFromAst allows a ValueSet to be seeded from an AST interface.
+func (vs *ValueSet) SeedFromAst(ast interface{}) {
 	// Walk our AST while extracting values
 	walkAstNodes(ast, func(node map[string]interface{}) {
 		// Extract values depending on node type.
@@ -19,13 +19,13 @@ func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 				return // fail silently to continue walking
 			}
 
-			// Seed BaseValueSet with literals
+			// Seed ValueSet with literals
 			if literalKind == "number" {
 				if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
-					bvs.AddInteger(*b)
+					vs.AddInteger(b)
 				}
 			} else if literalKind == "string" {
-				bvs.AddString(literalValue)
+				vs.AddString(literalValue)
 			}
 		}
 	})

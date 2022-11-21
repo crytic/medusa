@@ -57,7 +57,7 @@ func getFuzzerTestingProjectConfig(compilationConfig *compilation.CompilationCon
 			WorkerDatabaseEntryLimit: 10000,
 			Timeout:                  0,
 			TestLimit:                1_500_000,
-			MaxTxSequenceLength:      100,
+			CallSequenceLength:       100,
 			SenderAddresses: []string{
 				"0x1111111111111111111111111111111111111111",
 				"0x2222222222222222222222222222222222222222",

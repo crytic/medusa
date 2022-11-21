@@ -37,6 +37,8 @@ type Fuzzer struct {
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
 	contractDefinitions []fuzzerTypes.Contract
 
+	// NewValueGeneratorFunc describes the function to use to set up a new value generator per worker.
+	NewValueGeneratorFunc NewValueGeneratorFunc
 	// ChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
 	ChainSetupFunc TestChainSetupFunc
 
@@ -51,10 +53,8 @@ type Fuzzer struct {
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpusTypes.Corpus
 
-	// BaseValueSet represents a value_generation.BaseValueSet containing input values for our fuzz tests.
-	BaseValueSet *value_generation.BaseValueSet
-	// generator defines our fuzzing approach to generate function inputs.
-	generator value_generation.ValueGenerator
+	// baseValueSet represents a value_generation.ValueSet containing input values for our fuzz tests.
+	baseValueSet *value_generation.ValueSet
 
 	// testCases contains every TestCase registered with the Fuzzer.
 	testCases []TestCase
@@ -74,6 +74,11 @@ type Fuzzer struct {
 	// campaign. This can occur even if a fuzzing campaign is not stopping, if a worker has reached resource limits.
 	OnWorkerDestroyedEventEmitter events.EventEmitter[OnWorkerDestroyed]
 }
+
+// NewValueGeneratorFunc defines a method which is called to create a value_generation.ValueGenerator for a worker
+// when it is created. It takes the current fuzzer as an argument for context, and is expected to return a generator,
+// or an error if one is encountered.
+type NewValueGeneratorFunc func(fuzzer *Fuzzer) (value_generation.ValueGenerator, error)
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
@@ -99,10 +104,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		config:                    config,
 		senders:                   senders,
 		deployer:                  deployer,
-		BaseValueSet:              value_generation.NewBaseValueSet(),
+		baseValueSet:              value_generation.NewValueSet(),
 		contractDefinitions:       make([]fuzzerTypes.Contract, 0),
 		testCases:                 make([]TestCase, 0),
 		testCasesFinished:         make(map[string]TestCase),
+		NewValueGeneratorFunc:     createDefaultValueGenerator,
 		ChainSetupFunc:            deploymentStrategyCompilationConfig,
 		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
 	}
@@ -139,6 +145,12 @@ func (f *Fuzzer) ContractDefinitions() []fuzzerTypes.Contract {
 // Config exposes the underlying project configuration provided to the Fuzzer.
 func (f *Fuzzer) Config() config.ProjectConfig {
 	return f.config
+}
+
+// BaseValueSet exposes the underlying value set provided to the Fuzzer value generators to aid in generation
+// (e.g. for use in mutation operations).
+func (f *Fuzzer) BaseValueSet() *value_generation.ValueSet {
+	return f.baseValueSet
 }
 
 // SenderAddresses exposes the account addresses from which state changing fuzzed transactions will be sent by a
@@ -212,7 +224,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	for _, comp := range compilations {
 		for _, source := range comp.Sources {
 			// Seed our base value set from every source's AST
-			f.BaseValueSet.SeedFromAst(source.Ast)
+			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
@@ -367,6 +379,27 @@ func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestCh
 	return nil
 }
 
+func createDefaultValueGenerator(fuzzer *Fuzzer) (value_generation.ValueGenerator, error) {
+	valueGenConfig := &value_generation.MutatingValueGeneratorConfig{
+		MinMutationRounds: 0,
+		MaxMutationRounds: 3,
+		RandomIntegerBias: 0.2,
+		RandomStringBias:  0.2,
+		RandomBytesBias:   0.2,
+		RandomValueGeneratorConfig: &value_generation.RandomValueGeneratorConfig{
+			RandomArrayMinSize:  0,
+			RandomArrayMaxSize:  100,
+			RandomBytesMinSize:  0,
+			RandomBytesMaxSize:  100,
+			RandomStringMinSize: 0,
+			RandomStringMaxSize: 100,
+		},
+		ValueSet: fuzzer.baseValueSet.Clone(),
+	}
+	valueGenerator := value_generation.NewMutatingValueGenerator(valueGenConfig)
+	return valueGenerator, nil
+}
+
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
@@ -389,9 +422,8 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
-	// Initialize our metrics and generator.
+	// Initialize our metrics and valueGenerator.
 	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
-	f.generator = value_generation.NewValueGeneratorMutation(f.BaseValueSet) // TODO: make this configurable after adding more options
 
 	// Initialize our test cases and providers
 	f.testCasesLock.Lock()
@@ -458,13 +490,17 @@ func (f *Fuzzer) Start() error {
 		// processing the cleanup logic to exit gracefully.
 		go func(workerIndex int) {
 			// Create a new worker for this fuzzing.
-			worker := newFuzzerWorker(f, workerIndex)
+			worker, workerCreatedErr := newFuzzerWorker(f, workerIndex)
 			f.workers[workerIndex] = worker
-
-			// Publish an event indicating we created a worker.
-			workerCreatedErr := f.OnWorkerCreatedEventEmitter.Publish(OnWorkerCreated{Worker: worker})
 			if err == nil && workerCreatedErr != nil {
 				err = workerCreatedErr
+			}
+			if err == nil {
+				// Publish an event indicating we created a worker.
+				workerCreatedErr = f.OnWorkerCreatedEventEmitter.Publish(OnWorkerCreated{Worker: worker})
+				if err == nil && workerCreatedErr != nil {
+					err = workerCreatedErr
+				}
 			}
 
 			// Run the worker and check if we received a cancelled signal, or we encountered an error.

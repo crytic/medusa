@@ -24,7 +24,7 @@ An example project configuration can be observed below:
 		"workerDatabaseEntryLimit": 10000,
 		"timeout": 0,
 		"testLimit": 10000000,
-		"maxTxSequenceLength": 100,
+		"callSequenceLength": 100,
 		"corpusDirectory": "corpus",
 		"coverageEnabled": true,
 		"deploymentOrder": ["TestXY", "TestContract2"],
@@ -65,7 +65,7 @@ The structure is described below:
     - **Note**: this is a temporary logic for memory throttling
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `testLimit` refers to a threshold of the number of function calls to make before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no call limit will be enforced.
-  - `maxTxSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
+  - `callSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
   - `corpusDirectory` refers to the path where the corpus should be saved. The corpus collects artifacts during a fuzzing campaign that help drive fuzzer features (e.g. coverage-increasing call sequences which the fuzzer collects to be mutates).
   - `coverageEnabled` refers to whether coverage-increasing call sequences should be saved in the corpus for the fuzzer to mutate. This aims to help achieve greater coverage across contracts when testing.
   - `deploymentOrder` refers to the order in which compiled contracts (contracts resulting from compilation, as specified by the `compilation` config) should be deployed to the fuzzer on startup. At least one contract name must be specified here. 

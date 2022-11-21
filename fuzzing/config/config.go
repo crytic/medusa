@@ -33,8 +33,8 @@ type FuzzingConfig struct {
 	// must be non-negative. A zero value indicates the test limit should not be enforced.
 	TestLimit uint64 `json:"testLimit"`
 
-	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
-	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
+	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
+	CallSequenceLength int `json:"callSequenceLength"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.

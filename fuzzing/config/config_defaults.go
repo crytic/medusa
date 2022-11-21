@@ -23,7 +23,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			WorkerDatabaseEntryLimit: 10000,
 			Timeout:                  0,
 			TestLimit:                0,
-			MaxTxSequenceLength:      100,
+			CallSequenceLength:       100,
 			DeploymentOrder:          []string{},
 			CorpusDirectory:          "corpus",
 			CoverageEnabled:          true,
