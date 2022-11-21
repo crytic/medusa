@@ -39,7 +39,7 @@ func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
 }
 
 // ParseABIFromInterface parses a generic object into an abi.ABI and returns it, or an error if one occurs.
-func ParseABIFromInterface(i interface{}) (*abi.ABI, error) {
+func ParseABIFromInterface(i any) (*abi.ABI, error) {
 	// TODO: Refactor this ugly hack. Solidity 0.8.0 doesn't re-serialize ABI as a string, so go-ethereum simply
 	//  ensures older Solidity deserializes too. It doesn't do it as abi.ABI type though, so we do that here.
 	b, err := json.Marshal(i)

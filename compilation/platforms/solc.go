@@ -84,7 +84,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	}
 
 	// Our compilation succeeded, load the JSON
-	var results map[string]interface{}
+	var results map[string]any
 	err = json.Unmarshal(cmdStdout, &results)
 	if err != nil {
 		return nil, "", err
@@ -95,10 +95,10 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
-		if sourcesMap, ok := sources.(map[string]interface{}); ok {
+		if sourcesMap, ok := sources.(map[string]any); ok {
 			for name, source := range sourcesMap {
 				// Treat our source as a key-value lookup
-				sourceDict, sourceCorrectType := source.(map[string]interface{})
+				sourceDict, sourceCorrectType := source.(map[string]any)
 				if !sourceCorrectType {
 					return nil, "", fmt.Errorf("could not parse compiled source artifact because it could not be casted to a dictionary")
 				}

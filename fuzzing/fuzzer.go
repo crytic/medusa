@@ -108,8 +108,8 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions:       make([]fuzzerTypes.Contract, 0),
 		testCases:                 make([]TestCase, 0),
 		testCasesFinished:         make(map[string]TestCase),
-		NewValueGeneratorFunc:     createDefaultValueGenerator,
-		ChainSetupFunc:            deploymentStrategyCompilationConfig,
+		NewValueGeneratorFunc:     defaultValueGeneratorFunc,
+		ChainSetupFunc:            chainSetupFromCompilations,
 		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
 	}
 
@@ -239,7 +239,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 // createTestChain creates a test chain with the account balance allocations specified by the config.
 func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// Create our genesis allocations.
-	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
+	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(core.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
@@ -344,10 +344,11 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	return nil
 }
 
-// deploymentStrategyCompilationConfig is a TestChainSetupFunc which sets up the base test chain state by deploying
-// all contracts. First, the contracts in the DeploymentOrder config variable are deployed. Then, any remaining
-// contracts are deployed.
-func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+// chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
+// all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
+// definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
+// the Fuzzer.config.
+func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
 	// Loop for all contracts to deploy
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
@@ -379,7 +380,9 @@ func deploymentStrategyCompilationConfig(fuzzer *Fuzzer, testChain *chain.TestCh
 	return nil
 }
 
-func createDefaultValueGenerator(fuzzer *Fuzzer) (value_generation.ValueGenerator, error) {
+// defaultValueGeneratorFunc is a NewValueGeneratorFunc which creates a value_generation.MutatingValueGenerator with a
+// default configuration. Returns the generator or an error, if one occurs.
+func defaultValueGeneratorFunc(fuzzer *Fuzzer) (value_generation.ValueGenerator, error) {
 	valueGenConfig := &value_generation.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 3,

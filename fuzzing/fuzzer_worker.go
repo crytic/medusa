@@ -280,7 +280,7 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	selectedSender := fw.fuzzer.senders[rand.Intn(len(fw.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
-	args := make([]interface{}, len(selectedMethod.Method.Inputs))
+	args := make([]any, len(selectedMethod.Method.Inputs))
 	for i := 0; i < len(args); i++ {
 		// Create our fuzzed parameters.
 		input := selectedMethod.Method.Inputs[i]

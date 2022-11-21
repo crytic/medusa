@@ -13,7 +13,7 @@ type ValueSet struct {
 	// integers represents a set of integers to use in fuzz tests. A mapping is used to avoid duplicates.
 	integers map[string]*big.Int
 	// strings represents a set of strings to use in fuzz tests. A mapping is used to avoid duplicates.
-	strings map[string]interface{}
+	strings map[string]any
 	// bytes represents a set of bytes to use in fuzz tests. A mapping is used to avoid duplicates.
 	bytes map[string][]byte
 	// hashProvider represents a hash provider used to create keys for some data.
@@ -24,7 +24,7 @@ type ValueSet struct {
 func NewValueSet() *ValueSet {
 	baseValueSet := &ValueSet{
 		integers:     make(map[string]*big.Int, 0),
-		strings:      make(map[string]interface{}, 0),
+		strings:      make(map[string]any, 0),
 		bytes:        make(map[string][]byte, 0),
 		hashProvider: sha3.NewLegacyKeccak256(),
 	}
