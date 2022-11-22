@@ -36,6 +36,8 @@ type Fuzzer struct {
 	deployer common.Address
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
 	contractDefinitions []fuzzerTypes.Contract
+	// baseValueSet represents a value_generation.ValueSet containing input values for our fuzz tests.
+	baseValueSet *value_generation.ValueSet
 
 	// NewValueGeneratorFunc describes the function to use to set up a new value generator per worker.
 	NewValueGeneratorFunc NewValueGeneratorFunc
@@ -52,9 +54,8 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpusTypes.Corpus
-
-	// baseValueSet represents a value_generation.ValueSet containing input values for our fuzz tests.
-	baseValueSet *value_generation.ValueSet
+	// coverageMaps describes the total code coverage known to be achieved across the fuzzing campaign.
+	coverageMaps *coverage.CoverageMaps
 
 	// testCases contains every TestCase registered with the Fuzzer.
 	testCases []TestCase
@@ -116,6 +117,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		NewValueGeneratorFunc:     defaultValueGeneratorFunc,
 		ChainSetupFunc:            chainSetupFromCompilations,
 		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
+		coverageMaps:              nil,
 	}
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
@@ -275,7 +277,8 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // initializeCoverageMaps initializes our coverage maps by tracing initial deployments in the test chain and replaying
 // all call sequences stored in the corpus.
 func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
-	// Create a coverage tracer
+	// Create our coverage maps and a coverage tracer
+	f.coverageMaps = coverage.NewCoverageMaps()
 	coverageTracer := coverage.NewCoverageTracer()
 
 	// Clone our test chain with our coverage tracer.
@@ -285,7 +288,7 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	}
 
 	// Add our coverage recorded during chain setup to our coverage maps.
-	_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
+	_, err = f.coverageMaps.Update(coverageTracer.CoverageMaps())
 	if err != nil {
 		return fmt.Errorf("failed to initialize coverage maps, base test chain coverage update encountered error: %v", err)
 	}
@@ -342,7 +345,7 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 		}
 
 		// Add our coverage recorded during call sequence execution to our coverage maps.
-		_, err = f.corpus.CoverageMaps().Update(coverageTracer.CoverageMaps())
+		_, err = f.coverageMaps.Update(coverageTracer.CoverageMaps())
 		if err != nil {
 			return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
 		}

@@ -99,7 +99,8 @@ func TestFuzzValueGenerationSolving(t *testing.T) {
 		"testdata/contracts/value_generation/match_addr_exact.sol",
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
-		//"testdata/contracts/value_generation/match_ints_xy.sol", // TODO: Investigate why this is much less performant than match_uints_xy in the value generator.
+		"testdata/contracts/value_generation/match_structs_xy.sol",
+		//"testdata/contracts/value_generation/match_ints_xy.sol", // TODO: Investigate why this is much less slow to solve than match_uints_xy in the value generator.
 		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
@@ -220,7 +221,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.corpus.CoverageMaps()
+			originalCoverage := f.fuzzer.coverageMaps
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
@@ -236,7 +237,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 
 			// Check to see if we have some coverage
 			assertCorpusCallSequencesCollected(f, true)
-			newCoverage := f.fuzzer.corpus.CoverageMaps()
+			newCoverage := f.fuzzer.coverageMaps
 
 			// Check to see if original and new coverage are the same
 			assert.True(t, originalCoverage.Equals(newCoverage))
@@ -265,7 +266,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.corpus.CoverageMaps()
+			originalCoverage := f.fuzzer.coverageMaps
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
@@ -283,7 +284,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if original and new coverage are the same
-			newCoverage := f.fuzzer.corpus.CoverageMaps()
+			newCoverage := f.fuzzer.coverageMaps
 			assert.False(t, originalCoverage.Equals(newCoverage))
 		},
 	})

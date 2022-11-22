@@ -252,7 +252,7 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Bloc
 		blockCoverageMaps := fw.coverageTracer.CoverageMaps()
 
 		// Merge our block coverage maps into our total coverage maps and check if we had an update.
-		coverageUpdated, err := fw.fuzzer.corpus.CoverageMaps().Update(blockCoverageMaps)
+		coverageUpdated, err := fw.fuzzer.coverageMaps.Update(blockCoverageMaps)
 		if err != nil {
 			return err
 		}

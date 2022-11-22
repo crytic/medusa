@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
@@ -18,9 +17,6 @@ import (
 type Corpus struct {
 	// storageDirectory describes the directory to save corpus callSequencesByFilePath within.
 	storageDirectory string
-
-	// coverageMaps describes the total code coverage known to be achieved across all runs.
-	coverageMaps *coverage.CoverageMaps
 
 	// callSequences is a list of call sequences that increased coverage or otherwise were found to be valuable
 	// to the fuzzer.
@@ -48,7 +44,6 @@ type corpusFile[T any] struct {
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory: corpusDirectory,
-		coverageMaps:     coverage.NewCoverageMaps(),
 		callSequences:    make([]*corpusFile[*CorpusCallSequence], 0),
 	}
 
@@ -100,11 +95,6 @@ func (c *Corpus) CallSequencesDirectory() string {
 		return ""
 	}
 	return filepath.Join(c.StorageDirectory(), "call_sequences")
-}
-
-// CoverageMaps returns the total coverage collected across all runs.
-func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
-	return c.coverageMaps
 }
 
 // CallSequenceCount returns the count of call sequences recorded in the corpus.
