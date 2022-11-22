@@ -12,10 +12,13 @@ type OnFuzzerStarting struct {
 	Fuzzer *Fuzzer
 }
 
-// OnFuzzerStopping describes an event where a fuzzing.Fuzzer is exiting its main fuzzing loop.
+// OnFuzzerStopping describes an event where a fuzzing.Fuzzer is exiting the main fuzzing loop.
 type OnFuzzerStopping struct {
 	// Fuzzer represents the instance of the fuzzing.Fuzzer for which the event occurred.
 	Fuzzer *Fuzzer
+
+	// err describes a potential error returned by the fuzzer run.
+	err error
 }
 
 // OnWorkerCreated describes an event where a fuzzing.FuzzerWorker is created by a fuzzing.Fuzzer.

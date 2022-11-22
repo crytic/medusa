@@ -1,11 +1,9 @@
 package fuzzing
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/fuzzing/types"
-	"math/big"
 	"sync"
 )
 
@@ -82,51 +80,6 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	encounteredAssertionVMError := t.isAssertionVMError(lastCallResults.ExecutionResult.Err)
 
 	return &methodId, encounteredAssertionVMError, nil
-}
-
-// checkPropertyTestFailed executes a given property test method to see if it returns a failed status. This is used to
-// facilitate testing of property test methods after every call the Fuzzer makes when testing call sequences.
-func (t *AssertionTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker, propertyTestMethod *types.DeployedContractMethod) (bool, error) {
-	// Generate our ABI input data for the call. In this case, property test methods take no arguments, so the
-	// variadic argument list here is empty.
-	data, err := propertyTestMethod.Contract.CompiledContract().Abi.Pack(propertyTestMethod.Method.Name)
-	if err != nil {
-		return false, err
-	}
-
-	// Call the underlying contract
-	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the assertions.
-	value := big.NewInt(0)
-	msg := worker.Chain().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, data)
-	res, err := worker.Chain().CallContract(msg)
-	if err != nil {
-		return false, fmt.Errorf("failed to call property test method: %v", err)
-	}
-
-	// If our property test method call failed, we flag a failed test.
-	if res.Failed() {
-		return true, nil
-	}
-
-	// Decode our ABI outputs
-	retVals, err := propertyTestMethod.Method.Outputs.Unpack(res.Return())
-	if err != nil {
-		return false, fmt.Errorf("failed to decode property test method return value: %v", err)
-	}
-
-	// We should have one return value.
-	if len(retVals) != 1 {
-		return false, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
-	}
-
-	// The one return value should be a bool
-	propertyTestMethodPassed, ok := retVals[0].(bool)
-	if !ok {
-		return false, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
-	}
-
-	// Return our status from our property test method
-	return !propertyTestMethodPassed, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases

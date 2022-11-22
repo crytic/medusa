@@ -17,6 +17,7 @@ import (
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 )
@@ -595,7 +596,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Publish a fuzzer stopping event.
-	fuzzerStoppingErr := f.OnStoppingEventEmitter.Publish(OnFuzzerStopping{Fuzzer: f})
+	fuzzerStoppingErr := f.OnStoppingEventEmitter.Publish(OnFuzzerStopping{Fuzzer: f, err: err})
 	if err == nil && fuzzerStoppingErr != nil {
 		err = fuzzerStoppingErr
 	}
@@ -604,8 +605,11 @@ func (f *Fuzzer) Start() error {
 	fmt.Printf("\n")
 	fmt.Printf("Fuzzer stopped, test results follow below ...\n")
 	for _, testCase := range f.testCases {
-		if testCase.Status() == TestCaseStatusFailed {
-			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+		// Obtain the test case message. If it is a non-empty string, we format our output for it specially.
+		// Otherwise, we exclude it.
+		msg := strings.TrimSpace(testCase.Message())
+		if msg != "" {
+			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg)
 		} else {
 			fmt.Printf("[%s] %s\n", testCase.Status(), testCase.Name())
 		}

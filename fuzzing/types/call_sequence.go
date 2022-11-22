@@ -13,6 +13,11 @@ type CallSequence []*CallSequenceElement
 
 // String returns a displayable string representing the CallSequence.
 func (cs CallSequence) String() string {
+	// If we have an empty call sequence, return a special string
+	if len(cs) == 0 {
+		return "<none>"
+	}
+
 	// Construct a list of strings for each CallSequenceElement.
 	elementStrings := make([]string, len(cs))
 	for i := 0; i < len(elementStrings); i++ {
