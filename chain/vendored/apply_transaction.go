@@ -33,7 +33,9 @@ import (
 // method. Its purpose is to take a message (internal transaction) and apply state transition updates to our current
 // state as if we had just previously received and validated a transaction which the message was derived from.
 // This executes on an underlying EVM and returns a transaction receipt, or an error if one occurs.
-func EVMApplyTransaction(msg types.Message, config *params.ChainConfig, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+// Additional changes:
+// - Exposed core.ExecutionResult as a return value.
+func EVMApplyTransaction(msg types.Message, config *params.ChainConfig, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *ExecutionResult, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -41,7 +43,7 @@ func EVMApplyTransaction(msg types.Message, config *params.ChainConfig, author *
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Update the state with pending changes.
@@ -75,5 +77,5 @@ func EVMApplyTransaction(msg types.Message, config *params.ChainConfig, author *
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, err
+	return receipt, result, err
 }

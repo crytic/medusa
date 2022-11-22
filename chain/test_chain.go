@@ -601,7 +601,7 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 
 		// Apply our transaction
 		var usedGas uint64
-		receipt, err := vendored.EVMApplyTransaction(messages[i].ToEVMMessage(), t.chainConfig, &header.Coinbase, gasPool, t.state, header.Number, blockHash, tx, &usedGas, evm)
+		receipt, executionResult, err := vendored.EVMApplyTransaction(messages[i].ToEVMMessage(), t.chainConfig, &header.Coinbase, gasPool, t.state, header.Number, blockHash, tx, &usedGas, evm)
 		if err != nil {
 			return nil, fmt.Errorf("test chain state write error: %v", err)
 		}
@@ -619,6 +619,7 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 		// - We take the deployed contract addresses detected by the tracer and copy them into our results.
 		messageResults = append(messageResults, &chainTypes.CallMessageResults{
 			DeployedContractBytecodes: slices.Clone(t.internalTracer.deployedContractBytecode),
+			ExecutionResult:           executionResult,
 		})
 	}
 

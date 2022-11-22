@@ -1,4 +1,5 @@
-contract TestAssertionXY {
+// This contract ensures the fuzzer can solve a magic number problem and report an assertion failure.
+contract TestContract {
     uint x;
     uint y;
 
@@ -11,11 +12,5 @@ contract TestAssertionXY {
 
         // ASSERTION: x should never be 10 at the same time y is 80
         assert(!(x == 10 && y == 80));
-    }
-
-
-    function fuzz_not_solvable() public view returns (bool) {
-        // ASSERTION: We put a dummy assertion here that will never fail.
-        return true;
     }
 }

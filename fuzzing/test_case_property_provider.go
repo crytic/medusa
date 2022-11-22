@@ -15,6 +15,9 @@ import (
 // If a call to any on-chain property test returns false, the test signals a failed status. If no failure is found
 // before the fuzzing campaign ends, the test signals a passed status.
 type PropertyTestCaseProvider struct {
+	// fuzzer describes the Fuzzer which this provider is attached to.
+	fuzzer *Fuzzer
+
 	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
 	testCases map[types.ContractMethodID]*PropertyTestCase
 
@@ -40,8 +43,10 @@ type propertyTestCaseProviderWorkerState struct {
 
 // attachPropertyTestCaseProvider attaches a new PropertyTestCaseProvider to the Fuzzer and returns it.
 func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
-	// Create a property test case provider
-	t := &PropertyTestCaseProvider{}
+	// Create a test case provider
+	t := &PropertyTestCaseProvider{
+		fuzzer: fuzzer,
+	}
 
 	// Subscribe the provider to relevant events the fuzzer emits.
 	fuzzer.OnStartingEventEmitter.Subscribe(t.onFuzzerStarting)
@@ -55,9 +60,9 @@ func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
 
 // isPropertyTest check whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method, propertyTestPrefixes []string) bool {
-	// loop through all enabled prefixes to find a match
-	for _, prefix := range propertyTestPrefixes {
+func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method) bool {
+	// Loop through all enabled prefixes to find a match
+	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes {
 		if strings.HasPrefix(method.Name, prefix) {
 			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
 				return true
@@ -115,17 +120,14 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
 // in a "not started" state for every property test method discovered in the contract definitions known to the Fuzzer.
 func (t *PropertyTestCaseProvider) onFuzzerStarting(event OnFuzzerStarting) error {
-	// Alias our provided fuzzer
-	fuzzer := event.Fuzzer
-
 	// Reset our state
 	t.testCases = make(map[types.ContractMethodID]*PropertyTestCase)
-	t.workerStates = make([]propertyTestCaseProviderWorkerState, fuzzer.Config().Fuzzing.Workers)
+	t.workerStates = make([]propertyTestCaseProviderWorkerState, t.fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every property test method.
-	for _, contract := range fuzzer.ContractDefinitions() {
+	for _, contract := range t.fuzzer.ContractDefinitions() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isPropertyTest(method, fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes) {
+			if t.isPropertyTest(method) {
 				// Create local variables to avoid pointer types in the loop being overridden.
 				contract := contract
 				method := method
@@ -141,7 +143,7 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event OnFuzzerStarting) erro
 				// Add to our test cases and register them with the fuzzer
 				methodId := types.GetContractMethodID(&contract, &method)
 				t.testCases[methodId] = propertyTestCase
-				fuzzer.RegisterTestCase(propertyTestCase)
+				t.fuzzer.RegisterTestCase(propertyTestCase)
 			}
 		}
 	}
@@ -259,7 +261,7 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 	// sequence shrunk for.
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
 
-	// Obtain the property test methods for this worker
+	// Obtain the test provider state for this worker
 	workerState := &t.workerStates[worker.WorkerIndex()]
 
 	// Loop through all property test methods and test them.

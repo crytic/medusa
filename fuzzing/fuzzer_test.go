@@ -7,6 +7,78 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
+// TestAssertionsBasicSolving runs a series of tests to test that assertion testing behaves as expected.
+func TestAssertionsBasicSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/assertions/assert_immediate.sol",
+		"testdata/contracts/assertions/assert_xy.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
+// TestAssertionsNotRequire runs a test to ensure require and revert statements are not mistaken for assert statements.
+// It runs tests against a contract which immediately makes these statements and expects to find no errors before
+// timing out.
+func TestAssertionsNotRequire(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_not_require.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests. We expect none.
+			assertFailedTestsExpected(f, false)
+		},
+	})
+}
+
+// TestAssertionsAndProperties runs a test to property testing and assertion testing can both run in parallel.
+// This test does not stop on first failure and expects a failure from each after timeout.
+func TestAssertionsAndProperties(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_and_property_test.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Fuzzing.Testing.PropertyTesting.Enabled = true
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests. We expect none.
+			assert.EqualValues(f.t, 2, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Expected one failure from a property test, and one failure from an assertion test.")
+		},
+	})
+}
+
 // TestDeploymentInnerDeployment runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately. This test contract deploys the inner contract by calling a method after
 // deployment of the factory contract.
@@ -92,8 +164,8 @@ func TestDeploymentInternalLibrary(t *testing.T) {
 	})
 }
 
-// TestFuzzValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
-func TestFuzzValueGenerationSolving(t *testing.T) {
+// TestValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
+func TestValueGenerationSolving(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/value_generation/match_addr_contract.sol",
 		"testdata/contracts/value_generation/match_addr_exact.sol",

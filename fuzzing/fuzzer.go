@@ -114,7 +114,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions:       make([]fuzzerTypes.Contract, 0),
 		testCases:                 make([]TestCase, 0),
 		testCasesFinished:         make(map[string]TestCase),
-		NewValueGeneratorFunc:     defaultValueGeneratorFunc,
+		NewValueGeneratorFunc:     defaultNewValueGeneratorFunc,
 		ChainSetupFunc:            chainSetupFromCompilations,
 		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
 		coverageMaps:              nil,
@@ -146,7 +146,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		attachPropertyTestCaseProvider(fuzzer)
 	}
 	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
-		// TODO: Add assertion test provider.
+		attachAssertionTestCaseProvider(fuzzer)
 	}
 	return fuzzer, nil
 }
@@ -400,9 +400,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultValueGeneratorFunc is a NewValueGeneratorFunc which creates a value_generation.MutatingValueGenerator with a
+// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a value_generation.MutatingValueGenerator with a
 // default configuration. Returns the generator or an error, if one occurs.
-func defaultValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error) {
+func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error) {
 	valueGenConfig := &value_generation.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 3,
@@ -423,57 +423,15 @@ func defaultValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.ValueS
 	return valueGenerator, nil
 }
 
-// Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
-// is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
-// Returns an error if one is encountered.
-func (f *Fuzzer) Start() error {
-	// Define our variable to catch errors
-	var err error
+// spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.
+// This function exits when Fuzzer.ctx is cancelled.
+func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) {
+	// We create our fuzz workers in a loop, using a channel to block when we reach capacity.
+	// If we encounter any errors, we stop.
+	f.workers = make([]*FuzzerWorker, f.config.Fuzzing.Workers)
+	threadReserveChannel := make(chan struct{}, f.config.Fuzzing.Workers)
 
-	// Create our running context (allows us to cancel across threads)
-	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
-
-	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
-	if f.config.Fuzzing.Timeout > 0 {
-		fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
-		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
-	}
-
-	// Set up the corpus
-	f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
-	if err != nil {
-		return err
-	}
-
-	// Initialize our metrics and valueGenerator.
-	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
-
-	// Initialize our test cases and providers
-	f.testCasesLock.Lock()
-	f.testCases = make([]TestCase, 0)
-	f.testCasesFinished = make(map[string]TestCase)
-	f.testCasesLock.Unlock()
-
-	// Create our test chain
-	baseTestChain, err := f.createTestChain()
-	if err != nil {
-		return err
-	}
-
-	// Set it up with our deployment/setup strategy defined by the fuzzer.
-	err = f.ChainSetupFunc(f, baseTestChain)
-	if err != nil {
-		return err
-	}
-
-	// Initialize our coverage maps
-	err = f.initializeCoverageMaps(baseTestChain)
-	if err != nil {
-		return err
-	}
-
-	// We create a test node for each thread we intend to create. Fuzzer workers can stop if they hit some resource
-	// limit such as a memory limit, at which point we'll recreate them in our loop, putting them into the same index.
+	// Workers are "reset" when they hit some config-defined limit. They are destroyed and recreated at the same index.
 	// For now, we create our available index queue before initializing some providers and entering our main loop.
 	availableWorkerIndexes := make([]int, f.config.Fuzzing.Workers)
 	availableWorkerIndexedLock := sync.Mutex{}
@@ -481,22 +439,12 @@ func (f *Fuzzer) Start() error {
 		availableWorkerIndexes[i] = i
 	}
 
-	// Start our printing loop now that we're about to begin fuzzing.
-	go f.runMetricsPrintLoop()
-
-	// Finally, we create our fuzz workers in a loop, using a channel to block when we reach capacity.
-	// If we encounter any errors, we stop.
-	f.workers = make([]*FuzzerWorker, f.config.Fuzzing.Workers)
-	threadReserveChannel := make(chan struct{}, f.config.Fuzzing.Workers)
-
-	// Publish a fuzzer starting event.
-	err = f.OnStartingEventEmitter.Publish(OnFuzzerStarting{Fuzzer: f})
-
-	// If our context is cancelled, perform cleanup and exit instead of entering the fuzzing loop.
+	// Define a flag that indicates whether we have not cancelled o
 	working := !utils.CheckContextDone(f.ctx)
 
 	// Log that we are about to create the workers and start fuzzing
 	fmt.Printf("Creating %d workers ...\n", f.config.Fuzzing.Workers)
+	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
 		// slot is freed up.
@@ -575,6 +523,67 @@ func (f *Fuzzer) Start() error {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
+}
+
+// Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
+// is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
+// Returns an error if one is encountered.
+func (f *Fuzzer) Start() error {
+	// Define our variable to catch errors
+	var err error
+
+	// Create our running context (allows us to cancel across threads)
+	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+
+	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
+	if f.config.Fuzzing.Timeout > 0 {
+		fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
+		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
+	}
+
+	// Set up the corpus
+	f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		return err
+	}
+
+	// Initialize our metrics and valueGenerator.
+	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
+
+	// Initialize our test cases and providers
+	f.testCasesLock.Lock()
+	f.testCases = make([]TestCase, 0)
+	f.testCasesFinished = make(map[string]TestCase)
+	f.testCasesLock.Unlock()
+
+	// Create our test chain
+	baseTestChain, err := f.createTestChain()
+	if err != nil {
+		return err
+	}
+
+	// Set it up with our deployment/setup strategy defined by the fuzzer.
+	err = f.ChainSetupFunc(f, baseTestChain)
+	if err != nil {
+		return err
+	}
+
+	// Initialize our coverage maps
+	err = f.initializeCoverageMaps(baseTestChain)
+	if err != nil {
+		return err
+	}
+
+	// Start our printing loop now that we're about to begin fuzzing.
+	go f.runMetricsPrintLoop()
+
+	// Publish a fuzzer starting event.
+	err = f.OnStartingEventEmitter.Publish(OnFuzzerStarting{Fuzzer: f})
+
+	// Run the main worker loop
+	f.spawnWorkersLoop(baseTestChain)
+
+	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
 	// previous error, as we don't want to lose corpus entries.
@@ -583,11 +592,6 @@ func (f *Fuzzer) Start() error {
 		if err == nil {
 			err = corpusFlushErr
 		}
-	}
-
-	// Now that we've gracefully ensured all goroutines have ceased, we can immediately return any errors.
-	if err != nil {
-		return err
 	}
 
 	// Publish a fuzzer stopping event.
