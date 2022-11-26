@@ -1,4 +1,4 @@
-contract TestBlockNumber {
+contract TestContract {
     uint startingBlockNumber;
 
     constructor() public {

@@ -228,9 +228,9 @@ func (t *testChainDeploymentsTracer) CaptureState(pc uint64, op vm.OpCode, gas, 
 		callFrameData := t.pendingCallFrames[t.callDepth]
 		callFrameData.results = append(callFrameData.results, types.DeployedContractBytecodeChange{
 			Contract: &types.DeployedContractBytecode{
-				Address:         *scope.Contract.CodeAddr,
+				Address:         scope.Contract.Address(),
 				InitBytecode:    nil,
-				RuntimeBytecode: t.evm.StateDB.GetCode(*scope.Contract.CodeAddr),
+				RuntimeBytecode: t.evm.StateDB.GetCode(scope.Contract.Address()),
 			},
 			Creation:       false,
 			SelfDestructed: true,

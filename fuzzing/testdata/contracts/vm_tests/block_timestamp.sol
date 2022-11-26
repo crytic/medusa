@@ -1,4 +1,4 @@
-contract TestBlockTimestamp {
+contract TestContract {
     uint startingBlockTimestamp;
 
     constructor() public {

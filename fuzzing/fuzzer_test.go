@@ -9,7 +9,7 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
-// TestAssertionsBasicSolving runs a series of tests to test that assertion testing behaves as expected.
+// TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionsBasicSolving(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
@@ -81,13 +81,13 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
-// TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
+// TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsInnerDeployments(t *testing.T) {
 	// These contracts provide functions to deploy inner contracts which have properties that will produce a failure.
 	filePaths := []string{
-		"testdata/contracts/deployment_tests/inner_deployment.sol",
-		"testdata/contracts/deployment_tests/inner_inner_deployment.sol",
+		"testdata/contracts/deployments/inner_deployment.sol",
+		"testdata/contracts/deployments/inner_inner_deployment.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -110,7 +110,7 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 
 	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol",
+		filePath: "testdata/contracts/deployments/inner_deployment_on_construction.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
@@ -126,13 +126,33 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 	})
 }
 
+// TestDeploymentsInternalLibrary runs a test to ensure internal libraries behave correctly.
+func TestDeploymentsInternalLibrary(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/internal_library.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestInternalLibrary"}
+			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
 // TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsSelfDestruct(t *testing.T) {
 	// These contracts provide functions to deploy inner contracts which have properties that will produce a failure.
 	filePaths := []string{
-		"testdata/contracts/deployment_tests/selfdestruct_init.sol",
-		"testdata/contracts/deployment_tests/selfdestruct_runtime.sol",
+		"testdata/contracts/deployments/selfdestruct_init.sol",
+		"testdata/contracts/deployments/selfdestruct_runtime.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -167,13 +187,13 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 }
 
-// TestDeploymentsInternalLibrary runs a test to ensure internal libraries behave correctly.
-func TestDeploymentsInternalLibrary(t *testing.T) {
+// TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
+func TestValueGenerationGenerateAllTypes(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployment_tests/internal_library.sol",
+		filePath: "testdata/contracts/value_generation/generate_all_types.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestInternalLibrary"}
-			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
+			config.Fuzzing.DeploymentOrder = []string{"GenerateAllTypes"}
+			config.Fuzzing.TestLimit = 10_000
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -218,32 +238,14 @@ func TestValueGenerationSolving(t *testing.T) {
 	}
 }
 
-// TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
-func TestValueGenerationGenerateAllTypes(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/value_generation/generate_all_types.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"GenerateAllTypes"}
-			config.Fuzzing.TestLimit = 10_000
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
-
-			// Check for any failed tests and verify coverage was captured
-			assertFailedTestsExpected(f, false)
-			assertCorpusCallSequencesCollected(f, true)
-		},
-	})
-}
-
-// TestFuzzVMBlockNumber runs a test to ensure block numbers behave correctly in the VM.
-func TestFuzzVMBlockNumber(t *testing.T) {
+// TestVMCorrectness runs tests to ensure block properties are reported consistently within the EVM, as it's configured
+// by the chain.TestChain.
+func TestVMCorrectness(t *testing.T) {
+	// Test block numbers work as expected.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_number.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestBlockNumber"}
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -255,14 +257,12 @@ func TestFuzzVMBlockNumber(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
-}
 
-// TestFuzzVMTimestamp runs a test to ensure block timestamps behave correctly in the VM.
-func TestFuzzVMTimestamp(t *testing.T) {
+	// Test timestamps behave as expected.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_timestamp.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestBlockTimestamp"}
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -274,14 +274,12 @@ func TestFuzzVMTimestamp(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
-}
 
-// TestFuzzVMBlockHash runs a test to ensure block hashes behave correctly in the VM.
-func TestFuzzVMBlockHash(t *testing.T) {
+	// Test block hashes are reported consistently.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_hash.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestBlockHash"}
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
 		},
 		method: func(f *fuzzerTestContext) {
@@ -345,7 +343,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 // useful.
 func TestDeploymentOrderWithCoverage(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployment_tests/deployment_order.sol",
+		filePath: "testdata/contracts/deployments/deployment_order.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"InheritedFirstContract", "InheritedSecondContract"}
 		},

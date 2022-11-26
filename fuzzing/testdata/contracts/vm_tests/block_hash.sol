@@ -1,4 +1,4 @@
-contract TestBlockHash {
+contract TestContract {
     mapping(uint => bytes32) hashes;
     bool failedTest;
     bool ranBefore;
