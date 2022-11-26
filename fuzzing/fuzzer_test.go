@@ -1,6 +1,8 @@
 package fuzzing
 
 import (
+	"github.com/trailofbits/medusa/chain"
+	"github.com/trailofbits/medusa/events"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +13,7 @@ import (
 func TestAssertionsBasicSolving(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
-		"testdata/contracts/assertions/assert_xy.sol",
+		"testdata/contracts/assertions/assert_even_number.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -79,32 +81,34 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
-// TestDeploymentInnerDeployment runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
-// their properties are tested appropriately. This test contract deploys the inner contract by calling a method after
-// deployment of the factory contract.
-func TestDeploymentInnerDeployment(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployment_tests/inner_deployment.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
-			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
+// TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
+// their properties are tested appropriately.
+func TestDeploymentsInnerDeployments(t *testing.T) {
+	// These contracts provide functions to deploy inner contracts which have properties that will produce a failure.
+	filePaths := []string{
+		"testdata/contracts/deployment_tests/inner_deployment.sol",
+		"testdata/contracts/deployment_tests/inner_inner_deployment.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
+				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
 
-			// Check for any failed tests and verify coverage was captured
-			assertFailedTestsExpected(f, true)
-			assertCorpusCallSequencesCollected(f, true)
-		},
-	})
-}
+				// Check for any failed tests and verify coverage was captured
+				assertFailedTestsExpected(f, true)
+				assertCorpusCallSequencesCollected(f, true)
+			},
+		})
+	}
 
-// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
-// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract during
-// construction of the factory contract.
-func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
+	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployment_tests/inner_deployment_on_construction.sol",
 		configUpdates: func(config *config.ProjectConfig) {
@@ -122,30 +126,49 @@ func TestDeploymentInnerDeploymentOnConstruction(t *testing.T) {
 	})
 }
 
-// TestDeploymentInnerDeploymentOnConstruction runs a test to ensure dynamically deployed contracts are detected by the
-// Fuzzer and their properties are tested appropriately. This test contract deploys the inner contract which takes
-// constructor arguments, during the fuzzing campaign.
-func TestDeploymentInnerInnerDeployment(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployment_tests/inner_inner_deployment.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
-			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
+// TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
+// their properties are tested appropriately.
+func TestDeploymentsSelfDestruct(t *testing.T) {
+	// These contracts provide functions to deploy inner contracts which have properties that will produce a failure.
+	filePaths := []string{
+		"testdata/contracts/deployment_tests/selfdestruct_init.sol",
+		"testdata/contracts/deployment_tests/selfdestruct_runtime.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
+				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+			},
+			method: func(f *fuzzerTestContext) {
+				// Subscribe to any mined block events globally. When receiving them, check contract changes for a
+				// self-destruct.
+				selfDestructCount := 0
+				events.SubscribeAny(func(event chain.BlockMinedEvent) error {
+					for _, messageResults := range event.Block.MessageResults() {
+						for _, contractDeploymentChange := range messageResults.ContractDeploymentChanges {
+							if contractDeploymentChange.SelfDestructed {
+								selfDestructCount++
+							}
+						}
+					}
+					return nil
+				})
 
-			// Check for any failed tests and verify coverage was captured
-			assertFailedTestsExpected(f, true)
-			assertCorpusCallSequencesCollected(f, true)
-		},
-	})
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// When it's done, we should've had at least one self-destruction.
+				assert.Greater(t, selfDestructCount, 0, "no SELFDESTRUCT operations were detected, when they should have been.")
+			},
+		})
+	}
 }
 
-// TestDeploymentInternalLibrary runs a test to ensure internal libraries behave correctly.
-func TestDeploymentInternalLibrary(t *testing.T) {
+// TestDeploymentsInternalLibrary runs a test to ensure internal libraries behave correctly.
+func TestDeploymentsInternalLibrary(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployment_tests/internal_library.sol",
 		configUpdates: func(config *config.ProjectConfig) {
