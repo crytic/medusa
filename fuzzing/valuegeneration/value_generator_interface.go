@@ -1,4 +1,4 @@
-package value_generation
+package valuegeneration
 
 import (
 	"github.com/ethereum/go-ethereum/common"

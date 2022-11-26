@@ -1,4 +1,4 @@
-package value_generation
+package valuegeneration
 
 import (
 	"fmt"

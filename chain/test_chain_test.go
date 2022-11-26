@@ -30,7 +30,6 @@ func verifyChain(t *testing.T, chain *TestChain) {
 		currentBlock, err := chain.BlockFromNumber(uint64(i))
 		assert.NoError(t, err)
 		assert.EqualValues(t, len(currentBlock.Messages()), len(currentBlock.MessageResults()))
-		assert.EqualValues(t, len(currentBlock.Messages()), len(currentBlock.Receipts()))
 
 		// Verify our method to fetch block hashes works appropriately.
 		blockHash, err := chain.BlockHashFromNumber(uint64(i))
@@ -115,7 +114,7 @@ func TestChainReverting(t *testing.T) {
 		}
 
 		// Clone our chain
-		backup, err := chain.Clone()
+		backup, err := chain.Clone(nil, nil)
 		assert.NoError(t, err)
 		chainBackups = append(chainBackups, backup)
 	}
@@ -176,7 +175,7 @@ func TestChainBlockNumberJumping(t *testing.T) {
 	}
 
 	// Clone our chain
-	recreatedChain, err := chain.Clone()
+	recreatedChain, err := chain.Clone(nil, nil)
 	assert.NoError(t, err)
 
 	// Verify both chains
@@ -217,6 +216,17 @@ func TestChainDynamicDeployments(t *testing.T) {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
+						// Listen for contract changes
+						deployedContracts := 0
+						chain.ContractDeploymentAddedEventEmitter.Subscribe(func(event ContractDeploymentsAddedEvent) error {
+							deployedContracts++
+							return nil
+						})
+						chain.ContractDeploymentRemovedEventEmitter.Subscribe(func(event ContractDeploymentsRemovedEvent) error {
+							deployedContracts--
+							return nil
+						})
+
 						// Deploy the currently indexed contract
 						_, block, err := chain.DeployContract(&contract, senders[0])
 						assert.NoError(t, err)
@@ -225,7 +235,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 						// There should've been two address deployments, an outer and inner deployment.
 						// (tx deployment and dynamic deployment).
 						assert.EqualValues(t, 1, len(block.MessageResults()))
-						assert.EqualValues(t, 2, len(block.MessageResults()[0].DeployedContractBytecodes))
+						assert.EqualValues(t, 2, deployedContracts)
 
 						// Ensure we could get our state
 						_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -248,7 +258,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		}
 
 		// Clone our chain
-		recreatedChain, err := chain.Clone()
+		recreatedChain, err := chain.Clone(nil, nil)
 		assert.NoError(t, err)
 
 		// Verify both chains
@@ -311,7 +321,7 @@ func TestChainCloning(t *testing.T) {
 		}
 
 		// Clone our chain
-		recreatedChain, err := chain.Clone()
+		recreatedChain, err := chain.Clone(nil, nil)
 		assert.NoError(t, err)
 
 		// Verify both chains

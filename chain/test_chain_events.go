@@ -1,6 +1,8 @@
 package chain
 
-import "github.com/trailofbits/medusa/chain/types"
+import (
+	"github.com/trailofbits/medusa/chain/types"
+)
 
 // BlockMiningEvent describes an event where a new block has been requested to be mined in the TestChain. This only
 // considers committed blocks.
@@ -18,32 +20,32 @@ type BlockMinedEvent struct {
 	Block *types.Block
 }
 
-// BlockRemovedEvent describes an event where a block is removed from the TestChain. This only considers internally
+// BlocksRemovedEvent describes an event where a block is removed from the TestChain. This only considers internally
 // committed blocks, not ones spoofed in between block number jumps.
-type BlockRemovedEvent struct {
+type BlocksRemovedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 
-	// Block refers to the block that was removed from the Chain.
-	Block *types.Block
+	// Blocks refers to the block that was removed from the Chain.
+	Blocks []*types.Block
 }
 
-// ContractDeploymentsAddedEvent describes an event where a new contract deployments are detected by the TestChain.
+// ContractDeploymentsAddedEvent describes an event where a contract has become available on the TestChain, either
+// due to contract creation, or a self-destruct operation being reverted.
 type ContractDeploymentsAddedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 
-	// DeployedContractBytecodes contains descriptors for bytecode which was deployed to the Chain.
-	DeployedContractBytecodes []*types.DeployedContractBytecode
+	// Contract defines information for the contract which was deployed to the Chain.
+	Contract *types.DeployedContractBytecode
 }
 
-// ContractDeploymentsRemovedEvent describes an event where a previously deployed contract on the TestChain is removed,
-// possibly due to the chain reverting to a previous block or a self-destruct operation.
+// ContractDeploymentsRemovedEvent describes an event where a contract has become unavailable on the TestChain, either
+// due to the reverting of a contract creation, or a self-destruct operation.
 type ContractDeploymentsRemovedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 
-	// DeployedContractBytecodes contains descriptors for bytecode which was previously deployed to the Chain but now
-	// removed (e.g., in the case of the Chain reverting to a previous head).
-	DeployedContractBytecodes []*types.DeployedContractBytecode
+	// Contract defines information for the contract which was deployed to the Chain.
+	Contract *types.DeployedContractBytecode
 }

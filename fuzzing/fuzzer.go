@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/events"
@@ -13,7 +14,7 @@ import (
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
-	"github.com/trailofbits/medusa/fuzzing/value_generation"
+	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
 	"math/big"
@@ -37,8 +38,8 @@ type Fuzzer struct {
 	deployer common.Address
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
 	contractDefinitions []fuzzerTypes.Contract
-	// baseValueSet represents a value_generation.ValueSet containing input values for our fuzz tests.
-	baseValueSet *value_generation.ValueSet
+	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
+	baseValueSet *valuegeneration.ValueSet
 
 	// NewValueGeneratorFunc describes the function to use to set up a new value generator per worker.
 	NewValueGeneratorFunc NewValueGeneratorFunc
@@ -77,10 +78,10 @@ type Fuzzer struct {
 	OnWorkerDestroyedEventEmitter events.EventEmitter[OnWorkerDestroyed]
 }
 
-// NewValueGeneratorFunc defines a method which is called to create a value_generation.ValueGenerator for a worker
+// NewValueGeneratorFunc defines a method which is called to create a valuegeneration.ValueGenerator for a worker
 // when it is created. It takes the current fuzzer as an argument for context, and is expected to return a generator,
 // or an error if one is encountered.
-type NewValueGeneratorFunc func(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error)
+type NewValueGeneratorFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error)
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
@@ -111,7 +112,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		config:                    config,
 		senders:                   senders,
 		deployer:                  deployer,
-		baseValueSet:              value_generation.NewValueSet(),
+		baseValueSet:              valuegeneration.NewValueSet(),
 		contractDefinitions:       make([]fuzzerTypes.Contract, 0),
 		testCases:                 make([]TestCase, 0),
 		testCasesFinished:         make(map[string]TestCase),
@@ -164,7 +165,7 @@ func (f *Fuzzer) Config() config.ProjectConfig {
 
 // BaseValueSet exposes the underlying value set provided to the Fuzzer value generators to aid in generation
 // (e.g. for use in mutation operations).
-func (f *Fuzzer) BaseValueSet() *value_generation.ValueSet {
+func (f *Fuzzer) BaseValueSet() *valuegeneration.ValueSet {
 	return f.baseValueSet
 }
 
@@ -283,7 +284,7 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	coverageTracer := coverage.NewCoverageTracer()
 
 	// Clone our test chain with our coverage tracer.
-	testChain, err := baseTestChain.Clone(coverageTracer)
+	testChain, err := baseTestChain.Clone([]vm.EVMLogger{coverageTracer}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
@@ -401,17 +402,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a value_generation.MutatingValueGenerator with a
+// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a valuegeneration.MutatingValueGenerator with a
 // default configuration. Returns the generator or an error, if one occurs.
-func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.ValueSet) (value_generation.ValueGenerator, error) {
-	valueGenConfig := &value_generation.MutatingValueGeneratorConfig{
+func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 3,
 		RandomAddressBias: 0.2,
 		RandomIntegerBias: 0.2,
 		RandomStringBias:  0.2,
 		RandomBytesBias:   0.2,
-		RandomValueGeneratorConfig: &value_generation.RandomValueGeneratorConfig{
+		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
 			RandomArrayMinSize:  0,
 			RandomArrayMaxSize:  100,
 			RandomBytesMinSize:  0,
@@ -420,13 +421,13 @@ func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *value_generation.Val
 			RandomStringMaxSize: 100,
 		},
 	}
-	valueGenerator := value_generation.NewMutatingValueGenerator(valueGenConfig, valueSet)
+	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet)
 	return valueGenerator, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.
 // This function exits when Fuzzer.ctx is cancelled.
-func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) {
+func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	// We create our fuzz workers in a loop, using a channel to block when we reach capacity.
 	// If we encounter any errors, we stop.
 	f.workers = make([]*FuzzerWorker, f.config.Fuzzing.Workers)
@@ -524,6 +525,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
+	return err
 }
 
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
@@ -580,9 +582,12 @@ func (f *Fuzzer) Start() error {
 
 	// Publish a fuzzer starting event.
 	err = f.OnStartingEventEmitter.Publish(OnFuzzerStarting{Fuzzer: f})
+	if err != nil {
+		return err
+	}
 
 	// Run the main worker loop
-	f.spawnWorkersLoop(baseTestChain)
+	err = f.spawnWorkersLoop(baseTestChain)
 
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 

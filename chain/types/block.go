@@ -20,20 +20,15 @@ type Block struct {
 	// in a message).
 	messages []*CallMessage
 
-	// receipts represents a transaction receipts received when the associated messages in this structure were sent to
-	// the VM to perform a state update. It houses event logs and other information collected during the state
-	// transitions when the messages were applied.
-	receipts types.Receipts
-
-	// messageResults represents the results of executing a CallMessage, as defined by the chain.TestChain executing it.
+	// messageResults represents the results recorded while executing transactions.
 	messageResults []*CallMessageResults
 }
 
 // NewBlock returns a new Block with the provided parameters.
-func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessage, receipts types.Receipts, messageResults []*CallMessageResults) (*Block, error) {
+func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessage, messageResults []*CallMessageResults) (*Block, error) {
 	// Verify our message count is valid
-	if len(messages) != len(receipts) {
-		return nil, fmt.Errorf("cannot created block with %d messages and %d receipts. one receipt should exist per message", len(messages), len(receipts))
+	if len(messages) != len(messageResults) {
+		return nil, fmt.Errorf("cannot created block with %d messages and %d message results. one result should exist per message", len(messages), len(messageResults))
 	}
 
 	// Create our block and return it
@@ -41,7 +36,6 @@ func NewBlock(blockHash common.Hash, header *types.Header, messages []*CallMessa
 		hash:           blockHash,
 		header:         header,
 		messages:       messages,
-		receipts:       receipts,
 		messageResults: messageResults,
 	}
 	return block, nil
@@ -60,12 +54,6 @@ func (b *Block) Header() *types.Header {
 // Messages provides the messages (internal transactions) housed in the current block.
 func (b *Block) Messages() []*CallMessage {
 	return b.messages
-}
-
-// Receipts provides the transaction receipts generated when executing each of the Messages. To determine which message
-// generated a receipt, the same index should be used into Messages as Receipts, as they are one-to-one.
-func (b *Block) Receipts() types.Receipts {
-	return b.receipts
 }
 
 // MessageResults provides execution results tracked by the chain.TestChain after processing each message in Messages.

@@ -19,7 +19,6 @@ import (
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/utils"
-	"golang.org/x/exp/slices"
 	"math/big"
 	"sort"
 )
@@ -50,31 +49,33 @@ type TestChain struct {
 	// keyValueStore represents the underlying key-value store used to construct the db.
 	keyValueStore *memorydb.Database
 
-	// tracerForwarder represents an execution trace provider for the VM which observes VM execution for any notable
-	// events and forwards them to underlying vm.EVMLogger tracers.
-	tracerForwarder *chainTypes.TracerForwarder
+	// callTracerRouter forwards vm.EVMLogger and TestChainTracer calls to any instances added to it. This
+	// router is used for non-state changing calls.
+	callTracerRouter *TestChainTracerRouter
 
-	// internalTracer is a testChainTracer used to serve portions of the TestChain API.
-	internalTracer *testChainTracer
+	// transactionTracerRouter forwards vm.EVMLogger and TestChainTracer calls to any instances added to it. This
+	// router is used for transaction execution when constructing blocks.
+	transactionTracerRouter *TestChainTracerRouter
 
 	// chainConfig represents the configuration used to instantiate and manage this chain.
 	chainConfig *params.ChainConfig
-
-	// vmConfig represents a configuration given to the EVM when executing a transaction that specifies parameters
-	// such as whether certain fees should be charged and which execution tracer should be used (if any).
-	vmConfig *vm.Config
 
 	// BlockMiningEventEmitter emits events indicating a block was added to the chain.
 	BlockMiningEventEmitter events.EventEmitter[BlockMiningEvent]
 	// BlockMinedEventEmitter emits events indicating a block was added to the chain.
 	BlockMinedEventEmitter events.EventEmitter[BlockMinedEvent]
-	// BlockRemovedEventEmitter emits events indicating a block was removed from the chain.
-	BlockRemovedEventEmitter events.EventEmitter[BlockRemovedEvent]
+	// BlocksRemovedEventEmitter emits events indicating a block was removed from the chain.
+	BlocksRemovedEventEmitter events.EventEmitter[BlocksRemovedEvent]
 
-	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was deployed to the chain.
+	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was created on chain. This is called
+	// alongside ContractDeploymentRemovedEventEmitter when contract deployment changes are detected. e.g. If a
+	// contract is deployed and immediately destroyed within the same transaction, a ContractDeploymentsAddedEvent
+	// will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
 	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
 	// ContractDeploymentAddedEventEmitter emits events indicating a previously deployed contract was removed
-	// from the chain.
+	// from the chain. This is called alongside ContractDeploymentAddedEventEmitter when contract deployment changes
+	// are detected. e.g. If a contract is deployed and immediately destroyed within the same transaction, a
+	// ContractDeploymentsAddedEvent will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
 	ContractDeploymentRemovedEventEmitter events.EventEmitter[ContractDeploymentsRemovedEvent]
 }
 
@@ -117,8 +118,7 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	callMessages := make([]*chainTypes.CallMessage, 0)
 	callMessageResults := make([]*chainTypes.CallMessageResults, 0)
-	receipts := make(types.Receipts, 0)
-	testChainGenesisBlock, err := chainTypes.NewBlock(genesisBlock.Header().Hash(), genesisBlock.Header(), callMessages, receipts, callMessageResults)
+	testChainGenesisBlock, err := chainTypes.NewBlock(genesisBlock.Header().Hash(), genesisBlock.Header(), callMessages, callMessageResults)
 	if err != nil {
 		return nil, err
 	}
@@ -128,45 +128,40 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 		Cache: 256,
 	})
 
-	// Create a tracer forwarder to support the addition of multiple underlying tracers.
-	tracerForwarder := chainTypes.NewTracerForwarder()
-
-	// Add our test chain tracer.
-	internalTracer := newTestChainTracer()
-	tracerForwarder.AddTracer(internalTracer)
+	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
+	transactionTracerRouter := NewTestChainTracerRouter()
+	callTracerRouter := NewTestChainTracerRouter()
 
 	// Create our instance
-	g := &TestChain{
-		genesisDefinition: genesisDefinition,
-		blocks:            []*chainTypes.Block{testChainGenesisBlock},
-		keyValueStore:     keyValueStore,
-		db:                db,
-		state:             nil,
-		stateDatabase:     stateDatabase,
-		tracerForwarder:   tracerForwarder,
-		internalTracer:    internalTracer,
-		chainConfig:       genesisDefinition.Config,
-		vmConfig: &vm.Config{
-			Debug:     true,
-			Tracer:    tracerForwarder,
-			NoBaseFee: true,
-		},
+	chain := &TestChain{
+		genesisDefinition:       genesisDefinition,
+		blocks:                  []*chainTypes.Block{testChainGenesisBlock},
+		keyValueStore:           keyValueStore,
+		db:                      db,
+		state:                   nil,
+		stateDatabase:           stateDatabase,
+		transactionTracerRouter: transactionTracerRouter,
+		callTracerRouter:        callTracerRouter,
+		chainConfig:             genesisDefinition.Config,
 	}
 
+	// Add our contract deployment tracer to this chain by default. This is a special provider that attaches directly.
+	newTestChainDeploymentsTracer(chain)
+
 	// Obtain the state for the genesis block and set it as the chain's current state.
-	stateDB, err := g.StateAfterBlockNumber(0)
+	stateDB, err := chain.StateAfterBlockNumber(0)
 	if err != nil {
 		return nil, err
 	}
-	g.state = stateDB
-	return g, nil
+	chain.state = stateDB
+	return chain, nil
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
 // but does not perform any other API-related changes such as adding additional tracers the original had, unless
 // otherwise specified in function input parameters.
 // Returns the new chain, or an error if one occurred.
-func (t *TestChain) Clone(tracers ...vm.EVMLogger) (*TestChain, error) {
+func (t *TestChain) Clone(txTracers []vm.EVMLogger, callTracers []vm.EVMLogger) (*TestChain, error) {
 	// Create a new chain with the same genesis definition
 	chain, err := NewTestChainWithGenesis(t.genesisDefinition)
 	if err != nil {
@@ -174,7 +169,12 @@ func (t *TestChain) Clone(tracers ...vm.EVMLogger) (*TestChain, error) {
 	}
 
 	// Add our tracers to the new chain.
-	chain.TracerForwarder().AddTracers(tracers...)
+	for _, txTracer := range txTracers {
+		chain.AddTracer(txTracer, true, false)
+	}
+	for _, callTracer := range txTracers {
+		chain.AddTracer(callTracer, false, true)
+	}
 
 	// Copy our current chain state onto the new chain.
 	err = t.CopyTo(chain)
@@ -214,9 +214,15 @@ func (t *TestChain) CopyTo(targetChain *TestChain) error {
 	return nil
 }
 
-// TracerForwarder returns the tracer forwarder used to forward tracing calls to multiple underlying tracers.
-func (t *TestChain) TracerForwarder() *chainTypes.TracerForwarder {
-	return t.tracerForwarder
+// AddTracer adds a given vm.EVMLogger or TestChainTracer to the TestChain. If directed, the tracer will be attached
+// for transactions and/or non-state changing calls made via CallContract.
+func (t *TestChain) AddTracer(tracer vm.EVMLogger, txs bool, calls bool) {
+	if txs {
+		t.transactionTracerRouter.AddTracer(tracer)
+	}
+	if calls {
+		t.callTracerRouter.AddTracer(tracer)
+	}
 }
 
 // GenesisDefinition returns the core.Genesis definition used to initialize the chain.
@@ -346,10 +352,9 @@ func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, erro
 	// Create our transaction-related fields (empty, non-state changing).
 	messages := make([]*chainTypes.CallMessage, 0)
 	messageResults := make([]*chainTypes.CallMessageResults, 0)
-	receipts := make(types.Receipts, 0)
 
 	// Create our new block and return it.
-	block, err := chainTypes.NewBlock(blockHash, blockHeader, messages, receipts, messageResults)
+	block, err := chainTypes.NewBlock(blockHash, blockHeader, messages, messageResults)
 	return block, err
 }
 
@@ -423,34 +428,16 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 	// Remove the relevant blocks from the chain
 	t.blocks = t.blocks[:closestBlockIndex+1]
 
-	// Emit our events for newly deployed contracts
-	for i := len(removedBlocks) - 1; i >= 0; i-- {
-		// Emit our event for removing a block
-		err := t.BlockRemovedEventEmitter.Publish(BlockRemovedEvent{
-			Chain: t,
-			Block: removedBlocks[i],
-		})
-		if err != nil {
-			return err
-		}
-
-		// For each call message in our block, if we had any resulting deployed smart contracts, signal that they have
-		// now been removed.
-		for _, messageResult := range removedBlocks[i].MessageResults() {
-			if len(messageResult.DeployedContractBytecodes) > 0 {
-				err = t.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
-					Chain:                     t,
-					DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
-				})
-				if err != nil {
-					return err
-				}
-			}
-		}
+	// Emit our event for the removed blocks.
+	err := t.BlocksRemovedEventEmitter.Publish(BlocksRemovedEvent{
+		Chain:  t,
+		Blocks: removedBlocks,
+	})
+	if err != nil {
+		return err
 	}
 
 	// Reload our state from our database
-	var err error
 	t.state, err = t.StateAfterBlockNumber(blockNumber)
 	return err
 }
@@ -588,7 +575,6 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 
 	// Process each message and collect transaction receipts and results
 	messageResults := make([]*chainTypes.CallMessageResults, 0)
-	receipts := make(types.Receipts, 0)
 	for i := 0; i < len(messages); i++ {
 		// Create a tx from our msg, for hashing/receipt purposes
 		tx := utils.MessageToTransaction(messages[i])
@@ -597,7 +583,11 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 		blockContext := newTestChainBlockContext(t, header)
 
 		// Create our EVM instance.
-		evm := vm.NewEVM(blockContext, core.NewEVMTxContext(messages[i]), t.state, t.chainConfig, *t.vmConfig)
+		evm := vm.NewEVM(blockContext, core.NewEVMTxContext(messages[i]), t.state, t.chainConfig, vm.Config{
+			Debug:     true,
+			Tracer:    t.transactionTracerRouter,
+			NoBaseFee: true,
+		})
 
 		// Apply our transaction
 		var usedGas uint64
@@ -612,15 +602,18 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 		// Update our block's bloom filter
 		header.Bloom.Add(receipt.Bloom.Bytes())
 
-		// Add our receipt to our list
-		receipts = append(receipts, receipt)
+		// Create our message result
+		messageResult := &chainTypes.CallMessageResults{
+			ExecutionResult:   executionResult,
+			Receipt:           receipt,
+			AdditionalResults: make(map[string]any, 0),
+		}
 
-		// Create our execution result and append it to the list.
-		// - We take the deployed contract addresses detected by the tracer and copy them into our results.
-		messageResults = append(messageResults, &chainTypes.CallMessageResults{
-			DeployedContractBytecodes: slices.Clone(t.internalTracer.deployedContractBytecode),
-			ExecutionResult:           executionResult,
-		})
+		// For every EVM logger we have
+		t.transactionTracerRouter.CaptureTxEndSetAdditionalResults(messageResult)
+
+		// Append the message result to our list
+		messageResults = append(messageResults, messageResult)
 	}
 
 	// Write state changes to db
@@ -638,7 +631,7 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 	header.Root = root
 
 	// Create a new block for our test node
-	block, err := chainTypes.NewBlock(blockHash, header, messages, receipts, messageResults)
+	block, err := chainTypes.NewBlock(blockHash, header, messages, messageResults)
 
 	// Append our new block to our chain.
 	t.blocks = append(t.blocks, block)
@@ -650,19 +643,6 @@ func (t *TestChain) MineBlockWithParameters(blockNumber uint64, blockTime uint64
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	// Emit our events for newly deployed contracts
-	for _, messageResult := range messageResults {
-		if len(messageResult.DeployedContractBytecodes) > 0 {
-			err = t.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-				Chain:                     t,
-				DeployedContractBytecodes: messageResult.DeployedContractBytecodes,
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	// Return our created block.
@@ -693,10 +673,10 @@ func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, 
 	}
 
 	// Ensure our transaction succeeded
-	if block.Receipts()[0].Status != types.ReceiptStatusSuccessful {
+	if block.MessageResults()[0].Receipt.Status != types.ReceiptStatusSuccessful {
 		return common.Address{}, block, fmt.Errorf("contract deployment tx returned a failed status")
 	}
 
 	// Return the address for the deployed contract.
-	return block.Receipts()[0].ContractAddress, block, nil
+	return block.MessageResults()[0].Receipt.ContractAddress, block, nil
 }

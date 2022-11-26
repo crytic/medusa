@@ -9,7 +9,7 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
-	"github.com/trailofbits/medusa/fuzzing/value_generation"
+	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"math/rand"
@@ -41,10 +41,10 @@ type FuzzerWorker struct {
 
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
-	valueSet *value_generation.ValueSet
+	valueSet *valuegeneration.ValueSet
 	// valueGenerator generates values for use in the fuzzing campaign (e.g. when populating abi function call
 	// arguments)
-	valueGenerator value_generation.ValueGenerator
+	valueGenerator valuegeneration.ValueGenerator
 
 	// OnDeployedContractAddedEventEmitter emits events when the FuzzerWorker detects a newly deployed contract
 	// on its underlying chain.
@@ -121,11 +121,6 @@ func (fw *FuzzerWorker) Chain() *chain.TestChain {
 	return fw.chain
 }
 
-// metrics returns the FuzzerMetrics for the fuzzing campaign.
-func (fw *FuzzerWorker) metrics() *FuzzerMetrics {
-	return fw.fuzzer.metrics
-}
-
 // workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
 func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
@@ -144,47 +139,42 @@ func (fw *FuzzerWorker) onChainBlockMiningEvent(event chain.BlockMiningEvent) er
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
 // It attempts bytecode matching and updates the list of deployed contracts the worker should use for fuzz testing.
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) error {
-	// TODO: Optimizations to call updateStateChangingMethods less.
+	// Add the contract address to our value set so our generator can use it in calls.
+	fw.valueSet.AddAddress(event.Contract.Address)
 
-	// Loop through all deployed bytecode
-	for _, deployedBytecode := range event.DeployedContractBytecodes {
-		// Add the contract address to our value set so our generator can use it in calls.
-		fw.valueSet.AddAddress(deployedBytecode.Address)
+	// Loop through all our known contract definitions
+	matchedDeployment := false
+	for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {
+		contractDefinition := &fw.fuzzer.contractDefinitions[i]
 
-		// Loop through all our known contract definitions
-		matchedDeployment := false
-		for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {
-			contractDefinition := &fw.fuzzer.contractDefinitions[i]
+		// If we have a match, register the deployed contract.
+		if event.Contract.IsMatch(contractDefinition.CompiledContract()) {
+			// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
+			fw.deployedContracts[event.Contract.Address] = contractDefinition
 
-			// If we have a match, register the deployed contract.
-			if deployedBytecode.IsMatch(contractDefinition.CompiledContract()) {
-				// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
-				fw.deployedContracts[deployedBytecode.Address] = contractDefinition
+			// Update our state changing methods
+			fw.updateStateChangingMethods()
 
-				// Update our state changing methods
-				fw.updateStateChangingMethods()
-
-				// Emit an event indicating the worker detected a new contract deployment on its chain.
-				err := fw.OnDeployedContractAddedEventEmitter.Publish(OnWorkerDeployedContractAdded{
-					Worker:             fw,
-					ContractAddress:    deployedBytecode.Address,
-					ContractDefinition: contractDefinition,
-				})
-				if err != nil {
-					return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
-				}
-
-				// Skip to the next deployed contract to evaluate
-				matchedDeployment = true
-				break
+			// Emit an event indicating the worker detected a new contract deployment on its chain.
+			err := fw.OnDeployedContractAddedEventEmitter.Publish(OnWorkerDeployedContractAdded{
+				Worker:             fw,
+				ContractAddress:    event.Contract.Address,
+				ContractDefinition: contractDefinition,
+			})
+			if err != nil {
+				return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
 			}
-		}
 
-		// If we didn't match any deployment, report it.
-		if !matchedDeployment {
-			// TODO: More elegant error handling/messaging
-			return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+			// Skip to the next deployed contract to evaluate
+			matchedDeployment = true
+			break
 		}
+	}
+
+	// If we didn't match any deployment, report it.
+	if !matchedDeployment {
+		// TODO: More elegant error handling/messaging
+		return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
 	}
 	return nil
 }
@@ -192,34 +182,30 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 // onChainContractDeploymentRemovedEvent is the event callback used when the chain detects removal of a previously
 // deployed contract. It updates the list of deployed contracts the worker should use for fuzz testing.
 func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.ContractDeploymentsRemovedEvent) error {
-	// TODO: Optimizations to call updateStateChangingMethods less.
+	// Remove the contract address from our value set so our generator doesn't use it any longer
+	fw.valueSet.RemoveAddress(event.Contract.Address)
 
-	// Loop through all deployed bytecode
-	for _, deployedBytecode := range event.DeployedContractBytecodes {
-		// Remove the contract address from our value set so our generator doesn't use it any longer
-		fw.valueSet.RemoveAddress(deployedBytecode.Address)
+	// Obtain our contract definition for this address. If we didn't record this contract deployment in the first place,
+	// there is nothing to remove, so we exit early.
+	contractDefinition, previouslyRegistered := fw.deployedContracts[event.Contract.Address]
+	if !previouslyRegistered {
+		return nil
+	}
 
-		// Obtain our contract definition for this address
-		contractDefinition, previouslyRegistered := fw.deployedContracts[deployedBytecode.Address]
-		if !previouslyRegistered {
-			continue
-		}
+	// Remove the contract from our deployed contracts mapping the worker maintains.
+	delete(fw.deployedContracts, event.Contract.Address)
 
-		// Remove the contract from our deployed contracts mapping the worker maintains.
-		delete(fw.deployedContracts, deployedBytecode.Address)
+	// Update our state changing methods
+	fw.updateStateChangingMethods()
 
-		// Update our state changing methods
-		fw.updateStateChangingMethods()
-
-		// Emit an event indicating the worker detected the removal of a previously deployed contract on its chain.
-		err := fw.OnDeployedContractDeletedEventEmitter.Publish(OnWorkerDeployedContractDeleted{
-			Worker:             fw,
-			ContractAddress:    deployedBytecode.Address,
-			ContractDefinition: contractDefinition,
-		})
-		if err != nil {
-			return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract deleted event: %v", err)
-		}
+	// Emit an event indicating the worker detected the removal of a previously deployed contract on its chain.
+	err := fw.OnDeployedContractDeletedEventEmitter.Publish(OnWorkerDeployedContractDeleted{
+		Worker:             fw,
+		ContractAddress:    event.Contract.Address,
+		ContractDefinition: contractDefinition,
+	})
+	if err != nil {
+		return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract deleted event: %v", err)
 	}
 	return nil
 }
@@ -298,7 +284,7 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	for i := 0; i < len(args); i++ {
 		// Create our fuzzed parameters.
 		input := selectedMethod.Method.Inputs[i]
-		args[i] = value_generation.GenerateAbiValue(fw.valueGenerator, &input.Type)
+		args[i] = valuegeneration.GenerateAbiValue(fw.valueGenerator, &input.Type)
 	}
 
 	// Encode our parameters.
@@ -465,7 +451,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
 	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 		fw.coverageTracer = coverage.NewCoverageTracer()
-		fw.chain.TracerForwarder().AddTracer(fw.coverageTracer)
+		fw.chain.AddTracer(fw.coverageTracer, true, false)
 	}
 
 	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).

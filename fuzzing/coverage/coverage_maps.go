@@ -127,8 +127,9 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 }
 
 // Equals checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
-// Note that the `map` field is what is being tested for equality. Not the cached values
 func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
+	// Note: the `map` field is what is being tested for equality. Not the cached values
+
 	// Iterate through all maps
 	for addr, aHashToCoverage := range a.maps {
 		bHashToCoverage, ok := b.maps[addr]
