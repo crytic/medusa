@@ -23,7 +23,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.PersistentFlags().StringVarP(&argInitOutputPath, "out", "o", "", "output path for the new project configuration")
+	initCmd.PersistentFlags().StringVarP(&argInitOutputPath, "out", "o", "", "output path for the new project configuration file")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -34,7 +34,8 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 
 	// Make sure we have no more than 1 arg
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
-		return fmt.Errorf("init accepts at most 1 platform argument (options: %s). default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
+		return fmt.Errorf("init accepts at most 1 platform argument (options: %s). "+
+			"default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
 	}
 
 	// Ensure the optional provided argument refers to a supported platform
@@ -62,8 +63,8 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// If a platform is provided, then the projectConfig will be the default project config for that
-	// specific compilation platform (assuming it is not the default)
+	// If a platform is provided (and it is not the default), then the projectConfig will be the default project config
+	// for that specific compilation platform
 	if len(args) == 1 && args[0] != DefaultCompilationPlatform {
 		projectConfig, err = config.GetDefaultProjectConfig(args[0])
 		if err != nil {
