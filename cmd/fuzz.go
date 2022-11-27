@@ -91,7 +91,6 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("new project config is %v\n", projectConfig)
 
 	// Validate the project config for any errors
 	// Note that the CLI arguments have not gone through any previous validation
