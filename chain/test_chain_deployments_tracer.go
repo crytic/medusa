@@ -13,9 +13,6 @@ import (
 // self-destructs. It is a special tracer that is used internally by each TestChain. It subscribes to its block-related
 // events in order to power the TestChain's contract deployment related events.
 type testChainDeploymentsTracer struct {
-	// chain describes the TestChain to drive analysis and events for.
-	chain *TestChain
-
 	// results describes the results being currently captured.
 	results []types.DeployedContractBytecodeChange
 
@@ -42,79 +39,11 @@ type testChainDeploymentsTracerCallFrame struct {
 
 // newTestChainDeploymentsTracer creates a testChainDeploymentsTracer. It takes a TestChain, adds itself as a tracer for
 // it, and powers deployed contract events.
-func newTestChainDeploymentsTracer(chain *TestChain) *testChainDeploymentsTracer {
+func newTestChainDeploymentsTracer() *testChainDeploymentsTracer {
 	tracer := &testChainDeploymentsTracer{
-		chain:                    chain,
-		selfDestructDestroysCode: true,
+		selfDestructDestroysCode: true, // TODO: Update this when new EIP is introduced by checking the chain config.
 	}
-	chain.AddTracer(tracer, true, false)
-	chain.BlockMinedEventEmitter.Subscribe(tracer.onChainBlockMinedEvent)
-	chain.BlocksRemovedEventEmitter.Subscribe(tracer.onChainBlocksRemovedEvent)
 	return tracer
-}
-
-// onChainBlockMinedEvent is the event callback used when the chain mined a new block.
-func (t *testChainDeploymentsTracer) onChainBlockMinedEvent(event BlockMinedEvent) error {
-	// Obtain our message results for our mined block, and derive an event.
-	results := event.Block.MessageResults()
-
-	// Loop through all deployment changes stored in our call results and emit our TestChain event.
-	var err error
-	for i := 0; i < len(results); i++ {
-		for _, deploymentChange := range results[i].ContractDeploymentChanges {
-			// We emit the relevant event depending on the contract deployment change, as a block with
-			// this execution result is being committed to chain.
-			if deploymentChange.Creation {
-				err = t.chain.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-					Chain:    t.chain,
-					Contract: deploymentChange.Contract,
-				})
-			} else if deploymentChange.Destroyed {
-				err = t.chain.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
-					Chain:    t.chain,
-					Contract: deploymentChange.Contract,
-				})
-			}
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// onChainBlocksRemovedEvent is the event callback used when the chain removes a block.
-func (t *testChainDeploymentsTracer) onChainBlocksRemovedEvent(event BlocksRemovedEvent) error {
-	// Loop through all deployment changes stored in our call results in revert order, as we are reverting and wish
-	// to invert the events we emitted when these blocks were mined.
-	var err error
-	for i := len(event.Blocks) - 1; i >= 0; i-- {
-		results := event.Blocks[i].MessageResults()
-		for j := len(results) - 1; j >= 0; j-- {
-			result := results[j]
-			for k := len(result.ContractDeploymentChanges) - 1; k >= 0; k-- {
-				deploymentChange := result.ContractDeploymentChanges[k]
-
-				// We emit the *opposite* event depending on the contract deployment change, as a block with
-				// this execution result is being reverted/removed from the chain.
-				if deploymentChange.Creation {
-					err = t.chain.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
-						Chain:    t.chain,
-						Contract: deploymentChange.Contract,
-					})
-				} else if deploymentChange.Destroyed {
-					err = t.chain.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:    t.chain,
-						Contract: deploymentChange.Contract,
-					})
-				}
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
 }
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.

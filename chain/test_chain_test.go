@@ -29,12 +29,12 @@ func verifyChain(t *testing.T, chain *TestChain) {
 		// Verify our count of messages, message results, and receipts match.
 		currentBlock, err := chain.BlockFromNumber(uint64(i))
 		assert.NoError(t, err)
-		assert.EqualValues(t, len(currentBlock.Messages()), len(currentBlock.MessageResults()))
+		assert.EqualValues(t, len(currentBlock.Messages), len(currentBlock.MessageResults))
 
 		// Verify our method to fetch block hashes works appropriately.
 		blockHash, err := chain.BlockHashFromNumber(uint64(i))
 		assert.NoError(t, err)
-		assert.EqualValues(t, currentBlock.Hash(), blockHash)
+		assert.EqualValues(t, currentBlock.Hash, blockHash)
 
 		// Try to obtain the state for this block
 		_, err = chain.StateAfterBlockNumber(uint64(i))
@@ -44,8 +44,8 @@ func verifyChain(t *testing.T, chain *TestChain) {
 		if i > 0 {
 			previousBlock, err := chain.BlockFromNumber(uint64(i - 1))
 			assert.NoError(t, err)
-			assert.EqualValues(t, previousBlock.Hash(), currentBlock.Header().ParentHash)
-			assert.Less(t, previousBlock.Header().Time, currentBlock.Header().Time)
+			assert.EqualValues(t, previousBlock.Hash, currentBlock.Header.ParentHash)
+			assert.Less(t, previousBlock.Header.Time, currentBlock.Header.Time)
 		}
 	}
 }
@@ -97,7 +97,9 @@ func TestChainReverting(t *testing.T) {
 		// Determine if this will jump a certain number of blocks.
 		if rand.Float32() >= blockNumberJumpProbability {
 			// We decided not to jump, so we commit a block with a normal consecutive block number.
-			_, err := chain.MineBlock()
+			_, err := chain.PendingBlockCreate()
+			assert.NoError(t, err)
+			err = chain.PendingBlockCommit()
 			assert.NoError(t, err)
 		} else {
 			// We decided to jump, so we commit a block with a random jump amount.
@@ -109,7 +111,9 @@ func TestChainReverting(t *testing.T) {
 			// the diff.
 
 			// Create a block with our parameters
-			_, err := chain.MineBlockWithParameters(newBlockNumber, chain.Head().Header().Time+jumpDistance)
+			_, err := chain.PendingBlockCreateWithParameters(newBlockNumber, chain.Head().Header.Time+jumpDistance, nil)
+			assert.NoError(t, err)
+			err = chain.PendingBlockCommit()
 			assert.NoError(t, err)
 		}
 
@@ -134,9 +138,9 @@ func TestChainReverting(t *testing.T) {
 		verifyChain(t, chainBackup)
 
 		// Verify our final block hashes equal in both chains.
-		assert.EqualValues(t, chainBackup.Head().Hash(), chain.Head().Hash())
-		assert.EqualValues(t, chainBackup.Head().Header().Hash(), chain.Head().Header().Hash())
-		assert.EqualValues(t, chainBackup.Head().Header().Root, chain.Head().Header().Root)
+		assert.EqualValues(t, chainBackup.Head().Hash, chain.Head().Hash)
+		assert.EqualValues(t, chainBackup.Head().Header.Hash(), chain.Head().Header.Hash())
+		assert.EqualValues(t, chainBackup.Head().Header.Root, chain.Head().Header.Root)
 	}
 }
 
@@ -157,7 +161,9 @@ func TestChainBlockNumberJumping(t *testing.T) {
 		// Determine if this will jump a certain number of blocks.
 		if rand.Float32() >= blockNumberJumpProbability {
 			// We decided not to jump, so we commit a block with a normal consecutive block number.
-			_, err := chain.MineBlock()
+			_, err := chain.PendingBlockCreate()
+			assert.NoError(t, err)
+			err = chain.PendingBlockCommit()
 			assert.NoError(t, err)
 		} else {
 			// We decided to jump, so we commit a block with a random jump amount.
@@ -169,7 +175,9 @@ func TestChainBlockNumberJumping(t *testing.T) {
 			// the diff.
 
 			// Create a block with our parameters
-			_, err := chain.MineBlockWithParameters(newBlockNumber, chain.Head().Header().Time+jumpDistance)
+			_, err := chain.PendingBlockCreateWithParameters(newBlockNumber, chain.Head().Header.Time+jumpDistance, nil)
+			assert.NoError(t, err)
+			err = chain.PendingBlockCommit()
 			assert.NoError(t, err)
 		}
 	}
@@ -183,9 +191,9 @@ func TestChainBlockNumberJumping(t *testing.T) {
 	verifyChain(t, recreatedChain)
 
 	// Verify our final block hashes equal in both chains.
-	assert.EqualValues(t, chain.Head().Hash(), recreatedChain.Head().Hash())
-	assert.EqualValues(t, chain.Head().Header().Hash(), recreatedChain.Head().Header().Hash())
-	assert.EqualValues(t, chain.Head().Header().Root, recreatedChain.Head().Header().Root)
+	assert.EqualValues(t, chain.Head().Hash, recreatedChain.Head().Hash)
+	assert.EqualValues(t, chain.Head().Header.Hash(), recreatedChain.Head().Header.Hash())
+	assert.EqualValues(t, chain.Head().Header.Root, recreatedChain.Head().Header.Root)
 }
 
 // TestChainDynamicDeployments creates a TestChain, deploys a contract which dynamically deploys another contract,
@@ -218,11 +226,11 @@ func TestChainDynamicDeployments(t *testing.T) {
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						// Listen for contract changes
 						deployedContracts := 0
-						chain.ContractDeploymentAddedEventEmitter.Subscribe(func(event ContractDeploymentsAddedEvent) error {
+						chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event ContractDeploymentsAddedEvent) error {
 							deployedContracts++
 							return nil
 						})
-						chain.ContractDeploymentRemovedEventEmitter.Subscribe(func(event ContractDeploymentsRemovedEvent) error {
+						chain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(func(event ContractDeploymentsRemovedEvent) error {
 							deployedContracts--
 							return nil
 						})
@@ -234,7 +242,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 
 						// There should've been two address deployments, an outer and inner deployment.
 						// (tx deployment and dynamic deployment).
-						assert.EqualValues(t, 1, len(block.MessageResults()))
+						assert.EqualValues(t, 1, len(block.MessageResults))
 						assert.EqualValues(t, 2, deployedContracts)
 
 						// Ensure we could get our state
@@ -243,11 +251,13 @@ func TestChainDynamicDeployments(t *testing.T) {
 
 						// Create some empty blocks and ensure we can get our state for this block number.
 						for x := 0; x < 5; x++ {
-							block, err = chain.MineBlock()
+							block, err = chain.PendingBlockCreate()
+							assert.NoError(t, err)
+							err = chain.PendingBlockCommit()
 							assert.NoError(t, err)
 
 							// Empty blocks should not record message results or dynamic deployments.
-							assert.EqualValues(t, 0, len(block.MessageResults()))
+							assert.EqualValues(t, 0, len(block.MessageResults))
 
 							_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
 							assert.NoError(t, err)
@@ -266,9 +276,9 @@ func TestChainDynamicDeployments(t *testing.T) {
 		verifyChain(t, recreatedChain)
 
 		// Verify our final block hashes equal in both chains.
-		assert.EqualValues(t, chain.Head().Hash(), recreatedChain.Head().Hash())
-		assert.EqualValues(t, chain.Head().Header().Hash(), recreatedChain.Head().Header().Hash())
-		assert.EqualValues(t, chain.Head().Header().Root, recreatedChain.Head().Header().Root)
+		assert.EqualValues(t, chain.Head().Hash, recreatedChain.Head().Hash)
+		assert.EqualValues(t, chain.Head().Header.Hash(), recreatedChain.Head().Header.Hash())
+		assert.EqualValues(t, chain.Head().Header.Root, recreatedChain.Head().Header.Root)
 	})
 }
 
@@ -308,7 +318,9 @@ func TestChainCloning(t *testing.T) {
 
 							// Create some empty blocks and ensure we can get our state for this block number.
 							for x := 0; x < i; x++ {
-								_, err = chain.MineBlock()
+								_, err = chain.PendingBlockCreate()
+								assert.NoError(t, err)
+								err = chain.PendingBlockCommit()
 								assert.NoError(t, err)
 
 								_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -329,9 +341,9 @@ func TestChainCloning(t *testing.T) {
 		verifyChain(t, recreatedChain)
 
 		// Verify our final block hashes equal in both chains.
-		assert.EqualValues(t, chain.Head().Hash(), recreatedChain.Head().Hash())
-		assert.EqualValues(t, chain.Head().Header().Hash(), recreatedChain.Head().Header().Hash())
-		assert.EqualValues(t, chain.Head().Header().Root, recreatedChain.Head().Header().Root)
+		assert.EqualValues(t, chain.Head().Hash, recreatedChain.Head().Hash)
+		assert.EqualValues(t, chain.Head().Header.Hash(), recreatedChain.Head().Header.Hash())
+		assert.EqualValues(t, chain.Head().Header.Root, recreatedChain.Head().Header.Root)
 	})
 }
 
@@ -374,7 +386,9 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 							// Create some empty blocks and ensure we can get our state for this block number.
 							for x := 0; x < i; x++ {
-								_, err = chain.MineBlock()
+								_, err = chain.PendingBlockCreate()
+								assert.NoError(t, err)
+								err = chain.PendingBlockCommit()
 								assert.NoError(t, err)
 
 								_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -392,7 +406,13 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 		// Replay all messages after genesis
 		for i := 1; i < len(chain.blocks); i++ {
-			_, err := recreatedChain.MineBlock(chain.blocks[i].Messages()...)
+			_, err := recreatedChain.PendingBlockCreate()
+			assert.NoError(t, err)
+			for _, message := range chain.blocks[i].Messages {
+				err = recreatedChain.PendingBlockAddTx(message)
+				assert.NoError(t, err)
+			}
+			err = recreatedChain.PendingBlockCommit()
 			assert.NoError(t, err)
 		}
 
@@ -401,8 +421,8 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		verifyChain(t, recreatedChain)
 
 		// Verify our final block hashes equal in both chains.
-		assert.EqualValues(t, chain.Head().Hash(), recreatedChain.Head().Hash())
-		assert.EqualValues(t, chain.Head().Header().Hash(), recreatedChain.Head().Header().Hash())
-		assert.EqualValues(t, chain.Head().Header().Root, recreatedChain.Head().Header().Root)
+		assert.EqualValues(t, chain.Head().Hash, recreatedChain.Head().Hash)
+		assert.EqualValues(t, chain.Head().Header.Hash(), recreatedChain.Head().Header.Hash())
+		assert.EqualValues(t, chain.Head().Header.Root, recreatedChain.Head().Header.Root)
 	})
 }

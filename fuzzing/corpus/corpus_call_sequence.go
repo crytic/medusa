@@ -48,10 +48,10 @@ func NewCorpusEntry(blocks []*chainTypes.Block) *CorpusCallSequence {
 	for i := 0; i < len(blocks); i++ {
 		corpusBlocks[i] = CorpusBlock{
 			Header: CorpusBlockHeader{
-				Number:    blocks[i].Header().Number,
-				Timestamp: blocks[i].Header().Time,
+				Number:    blocks[i].Header.Number,
+				Timestamp: blocks[i].Header.Time,
 			},
-			Transactions: utils.SlicePointersToValues(blocks[i].Messages()),
+			Transactions: utils.SlicePointersToValues(blocks[i].Messages),
 		}
 	}
 

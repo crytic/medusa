@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
@@ -66,16 +65,8 @@ type Fuzzer struct {
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
 
-	// OnStartingEventEmitter emits events when the Fuzzer initialized state and is ready to about to begin the main
-	// execution loop for the fuzzing campaign.
-	OnStartingEventEmitter events.EventEmitter[OnFuzzerStarting]
-	// OnStoppingEventEmitter emits events when the Fuzzer is exiting its main fuzzing loop.
-	OnStoppingEventEmitter events.EventEmitter[OnFuzzerStopping]
-	// OnWorkerCreatedEventEmitter emits events when the Fuzzer creates a new FuzzerWorker during the fuzzing campaign.
-	OnWorkerCreatedEventEmitter events.EventEmitter[OnWorkerCreated]
-	// OnWorkerDestroyedEventEmitter emits events when the Fuzzer destroys an existing FuzzerWorker during the fuzzing
-	// campaign. This can occur even if a fuzzing campaign is not stopping, if a worker has reached resource limits.
-	OnWorkerDestroyedEventEmitter events.EventEmitter[OnWorkerDestroyed]
+	// Events describes the event system for the Fuzzer.
+	Events FuzzerEvents
 }
 
 // NewValueGeneratorFunc defines a method which is called to create a valuegeneration.ValueGenerator for a worker
@@ -289,12 +280,6 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 
-	// Add our coverage recorded during chain setup to our coverage maps.
-	_, err = f.coverageMaps.Update(coverageTracer.CoverageMaps())
-	if err != nil {
-		return fmt.Errorf("failed to initialize coverage maps, base test chain coverage update encountered error: %v", err)
-	}
-
 	// Next we measure coverage for every corpus call sequence.
 	corpusCallSequences := f.corpus.CallSequences()
 
@@ -302,9 +287,6 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	baseBlockNumber := testChain.HeadBlockNumber()
 
 	for _, sequence := range corpusCallSequences {
-		// Reset our tracer's coverage maps.
-		coverageTracer.Reset()
-
 		// Loop through each block in the sequence
 		// Note that `block`'s blockNumber may be less/greater/equal to `testChain.HeadBlockNumber()`
 		// To maintain chain semantics we have to find the difference in block number (and timestamp)
@@ -336,20 +318,33 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 
 				// The next block is head block number plus the gap. Same applies to timestamp.
 				rebasedBlockNumber = testChain.HeadBlockNumber() + uint64(blockGap)
-				rebasedTimestamp = testChain.Head().Header().Time + uint64(timestampGap)
+				rebasedTimestamp = testChain.Head().Header.Time + uint64(timestampGap)
 			}
 
 			// Mine the block with the new block number + timestamp, and messages from the corpus block
-			_, err = testChain.MineBlockWithParameters(rebasedBlockNumber, rebasedTimestamp, utils.SliceValuesToPointers(block.Transactions)...)
+			_, err = testChain.PendingBlockCreateWithParameters(rebasedBlockNumber, rebasedTimestamp, nil)
 			if err != nil {
-				return fmt.Errorf("failed to mine block, mining encountered an error: %v", err)
+				return fmt.Errorf("failed to initialize corpus coverage maps, encountered an error when creating a pending chain block: %v", err)
 			}
-		}
+			for _, tx := range block.Transactions {
+				tx := tx
+				err = testChain.PendingBlockAddTx(&tx)
+				if err != nil {
+					return fmt.Errorf("failed to initialize corpus coverage maps, encountered an error when adding a transaction to the pending chain block: %v", err)
+				}
+			}
+			err = testChain.PendingBlockCommit()
+			if err != nil {
+				return fmt.Errorf("failed to initialize corpus coverage maps,  encountered an error when commiting pending chain block: %v", err)
+			}
 
-		// Add our coverage recorded during call sequence execution to our coverage maps.
-		_, err = f.coverageMaps.Update(coverageTracer.CoverageMaps())
-		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
+			// Add our coverage recorded during call sequence execution to our coverage maps.
+			for _, messageResults := range testChain.Head().MessageResults {
+				_, err = f.coverageMaps.Update(coverage.GetCoverageTracerResults(messageResults))
+				if err != nil {
+					return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
+				}
+			}
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
@@ -470,7 +465,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 			}
 			if err == nil {
 				// Publish an event indicating we created a worker.
-				workerCreatedErr = f.OnWorkerCreatedEventEmitter.Publish(OnWorkerCreated{Worker: worker})
+				workerCreatedErr = f.Events.WorkerCreated.Publish(FuzzerWorkerCreatedEvent{Worker: worker})
 				if err == nil && workerCreatedErr != nil {
 					err = workerCreatedErr
 				}
@@ -495,7 +490,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 			availableWorkerIndexedLock.Unlock()
 
 			// Publish an event indicating we destroyed a worker.
-			workerDestroyedErr := f.OnWorkerDestroyedEventEmitter.Publish(OnWorkerDestroyed{Worker: worker})
+			workerDestroyedErr := f.Events.WorkerDestroyed.Publish(FuzzerWorkerDestroyedEvent{Worker: worker})
 			if err == nil && workerDestroyedErr != nil {
 				err = workerDestroyedErr
 			}
@@ -581,7 +576,7 @@ func (f *Fuzzer) Start() error {
 	go f.runMetricsPrintLoop()
 
 	// Publish a fuzzer starting event.
-	err = f.OnStartingEventEmitter.Publish(OnFuzzerStarting{Fuzzer: f})
+	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
 		return err
 	}
@@ -601,7 +596,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Publish a fuzzer stopping event.
-	fuzzerStoppingErr := f.OnStoppingEventEmitter.Publish(OnFuzzerStopping{Fuzzer: f, err: err})
+	fuzzerStoppingErr := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: err})
 	if err == nil && fuzzerStoppingErr != nil {
 		err = fuzzerStoppingErr
 	}

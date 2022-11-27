@@ -165,8 +165,8 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 				// Subscribe to any mined block events globally. When receiving them, check contract changes for a
 				// self-destruct.
 				selfDestructCount := 0
-				events.SubscribeAny(func(event chain.BlockMinedEvent) error {
-					for _, messageResults := range event.Block.MessageResults() {
+				events.SubscribeAny(func(event chain.PendingBlockCommittedEvent) error {
+					for _, messageResults := range event.Block.MessageResults {
 						for _, contractDeploymentChange := range messageResults.ContractDeploymentChanges {
 							if contractDeploymentChange.SelfDestructed {
 								selfDestructCount++
@@ -209,13 +209,15 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 
 // TestValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
 func TestValueGenerationSolving(t *testing.T) {
+	// TODO: match_ints_xy is slower than match_uints_xy in the value generator because AST doesn't retain negative
+	//  numbers, improve our logic to solve it faster, then re-enable this.
 	filePaths := []string{
 		"testdata/contracts/value_generation/match_addr_contract.sol",
 		"testdata/contracts/value_generation/match_addr_exact.sol",
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
 		"testdata/contracts/value_generation/match_structs_xy.sol",
-		//"testdata/contracts/value_generation/match_ints_xy.sol", // TODO: Investigate why this is much less slow to solve than match_uints_xy in the value generator.
+		//"testdata/contracts/value_generation/match_ints_xy.sol",
 		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
@@ -304,7 +306,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
-			expectEventEmitted(f, &f.fuzzer.OnStartingEventEmitter)
+			expectEventEmitted(f, &f.fuzzer.Events.FuzzerStarting)
 
 			// Start the fuzzer
 			err := f.fuzzer.Start()
@@ -317,7 +319,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			originalCoverage := f.fuzzer.coverageMaps
 
 			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
+			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
 				// Simply stop the fuzzer
 				event.Fuzzer.Stop()
 				return nil
@@ -349,7 +351,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
-			expectEventEmitted(f, &f.fuzzer.OnStartingEventEmitter)
+			expectEventEmitted(f, &f.fuzzer.Events.FuzzerStarting)
 
 			// Start the fuzzer
 			err := f.fuzzer.Start()
@@ -362,7 +364,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			originalCoverage := f.fuzzer.coverageMaps
 
 			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.OnStartingEventEmitter.Subscribe(func(event OnFuzzerStarting) error {
+			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
 				// Simply stop the fuzzer
 				event.Fuzzer.Stop()
 				return nil

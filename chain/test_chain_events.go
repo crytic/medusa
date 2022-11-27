@@ -2,21 +2,76 @@ package chain
 
 import (
 	"github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/events"
 )
 
-// BlockMiningEvent describes an event where a new block has been requested to be mined in the TestChain. This only
-// considers committed blocks.
-type BlockMiningEvent struct {
-	// Chain refers to the TestChain which emitted the event.
-	Chain *TestChain
+// TestChainEvents defines event emitters for a TestChain.
+type TestChainEvents struct {
+	// PendingBlockCreated emits events indicating a pending block was created on the chain.
+	PendingBlockCreated events.EventEmitter[PendingBlockCreatedEvent]
+
+	// PendingBlockAddedTx emits events indicating a pending block had a transaction added to it.
+	PendingBlockAddedTx events.EventEmitter[PendingBlockAddedTxEvent]
+
+	// PendingBlockCommitted emits events indicating a pending block was committed to the chain.
+	PendingBlockCommitted events.EventEmitter[PendingBlockCommittedEvent]
+
+	// PendingBlockDiscarded emits events indicating a pending block was discarded before being committed to the chain.
+	PendingBlockDiscarded events.EventEmitter[PendingBlockDiscardedEvent]
+
+	// BlocksRemoved emits events indicating a block was removed from the chain.
+	BlocksRemoved events.EventEmitter[BlocksRemovedEvent]
+
+	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was created on chain. This is called
+	// alongside ContractDeploymentRemovedEventEmitter when contract deployment changes are detected. e.g. If a
+	// contract is deployed and immediately destroyed within the same transaction, a ContractDeploymentsAddedEvent
+	// will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
+	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
+
+	// ContractDeploymentAddedEventEmitter emits events indicating a previously deployed contract was removed
+	// from the chain. This is called alongside ContractDeploymentAddedEventEmitter when contract deployment changes
+	// are detected. e.g. If a contract is deployed and immediately destroyed within the same transaction, a
+	// ContractDeploymentsAddedEvent will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
+	ContractDeploymentRemovedEventEmitter events.EventEmitter[ContractDeploymentsRemovedEvent]
 }
 
-// BlockMinedEvent describes an event where a new block is added to the TestChain. This only considers committed blocks.
-type BlockMinedEvent struct {
+// PendingBlockCreatedEvent describes an event where a new pending block was created, prior to any transactions being
+// added to it.
+type PendingBlockCreatedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 
-	// Block refers to the block that was added to the Chain.
+	// Block refers to the Chain's pending block which was just created.
+	Block *types.Block
+}
+
+// PendingBlockAddedTxEvent describes an event where a pending block had a transaction added to it.
+type PendingBlockAddedTxEvent struct {
+	// Chain refers to the TestChain which emitted the event.
+	Chain *TestChain
+
+	// Block refers to the pending block which the transaction was added to.
+	Block *types.Block
+
+	// TransactionIndex describes the index of the transaction in the pending block.
+	TransactionIndex int
+}
+
+// PendingBlockCommittedEvent describes an event where a pending block is committed to the chain as the new head.
+type PendingBlockCommittedEvent struct {
+	// Chain refers to the TestChain which emitted the event.
+	Chain *TestChain
+
+	// Block refers to the pending block that was committed to the Chain as the new head.
+	Block *types.Block
+}
+
+// PendingBlockDiscardedEvent describes an event where a pending block is discarded from the chain before being committed.
+type PendingBlockDiscardedEvent struct {
+	// Chain refers to the TestChain which emitted the event.
+	Chain *TestChain
+
+	// Block refers to the pending block that was discarded before being committed to the Chain.
 	Block *types.Block
 }
 

@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/chain/types"
-	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
@@ -46,18 +45,8 @@ type FuzzerWorker struct {
 	// arguments)
 	valueGenerator valuegeneration.ValueGenerator
 
-	// OnDeployedContractAddedEventEmitter emits events when the FuzzerWorker detects a newly deployed contract
-	// on its underlying chain.
-	OnDeployedContractAddedEventEmitter events.EventEmitter[OnWorkerDeployedContractAdded]
-	// OnDeployedContractDeletedEventEmitter emits events when the FuzzerWorker detects a deployed contract no
-	// longer exists on its underlying chain.
-	OnDeployedContractDeletedEventEmitter events.EventEmitter[OnWorkerDeployedContractDeleted]
-	// OnCallSequenceTestingEventEmitter emits events when the FuzzerWorker is about to generate and test a new
-	// call sequence.
-	OnCallSequenceTestingEventEmitter events.EventEmitter[OnWorkerCallSequenceTesting]
-	// OnCallSequenceTestedEventEmitter emits events when the FuzzerWorker has finished generating and testing a
-	// new call sequence.
-	OnCallSequenceTestedEventEmitter events.EventEmitter[OnWorkerCallSequenceTested]
+	// Events describes the event system for the FuzzerWorker.
+	Events FuzzerWorkerEvents
 }
 
 // CallSequenceTestFunc defines a method called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
@@ -126,16 +115,6 @@ func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
 }
 
-// onChainBlockMiningEvent is the event callback used when the chain is attempting to mine a new block.
-func (fw *FuzzerWorker) onChainBlockMiningEvent(event chain.BlockMiningEvent) error {
-	// Clear any of our tracer's coverage maps prior to mining any new blocks. This way, coverage maps will be
-	// per-block.
-	if fw.coverageTracer != nil {
-		fw.coverageTracer.Reset()
-	}
-	return nil
-}
-
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
 // It attempts bytecode matching and updates the list of deployed contracts the worker should use for fuzz testing.
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) error {
@@ -156,7 +135,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 			fw.updateStateChangingMethods()
 
 			// Emit an event indicating the worker detected a new contract deployment on its chain.
-			err := fw.OnDeployedContractAddedEventEmitter.Publish(OnWorkerDeployedContractAdded{
+			err := fw.Events.ContractAdded.Publish(FuzzerWorkerContractAddedEvent{
 				Worker:             fw,
 				ContractAddress:    event.Contract.Address,
 				ContractDefinition: contractDefinition,
@@ -199,7 +178,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.Contra
 	fw.updateStateChangingMethods()
 
 	// Emit an event indicating the worker detected the removal of a previously deployed contract on its chain.
-	err := fw.OnDeployedContractDeletedEventEmitter.Publish(OnWorkerDeployedContractDeleted{
+	err := fw.Events.ContractDeleted.Publish(FuzzerWorkerContractDeletedEvent{
 		Worker:             fw,
 		ContractAddress:    event.Contract.Address,
 		ContractDefinition: contractDefinition,
@@ -229,36 +208,40 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 }
 
 // updateCoverageAndCorpus updates the corpus with the provided corpus input variables if new coverage was achieved
-// when executing the last block. Coverage is measured on the transactions in the last executed block, thus the last
+// when executing the last call. Coverage is measured on the transactions in the last executed block, thus the last
 // block provided in the sequence is expected to be the last block constructed by the worker.
 func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Block) error {
-	// If we have coverage-guided fuzzing enabled, we check if coverage has increased
-	if fw.coverageTracer != nil {
-		// Merge coverage across all transactions executed in our last block.
-		blockCoverageMaps := fw.coverageTracer.CoverageMaps()
+	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
+	if fw.coverageTracer == nil || len(callSequenceBlocks) == 0 {
+		return nil
+	}
 
-		// Merge our block coverage maps into our total coverage maps and check if we had an update.
-		coverageUpdated, err := fw.fuzzer.coverageMaps.Update(blockCoverageMaps)
+	// Obtain our coverage maps for our last call.
+	lastBlockResults := callSequenceBlocks[len(callSequenceBlocks)-1].MessageResults
+	lastMessageResult := lastBlockResults[len(lastBlockResults)-1]
+	lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
+
+	// Memory optimization: Remove them from the results now that we obtained them, to free memory later.
+	coverage.RemoveCoverageTracerResults(lastMessageResult)
+
+	// Merge the coverage maps into our total coverage maps and check if we had an update.
+	coverageUpdated, err := fw.fuzzer.coverageMaps.Update(lastMessageCoverageMaps)
+	if err != nil {
+		return err
+	}
+	if coverageUpdated {
+		// New coverage has been found with this call sequence, so we add it to the corpus.
+		entry := corpus.NewCorpusEntry(callSequenceBlocks)
+		err = fw.fuzzer.corpus.AddCallSequence(*entry)
 		if err != nil {
 			return err
 		}
-		if coverageUpdated {
-			// New coverage has been found, add it to the corpus
-			// First convert block sequence to a single corpus entry
-			entry := corpus.NewCorpusEntry(callSequenceBlocks)
 
-			// Add corpus entry
-			err = fw.fuzzer.corpus.AddCallSequence(*entry)
-			if err != nil {
-				return err
-			}
-
-			// TODO: For now we flush immediately but later we'll want to move this to another routine that flushes
-			//  periodically so fuzzer workers don't collide with mutex locks.
-			err = fw.fuzzer.corpus.Flush()
-			if err != nil {
-				return err
-			}
+		// TODO: For now we flush immediately but later we'll want to move this to another routine that flushes
+		//  periodically so fuzzer workers don't collide with mutex locks.
+		err = fw.fuzzer.corpus.Flush()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -300,7 +283,7 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	if selectedMethod.Method.StateMutability == "payable" {
 		value = fw.valueGenerator.GenerateInteger(false, 64)
 	}
-	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, data)
+	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, nil, nil, data)
 
 	// Return our call sequence element.
 	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg), nil
@@ -333,8 +316,27 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 			}
 		}
 
-		// Create a new block with our call.
-		block, err := fw.chain.MineBlock(callSequence[i].Call())
+		// Create a new pending block
+		// TODO: Select smart params for jumping this
+		block, err := fw.chain.PendingBlockCreate()
+		if err != nil {
+			return i, nil, err
+		}
+
+		// Add our transaction to it.
+		err = fw.chain.PendingBlockAddTx(callSequence[i].Call)
+		if err != nil {
+			return i, nil, err
+		}
+
+		// Set our chain reference data for this call sequence element. It should now be the latest item in our block.
+		callSequence[i].ChainReference = &fuzzerTypes.CallSequenceElementChainReference{
+			Block:            block,
+			TransactionIndex: len(block.Messages) - 1,
+		}
+
+		// Commit the block
+		err = fw.chain.PendingBlockCommit()
 		if err != nil {
 			return i, nil, err
 		}
@@ -390,7 +392,25 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		// Replay the call sequence
 		for _, callSequenceElement := range testSeq {
 			// Create a new block with our call
-			block, err := fw.chain.MineBlock(callSequenceElement.Call())
+			block, err := fw.chain.PendingBlockCreate()
+			if err != nil {
+				return nil, err
+			}
+
+			// Add our transaction to it.
+			err = fw.chain.PendingBlockAddTx(callSequenceElement.Call)
+			if err != nil {
+				return nil, err
+			}
+
+			// Set our chain reference data for this call sequence element. It should now be the latest item in our block.
+			callSequenceElement.ChainReference = &fuzzerTypes.CallSequenceElementChainReference{
+				Block:            block,
+				TransactionIndex: len(block.Messages) - 1,
+			}
+
+			// Commit the block
+			err = fw.chain.PendingBlockCommit()
 			if err != nil {
 				return nil, err
 			}
@@ -444,9 +464,8 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	}
 
 	// Subscribe our chain event handlers
-	fw.chain.BlockMiningEventEmitter.Subscribe(fw.onChainBlockMiningEvent)
-	fw.chain.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
-	fw.chain.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
+	fw.chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
+	fw.chain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
 	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
 	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
@@ -478,7 +497,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Emit an event indicating the worker is about to test a new call sequence.
-		err := fw.OnCallSequenceTestingEventEmitter.Publish(OnWorkerCallSequenceTesting{
+		err := fw.Events.CallSequenceTesting.Publish(FuzzerWorkerCallSequenceTestingEvent{
 			Worker: fw,
 		})
 		if err != nil {
@@ -503,7 +522,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Emit an event indicating the worker is about to test a new call sequence.
-		err = fw.OnCallSequenceTestedEventEmitter.Publish(OnWorkerCallSequenceTested{
+		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
 			Worker: fw,
 		})
 		if err != nil {

@@ -29,9 +29,9 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 	}
 
 	// Subscribe the provider to relevant events the fuzzer emits.
-	fuzzer.OnStartingEventEmitter.Subscribe(t.onFuzzerStarting)
-	fuzzer.OnStoppingEventEmitter.Subscribe(t.onFuzzerStopping)
-	fuzzer.OnWorkerCreatedEventEmitter.Subscribe(t.onWorkerCreated)
+	fuzzer.Events.FuzzerStarting.Subscribe(t.onFuzzerStarting)
+	fuzzer.Events.FuzzerStopping.Subscribe(t.onFuzzerStopping)
+	fuzzer.Events.WorkerCreated.Subscribe(t.onWorkerCreated)
 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.CallSequenceTestFunctions = append(fuzzer.CallSequenceTestFunctions, t.callSequencePostCallTest)
@@ -67,24 +67,21 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	if err != nil {
 		return nil, false, err
 	}
-	methodId := types.GetContractMethodID(lastCall.Contract(), lastCallMethod)
+	methodId := types.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Obtain the last block
 	lastBlock := worker.chain.Head()
 
-	// Obtain our transaction index in the block
-	//  TODO: When we support multiple calls per block in the fuzzer, replace this hardcoded index.
-	lastCallResults := lastBlock.MessageResults()[0]
-
 	// Check if we encountered an assertion error.
-	encounteredAssertionVMError := t.isAssertionVMError(lastCallResults.ExecutionResult.Err)
+	//  TODO: When we support multiple calls per block in the fuzzer, replace this hardcoded index.
+	encounteredAssertionVMError := t.isAssertionVMError(lastBlock.MessageResults[0].ExecutionResult.Err)
 
 	return &methodId, encounteredAssertionVMError, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
 // in a "not started" state for every property test method discovered in the contract definitions known to the Fuzzer.
-func (t *AssertionTestCaseProvider) onFuzzerStarting(event OnFuzzerStarting) error {
+func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
 	t.testCases = make(map[types.ContractMethodID]*AssertionTestCase)
 
@@ -117,7 +114,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event OnFuzzerStarting) err
 // onFuzzerStarting is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
-func (t *AssertionTestCaseProvider) onFuzzerStopping(event OnFuzzerStopping) error {
+func (t *AssertionTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
 	// Loop through each test case and set any tests with a running status to a passed status.
 	for _, testCase := range t.testCases {
 		if testCase.status == TestCaseStatusRunning {
@@ -129,9 +126,9 @@ func (t *AssertionTestCaseProvider) onFuzzerStopping(event OnFuzzerStopping) err
 
 // onWorkerCreated is the event handler triggered when a FuzzerWorker is created by the Fuzzer. It ensures state tracked
 // for that worker index is refreshed and subscribes to relevant worker events.
-func (t *AssertionTestCaseProvider) onWorkerCreated(event OnWorkerCreated) error {
+func (t *AssertionTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreatedEvent) error {
 	// Subscribe to relevant worker events.
-	event.Worker.OnDeployedContractAddedEventEmitter.Subscribe(t.onWorkerDeployedContractAdded)
+	event.Worker.Events.ContractAdded.Subscribe(t.onWorkerDeployedContractAdded)
 	return nil
 }
 
@@ -139,7 +136,7 @@ func (t *AssertionTestCaseProvider) onWorkerCreated(event OnWorkerCreated) error
 // on its underlying chain. It ensures any property test methods which the deployed contract contains are tracked by the
 // provider for testing. Any test cases previously made for these methods which are in a "not started" state are put
 // into a "running" state, as they are now potentially reachable for testing.
-func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event OnWorkerDeployedContractAdded) error {
+func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWorkerContractAddedEvent) error {
 	// If we don't have a contract definition, we can't run tests against the contract.
 	if event.ContractDefinition == nil {
 		return nil

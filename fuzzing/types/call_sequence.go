@@ -32,48 +32,43 @@ func (cs CallSequence) String() string {
 // It contains the information regarding the contract/method being called as well as the call message data itself.
 type CallSequenceElement struct {
 	// contract describes the contract which was targeted by a transaction.
-	contract *Contract
+	Contract *Contract
 
 	// call represents the underlying message call.
-	call *types.CallMessage
+	Call *types.CallMessage
+
+	// ChainReference describes the inclusion of the Call as a transaction in a block. This block may not yet be
+	// committed to its underlying chain if this is a CallSequenceElement was just executed. Additional transactions
+	// may be included before the block is committed. This reference will remain compatible after the block finalizes.
+	ChainReference *CallSequenceElementChainReference
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
 func NewCallSequenceElement(contract *Contract, call *types.CallMessage) *CallSequenceElement {
 	callSequenceElement := &CallSequenceElement{
-		contract: contract,
-		call:     call,
+		Contract:       contract,
+		Call:           call,
+		ChainReference: nil,
 	}
 	return callSequenceElement
-}
-
-// Contract obtains the Contract instance which is being targeted by CallSequenceElement.Call.
-func (cse *CallSequenceElement) Contract() *Contract {
-	return cse.contract
-}
-
-// Call obtains the CallMessage used in this CallSequenceElement.
-func (cse *CallSequenceElement) Call() *types.CallMessage {
-	return cse.call
 }
 
 // Method obtains the abi.Method targeted by the CallSequenceElement.Call, or an error if one occurred while obtaining
 // it.
 func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	// If there is no resolved contract definition, we return no method.
-	if cse.contract == nil {
+	if cse.Contract == nil {
 		return nil, nil
 	}
-	return cse.contract.CompiledContract().Abi.MethodById(cse.call.Data())
+	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data())
 }
 
 // String returns a displayable string representing the CallSequenceElement.
 func (cse *CallSequenceElement) String() string {
 	// Obtain our contract name
-	contract := cse.Contract()
 	contractName := "<unresolved contract>"
-	if contract != nil {
-		contractName = contract.Name()
+	if cse.Contract != nil {
+		contractName = cse.Contract.Name()
 	}
 
 	// Obtain our method name
@@ -84,7 +79,7 @@ func (cse *CallSequenceElement) String() string {
 	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
-	args, err := method.Inputs.Unpack(cse.Call().Data()[4:])
+	args, err := method.Inputs.Unpack(cse.Call.Data()[4:])
 	argsText := "<unresolved args>"
 	if err == nil {
 		// Serialize our args to a JSON string and set it as our method name if we succeeded.
@@ -103,9 +98,25 @@ func (cse *CallSequenceElement) String() string {
 		contractName,
 		methodName,
 		argsText,
-		cse.Call().Gas(),
-		cse.Call().GasPrice().String(),
-		cse.Call().Value().String(),
-		cse.Call().From(),
+		cse.Call.Gas(),
+		cse.Call.GasPrice().String(),
+		cse.Call.Value().String(),
+		cse.Call.From(),
 	)
+}
+
+// CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being
+// included in a block as a transaction.
+type CallSequenceElementChainReference struct {
+	// Block describes the block the CallSequenceElement.Call was included in as a transaction. This block may be
+	// pending commitment to the chain, or already committed.
+	Block *types.Block
+
+	// TransactionIndex describes the index at which the transaction was included into the Block.
+	TransactionIndex int
+}
+
+// MessageResults obtains the results of executing the CallSequenceElement.
+func (cr *CallSequenceElementChainReference) MessageResults() *types.CallMessageResults {
+	return cr.Block.MessageResults[cr.TransactionIndex]
 }
