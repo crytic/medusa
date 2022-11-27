@@ -43,8 +43,7 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
-	// configuration variable are deployed, any remaining contracts will then be deployed
+	// DeploymentOrder determines the order in which the contracts should be deployed
 	DeploymentOrder []string `json:"deploymentOrder"`
 
 	// DeployerAddress describe the account address to be used to deploy contracts.
@@ -108,12 +107,6 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 		return nil, err
 	}
 
-	// Making validation a separate function in case we want to add other checks
-	// The only check currently is to make sure at least one test prefix is provided
-	err = projectConfig.Validate()
-	if err != nil {
-		return nil, err
-	}
 	return projectConfig, nil
 }
 
@@ -141,6 +134,11 @@ func (p *ProjectConfig) Validate() error {
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
+	}
+
+	// Verify that the sequence length is a positive number
+	if p.Fuzzing.MaxTxSequenceLength <= 0 {
+		return errors.New("project configuration must specify a positive number for the transaction sequence length")
 	}
 
 	// Verify contract deployment order is not empty.

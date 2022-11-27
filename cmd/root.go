@@ -8,7 +8,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "medusa",
 	Short: "A Solidity smart contract fuzzing harness",
-	Long: "medusa is a solidity smart contract fuzzing harness",
+	Long:  "medusa is a solidity smart contract fuzzing harness",
 }
 
 // Execute provides an exportable function to invoke the CLI.

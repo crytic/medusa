@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/fuzzing"
 	"github.com/trailofbits/medusa/fuzzing/config"
@@ -12,6 +13,9 @@ import (
 // argFuzzConfigPath describes the project configuration path
 var argFuzzConfigPath string
 
+// defaultProjectConfig describes the default project configuration for the default compilation platform
+var defaultProjectConfig *config.ProjectConfig
+
 // fuzzCmd represents the command provider for fuzzing
 var fuzzCmd = &cobra.Command{
 	Use:   "fuzz",
@@ -21,7 +25,19 @@ var fuzzCmd = &cobra.Command{
 }
 
 func init() {
-	fuzzCmd.PersistentFlags().StringVarP(&argFuzzConfigPath, "in", "i", "", "project configuration input path")
+	// Define err here to prevent variable shadowing of defaultProjectConfig
+	var err error
+	// Get the default project config
+	defaultProjectConfig, err = config.GetDefaultProjectConfig(DefaultCompilationPlatform)
+	// Throw a panic if we cannot get the defaultProjectConfig
+	if err != nil {
+		panic(fmt.Sprintf("unable to get default project config for the %s compilation platform", DefaultCompilationPlatform))
+	}
+
+	// Add all the flags allowed for the fuzz command
+	addFuzzFlags()
+
+	// Add the fuzz command and its associated flags to the root command
 	rootCmd.AddCommand(fuzzCmd)
 }
 
@@ -38,6 +54,24 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 
 	// Read our project configuration
 	projectConfig, err := config.ReadProjectConfigFromFile(argFuzzConfigPath)
+	// If a config file does not exist, then the default config will be used
+	if err != nil {
+		projectConfig, err = config.GetDefaultProjectConfig(DefaultCompilationPlatform)
+		// Throw if GetDefaultProjectConfig doesn't work
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update the project configuration given whatever flags were set using the CLI
+	err = updateProjectConfigWithCLIArguments(cmd, projectConfig)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("new project config is %v\n", projectConfig)
+
+	// Validate the project config for any errors
+	err = projectConfig.Validate()
 	if err != nil {
 		return err
 	}

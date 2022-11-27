@@ -9,7 +9,8 @@
 `medusa` is configuration file driven. Command-line arguments simply specify where to initialize a new medusa project configuration or where to ingest one.
 
 ### Initializing a project configuration
-To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a supported `platform` argument will present you a list of supported platforms.
+To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a `platform` argument will result in using `crytic-compile` 
+as the default compilation platform.
 
 ### Understanding the project configuration format
 After initializing a `medusa` project in a given directory, a `medusa.json` file will be created. This is the project configuration file which dictates compilation and fuzzing parameters for `medusa`.
@@ -85,6 +86,16 @@ The structure is described below:
 - `compilation` defines parameters used to compile a given target to be fuzzed:
   - `platform` refers to the type of platform to be used to compile the underlying target.
   - `platformConfig` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
+
+### Using the CLI to update project configuration
+In addition to using a project configuration file to provide the necessary parameters to medusa, you can also use medusa's command-line interface (CLI).
+Note that the CLI does not provide the same level of control to medusa's configuration as the configuration file does. Currently, the following X CLI flags can be used with `medusa fuzz` to update the configuration.
+TODO
+
+The CLI and the configuration file can be used in tandem. This combination results in three possibilities:
+1. **Custom configuration file and no CLI flags**: This will result in medusa retrieving all of its project configuration parameters directly from the file.
+2. **Custom configuration file and CLI flags**: This will result in medusa using the custom file as the "base configuration" and using the CLI flags to override specific configuration items.
+3. **No configuration file and CLI flags**: This will result in medusa using the default configuration (derived from `medusa init`) and using the CLI flags to override specific configuration items.
 
 ### Writing property tests
 Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.

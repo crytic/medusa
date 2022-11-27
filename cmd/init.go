@@ -29,15 +29,16 @@ func init() {
 
 // cmdValidateInitArgs validates CLI arguments
 func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
-	// Validate we have a positional argument to represent our platform
-	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
-		supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
-		return fmt.Errorf("init requires a platform argument (options: %s)", strings.Join(supportedPlatforms, ", "))
+	// Cache supported platforms
+	supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
+
+	// Make sure we have no more than 1 arg
+	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
+		return fmt.Errorf("init accepts at most 1 platform argument (options: %s). default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
 	}
 
-	// Ensure the provided argument refers to a supported platform
-	if !compilation.IsSupportedCompilationPlatform(args[0]) {
-		supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
+	// Ensure the optional provided argument refers to a supported platform
+	if len(args) == 1 && !compilation.IsSupportedCompilationPlatform(args[0]) {
 		return fmt.Errorf("init was provided invalid platform argument '%s' (options: %s)", args[0], strings.Join(supportedPlatforms, ", "))
 	}
 
@@ -55,13 +56,22 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		argInitOutputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
-	// Get a default project configuration
-	projectConfig, err := config.GetDefaultProjectConfig(args[0])
+	// By default, projectConfig will be the default project config for the DefaultCompilationPlatform
+	projectConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
 		return err
 	}
 
-	// Read our project configuration
+	// If a platform is provided, then the projectConfig will be the default project config for that
+	// specific compilation platform (assuming it is not the default)
+	if len(args) == 1 && args[0] != DefaultCompilationPlatform {
+		projectConfig, err = config.GetDefaultProjectConfig(args[0])
+		if err != nil {
+			return err
+		}
+	}
+
+	// Write our project configuration
 	err = projectConfig.WriteToFile(argInitOutputPath)
 	if err != nil {
 		return err
