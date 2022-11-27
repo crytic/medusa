@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 )
 
@@ -144,6 +145,16 @@ func (p *ProjectConfig) Validate() error {
 	// Verify contract deployment order is not empty.
 	if len(p.Fuzzing.DeploymentOrder) == 0 {
 		return errors.New("project configuration must specify at least one contract to be deployed")
+	}
+
+	// Verify that senders are well-formed addresses
+	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
+		return errors.New("project configuration must specify only well-formed sender address(es)")
+	}
+
+	// Verify that deployer is a well-formed address
+	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
+		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
 	// Verify property testing fields.
