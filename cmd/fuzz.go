@@ -23,7 +23,7 @@ var fuzzCmd = &cobra.Command{
 func cmdValidateFuzzArgs(cmd *cobra.Command, args []string) error {
 	// Make sure we have no positional args
 	if err := cobra.NoArgs(cmd, args); err != nil {
-		return fmt.Errorf("fuzz does not accept any positional arguments, only flags and their associated arguments")
+		return fmt.Errorf("fuzz does not accept any positional arguments, only flags and their associated values")
 	}
 	return nil
 }
@@ -53,8 +53,8 @@ func init() {
 // Third, if we don't find the default file, we will use the CLI as the default config
 func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// Check to see if --config flag was used and store the value of --config flag
-	changed := cmd.PersistentFlags().Changed("config")
-	argFuzzConfigPath, err := cmd.PersistentFlags().GetString("config")
+	changed := cmd.Flags().Changed("config")
+	argFuzzConfigPath, err := cmd.Flags().GetString("config")
 	if err != nil {
 		return err
 	}

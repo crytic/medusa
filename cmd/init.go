@@ -23,7 +23,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.LocalFlags().StringVarP(&argInitOutputPath, "out", "o", "", "output path for the new project configuration file")
+	initCmd.Flags().StringVarP(&argInitOutputPath, "out", "o", "", "output path for the new project configuration file")
 	rootCmd.AddCommand(initCmd)
 }
 
