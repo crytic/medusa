@@ -39,7 +39,6 @@ func init() {
 	// Note: this is a bit clunky and will have to change if we update the config in any way
 	// TODO: Fine with removing it if unnecessary
 	fuzzCmd.Flags().SortFlags = false
-	fuzzCmd.PersistentFlags().SortFlags = false
 
 	// Add all the flags allowed for the fuzz command
 	addFuzzFlags(defaultProjectConfig)

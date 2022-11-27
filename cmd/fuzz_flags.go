@@ -10,42 +10,42 @@ import (
 // users of the default values
 func addFuzzFlags(config *config.ProjectConfig) {
 	// Config file
-	fuzzCmd.PersistentFlags().String("config", "", "path to config file")
+	fuzzCmd.LocalFlags().String("config", "", "path to config file")
 
 	// Number of workers
-	fuzzCmd.PersistentFlags().Int("workers", 0,
+	fuzzCmd.LocalFlags().Int("workers", 0,
 		fmt.Sprintf("number of fuzzer workers (unless a config file is provided, default is %d)", config.Fuzzing.Workers))
 
 	// Timeout
-	fuzzCmd.PersistentFlags().Int("timeout", 0,
+	fuzzCmd.LocalFlags().Int("timeout", 0,
 		fmt.Sprintf("number of seconds to run the fuzzer campaign for (unless a config file is provided, default is %d). 0 means that timeout is not enforced", config.Fuzzing.Timeout))
 
 	// Test limit
-	fuzzCmd.PersistentFlags().Uint64("test-limit", 0,
+	fuzzCmd.LocalFlags().Uint64("test-limit", 0,
 		fmt.Sprintf("number of transactions to test before exiting (unless a config file is provided, default is %d). 0 means that test limit is not enforced", config.Fuzzing.TestLimit))
 
 	// Tx sequence length
-	fuzzCmd.PersistentFlags().Int("seq-len", 0,
+	fuzzCmd.LocalFlags().Int("seq-len", 0,
 		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", config.Fuzzing.MaxTxSequenceLength))
 
 	// Deployment order
-	fuzzCmd.PersistentFlags().StringSlice("deployment-order", []string{},
+	fuzzCmd.LocalFlags().StringSlice("deployment-order", []string{},
 		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", config.Fuzzing.DeploymentOrder))
 
 	// Corpus directory
-	fuzzCmd.PersistentFlags().String("corpus-dir", "",
+	fuzzCmd.LocalFlags().String("corpus-dir", "",
 		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", config.Fuzzing.CorpusDirectory))
 
 	// Senders
-	fuzzCmd.PersistentFlags().StringSlice("senders", []string{},
+	fuzzCmd.LocalFlags().StringSlice("senders", []string{},
 		fmt.Sprintf("account address(es) used to send state-changing txns (unless a config file is provided, default addresses are %v)", config.Fuzzing.SenderAddresses))
 
 	// Deployer address
-	fuzzCmd.PersistentFlags().String("deployer", "",
+	fuzzCmd.LocalFlags().String("deployer", "",
 		fmt.Sprintf("account address used to deploy contracts (unless a config file is provided, default is %s)", config.Fuzzing.DeployerAddress))
 
 	// Assertion mode
-	fuzzCmd.PersistentFlags().Bool("assertion-mode", false,
+	fuzzCmd.LocalFlags().Bool("assertion-mode", false,
 		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", config.Fuzzing.Testing.AssertionTesting.Enabled))
 }
 
@@ -53,72 +53,72 @@ func addFuzzFlags(config *config.ProjectConfig) {
 func updateProjectConfigWithFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
 	var err error
 	// Update number of workers
-	if cmd.PersistentFlags().Changed("workers") {
-		projectConfig.Fuzzing.Workers, err = cmd.PersistentFlags().GetInt("workers")
+	if cmd.LocalFlags().Changed("workers") {
+		projectConfig.Fuzzing.Workers, err = cmd.LocalFlags().GetInt("workers")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update timeout
-	if cmd.PersistentFlags().Changed("timeout") {
-		projectConfig.Fuzzing.Timeout, err = cmd.PersistentFlags().GetInt("timeout")
+	if cmd.LocalFlags().Changed("timeout") {
+		projectConfig.Fuzzing.Timeout, err = cmd.LocalFlags().GetInt("timeout")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update test limit
-	if cmd.PersistentFlags().Changed("test-limit") {
-		projectConfig.Fuzzing.TestLimit, err = cmd.PersistentFlags().GetUint64("test-limit")
+	if cmd.LocalFlags().Changed("test-limit") {
+		projectConfig.Fuzzing.TestLimit, err = cmd.LocalFlags().GetUint64("test-limit")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update sequence length
-	if cmd.PersistentFlags().Changed("seq-len") {
-		projectConfig.Fuzzing.MaxTxSequenceLength, err = cmd.PersistentFlags().GetInt("seq-len")
+	if cmd.LocalFlags().Changed("seq-len") {
+		projectConfig.Fuzzing.MaxTxSequenceLength, err = cmd.LocalFlags().GetInt("seq-len")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update deployment order
-	if cmd.PersistentFlags().Changed("deployment-order") {
-		projectConfig.Fuzzing.DeploymentOrder, err = cmd.PersistentFlags().GetStringSlice("deployment-order")
+	if cmd.LocalFlags().Changed("deployment-order") {
+		projectConfig.Fuzzing.DeploymentOrder, err = cmd.LocalFlags().GetStringSlice("deployment-order")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update corpus directory
-	if cmd.PersistentFlags().Changed("corpus-dir") {
-		projectConfig.Fuzzing.CorpusDirectory, err = cmd.PersistentFlags().GetString("corpus-dir")
+	if cmd.LocalFlags().Changed("corpus-dir") {
+		projectConfig.Fuzzing.CorpusDirectory, err = cmd.LocalFlags().GetString("corpus-dir")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update senders
-	if cmd.PersistentFlags().Changed("senders") {
-		projectConfig.Fuzzing.SenderAddresses, err = cmd.PersistentFlags().GetStringSlice("senders")
+	if cmd.LocalFlags().Changed("senders") {
+		projectConfig.Fuzzing.SenderAddresses, err = cmd.LocalFlags().GetStringSlice("senders")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update deployer address
-	if cmd.PersistentFlags().Changed("deployer") {
-		projectConfig.Fuzzing.DeployerAddress, err = cmd.PersistentFlags().GetString("deployer")
+	if cmd.LocalFlags().Changed("deployer") {
+		projectConfig.Fuzzing.DeployerAddress, err = cmd.LocalFlags().GetString("deployer")
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update assertion mode enablement
-	if cmd.Flags().Changed("assertion-mode") {
-		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.Flags().GetBool("assertion-mode")
+	if cmd.LocalFlags().Changed("assertion-mode") {
+		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.LocalFlags().GetBool("assertion-mode")
 		if err != nil {
 			return err
 		}
