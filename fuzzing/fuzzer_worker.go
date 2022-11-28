@@ -369,6 +369,9 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 
+		// Update our metrics
+		fw.workerMetrics().callsTested++
+
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil
@@ -569,8 +572,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence has concluded: %v", err)
 		}
 
-		// Update our metrics
-		fw.workerMetrics().callsTested += uint64(txsTested)
+		// Update our sequences tested metrics
 		fw.workerMetrics().sequencesTested++
 		sequencesTested++
 	}
