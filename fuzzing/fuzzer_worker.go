@@ -247,13 +247,15 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequence fuzzerTypes.CallSeq
 // deployed to this FuzzerWorker's Chain with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, error) {
+	// TODO: Replace use of rand.Intn here as we'll want to use a seeded worker-specific rng for reproducibility in
+	//  the value generator, here, and elsewhere.
+
 	// Verify we have state changing methods to call
 	if len(fw.stateChangingMethods) == 0 {
 		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
 	}
 
 	// Select a random method and sender
-	// TODO: Don't use rand.Intn here as we'll want to use a seeded rng for reproducibility.
 	selectedMethod := &fw.stateChangingMethods[rand.Intn(len(fw.stateChangingMethods))]
 	selectedSender := fw.fuzzer.senders[rand.Intn(len(fw.fuzzer.senders))]
 
@@ -283,9 +285,30 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	// TODO: We likely want to make gasPrice configurable similarly.
 	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, &fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, data)
 
+	// Determine our delay values for this element
+	// TODO: If we want more txs to be added together in a block, we should add a switch to make a 0 block number
+	//  jump occur more often here.
+	blockNumberDelay := uint64(0)
+	blockTimestampDelay := uint64(0)
+	if fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay > 0 {
+		blockNumberDelay = rand.Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay + 1)
+	}
+	if fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay > 0 {
+		blockTimestampDelay = rand.Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
+	}
+
+	// For each block we jump, we need a unique time stamp for chain semantics, so if our block number jump is too small,
+	// while our timestamp jump is larger, we cap it.
+	if blockNumberDelay > blockTimestampDelay {
+		if blockTimestampDelay == 0 {
+			blockNumberDelay = 0
+		} else {
+			blockNumberDelay %= blockTimestampDelay
+		}
+	}
+
 	// Return our call sequence element.
-	// TODO: Replace block number and timestamp delay with configurable values.
-	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg, 1, 1), nil
+	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg, blockNumberDelay, blockTimestampDelay), nil
 }
 
 // testCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every

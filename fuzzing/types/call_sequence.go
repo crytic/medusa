@@ -51,7 +51,7 @@ func (cs CallSequence) ExecuteOnChain(chain *chain.TestChain, commitLastPendingB
 			}
 
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
-			if chain.PendingBlock() != nil && cs[i].BlockNumberDelay > 0 && cs[i].BlockTimestampDelay > 0 {
+			if chain.PendingBlock() != nil && cs[i].BlockNumberDelay > 0 {
 				err := chain.PendingBlockCommit()
 				if err != nil {
 					return executedCount, err
@@ -62,7 +62,7 @@ func (cs CallSequence) ExecuteOnChain(chain *chain.TestChain, commitLastPendingB
 			if chain.PendingBlock() == nil {
 				// The minimum step between blocks must be 1 in block number and timestamp, so we ensure this is the
 				// case.
-				numberDelay := cs[i].BlockTimestampDelay
+				numberDelay := cs[i].BlockNumberDelay
 				timeDelay := cs[i].BlockTimestampDelay
 				if numberDelay == 0 {
 					numberDelay = 1

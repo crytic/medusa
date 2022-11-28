@@ -36,13 +36,6 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
-	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
-	// limits for how many transactions can be included per block.
-	BlockGasLimit uint64 `json:"blockGasLimit"`
-
-	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated trnasactions.
-	TransactionGasLimit uint64 `json:"transactionGasLimit"`
-
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
@@ -60,6 +53,21 @@ type FuzzingConfig struct {
 	// SenderAddresses describe a set of account addresses to be used to send state-changing txs (calls) in fuzzing
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
+
+	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
+	// compared to the previous.
+	MaxBlockNumberDelay uint64 `json:"blockNumberDelayMax"`
+
+	// MaxBlockTimestampDelay describes the maximum distance in timestamps the fuzzer will use when generating blocks
+	// compared to the previous.
+	MaxBlockTimestampDelay uint64 `json:"blockTimestampDelayMax"`
+
+	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
+	// limits for how many transactions can be included per block.
+	BlockGasLimit uint64 `json:"blockGasLimit"`
+
+	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated trnasactions.
+	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`

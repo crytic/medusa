@@ -75,7 +75,7 @@ func (g *RandomValueGenerator) GenerateBool() bool {
 func (g *RandomValueGenerator) GenerateBytes() []byte {
 	g.randomProviderLock.Lock()
 	rangeSize := uint64(g.config.RandomBytesMaxSize-g.config.RandomBytesMinSize) + 1
-	b := make([]byte, int(rand.Uint64()%rangeSize)+g.config.RandomBytesMinSize)
+	b := make([]byte, int(g.randomProvider.Uint64()%rangeSize)+g.config.RandomBytesMinSize)
 	g.randomProvider.Read(b)
 	g.randomProviderLock.Unlock()
 	return b
@@ -94,7 +94,7 @@ func (g *RandomValueGenerator) GenerateFixedBytes(length int) []byte {
 func (g *RandomValueGenerator) GenerateString() string {
 	g.randomProviderLock.Lock()
 	rangeSize := uint64(g.config.RandomStringMaxSize-g.config.RandomStringMinSize) + 1
-	b := make([]byte, int(rand.Uint64()%rangeSize)+g.config.RandomStringMinSize)
+	b := make([]byte, int(g.randomProvider.Uint64()%rangeSize)+g.config.RandomStringMinSize)
 	g.randomProvider.Read(b)
 	g.randomProviderLock.Unlock()
 	return string(b)

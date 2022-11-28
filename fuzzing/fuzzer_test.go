@@ -263,12 +263,9 @@ func TestValueGenerationSolving(t *testing.T) {
 // TestVMCorrectness runs tests to ensure block properties are reported consistently within the EVM, as it's configured
 // by the chain.TestChain.
 func TestVMCorrectness(t *testing.T) {
-	// TODO: When we add block number and timestamp delay, we should set the config override to always set delay to 1.
-	//  This way, every tx processed is one that hits the contract, as it expects for its assertions.
-
 	// Test block numbers work as expected.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/vm_tests/block_number.sol",
+		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 		},
@@ -285,7 +282,7 @@ func TestVMCorrectness(t *testing.T) {
 
 	// Test timestamps behave as expected.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/vm_tests/block_timestamp.sol",
+		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 		},
@@ -302,10 +299,11 @@ func TestVMCorrectness(t *testing.T) {
 
 	// Test block hashes are reported consistently.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/vm_tests/block_hash.sol",
+		filePath: "testdata/contracts/vm_tests/block_hash_store_check.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			config.Fuzzing.TestLimit = 1_000       // this test should expose a failure quickly.
+			config.Fuzzing.MaxBlockNumberDelay = 1 // this test requires it be called every block number
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
