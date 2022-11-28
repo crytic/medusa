@@ -33,8 +33,9 @@ func addFuzzFlags(config *config.ProjectConfig) {
 		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", config.Fuzzing.DeploymentOrder))
 
 	// Corpus directory
+	// TODO: Update description when we add "coverage reports" feature
 	fuzzCmd.Flags().String("corpus-dir", "",
-		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", config.Fuzzing.CorpusDirectory))
+		fmt.Sprintf("directory path for corpus items (unless a config file is provided, default is %q)", config.Fuzzing.CorpusDirectory))
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},

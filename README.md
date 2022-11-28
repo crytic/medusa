@@ -9,8 +9,7 @@
 `medusa` can be configured both using a configuration file and with command line arguments.
 
 ### Initializing a project configuration
-To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a `platform` argument will result in using `crytic-compile` 
-as the default compilation platform. 
+To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a `platform` argument will result in using `crytic-compile` as the default compilation platform. 
 
 > Note that the output of `medusa init`, which is equivalent to `medusa init crytic-compile`, is considered the **default configuration** of `medusa`
 
