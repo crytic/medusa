@@ -8,6 +8,7 @@ import (
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
+	"golang.org/x/exp/maps"
 	"math/big"
 	"math/rand"
 )
@@ -79,6 +80,11 @@ func (fw *FuzzerWorker) WorkerIndex() int {
 	return fw.workerIndex
 }
 
+// workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
+func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
+	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+}
+
 // Fuzzer returns the parent Fuzzer which spawned this FuzzerWorker.
 func (fw *FuzzerWorker) Fuzzer() *Fuzzer {
 	return fw.fuzzer
@@ -89,9 +95,29 @@ func (fw *FuzzerWorker) Chain() *chain.TestChain {
 	return fw.chain
 }
 
-// workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
-func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
-	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+// DeployedContracts returns a mapping of deployed contract addresses to contract definitions, which are currently known
+// to the fuzzer.
+func (fw *FuzzerWorker) DeployedContracts() map[common.Address]*fuzzerTypes.Contract {
+	// Return a clone of the map, as we don't want external usage of this to break it.
+	return maps.Clone(fw.deployedContracts)
+}
+
+// DeployedContract obtains a contract deployed at the given address. If it does not exist, it returns nil.
+func (fw *FuzzerWorker) DeployedContract(address common.Address) *fuzzerTypes.Contract {
+	if contractDefinition, ok := fw.deployedContracts[address]; ok {
+		return contractDefinition
+	}
+	return nil
+}
+
+// ValueSet obtains the value set used to power the value generator for this worker.
+func (fw *FuzzerWorker) ValueSet() *valuegeneration.ValueSet {
+	return fw.valueSet
+}
+
+// ValueGenerator obtains the value generator used by this worker.
+func (fw *FuzzerWorker) ValueGenerator() *valuegeneration.ValueSet {
+	return fw.valueSet
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.

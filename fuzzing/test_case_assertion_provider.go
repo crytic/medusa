@@ -14,7 +14,7 @@ type AssertionTestCaseProvider struct {
 	// fuzzer describes the Fuzzer which this provider is attached to.
 	fuzzer *Fuzzer
 
-	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
+	// testCases is a map of contract-method IDs to assertion test cases.GetContractMethodID
 	testCases map[types.ContractMethodID]*AssertionTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
@@ -76,7 +76,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
-// in a "not started" state for every property test method discovered in the contract definitions known to the Fuzzer.
+// in a "not started" state for every method to test discovered in the contract definitions known to the Fuzzer.
 func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
 	t.testCases = make(map[types.ContractMethodID]*AssertionTestCase)
@@ -90,7 +90,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 				method := method
 
 				// Create our test case
-				propertyTestCase := &AssertionTestCase{
+				testCase := &AssertionTestCase{
 					status:         TestCaseStatusNotStarted,
 					targetContract: &contract,
 					targetMethod:   method,
@@ -99,8 +99,8 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 
 				// Add to our test cases and register them with the fuzzer
 				methodId := types.GetContractMethodID(&contract, &method)
-				t.testCases[methodId] = propertyTestCase
-				t.fuzzer.RegisterTestCase(propertyTestCase)
+				t.testCases[methodId] = testCase
+				t.fuzzer.RegisterTestCase(testCase)
 			}
 		}
 	}
@@ -129,7 +129,7 @@ func (t *AssertionTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreatedEve
 }
 
 // onWorkerDeployedContractAdded is the event handler triggered when a FuzzerWorker detects a new contract deployment
-// on its underlying chain. It ensures any property test methods which the deployed contract contains are tracked by the
+// on its underlying chain. It ensures any methods to test which the deployed contract contains are tracked by the
 // provider for testing. Any test cases previously made for these methods which are in a "not started" state are put
 // into a "running" state, as they are now potentially reachable for testing.
 func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWorkerContractAddedEvent) error {
@@ -156,8 +156,8 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 }
 
 // callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
-// and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether property
-// test invariants are upheld after each call the Fuzzer makes when testing a call sequence.
+// and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether invariants
+// in methods to test are upheld after each call the Fuzzer makes when testing a call sequence.
 func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 	// Create a list of shrink call sequence verifiers, which we populate for each failed test we want a call sequence
 	// shrunk for.
@@ -180,7 +180,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	}
 
 	// If we failed a test, we update our state immediately. We provide a shrink verifier which will update
-	// the call sequence for each shrunken sequence provided that fails the property test.
+	// the call sequence for each shrunken sequence provided that fails the test.
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
