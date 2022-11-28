@@ -69,12 +69,8 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	}
 	methodId := types.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
-	// Obtain the last block
-	lastBlock := worker.chain.Head()
-
 	// Check if we encountered an assertion error.
-	//  TODO: When we support multiple calls per block in the fuzzer, replace this hardcoded index.
-	encounteredAssertionVMError := t.isAssertionVMError(lastBlock.MessageResults[0].ExecutionResult.Err)
+	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult.Err)
 
 	return &methodId, encounteredAssertionVMError, nil
 }

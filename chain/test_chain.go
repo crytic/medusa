@@ -437,17 +437,17 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 		}
 	}
 
+	// Reload our state from our database
+	t.state, err = t.StateAfterBlockNumber(blockNumber)
+	if err != nil {
+		return err
+	}
+
 	// Emit our event for the removed blocks.
 	err = t.Events.BlocksRemoved.Publish(BlocksRemovedEvent{
 		Chain:  t,
 		Blocks: removedBlocks,
 	})
-	if err != nil {
-		return err
-	}
-
-	// Reload our state from our database
-	t.state, err = t.StateAfterBlockNumber(blockNumber)
 	return err
 }
 
@@ -480,6 +480,7 @@ func (t *TestChain) CreateMessage(from common.Address, to *common.Address, value
 
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
+// The state executed over may be a pending block state.
 func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionResult, error) {
 	// Obtain our state snapshot (note: this is different from the test chain snapshot)
 	snapshot := t.state.Snapshot()
@@ -505,6 +506,12 @@ func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionRe
 	t.state.RevertToSnapshot(snapshot)
 
 	return res, err
+}
+
+// PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
+// This may be nil if no pending block was created.
+func (t *TestChain) PendingBlock() *chainTypes.Block {
+	return t.pendingBlock
 }
 
 // PendingBlockCreate constructs an empty block which is pending addition to the chain. The block produces by this
@@ -632,14 +639,8 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	var usedGas uint64
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message.ToEVMMessage(), t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
-		return fmt.Errorf("test chain state write error: %v", err)
+		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
-
-	// Update our gas used in the block header
-	t.pendingBlock.Header.GasUsed += receipt.GasUsed
-
-	// Update our block's bloom filter
-	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
 
 	// Create our message result
 	messageResult := &chainTypes.CallMessageResults{
@@ -651,7 +652,9 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	// For every tracer we have, we call upon them to set their results for this transaction now.
 	t.transactionTracerRouter.CaptureTxEndSetAdditionalResults(messageResult)
 
-	// Write state changes to db
+	// Write state changes to database.
+	// NOTE: If this completes without an error, we know we didn't hit the block gas limit or other errors, so we are
+	// safe to update the block header afterwards.
 	root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
 	if err != nil {
 		return fmt.Errorf("test chain state write error: %v", err)
@@ -659,6 +662,12 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
 		return fmt.Errorf("test chain trie write error: %v", err)
 	}
+
+	// Update our gas used in the block header
+	t.pendingBlock.Header.GasUsed += receipt.GasUsed
+
+	// Update our block's bloom filter
+	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
 
 	// Update the header's state root hash
 	// Note: You could also retrieve the root without committing by using
@@ -670,7 +679,10 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	t.pendingBlock.MessageResults = append(t.pendingBlock.MessageResults, messageResult)
 
 	// Emit our contract change events for this message
-	t.emitContractChangeEvents(false, messageResult)
+	err = t.emitContractChangeEvents(false, messageResult)
+	if err != nil {
+		return err
+	}
 
 	// Emit our event for having added a new transaction to the pending block.
 	err = t.Events.PendingBlockAddedTx.Publish(PendingBlockAddedTxEvent{
@@ -724,10 +736,19 @@ func (t *TestChain) PendingBlockDiscard() error {
 	t.pendingBlock = nil
 
 	// Emit our contract change events for the messages reverted
-	t.emitContractChangeEvents(true, pendingBlock.MessageResults...)
+	err := t.emitContractChangeEvents(true, pendingBlock.MessageResults...)
+	if err != nil {
+		return err
+	}
+
+	// Reload our state from our database
+	t.state, err = t.StateAfterBlockNumber(t.HeadBlockNumber())
+	if err != nil {
+		return err
+	}
 
 	// Emit our pending block discarded event
-	err := t.Events.PendingBlockCommitted.Publish(PendingBlockCommittedEvent{
+	err = t.Events.PendingBlockCommitted.Publish(PendingBlockCommittedEvent{
 		Chain: t,
 		Block: pendingBlock,
 	})

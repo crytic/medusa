@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
 	"math/rand"
@@ -23,7 +24,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	// Add the requested number of entries.
 	numSequences := minSequences + (rand.Int() % (maxSequences - minSequences))
 	for i := 0; i < numSequences; i++ {
-		err := corpus.AddCallSequence(*getMockSimpleCorpusEntry(minBlocks + (rand.Int() % (maxBlocks - minBlocks))))
+		err := corpus.AddCallSequence(getMockCallSequence(minBlocks + (rand.Int() % (maxBlocks - minBlocks))))
 		if err != nil {
 			return nil, err
 		}
@@ -32,33 +33,27 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 }
 
 // getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
-func getMockSimpleCorpusEntry(numBlocks int) *CorpusCallSequence {
-	entry := &CorpusCallSequence{
-		Blocks: nil,
+func getMockCallSequence(size int) types.CallSequence {
+	cs := make(types.CallSequence, size)
+	for i := 0; i < size; i++ {
+		cs[i] = getMockCallSequenceElement()
 	}
-	for i := 0; i < numBlocks; i++ {
-		entry.Blocks = append(entry.Blocks, *getMockSimpleBlockBlock(numBlocks))
-	}
-	return entry
+	return cs
 }
 
 // getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
-func getMockSimpleBlockBlock(numTransactions int) *CorpusBlock {
-	block := &CorpusBlock{
-		Header: CorpusBlockHeader{
-			Number:    big.NewInt(int64(rand.Int())),
-			Timestamp: rand.Uint64(),
-		},
-		Transactions: nil,
+func getMockCallSequenceElement() *types.CallSequenceElement {
+	return &types.CallSequenceElement{
+		Contract:            nil,
+		Call:                getMockCallSequenceElementCall(),
+		BlockNumberDelay:    rand.Uint64(),
+		BlockTimestampDelay: rand.Uint64(),
+		ChainReference:      nil,
 	}
-	for i := 0; i < numTransactions; i++ {
-		block.Transactions = append(block.Transactions, *getMockTransaction())
-	}
-	return block
 }
 
-// getMockTransaction creates a mock CallMessage for testing
-func getMockTransaction() *chainTypes.CallMessage {
+// getMockCallSequenceElementCall creates a mock CallMessage for testing
+func getMockCallSequenceElementCall() *chainTypes.CallMessage {
 	to := common.BigToAddress(big.NewInt(rand.Int63()))
 	txn := chainTypes.CallMessage{
 		MsgFrom:      common.BigToAddress(big.NewInt(rand.Int63())),
@@ -74,47 +69,25 @@ func getMockTransaction() *chainTypes.CallMessage {
 	return &txn
 }
 
-// testCorpusBlockSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
-func testCorpusBlockSequencesAreEqual(t *testing.T, seqOne *CorpusCallSequence, seqTwo *CorpusCallSequence) {
+// testCorpusCallSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
+func testCorpusCallSequencesEqual(t *testing.T, expected types.CallSequence, actual types.CallSequence) {
 	// Ensure the lengths of both sequences are the same
-	assert.EqualValues(t, len(seqOne.Blocks), len(seqTwo.Blocks), "Different number of blocks in sequences")
+	assert.EqualValues(t, len(expected), len(actual), "Different number of calls in sequences")
 
 	// Iterate through seqOne
-	for idx, corpusBlock := range seqOne.Blocks {
-		// Make sure the headers are equal
-		testCorpusBlockHeadersAreEqual(t, corpusBlock.Header, seqTwo.Blocks[idx].Header)
-		// Make sure transactions are equal
-		testCorpusBlockTransactionsAreEqual(t, corpusBlock.Transactions, seqTwo.Blocks[idx].Transactions)
+	for i := 0; i < len(expected); i++ {
+		testCorpusCallSequenceElementsEqual(t, *expected[i], *actual[i])
 	}
 }
 
 // testCorpusBlockHeadersAreEqual tests whether two CorpusBlockHeader objects are equal to each other
-func testCorpusBlockHeadersAreEqual(t *testing.T, headerOne CorpusBlockHeader, headerTwo CorpusBlockHeader) {
-	// Make sure that the block number, and block timestamp are the same
-	assert.True(t, headerOne.Number.Cmp(headerTwo.Number) == 0, "Block numbers are not equal")
-	assert.EqualValues(t, headerOne.Timestamp, headerTwo.Timestamp, "Block timestamps are not equal")
-}
+func testCorpusCallSequenceElementsEqual(t *testing.T, expected types.CallSequenceElement, actual types.CallSequenceElement) {
+	// Make sure the call is equal
+	assert.EqualValues(t, *expected.Call, *actual.Call)
 
-// testCorpusBlockTransactionsAreEqual tests whether each transaction in two CorpusBlock objects are equal
-func testCorpusBlockTransactionsAreEqual(t *testing.T, txSeqOne []chainTypes.CallMessage, txSeqTwo []chainTypes.CallMessage) {
-	// Ensure the lengths of both transaction sequences are the same
-	assert.True(t, len(txSeqOne) == len(txSeqTwo), "Different number of transactions in blocks")
-	// Iterate across each transaction
-	for idx, txOne := range txSeqOne {
-		// De-reference our supposed parallel equivalent transaction.
-		txTwo := txSeqTwo[idx]
-
-		// Check all fields of a types.CallMessage
-		assert.True(t, txOne.MsgGasPrice.Cmp(txTwo.MsgGasPrice) == 0, "Gas prices field is not equal")
-		assert.True(t, txOne.MsgGasTipCap.Cmp(txTwo.MsgGasTipCap) == 0, "GasTipCaps field is not equal")
-		assert.True(t, txOne.MsgGasFeeCap.Cmp(txTwo.MsgGasFeeCap) == 0, "GasFeeCaps field is not equal")
-		assert.EqualValues(t, txOne.MsgNonce, txTwo.MsgNonce, "Nonces field is not equal")
-		assert.EqualValues(t, txOne.MsgData, txTwo.MsgData, "Data field is not equal")
-		assert.EqualValues(t, txOne.MsgGas, txTwo.MsgGas, "Gas field is not equal")
-		assert.True(t, txOne.MsgValue.Cmp(txTwo.MsgValue) == 0, "Value field is not equal")
-		assert.EqualValues(t, txOne.MsgTo.String(), txTwo.MsgTo.String(), "To field is not equal")
-		assert.EqualValues(t, txOne.MsgFrom.String(), txTwo.MsgFrom.String(), "From field is not equal")
-	}
+	// Make sure delays are equal
+	assert.EqualValues(t, expected.BlockNumberDelay, actual.BlockNumberDelay)
+	assert.EqualValues(t, expected.BlockTimestampDelay, actual.BlockTimestampDelay)
 }
 
 // TestCorpusReadWrite first writes the corpus to disk and then reads it back from the disk and ensures integrity.
@@ -158,12 +131,12 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Unmarshal byte array
-			var sameEntry CorpusCallSequence
+			var sameEntry types.CallSequence
 			err = json.Unmarshal(b, &sameEntry)
 			assert.NoError(t, err)
 
 			// Check equality
-			testCorpusBlockSequencesAreEqual(t, entryFile.data, &sameEntry)
+			testCorpusCallSequencesEqual(t, entryFile.data, sameEntry)
 		}
 	})
 }

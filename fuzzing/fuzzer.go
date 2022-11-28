@@ -287,64 +287,17 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 	baseBlockNumber := testChain.HeadBlockNumber()
 
 	for _, sequence := range corpusCallSequences {
-		// Loop through each block in the sequence
-		// Note that `block`'s blockNumber may be less/greater/equal to `testChain.HeadBlockNumber()`
-		// To maintain chain semantics we have to find the difference in block number (and timestamp)
-		// and may need to rebase blocks.
-		// Note: original corpus block number preservation is prioritized over block gaps between corpus blocks.
-		for i, block := range sequence.Blocks {
-			// If the next corpus block is ahead of the chain's head, that will be the `nextBlockNumber`
-			// Same reasoning for `nextTs`
-			rebasedBlockNumber := block.Header.Number.Uint64()
-			rebasedTimestamp := block.Header.Timestamp
-
-			// Get difference in head and corpus block numbers
-			blockNumberDiff := int(block.Header.Number.Uint64()) - int(testChain.HeadBlockNumber())
-
-			// If the chain head is ahead, or at the same level, as the corpus block (blockNumberDiff <= 0)
-			// The next block number should be the head's block number plus the gap between the current corpus block
-			// and the previous one
-			if blockNumberDiff <= 0 {
-				// At minimum, the timestamp and block must be shifted 1 block past the HEAD (in the diff==0 case).
-				blockGap := 1
-				timestampGap := 1
-
-				// If this isn't the first block we're trying to add, we evaluate the gap between blocks to ensure
-				// we maintain it.
-				if i > 0 {
-					blockGap = int(block.Header.Number.Uint64()) - int(sequence.Blocks[i-1].Header.Number.Uint64())
-					timestampGap = int(block.Header.Timestamp) - int(sequence.Blocks[i-1].Header.Timestamp)
-				}
-
-				// The next block is head block number plus the gap. Same applies to timestamp.
-				rebasedBlockNumber = testChain.HeadBlockNumber() + uint64(blockGap)
-				rebasedTimestamp = testChain.Head().Header.Time + uint64(timestampGap)
+		// Execute each call sequence, collecting coverage and updating it along the way
+		_, err = sequence.ExecuteOnChain(testChain, true, nil, func(index int) (bool, error) {
+			// Update our coverage maps for each call executed in our sequence.
+			_, covErr := f.coverageMaps.Update(coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults()))
+			if covErr != nil {
+				return true, fmt.Errorf("coverage map update encountered error: %v", err)
 			}
-
-			// Mine the block with the new block number + timestamp, and messages from the corpus block
-			_, err = testChain.PendingBlockCreateWithParameters(rebasedBlockNumber, rebasedTimestamp, nil)
-			if err != nil {
-				return fmt.Errorf("failed to initialize corpus coverage maps, encountered an error when creating a pending chain block: %v", err)
-			}
-			for _, tx := range block.Transactions {
-				tx := tx
-				err = testChain.PendingBlockAddTx(&tx)
-				if err != nil {
-					return fmt.Errorf("failed to initialize corpus coverage maps, encountered an error when adding a transaction to the pending chain block: %v", err)
-				}
-			}
-			err = testChain.PendingBlockCommit()
-			if err != nil {
-				return fmt.Errorf("failed to initialize corpus coverage maps,  encountered an error when commiting pending chain block: %v", err)
-			}
-
-			// Add our coverage recorded during call sequence execution to our coverage maps.
-			for _, messageResults := range testChain.Head().MessageResults {
-				_, err = f.coverageMaps.Update(coverage.GetCoverageTracerResults(messageResults))
-				if err != nil {
-					return fmt.Errorf("failed to initialize coverage maps, call sequence encountered error: %v", err)
-				}
-			}
+			return false, nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize coverage maps, encountered an error while executing call sequence: %v\n", err)
 		}
 
 		// Revert chain state to our starting point to test the next sequence.

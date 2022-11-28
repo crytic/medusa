@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/chain/types"
-	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -210,15 +208,15 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // updateCoverageAndCorpus updates the corpus with the provided corpus input variables if new coverage was achieved
 // when executing the last call. Coverage is measured on the transactions in the last executed block, thus the last
 // block provided in the sequence is expected to be the last block constructed by the worker.
-func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Block) error {
+func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequence fuzzerTypes.CallSequence) error {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
-	if fw.coverageTracer == nil || len(callSequenceBlocks) == 0 {
+	if fw.coverageTracer == nil || len(callSequence) == 0 {
 		return nil
 	}
 
 	// Obtain our coverage maps for our last call.
-	lastBlockResults := callSequenceBlocks[len(callSequenceBlocks)-1].MessageResults
-	lastMessageResult := lastBlockResults[len(lastBlockResults)-1]
+	lastCallChainReference := callSequence[len(callSequence)-1].ChainReference
+	lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
 	lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
 
 	// Memory optimization: Remove them from the results now that we obtained them, to free memory later.
@@ -231,8 +229,7 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequenceBlocks []*types.Bloc
 	}
 	if coverageUpdated {
 		// New coverage has been found with this call sequence, so we add it to the corpus.
-		entry := corpus.NewCorpusEntry(callSequenceBlocks)
-		err = fw.fuzzer.corpus.AddCallSequence(*entry)
+		err = fw.fuzzer.corpus.AddCallSequence(callSequence)
 		if err != nil {
 			return err
 		}
@@ -286,7 +283,8 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, nil, nil, data)
 
 	// Return our call sequence element.
-	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg), nil
+	// TODO: Replace block number and timestamp delay with configurable values.
+	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg, 1, 1), nil
 }
 
 // testCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
@@ -302,71 +300,56 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		}
 	}()
 
-	// Define the list of resulting blocks produced by our call sequence, used to record corpus entries.
-	callSequenceBlocks := make([]*types.Block, 0)
+	// Define our shrink requests we'll collect during execution.
+	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
-	// Loop for each call to send
-	for i := 0; i < len(callSequence); i++ {
-		// If the call sequence element is nil, generate a new call in its place.
+	// Our pre-step method will generate new calls as needed, prior to them being executed.
+	executePreStepFunc := func(i int) (bool, error) {
+		// If our current call sequence element is nil, generate one.
 		var err error
 		if callSequence[i] == nil {
 			callSequence[i], err = fw.generateFuzzedCall()
 			if err != nil {
-				return i, nil, err
+				return true, err
 			}
 		}
+		return false, nil
+	}
 
-		// Create a new pending block
-		// TODO: Select smart params for jumping this
-		block, err := fw.chain.PendingBlockCreate()
+	// Our post-step method will check coverage and call all testing functions. If one returns a request for a shrunk
+	// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
+	executePostStepFunc := func(i int) (bool, error) {
+		// Slice off the currently tested part of our call sequence
+		callSequenceTested := callSequence[:i+1]
+
+		// Check for updates to coverage and corpus.
+		err := fw.updateCoverageAndCorpus(callSequenceTested)
 		if err != nil {
-			return i, nil, err
+			return true, err
 		}
 
-		// Add our transaction to it.
-		err = fw.chain.PendingBlockAddTx(callSequence[i].Call)
-		if err != nil {
-			return i, nil, err
-		}
-
-		// Set our chain reference data for this call sequence element. It should now be the latest item in our block.
-		callSequence[i].ChainReference = &fuzzerTypes.CallSequenceElementChainReference{
-			Block:            block,
-			TransactionIndex: len(block.Messages) - 1,
-		}
-
-		// Commit the block
-		err = fw.chain.PendingBlockCommit()
-		if err != nil {
-			return i, nil, err
-		}
-
-		// Record the resulting block and check for updates to coverage and corpus.
-		callSequenceBlocks = append(callSequenceBlocks, block)
-		err = fw.updateCoverageAndCorpus(callSequenceBlocks)
-		if err != nil {
-			return i, nil, err
-		}
-
-		// Loop through each test provider, signal our worker tested a call, and collect any requests to shrink
+		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
-		shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 		for _, callSequenceTestFunc := range fw.fuzzer.CallSequenceTestFunctions {
-			newShrinkRequests, err := callSequenceTestFunc(fw, callSequence[:i+1])
+			newShrinkRequests, err := callSequenceTestFunc(fw, callSequenceTested)
 			if err != nil {
-				return i, nil, err
+				return true, err
 			}
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 
 		// If we have shrink requests, it means we violated a test, so we quit at this point
-		if len(shrinkCallSequenceRequests) > 0 {
-			return i + 1, shrinkCallSequenceRequests, nil
-		}
+		return len(shrinkCallSequenceRequests) > 0, nil
 	}
 
-	// Return the amount of txs we tested and no violated properties or errors.
-	return len(callSequence), nil, nil
+	// Execute our call sequence.
+	executedCount, err := callSequence.ExecuteOnChain(fw.chain, true, executePreStepFunc, executePostStepFunc)
+
+	// Return our results accordingly.
+	if err != nil {
+		return executedCount, nil, err
+	}
+	return executedCount, shrinkCallSequenceRequests, nil
 }
 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
@@ -379,54 +362,37 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 	defer fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 
 	// Define another slice to store our tx sequence
-	optimizedSequence := callSequence
+	// Note: We clone here as we don't want to overwrite our call sequence runtime results we store.
+	optimizedSequence := callSequence.Clone()
+
 	for i := 0; i < len(optimizedSequence); {
 		// Recreate our sequence without the item at this index
-		testSeq := make(fuzzerTypes.CallSequence, 0)
-		testSeq = append(testSeq, optimizedSequence[:i]...)
-		testSeq = append(testSeq, optimizedSequence[i+1:]...)
+		possibleShrunkSequence := make(fuzzerTypes.CallSequence, 0)
+		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[:i].Clone()...)
+		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[i+1:].Clone()...)
 
-		// Define the list of resulting blocks produced by our call sequence, used to record corpus entries.
-		callSequenceBlocks := make([]*types.Block, 0)
-
-		// Replay the call sequence
-		for _, callSequenceElement := range testSeq {
-			// Create a new block with our call
-			block, err := fw.chain.PendingBlockCreate()
+		// Our post-step method will check coverage and call all testing functions. If one returns a request for a shrunk
+		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
+		executePostStepFunc := func(currentIndex int) (bool, error) {
+			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
+			err := fw.updateCoverageAndCorpus(possibleShrunkSequence[:currentIndex+1])
 			if err != nil {
-				return nil, err
+				return true, err
 			}
-
-			// Add our transaction to it.
-			err = fw.chain.PendingBlockAddTx(callSequenceElement.Call)
-			if err != nil {
-				return nil, err
-			}
-
-			// Set our chain reference data for this call sequence element. It should now be the latest item in our block.
-			callSequenceElement.ChainReference = &fuzzerTypes.CallSequenceElementChainReference{
-				Block:            block,
-				TransactionIndex: len(block.Messages) - 1,
-			}
-
-			// Commit the block
-			err = fw.chain.PendingBlockCommit()
-			if err != nil {
-				return nil, err
-			}
-
-			// Record the resulting block and check for updates to coverage and corpus.
-			callSequenceBlocks = append(callSequenceBlocks, block)
-			err = fw.updateCoverageAndCorpus(callSequenceBlocks)
-			if err != nil {
-				return nil, err
-			}
+			return false, nil
 		}
 
+		// Execute our call sequence.
+		executedCount, err := possibleShrunkSequence.ExecuteOnChain(fw.chain, true, nil, executePostStepFunc)
+
 		// Check if our verifier signalled that we met our conditions
-		validShrunkSequence, err := shrinkRequest.VerifierFunction(fw, testSeq)
-		if err != nil {
-			return nil, err
+		testedPossibleShrunkSequence := possibleShrunkSequence[:executedCount]
+		validShrunkSequence := false
+		if len(testedPossibleShrunkSequence) > 0 {
+			validShrunkSequence, err = shrinkRequest.VerifierFunction(fw, testedPossibleShrunkSequence)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// After testing the sequence, we'll want to rollback changes to reset our testing state.
@@ -436,7 +402,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 
 		// If this current sequence satisfied our conditions, set it as our optimized sequence.
 		if validShrunkSequence {
-			optimizedSequence = testSeq
+			optimizedSequence = testedPossibleShrunkSequence
 		} else {
 			// We didn't remove an item at this index, so we'll iterate to the next one.
 			i++
