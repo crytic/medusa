@@ -25,7 +25,7 @@ func GetCoverageTracerResults(messageResults *types.CallMessageResults) *Coverag
 		}
 	}
 
-	// If we could not obtain them, return an error.
+	// If we could not obtain them, return nil.
 	return nil
 }
 
