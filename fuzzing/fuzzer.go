@@ -281,7 +281,8 @@ func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
 		// Execute each call sequence, collecting coverage and updating it along the way
 		_, err = sequence.ExecuteOnChain(testChain, true, nil, func(index int) (bool, error) {
 			// Update our coverage maps for each call executed in our sequence.
-			_, covErr := f.coverageMaps.Update(coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults()))
+			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
+			_, covErr := f.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, fmt.Errorf("coverage map update encountered error: %v", err)
 			}

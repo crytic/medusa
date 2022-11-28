@@ -9,7 +9,7 @@ type FuzzerMetrics struct {
 
 // fuzzerWorkerMetrics represents metrics for a single FuzzerWorker instance.
 type fuzzerWorkerMetrics struct {
-	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
+	// sequencesTested describes the amount of sequences of transactions which tests were run against.
 	sequencesTested uint64
 
 	// callsTested describes the amount of transactions/calls the fuzzer executed and ran tests against.
@@ -47,8 +47,8 @@ func (m *FuzzerMetrics) CallsTested() uint64 {
 	return transactionsTested
 }
 
-// WorkerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
-// This could happen due cases such as hitting memory constraints where re-generation frees resources.
+// WorkerStartupCount describes the amount of times the worker was spawned for this index. Workers are periodically
+// reset.
 func (m *FuzzerMetrics) WorkerStartupCount() uint64 {
 	workerStartupCount := uint64(0)
 	for _, workerMetrics := range m.workerMetrics {
