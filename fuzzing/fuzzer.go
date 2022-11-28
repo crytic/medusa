@@ -40,15 +40,6 @@ type Fuzzer struct {
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
-	// NewValueGeneratorFunc describes the function to use to set up a new value generator per worker.
-	NewValueGeneratorFunc NewValueGeneratorFunc
-	// ChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
-	ChainSetupFunc TestChainSetupFunc
-
-	// CallSequenceTestFunctions describes a list of functions to be called upon by a FuzzerWorker after every call
-	// in a call sequence.
-	CallSequenceTestFunctions []CallSequenceTestFunc
-
 	// workers represents the work threads created by this Fuzzer when Start invokes a fuzz operation.
 	workers []*FuzzerWorker
 	// metrics represents the metrics for the fuzzing campaign.
@@ -67,15 +58,10 @@ type Fuzzer struct {
 
 	// Events describes the event system for the Fuzzer.
 	Events FuzzerEvents
+
+	// Hooks describes the replaceable functions used by the Fuzzer.
+	Hooks FuzzerHooks
 }
-
-// NewValueGeneratorFunc defines a method which is called to create a valuegeneration.ValueGenerator for a worker
-// when it is created. It takes the current fuzzer as an argument for context, and is expected to return a generator,
-// or an error if one is encountered.
-type NewValueGeneratorFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error)
-
-// TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
-type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
@@ -100,17 +86,19 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
-		config:                    config,
-		senders:                   senders,
-		deployer:                  deployer,
-		baseValueSet:              valuegeneration.NewValueSet(),
-		contractDefinitions:       make([]fuzzerTypes.Contract, 0),
-		testCases:                 make([]TestCase, 0),
-		testCasesFinished:         make(map[string]TestCase),
-		NewValueGeneratorFunc:     defaultNewValueGeneratorFunc,
-		ChainSetupFunc:            chainSetupFromCompilations,
-		CallSequenceTestFunctions: make([]CallSequenceTestFunc, 0),
-		coverageMaps:              nil,
+		config:              config,
+		senders:             senders,
+		deployer:            deployer,
+		baseValueSet:        valuegeneration.NewValueSet(),
+		contractDefinitions: make([]fuzzerTypes.Contract, 0),
+		testCases:           make([]TestCase, 0),
+		testCasesFinished:   make(map[string]TestCase),
+		Hooks: FuzzerHooks{
+			NewValueGeneratorFunc: defaultNewValueGeneratorFunc,
+			ChainSetupFunc:        chainSetupFromCompilations,
+			CallSequenceTestFuncs: make([]CallSequenceTestFunc, 0),
+		},
+		coverageMaps: nil,
 	}
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
@@ -517,7 +505,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
-	err = f.ChainSetupFunc(f, baseTestChain)
+	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		return err
 	}

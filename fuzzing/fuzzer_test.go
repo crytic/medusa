@@ -3,11 +3,55 @@ package fuzzing
 import (
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
+	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
+
+// TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.
+func TestFuzzerHooks(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_immediate.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+		},
+		method: func(f *fuzzerTestContext) {
+			// Attach to fuzzer hooks which simply set a success state.
+			var valueGenOk, chainSetupOk, callSeqTestFuncOk bool
+			existingValueGenFunc := f.fuzzer.Hooks.NewValueGeneratorFunc
+			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+				valueGenOk = true
+				return existingValueGenFunc(fuzzer, valueSet)
+			}
+			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+				chainSetupOk = true
+				return existingChainSetupFunc(fuzzer, testChain)
+			}
+			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+				callSeqTestFuncOk = true
+				return make([]ShrinkCallSequenceRequest, 0), nil
+			})
+
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			assertFailedTestsExpected(f, true)
+
+			// Assert that our hooks worked
+			assert.True(t, valueGenOk, "could not hook value generator func")
+			assert.True(t, chainSetupOk, "could not hook chain setup func")
+			assert.True(t, callSeqTestFuncOk, "could not hook call sequence test func")
+		},
+	})
+}
 
 // TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionsBasicSolving(t *testing.T) {
@@ -88,7 +132,10 @@ func TestChainBehaviour(t *testing.T) {
 		filePath: "testdata/contracts/chain/tx_out_of_gas.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-			config.Fuzzing.Timeout = 10 // this can execute for a long time, so we'll do a 10s timeout.
+			config.Fuzzing.Workers = 1
+			config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) // we just need a few oog txs to test
+			config.Fuzzing.Timeout = 10                                          // to be safe, we set a 10s timeout
+			config.Fuzzing.TransactionGasLimit = 100000                          // we set this low, so contract execution runs out of gas earlier.
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer

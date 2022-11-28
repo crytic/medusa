@@ -34,7 +34,7 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 	fuzzer.Events.WorkerCreated.Subscribe(t.onWorkerCreated)
 
 	// Add the provider's call sequence test function to the fuzzer.
-	fuzzer.CallSequenceTestFunctions = append(fuzzer.CallSequenceTestFunctions, t.callSequencePostCallTest)
+	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
 	return t
 }
 
