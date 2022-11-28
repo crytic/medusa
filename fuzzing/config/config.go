@@ -36,6 +36,13 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
+	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
+	// limits for how many transactions can be included per block.
+	BlockGasLimit uint64 `json:"blockGasLimit"`
+
+	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated trnasactions.
+	TransactionGasLimit uint64 `json:"transactionGasLimit"`
+
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
@@ -146,6 +153,14 @@ func (p *ProjectConfig) Validate() error {
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker reset limit")
+	}
+
+	// Verify gas limits are appropriate
+	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
+		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
+	}
+	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
+		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
 	}
 
 	// Verify property testing fields.

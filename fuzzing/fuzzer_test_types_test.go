@@ -58,7 +58,7 @@ func (c *fuzzerSolcFileTest) run(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Now create a project configuration.
-			projectConfig := getFuzzerTestingProjectConfig(compilationConfig)
+			projectConfig := getFuzzerTestingProjectConfig(t, compilationConfig)
 
 			// Run our config updates method provided for this test case.
 			if c.configUpdates != nil {

@@ -264,6 +264,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 	// Create our test chain with our basic allocations.
 	testChain, err := chain.NewTestChain(genesisAlloc)
+
+	// Set our block gas limit
+	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
 	return testChain, err
 }
 

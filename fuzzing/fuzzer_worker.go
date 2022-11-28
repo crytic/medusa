@@ -234,8 +234,6 @@ func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequence fuzzerTypes.CallSeq
 			return err
 		}
 
-		// TODO: For now we flush immediately but later we'll want to move this to another routine that flushes
-		//  periodically so fuzzer workers don't collide with mutex locks.
 		err = fw.fuzzer.corpus.Flush()
 		if err != nil {
 			return err
@@ -273,14 +271,17 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 		return nil, fmt.Errorf("could not generate tx due to error: %v", err)
 	}
 
-	// Create a new call and return it
 	// If this is a payable function, generate value to send
 	var value *big.Int
 	value = big.NewInt(0)
 	if selectedMethod.Method.StateMutability == "payable" {
 		value = fw.valueGenerator.GenerateInteger(false, 64)
 	}
-	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, nil, nil, data)
+
+	// Create our message using the provided parameters.
+	// TODO: We likely want to generate use TransactionGasLimit as a max and generate a sensible number in its range.
+	// TODO: We likely want to make gasPrice configurable similarly.
+	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, &fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, data)
 
 	// Return our call sequence element.
 	// TODO: Replace block number and timestamp delay with configurable values.
@@ -338,6 +339,11 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 
+		// If our fuzzer context is done, exit out immediately without results.
+		if utils.CheckContextDone(fw.fuzzer.ctx) {
+			return true, nil
+		}
+
 		// If we have shrink requests, it means we violated a test, so we quit at this point
 		return len(shrinkCallSequenceRequests) > 0, nil
 	}
@@ -349,6 +355,12 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 	if err != nil {
 		return executedCount, nil, err
 	}
+
+	// If our fuzzer context is done, exit out immediately without results.
+	if utils.CheckContextDone(fw.fuzzer.ctx) {
+		return executedCount, nil, nil
+	}
+
 	return executedCount, shrinkCallSequenceRequests, nil
 }
 
@@ -379,11 +391,25 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 			if err != nil {
 				return true, err
 			}
+
+			// If our fuzzer context is done, exit out immediately without results.
+			if utils.CheckContextDone(fw.fuzzer.ctx) {
+				return true, nil
+			}
+
 			return false, nil
 		}
 
 		// Execute our call sequence.
 		executedCount, err := possibleShrunkSequence.ExecuteOnChain(fw.chain, true, nil, executePostStepFunc)
+		if err != nil {
+			return nil, err
+		}
+
+		// If our fuzzer context is done, exit out immediately without results.
+		if utils.CheckContextDone(fw.fuzzer.ctx) {
+			return nil, nil
+		}
 
 		// Check if our verifier signalled that we met our conditions
 		testedPossibleShrunkSequence := possibleShrunkSequence[:executedCount]

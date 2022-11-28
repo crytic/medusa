@@ -81,6 +81,26 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
+// TestChainBehaviour runs tests to ensure the chain behaves as expected.
+func TestChainBehaviour(t *testing.T) {
+	// Run a test to simulate out of gas errors to make sure its handled well by the Chain and does not panic.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/chain/tx_out_of_gas.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.Timeout = 10 // this can execute for a long time, so we'll do a 10s timeout.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Assert that we should not have failures.
+			assertFailedTestsExpected(f, false)
+		},
+	})
+}
+
 // TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsInnerDeployments(t *testing.T) {
@@ -243,6 +263,9 @@ func TestValueGenerationSolving(t *testing.T) {
 // TestVMCorrectness runs tests to ensure block properties are reported consistently within the EVM, as it's configured
 // by the chain.TestChain.
 func TestVMCorrectness(t *testing.T) {
+	// TODO: When we add block number and timestamp delay, we should set the config override to always set delay to 1.
+	//  This way, every tx processed is one that hits the contract, as it expects for its assertions.
+
 	// Test block numbers work as expected.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_number.sol",
