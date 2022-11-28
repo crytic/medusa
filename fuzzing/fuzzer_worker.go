@@ -489,6 +489,15 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	fw.chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 	fw.chain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
+	// Emit an event indicating the worker has created its chain.
+	err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
+		Worker: fw,
+		Chain:  fw.chain,
+	})
+	if err != nil {
+		return false, fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
+	}
+
 	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
 	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 		fw.coverageTracer = coverage.NewCoverageTracer()
@@ -499,6 +508,15 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	err = baseTestChain.CopyTo(fw.chain)
 	if err != nil {
 		return false, err
+	}
+
+	// Emit an event indicating the worker has setup its chain.
+	err = fw.Events.FuzzerWorkerChainSetup.Publish(FuzzerWorkerChainSetupEvent{
+		Worker: fw,
+		Chain:  fw.chain,
+	})
+	if err != nil {
+		return false, fmt.Errorf("error returned by an event handler when emitting a worker chain setup event: %v", err)
 	}
 
 	// Increase our generation metric as we successfully generated a test node

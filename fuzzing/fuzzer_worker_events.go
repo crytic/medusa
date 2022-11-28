@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/fuzzing/types"
 )
@@ -15,6 +16,13 @@ type FuzzerWorkerEvents struct {
 	// ContractDeleted emits events when the FuzzerWorker detects a deployed contract no
 	// longer exists on its underlying chain.
 	ContractDeleted events.EventEmitter[FuzzerWorkerContractDeletedEvent]
+
+	// FuzzerWorkerChainCreated emits events when the FuzzerWorker has created its chain and is about to begin chain
+	// setup.
+	FuzzerWorkerChainCreated events.EventEmitter[FuzzerWorkerChainCreatedEvent]
+
+	// FuzzerWorkerChainSetup emits events when the FuzzerWorker has set up its chain and is about to begin fuzzing.
+	FuzzerWorkerChainSetup events.EventEmitter[FuzzerWorkerChainSetupEvent]
 
 	// CallSequenceTesting emits events when the FuzzerWorker is about to generate and test a new
 	// call sequence.
@@ -51,6 +59,26 @@ type FuzzerWorkerContractDeletedEvent struct {
 	// ContractDefinition describes the compiled contract artifact definition which the fuzzing.Fuzzer matched to the
 	// deployed bytecode. If this could not be resolved, a nil value is provided.
 	ContractDefinition *types.Contract
+}
+
+// FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker is created its underlying chain.
+// This is an opportune to attach tracers to capture chain setup information.
+type FuzzerWorkerChainCreatedEvent struct {
+	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
+	Worker *FuzzerWorker
+
+	// Chain represents the worker's chain.
+	Chain *chain.TestChain
+}
+
+// FuzzerWorkerChainSetupEvent describes an event where a fuzzing.FuzzerWorker set up its underlying chain. This
+// means the chain should have its initial contracts deployed and is ready for the fuzzing campaign to start.
+type FuzzerWorkerChainSetupEvent struct {
+	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
+	Worker *FuzzerWorker
+
+	// Chain represents the worker's chain.
+	Chain *chain.TestChain
 }
 
 // FuzzerWorkerCallSequenceTestingEvent describes an event where a fuzzing.FuzzerWorker is about to generate and test a new call
