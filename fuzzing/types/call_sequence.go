@@ -265,7 +265,7 @@ func (cse *CallSequenceElement) String() string {
 	)
 }
 
-// MarshalJSON provides the default serialization routine for a CallSequence.
+// MarshalJSON provides the default serialization routine for a CallSequenceElement.
 func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Call                *types.CallMessage `json:"call"`
@@ -278,7 +278,7 @@ func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON provides the default deserialization routine for a CallSequence.
+// UnmarshalJSON provides the default deserialization routine for a CallSequenceElement.
 func (cse *CallSequenceElement) UnmarshalJSON(data []byte) error {
 	// Define our definition and deserialize our data.
 	type jsonDefinition struct {
