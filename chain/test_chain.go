@@ -560,9 +560,6 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// Timestamps must be unique per block, that means our timestamp must've advanced at least as many steps as the
 	// block number for us to spoof the existence of those intermediate blocks, each with their own unique timestamp.
 	currentHeadTimeStamp := t.Head().Header.Time
-	if currentHeadTimeStamp >= blockTime {
-		return nil, fmt.Errorf("failed to create block with a timestamp of %d as it precedes the chain head timestamp of %d", blockTime, currentHeadTimeStamp)
-	}
 	if currentHeadTimeStamp >= blockTime || blockNumberDifference > blockTime-currentHeadTimeStamp {
 		return nil, fmt.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
 	}

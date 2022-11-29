@@ -70,6 +70,11 @@ func (cs CallSequence) ExecuteOnChain(chain *chain.TestChain, commitLastPendingB
 				if timeDelay == 0 {
 					timeDelay = 1
 				}
+
+				// Each timestamp/block number must be unique as well, so we cannot jump more block numbers than time.
+				if numberDelay > timeDelay {
+					numberDelay = timeDelay
+				}
 				_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
 				if err != nil {
 					return executedCount, err
