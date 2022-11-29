@@ -34,8 +34,8 @@ func (t *TruffleCompilationConfig) GetTarget() string {
 	return t.Target
 }
 
-// UpdateTarget sets the new target for compilation
-func (t *TruffleCompilationConfig) UpdateTarget(newTarget string) {
+// SetTarget sets the new target for compilation
+func (t *TruffleCompilationConfig) SetTarget(newTarget string) {
 	t.Target = newTarget
 }
 

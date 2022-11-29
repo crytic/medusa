@@ -78,12 +78,17 @@ func (c *CompilationConfig) GetPlatformConfig() (platforms.PlatformConfig, error
 	return platformConfig, nil
 }
 
-// UpdatePlatformConfig replaces the current platform config with the one provided as an argument
-// Note that non-nil platform configs will not be accepted
-func (c *CompilationConfig) UpdatePlatformConfig(platformConfig platforms.PlatformConfig) error {
+// SetPlatformConfig replaces the current platform config with the one provided as an argument
+// Note that non-nil platform configs will not be accepted and the underlying platforms must be the same
+func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformConfig) error {
 	// No nil values allowed
 	if platformConfig == nil {
 		return errors.New("platformConfig must be non-nil")
+	}
+
+	// Check to see if the platforms are the same
+	if c.Platform != platformConfig.Platform() {
+		return errors.New("must provide a platformConfig for the same underlying platform")
 	}
 
 	// Serialize
@@ -95,6 +100,26 @@ func (c *CompilationConfig) UpdatePlatformConfig(platformConfig platforms.Platfo
 	// Update the compilation config
 	platformConfigMsg := (*json.RawMessage)(&b)
 	c.PlatformConfig = platformConfigMsg
+
+	return nil
+}
+
+// SetTarget will update the compilation target in the underlying PlatformConfig
+func (c *CompilationConfig) SetTarget(newTarget string) error {
+	// De-serialize platform config
+	platformConfig, err := c.GetPlatformConfig()
+	if err != nil {
+		return err
+	}
+
+	// Update target
+	platformConfig.SetTarget(newTarget)
+
+	// Update this config's platformConfig
+	err = c.SetPlatformConfig(platformConfig)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

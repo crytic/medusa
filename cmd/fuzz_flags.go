@@ -67,10 +67,18 @@ func addFuzzFlags() error {
 func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
 	var err error
 
-	// Update target
-	err = updateCompilationTarget(cmd, projectConfig)
-	if err != nil {
-		return err
+	// If --target was used
+	if cmd.Flags().Changed("target") {
+		// Get the new target
+		newTarget, err := cmd.Flags().GetString("target")
+		if err != nil {
+			return err
+		}
+
+		err = projectConfig.Compilation.SetTarget(newTarget)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Update number of workers

@@ -18,11 +18,19 @@ func addInitFlags() error {
 
 // updateProjectConfigWithInitFlags will update the given projectConfig with any CLI arguments that were provided to the init command
 func updateProjectConfigWithInitFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
-	// Update target if necessary
-	err := updateCompilationTarget(cmd, projectConfig)
-	if err != nil {
-		return err
+	// If --target was used
+	if cmd.Flags().Changed("target") {
+		// Get the new target
+		newTarget, err := cmd.Flags().GetString("target")
+		if err != nil {
+			return err
+		}
+
+		err = projectConfig.Compilation.SetTarget(newTarget)
+		if err != nil {
+			return err
+		}
 	}
-	
+
 	return nil
 }

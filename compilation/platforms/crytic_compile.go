@@ -38,8 +38,8 @@ func (c *CryticCompilationConfig) GetTarget() string {
 	return c.Target
 }
 
-// UpdateTarget sets the new target for compilation
-func (c *CryticCompilationConfig) UpdateTarget(newTarget string) {
+// SetTarget sets the new target for compilation
+func (c *CryticCompilationConfig) SetTarget(newTarget string) {
 	c.Target = newTarget
 }
 

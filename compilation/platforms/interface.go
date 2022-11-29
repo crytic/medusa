@@ -7,5 +7,5 @@ type PlatformConfig interface {
 	Compile() ([]types.Compilation, string, error)
 	Platform() string
 	GetTarget() string
-	UpdateTarget(string)
+	SetTarget(string)
 }

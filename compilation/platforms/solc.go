@@ -32,8 +32,8 @@ func (s *SolcCompilationConfig) GetTarget() string {
 	return s.Target
 }
 
-// UpdateTarget sets the new target for compilation
-func (s *SolcCompilationConfig) UpdateTarget(newTarget string) {
+// SetTarget sets the new target for compilation
+func (s *SolcCompilationConfig) SetTarget(newTarget string) {
 	s.Target = newTarget
 }
 
