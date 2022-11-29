@@ -103,6 +103,7 @@ Note that the CLI flags do not provide the same level of control to `medusa`'s s
 
 Currently, the following flags can be used with the `medusa fuzz` command to update the configuration.
 - `medusa fuzz --config myConfig.json`: Will use the configuration in `myConfig.json` as the project configuration. If `--config` is not set, `medusa` will look for a `medusa.json` file in the current working directory. 
+- `medusa fuzz --target myContract.sol`: Will set the compilation target to `myContract.sol`
 - `medusa fuzz --workers 20`: Will set the number of `workers` to 20 threads
 - `medusa fuzz --timeout 1000`: Will set the `timeout` to 1000 seconds
 - `medusa fuzz --test-limit 50000`: Will set the `testLimit` to 50000 function calls
