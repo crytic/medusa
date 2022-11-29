@@ -11,7 +11,7 @@ contract TestContract {
     }
 
     function fuzz_increase_block_timestamp() public view returns (bool) {
-        // ASSERTION: block timestamp should never increase more than 10
+        // ASSERTION: block timestamp should never increase more than 10 (we expect failure)
         return !(block.timestamp - startingBlockTimestamp >= 10);
     }
 }

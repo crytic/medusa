@@ -636,6 +636,8 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	var usedGas uint64
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message.ToEVMMessage(), t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
+		// If we encountered an error, reset our state, as we couldn't add the tx.
+		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
 
@@ -657,6 +659,8 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 		return fmt.Errorf("test chain state write error: %v", err)
 	}
 	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
+		// If we encountered an error, reset our state, as we couldn't add the tx.
+		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain trie write error: %v", err)
 	}
 

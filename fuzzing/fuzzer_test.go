@@ -315,6 +315,8 @@ func TestVMCorrectness(t *testing.T) {
 		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
+			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -332,6 +334,8 @@ func TestVMCorrectness(t *testing.T) {
 		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
+			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -349,8 +353,9 @@ func TestVMCorrectness(t *testing.T) {
 		filePath: "testdata/contracts/vm_tests/block_hash_store_check.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-			config.Fuzzing.TestLimit = 1_000       // this test should expose a failure quickly.
-			config.Fuzzing.MaxBlockNumberDelay = 1 // this test requires it be called every block number
+			config.Fuzzing.TestLimit = 1_000          // this test should expose a failure quickly.
+			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
+			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
