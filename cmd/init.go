@@ -49,7 +49,7 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// cmdRunInit executes the init CLI command
+// cmdRunInit executes the init CLI command and updates the project configuration with any flags
 func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// Check to see if --out flag was used and store the value of --out flag
 	outputFlagUsed := cmd.Flags().Changed("out")
@@ -71,6 +71,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
 	// If a platform is provided (and it is not the default), then the projectConfig will be the default project config
 	// for that specific compilation platform
 	if len(args) == 1 && args[0] != DefaultCompilationPlatform {

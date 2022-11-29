@@ -63,7 +63,7 @@ func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
 	}
 
 	// Compile using our solc configs
-	return platformConfig.(platforms.PlatformConfig).Compile()
+	return platformConfig.Compile()
 }
 
 // GetPlatformConfig will return the de-serialized version of platforms.PlatformConfig for a given CompilationConfig
