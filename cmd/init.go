@@ -10,9 +10,6 @@ import (
 	"strings"
 )
 
-// argInitOutputPath describes the init output directory parsed from CLI arguments
-var argInitOutputPath string
-
 // initCmd represents the command provider for init
 var initCmd = &cobra.Command{
 	Use:   "init [platform]",
@@ -23,7 +20,13 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVarP(&argInitOutputPath, "out", "o", "", "output path for the new project configuration file")
+	// Add flags to init command
+	err := addInitFlags()
+	if err != nil {
+		panic(err)
+	}
+
+	// Add the init command and its associated flags to the root command
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -48,13 +51,19 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 
 // cmdRunInit executes the init CLI command
 func cmdRunInit(cmd *cobra.Command, args []string) error {
-	// If we weren't provided an output path, we use our working directory
-	if argInitOutputPath == "" {
+	// Check to see if --out flag was used and store the value of --out flag
+	outputFlagUsed := cmd.Flags().Changed("out")
+	outputPath, err := cmd.Flags().GetString("out")
+	if err != nil {
+		return err
+	}
+	// If we weren't provided an output path (flag was not used), we use our working directory
+	if outputFlagUsed == false {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		argInitOutputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
+		outputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
 	// By default, projectConfig will be the default project config for the DefaultCompilationPlatform
@@ -62,7 +71,6 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	// If a platform is provided (and it is not the default), then the projectConfig will be the default project config
 	// for that specific compilation platform
 	if len(args) == 1 && args[0] != DefaultCompilationPlatform {
@@ -72,16 +80,22 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Update the project configuration given whatever flags were set using the CLI
+	err = updateProjectConfigWithInitFlags(cmd, projectConfig)
+	if err != nil {
+		return err
+	}
+
 	// Write our project configuration
-	err = projectConfig.WriteToFile(argInitOutputPath)
+	err = projectConfig.WriteToFile(outputPath)
 	if err != nil {
 		return err
 	}
 
 	// Print a success message
-	if absoluteOutputPath, err := filepath.Abs(argInitOutputPath); err == nil {
-		argInitOutputPath = absoluteOutputPath
+	if absoluteOutputPath, err := filepath.Abs(outputPath); err == nil {
+		outputPath = absoluteOutputPath
 	}
-	fmt.Printf("Project configuration successfully output to: %s\n", argInitOutputPath)
+	fmt.Printf("Project configuration successfully output to: %s\n", outputPath)
 	return nil
 }

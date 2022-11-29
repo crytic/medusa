@@ -6,53 +6,73 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
-// addFuzzFlags adds the various flags for the fuzz command. It takes in a *config.ProjectConfig that is used to notify
-// users of the default values
-func addFuzzFlags(config *config.ProjectConfig) {
+// addFuzzFlags adds the various flags for the fuzz command
+func addFuzzFlags() error {
+	// Get the default project config and throw an error if we cant
+	defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
+	if err != nil {
+		return err
+	}
+
+	// Prevent alphabetical sorting of usage message
+	fuzzCmd.Flags().SortFlags = false
+
 	// Config file
 	fuzzCmd.Flags().String("config", "", "path to config file")
 
+	// Target
+	fuzzCmd.Flags().String("target", "", TargetFlagDescription)
+
 	// Number of workers
 	fuzzCmd.Flags().Int("workers", 0,
-		fmt.Sprintf("number of fuzzer workers (unless a config file is provided, default is %d)", config.Fuzzing.Workers))
+		fmt.Sprintf("number of fuzzer workers (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.Workers))
 
 	// Timeout
 	fuzzCmd.Flags().Int("timeout", 0,
-		fmt.Sprintf("number of seconds to run the fuzzer campaign for (unless a config file is provided, default is %d). 0 means that timeout is not enforced", config.Fuzzing.Timeout))
+		fmt.Sprintf("number of seconds to run the fuzzer campaign for (unless a config file is provided, default is %d). 0 means that timeout is not enforced", defaultConfig.Fuzzing.Timeout))
 
 	// Test limit
 	fuzzCmd.Flags().Uint64("test-limit", 0,
-		fmt.Sprintf("number of transactions to test before exiting (unless a config file is provided, default is %d). 0 means that test limit is not enforced", config.Fuzzing.TestLimit))
+		fmt.Sprintf("number of transactions to test before exiting (unless a config file is provided, default is %d). 0 means that test limit is not enforced", defaultConfig.Fuzzing.TestLimit))
 
 	// Tx sequence length
 	fuzzCmd.Flags().Int("seq-len", 0,
-		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", config.Fuzzing.MaxTxSequenceLength))
+		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.MaxTxSequenceLength))
 
 	// Deployment order
 	fuzzCmd.Flags().StringSlice("deployment-order", []string{},
-		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", config.Fuzzing.DeploymentOrder))
+		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.DeploymentOrder))
 
 	// Corpus directory
 	// TODO: Update description when we add "coverage reports" feature
 	fuzzCmd.Flags().String("corpus-dir", "",
-		fmt.Sprintf("directory path for corpus items (unless a config file is provided, default is %q)", config.Fuzzing.CorpusDirectory))
+		fmt.Sprintf("directory path for corpus items (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},
-		fmt.Sprintf("account address(es) used to send state-changing txns", config.Fuzzing.SenderAddresses))
+		fmt.Sprintf("account address(es) used to send state-changing txns"))
 
 	// Deployer address
 	fuzzCmd.Flags().String("deployer", "",
-		fmt.Sprintf("account address used to deploy contracts", config.Fuzzing.DeployerAddress))
+		fmt.Sprintf("account address used to deploy contracts"))
 
 	// Assertion mode
 	fuzzCmd.Flags().Bool("assertion-mode", false,
-		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", config.Fuzzing.Testing.AssertionTesting.Enabled))
+		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.AssertionTesting.Enabled))
+
+	return nil
 }
 
-// updateProjectConfigWithFlags will update the given projectConfig with any CLI arguments that were provided.
-func updateProjectConfigWithFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
+// updateProjectConfigWithFuzzFlags will update the given projectConfig with any CLI arguments that were provided to the fuzz command
+func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
 	var err error
+
+	// Update target
+	err = updateCompilationTarget(cmd, projectConfig)
+	if err != nil {
+		return err
+	}
+
 	// Update number of workers
 	if cmd.Flags().Changed("workers") {
 		projectConfig.Fuzzing.Workers, err = cmd.Flags().GetInt("workers")

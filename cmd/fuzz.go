@@ -29,19 +29,11 @@ func cmdValidateFuzzArgs(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	// Get the default project config and throw a panic if we can't
-	defaultProjectConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
-	if err != nil {
-		panic(fmt.Sprintf("unable to get default project config for the %s compilation platform", DefaultCompilationPlatform))
-	}
-
-	// Prevent lexicographic sorting of flags to maintain parity with order in the config file
-	// Note: this is a bit clunky and will have to change if we update the config in any way
-	// TODO: Fine with removing it if unnecessary
-	fuzzCmd.Flags().SortFlags = false
-
 	// Add all the flags allowed for the fuzz command
-	addFuzzFlags(defaultProjectConfig)
+	err := addFuzzFlags()
+	if err != nil {
+		panic(err)
+	}
 
 	// Add the fuzz command and its associated flags to the root command
 	rootCmd.AddCommand(fuzzCmd)
@@ -95,7 +87,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update the project configuration given whatever flags were set using the CLI
-	err = updateProjectConfigWithFlags(cmd, projectConfig)
+	err = updateProjectConfigWithFuzzFlags(cmd, projectConfig)
 	if err != nil {
 		return err
 	}
