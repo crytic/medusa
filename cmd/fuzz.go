@@ -47,39 +47,47 @@ func init() {
 	rootCmd.AddCommand(fuzzCmd)
 }
 
-// cmdRunFuzz executes the CLI fuzz command with three distinct possibilities:
-// First, if a --config file is specified, read that. If we don't find the file, throw an error and exit
-// Second, we try for the default file. If we find that, we continue and override with CLI args
-// Third, if we don't find the default file, we will use the CLI as the default config
+// cmdRunFuzz executes the CLI fuzz command and navigates through the following possibilities:
+// If the --config flag is used, we will search for the file at the given config location.
+// If the flag was not used, we will look for medusa.json in the current working directly
+// If the config file is found, we will parse it. If parsing it fails, we throw an error. Otherwise, we override with CLI values
+// If the file is not found, we will use the default config and override with CLI values
 func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// Check to see if --config flag was used and store the value of --config flag
-	changed := cmd.Flags().Changed("config")
-	argFuzzConfigPath, err := cmd.Flags().GetString("config")
+	configFlagUsed := cmd.Flags().Changed("config")
+	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
 		return err
 	}
 
 	// If --config was not used, look for `medusa.json` in the current work directory
-	if changed == false {
+	if configFlagUsed == false {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		argFuzzConfigPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
+		configPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
-	// Read the configuration file
-	projectConfig, err := config.ReadProjectConfigFromFile(argFuzzConfigPath)
+	var projectConfig *config.ProjectConfig
 
-	// If we failed to read and the --config parameter was used, that means we did not find the file
-	if err != nil && changed == true {
-		return err
-	}
+	// Check to see if the file exists at configPath
+	_, err = os.Stat(configPath)
 
-	// If we failed BUT --config was not used, we should use the default config for the default platform
-	if err != nil && changed == false {
+	// If the file exists, let us read it
+	if err == nil {
+		// Read the configuration file
+		projectConfig, err = config.ReadProjectConfigFromFile(configPath)
+		// There was some kind of error while parsing the config, return it
+		if err != nil {
+			return err
+		}
+	} else {
+		// Since we can't find the file, we will use the default config for the default compilation platform
+		// and notify the user
 		fmt.Printf("unable to find the config file at %v. will use the default project configuration for the "+
-			"%v compilation platform instead\n", argFuzzConfigPath, DefaultCompilationPlatform)
+			"%v compilation platform instead\n", configPath, DefaultCompilationPlatform)
+
 		projectConfig, err = config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 		if err != nil {
 			return err
@@ -92,18 +100,11 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Validate the project config for any errors
-	// Note that the CLI arguments have not gone through any previous validation
-	err = projectConfig.Validate()
-	if err != nil {
-		return err
-	}
-
 	// Change our working directory to the parent directory of the project configuration file
 	// This is important as when we compile for a given platform, the paths may be relative to wherever the
 	// configuration is supplied from. Providing a file path explicitly is optional anyways, so we _should_
 	// be in the config directory when running this.
-	err = os.Chdir(filepath.Dir(argFuzzConfigPath))
+	err = os.Chdir(filepath.Dir(configPath))
 	if err != nil {
 		return err
 	}

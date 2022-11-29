@@ -98,10 +98,10 @@ Note that the CLI flags do not provide the same level of control to `medusa`'s s
 
 Currently, the following flags can be used with the `medusa fuzz` command to update the configuration.
 - `medusa fuzz --config myConfig.json`: Will use the configuration in `myConfig.json` as the project configuration. If `--config` is not set, `medusa` will look for a `medusa.json` file in the current working directory. 
-- `medusa fuzz --workers 20`: Will set the number of `workers` to 20
-- `medusa fuzz --timeout 1000`: Will set the `timeout` to 1000
-- `medusa fuzz --test-limit 50000`: Will set the `testLimit` to 50000
-- `medusa fuzz --seq-len 50`: Will set the `maxTxSequenceLength` to 50
+- `medusa fuzz --workers 20`: Will set the number of `workers` to 20 threads
+- `medusa fuzz --timeout 1000`: Will set the `timeout` to 1000 seconds
+- `medusa fuzz --test-limit 50000`: Will set the `testLimit` to 50000 function calls
+- `medusa fuzz --seq-len 50`: Will set the `maxTxSequenceLength` to 50 transactions
 - `medusa fuzz --deployment-order "FirstContract,SecondContract"`: Will set the deployment order to `[FirstContract, SecondContract]`
 - `medusa fuzz --corpus-dir myCorpus`: Will set the corpus directory _path_ to `myCorpus`
 - `medusa fuzz --senders "0x10000,0x20000,0x30000"`: Will set the `senderAdddresses` to `[0x10000, 0x20000, 0x30000]`
@@ -110,11 +110,11 @@ Currently, the following flags can be used with the `medusa fuzz` command to upd
 
 ### Running medusa
 
-We now have a variety of different ways of running `medusa`:
+We have a variety of different ways of running `medusa`:
 1. `medusa fuzz`: Run `medusa` using the configuration in `medusa.json` (or the **default configuration** if `medusa.json` can't be found) and no CLI updates
 4. `medusa fuzz --workers 20 --test-limit 50000`: Run `medusa` using the configuration in `medusa.json` (or the **default configuration** if `medusa.json` can't be found) and then override the `workers` and `testLimit` parameters
-2. `medusa fuzz --config myConfig.json`: Run `medusa` using the configuration in `myConfig.json` and no CLI updates
-3. `medusa fuzz --config myConfig.json --workers 20 --test-limit 50000`: Run `medusa` using the configuration in `myConfig.json` and then override the `workers` and `testLimit` parameters.
+2. `medusa fuzz --config myConfig.json`: Run `medusa` using the configuration in `myConfig.json` (or the **default configuration** if `myConfig.json` can't be found) and no CLI updates
+3. `medusa fuzz --config myConfig.json --workers 20 --test-limit 50000`: Run `medusa` using the configuration in `myConfig.json` (or the **default configuration** if `myConfig.json` can't be found) and then override the `workers` and `testLimit` parameters.
 
 ### Writing property tests
 Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.

@@ -39,11 +39,11 @@ func addFuzzFlags(config *config.ProjectConfig) {
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},
-		fmt.Sprintf("account address(es) used to send state-changing txns (unless a config file is provided, default addresses are %v)", config.Fuzzing.SenderAddresses))
+		fmt.Sprintf("account address(es) used to send state-changing txns", config.Fuzzing.SenderAddresses))
 
 	// Deployer address
 	fuzzCmd.Flags().String("deployer", "",
-		fmt.Sprintf("account address used to deploy contracts (unless a config file is provided, default is %s)", config.Fuzzing.DeployerAddress))
+		fmt.Sprintf("account address used to deploy contracts", config.Fuzzing.DeployerAddress))
 
 	// Assertion mode
 	fuzzCmd.Flags().Bool("assertion-mode", false,
