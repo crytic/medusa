@@ -27,6 +27,16 @@ func (s *SolcCompilationConfig) Platform() string {
 	return "solc"
 }
 
+// GetTarget returns the target for compilation
+func (s *SolcCompilationConfig) GetTarget() string {
+	return s.Target
+}
+
+// UpdateTarget sets the new target for compilation
+func (s *SolcCompilationConfig) UpdateTarget(newTarget string) {
+	s.Target = newTarget
+}
+
 func GetSystemSolcVersion() (*semver.Version, error) {
 	// Run solc --version to obtain our compiler version.
 	out, err := exec.Command("solc", "--version").CombinedOutput()
