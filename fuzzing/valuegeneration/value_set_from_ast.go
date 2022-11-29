@@ -25,11 +25,13 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 				if strings.HasPrefix(literalValue, "0x") {
 					if b, ok := big.NewInt(0).SetString(literalValue[2:], 16); ok {
 						vs.AddInteger(b)
+						vs.AddInteger(new(big.Int).Neg(b))
 						vs.AddAddress(common.BigToAddress(b))
 					}
 				} else {
 					if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
 						vs.AddInteger(b)
+						vs.AddInteger(new(big.Int).Neg(b))
 						vs.AddAddress(common.BigToAddress(b))
 					}
 				}

@@ -347,11 +347,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
 	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
-		MaxMutationRounds: 3,
-		RandomAddressBias: 0.2,
-		RandomIntegerBias: 0.2,
-		RandomStringBias:  0.2,
-		RandomBytesBias:   0.2,
+		MaxMutationRounds: 1,
+		RandomAddressBias: 0.5,
+		RandomIntegerBias: 0.5,
+		RandomStringBias:  0.5,
+		RandomBytesBias:   0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
 			RandomArrayMinSize:  0,
 			RandomArrayMaxSize:  100,

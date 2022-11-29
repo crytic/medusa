@@ -184,10 +184,16 @@ type CallSequenceElement struct {
 
 	// BlockNumberDelay defines how much the block number should advance when executing this transaction, compared to
 	// the last executed transaction. If zero, this indicates the call should be included in the current pending block.
+	// This number is *suggestive*: if delay specifies we should add a tx to a block which is full, it will be added to
+	// a new block instead. If BlockNumberDelay is greater than BlockTimestampDelay and both are non-zero (we want to
+	// create a new block), BlockNumberDelay will be capped to BlockTimestampDelay, as each block must have a unique
+	// time stamp for chain semantics.
 	BlockNumberDelay uint64 `json:"blockNumberDelay"`
 
 	// BlockTimestampDelay defines how much the block timestamp should advance when executing this transaction,
 	// compared to the last executed transaction.
+	// This number is *suggestive*: if BlockNumberDelay is non-zero (indicating to add to the existing block), this
+	// value will not be used.
 	BlockTimestampDelay uint64 `json:"blockTimestampDelay"`
 
 	// ChainReference describes the inclusion of the Call as a transaction in a block. This block may not yet be

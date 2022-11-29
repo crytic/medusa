@@ -68,8 +68,8 @@ func NewMutatingValueGenerator(config *MutatingValueGeneratorConfig, valueSet *V
 // ValueGeneratorConfig).
 func (g *MutatingValueGenerator) getMutationParams(inputsLen int) (int, int) {
 	g.randomProviderLock.Lock()
-	inputIdx := g.randomProvider.Int() % inputsLen
-	mutationCount := g.randomProvider.Int()%((g.config.MaxMutationRounds-g.config.MinMutationRounds)+1) + g.config.MinMutationRounds
+	inputIdx := g.randomProvider.Intn(inputsLen)
+	mutationCount := g.randomProvider.Intn(((g.config.MaxMutationRounds - g.config.MinMutationRounds) + 1) + g.config.MinMutationRounds)
 	g.randomProviderLock.Unlock()
 
 	return inputIdx, mutationCount
@@ -92,7 +92,7 @@ func (g *MutatingValueGenerator) GenerateAddress() common.Address {
 	}
 
 	// Select a random address from our set of addresses.
-	address := addresses[g.randomProvider.Int()%len(addresses)]
+	address := addresses[g.randomProvider.Intn(len(addresses))]
 	return address
 }
 
@@ -102,19 +102,19 @@ func (g *MutatingValueGenerator) GenerateAddress() common.Address {
 var integerMutationMethods = []func(*MutatingValueGenerator, *big.Int, ...*big.Int) *big.Int{
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Add a random input
-		return big.NewInt(0).Add(x, inputs[g.randomProvider.Int()%len(inputs)])
+		return big.NewInt(0).Add(x, inputs[g.randomProvider.Intn(len(inputs))])
 	},
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Subtract a random input
-		return big.NewInt(0).Sub(x, inputs[g.randomProvider.Int()%len(inputs)])
+		return big.NewInt(0).Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
 	},
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Multiply a random input
-		return big.NewInt(0).Mul(x, inputs[g.randomProvider.Int()%len(inputs)])
+		return big.NewInt(0).Mul(x, inputs[g.randomProvider.Intn(len(inputs))])
 	},
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide a random input
-		divisor := inputs[g.randomProvider.Int()%len(inputs)]
+		divisor := inputs[g.randomProvider.Intn(len(inputs))]
 		if divisor.Cmp(big.NewInt(0)) == 0 {
 			return big.NewInt(1) // leave unchanged if divisor was zero (would've caused panic)
 		}
@@ -122,7 +122,7 @@ var integerMutationMethods = []func(*MutatingValueGenerator, *big.Int, ...*big.I
 	},
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Modulo divide a random input
-		divisor := inputs[g.randomProvider.Int()%len(inputs)]
+		divisor := inputs[g.randomProvider.Intn(len(inputs))]
 		if divisor.Cmp(big.NewInt(0)) == 0 {
 			return big.NewInt(0).Set(x) // leave unchanged if divisor was zero (would've caused panic)
 		}
@@ -163,7 +163,7 @@ func (g *MutatingValueGenerator) GenerateInteger(signed bool, bitLength int) *bi
 	for i := 0; i < mutationCount; i++ {
 		// Mutate input
 		g.randomProviderLock.Lock()
-		input = integerMutationMethods[g.randomProvider.Int()%len(integerMutationMethods)](g, input, inputs...)
+		input = integerMutationMethods[g.randomProvider.Intn(len(integerMutationMethods))](g, input, inputs...)
 		g.randomProviderLock.Unlock()
 
 		// Correct value boundaries (underflow/overflow)
@@ -179,9 +179,9 @@ var bytesMutationMethods = []func(*MutatingValueGenerator, []byte, ...[]byte) []
 	func(g *MutatingValueGenerator, b []byte, inputs ...[]byte) []byte {
 		// Generate a random byte and replace an existing byte in our array with it. If our array has no bytes, we add
 		// it.
-		randomByteValue := byte(g.randomProvider.Int() % 256)
+		randomByteValue := byte(g.randomProvider.Intn(256))
 		if len(b) > 0 {
-			b[g.randomProvider.Int()%len(b)] = randomByteValue
+			b[g.randomProvider.Intn(len(b))] = randomByteValue
 		} else {
 			b = append(b, randomByteValue)
 		}
@@ -191,17 +191,17 @@ var bytesMutationMethods = []func(*MutatingValueGenerator, []byte, ...[]byte) []
 	func(g *MutatingValueGenerator, b []byte, inputs ...[]byte) []byte {
 		// If we have bytes in our array, flip a random bit in a random byte. Otherwise, we add a random byte.
 		if len(b) > 0 {
-			i := g.randomProvider.Int() % len(b)
-			b[i] = b[i] ^ (1 << (g.randomProvider.Int() % 8))
+			i := g.randomProvider.Intn(len(b))
+			b[i] = b[i] ^ (1 << (g.randomProvider.Intn(8)))
 		} else {
-			b = append(b, byte(g.randomProvider.Int()%256))
+			b = append(b, byte(g.randomProvider.Intn(256)))
 		}
 		return b
 	},
 	// Add a random byte at a random position
 	func(g *MutatingValueGenerator, b []byte, inputs ...[]byte) []byte {
 		// Generate a random byte to insert
-		by := byte(g.randomProvider.Int() % 256)
+		by := byte(g.randomProvider.Intn(256))
 
 		// If our provided byte array has no bytes, simply return a new array with this byte.
 		if len(b) == 0 {
@@ -210,7 +210,7 @@ var bytesMutationMethods = []func(*MutatingValueGenerator, []byte, ...[]byte) []
 
 		// Determine the index to insert our byte into and insert it accordingly. We add +1 here as we allow appending
 		// to the end here.
-		i := g.randomProvider.Int() % (len(b) + 1)
+		i := g.randomProvider.Intn(len(b) + 1)
 		if i >= len(b) {
 			return append(b, by)
 		} else {
@@ -224,7 +224,7 @@ var bytesMutationMethods = []func(*MutatingValueGenerator, []byte, ...[]byte) []
 			return b
 		}
 
-		i := g.randomProvider.Int() % len(b)
+		i := g.randomProvider.Intn(len(b))
 		return append(b[:i], b[i+1:]...)
 	},
 }
@@ -247,7 +247,7 @@ func (g *MutatingValueGenerator) GenerateBytes() []byte {
 	// Mutate the data for our desired number of rounds
 	for i := 0; i < mutationCount; i++ {
 		g.randomProviderLock.Lock()
-		input = bytesMutationMethods[g.randomProvider.Int()%len(bytesMutationMethods)](g, input, inputs...)
+		input = bytesMutationMethods[g.randomProvider.Intn(len(bytesMutationMethods))](g, input, inputs...)
 		g.randomProviderLock.Unlock()
 	}
 
@@ -260,7 +260,7 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 	// Replace a random index with a random character
 	func(g *MutatingValueGenerator, s string, inputs ...string) string {
 		// Generate a random rune
-		randomRune := rune(32 + g.randomProvider.Int()%95)
+		randomRune := rune(32 + g.randomProvider.Intn(95))
 
 		// If the string is empty, we can simply return a new string with just the rune in it.
 		r := []rune(s)
@@ -269,7 +269,7 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 		}
 
 		// Otherwise, we replace a rune in it and return it.
-		r[g.randomProvider.Int()%len(r)] = randomRune
+		r[g.randomProvider.Intn(len(r))] = randomRune
 		return string(r)
 	},
 	// Flip a random bit
@@ -281,14 +281,14 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 		}
 
 		// Otherwise, flip a random bit in it and return it.
-		i := g.randomProvider.Int() % len(r)
+		i := g.randomProvider.Intn(len(r))
 		r[i] = r[i] ^ (1 << (g.randomProvider.Int() % 8))
 		return string(r)
 	},
 	// Insert a random character at a random position
 	func(g *MutatingValueGenerator, s string, inputs ...string) string {
 		// Create a random character.
-		c := string(rune(32 + g.randomProvider.Int()%95))
+		c := string(rune(32 + g.randomProvider.Intn(95)))
 
 		// If we have an empty string, simply return it
 		if len(s) == 0 {
@@ -296,7 +296,7 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 		}
 
 		// Otherwise we insert it into a random position in the string.
-		i := g.randomProvider.Int() % len(s)
+		i := g.randomProvider.Intn(len(s))
 		return s[:i] + c + s[i+1:]
 	},
 	// Remove a random character
@@ -307,7 +307,7 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 		}
 
 		// Otherwise, remove a random character.
-		i := g.randomProvider.Int() % len(s)
+		i := g.randomProvider.Intn(len(s))
 		return s[:i] + s[i+1:]
 	},
 }
@@ -330,7 +330,7 @@ func (g *MutatingValueGenerator) GenerateString() string {
 	// Mutate the data for our desired number of rounds
 	for i := 0; i < mutationCount; i++ {
 		g.randomProviderLock.Lock()
-		input = stringMutationMethods[g.randomProvider.Int()%len(stringMutationMethods)](g, input, inputs...)
+		input = stringMutationMethods[g.randomProvider.Intn(len(stringMutationMethods))](g, input, inputs...)
 		g.randomProviderLock.Unlock()
 	}
 

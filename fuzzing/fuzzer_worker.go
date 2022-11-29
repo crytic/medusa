@@ -298,10 +298,10 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	blockNumberDelay := uint64(0)
 	blockTimestampDelay := uint64(0)
 	if fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay > 0 {
-		blockNumberDelay = rand.Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay + 1)
+		blockNumberDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay + 1)
 	}
 	if fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay > 0 {
-		blockTimestampDelay = rand.Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
+		blockTimestampDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
 	}
 
 	// For each block we jump, we need a unique time stamp for chain semantics, so if our block number jump is too small,
