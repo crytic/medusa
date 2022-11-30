@@ -40,11 +40,13 @@ func init() {
 }
 
 // cmdRunFuzz executes the CLI fuzz command and navigates through the following possibilities:
-// If the --config flag is used, we will search for the file at the given config location.
-// If the flag was not used, we will look for medusa.json in the current working directly
-// If the config file is found, we will parse it. If parsing it fails, we throw an error. Otherwise, we override with CLI values
-// If the file is not found, we will use the default config and override with CLI values
+// #1: We will search for either a custom config file (via --config) or the default (medusa.json).
+// If we find it, read it. If we can't read it, throw an error.
+// #2: If a custom file was provided (--config was used), and we can't find the file, throw an error.
+// #3: If medusa.json can't be found, use the default project configuration.
 func cmdRunFuzz(cmd *cobra.Command, args []string) error {
+	var projectConfig *config.ProjectConfig
+
 	// Check to see if --config flag was used and store the value of --config flag
 	configFlagUsed := cmd.Flags().Changed("config")
 	configPath, err := cmd.Flags().GetString("config")
@@ -61,22 +63,25 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		configPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
 
-	var projectConfig *config.ProjectConfig
-
 	// Check to see if the file exists at configPath
-	_, err = os.Stat(configPath)
+	_, existenceError := os.Stat(configPath)
 
-	// If the file exists, let us read it
-	if err == nil {
-		// Read the configuration file
+	// Possibility #1: File was found
+	if existenceError == nil {
+		// Try to read the configuration file and throw an error if something goes wrong
 		projectConfig, err = config.ReadProjectConfigFromFile(configPath)
-		// There was some kind of error while parsing the config, return it
 		if err != nil {
 			return err
 		}
-	} else {
-		// Since we can't find the file, we will use the default config for the default compilation platform
-		// and notify the user
+	}
+
+	// Possibility #2: If the --config flag was used, and we couldn't find the file, we'll throw an error
+	if configFlagUsed == true && existenceError != nil {
+		return existenceError
+	}
+
+	// Possibility #3: --config flag was not used and medusa.json was not found, so use the default project config
+	if configFlagUsed == false && existenceError != nil {
 		fmt.Printf("unable to find the config file at %v. will use the default project configuration for the "+
 			"%v compilation platform instead\n", configPath, DefaultCompilationPlatform)
 

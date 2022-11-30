@@ -79,17 +79,15 @@ func (c *CompilationConfig) GetPlatformConfig() (platforms.PlatformConfig, error
 }
 
 // SetPlatformConfig replaces the current platform config with the one provided as an argument
-// Note that non-nil platform configs will not be accepted and the underlying platforms must be the same
+// Note that non-nil platform configs will not be accepted
 func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformConfig) error {
 	// No nil values allowed
 	if platformConfig == nil {
 		return errors.New("platformConfig must be non-nil")
 	}
 
-	// Check to see if the platforms are the same
-	if c.Platform != platformConfig.Platform() {
-		return errors.New("must provide a platformConfig for the same underlying platform")
-	}
+	// Update platform
+	c.Platform = platformConfig.Platform()
 
 	// Serialize
 	b, err := json.Marshal(platformConfig)
