@@ -617,7 +617,7 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 	}
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
-	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit)
+	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit - t.pendingBlock.Header.GasUsed)
 
 	// Create a tx from our msg, for hashing/receipt purposes
 	tx := utils.MessageToTransaction(message)
@@ -854,7 +854,7 @@ func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, 
 
 	// Ensure our transaction succeeded
 	if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-		return common.Address{}, block, fmt.Errorf("contract deployment tx returned a failed status")
+		return common.Address{}, block, fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 	}
 
 	// Return the address for the deployed contract.
