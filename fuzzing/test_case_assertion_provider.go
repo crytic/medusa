@@ -74,7 +74,7 @@ func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionRes
 		if bytes.Compare(result.ReturnData[:4], panicReturnDataAbi.ID) == 0 {
 			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
 
-			// If they unpacked without issue, read the panic code
+			// If they unpacked without issue, read the panic code. We expect a panic code of 1.
 			if err == nil && len(values) > 0 {
 				panicCode := values[0].(*big.Int)
 				if panicCode.Cmp(big.NewInt(1)) == 0 {

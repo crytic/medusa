@@ -14,8 +14,7 @@ import (
 // TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.
 func TestFuzzerHooks(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath:    "testdata/contracts/assertions/assert_immediate.sol",
-		solcVersion: "0.7.0", // assertion testing is not possible on 0.8.0
+		filePath: "testdata/contracts/assertions/assert_immediate.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
@@ -62,8 +61,7 @@ func TestAssertionsBasicSolving(t *testing.T) {
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath:    filePath,
-			solcVersion: "0.7.0", // assertion testing is not possible on 0.8.0
+			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
@@ -86,8 +84,7 @@ func TestAssertionsBasicSolving(t *testing.T) {
 // timing out.
 func TestAssertionsNotRequire(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath:    "testdata/contracts/assertions/assert_not_require.sol",
-		solcVersion: "0.7.0", // assertion testing is not possible on 0.8.0
+		filePath: "testdata/contracts/assertions/assert_not_require.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
@@ -109,8 +106,7 @@ func TestAssertionsNotRequire(t *testing.T) {
 // This test does not stop on first failure and expects a failure from each after timeout.
 func TestAssertionsAndProperties(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath:    "testdata/contracts/assertions/assert_and_property_test.sol",
-		solcVersion: "0.7.0", // assertion testing is not possible on 0.8.0
+		filePath: "testdata/contracts/assertions/assert_and_property_test.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
@@ -227,7 +223,8 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath: filePath,
+			filePath:    filePath,
+			solcVersion: "0.7.0", // this test depends on solc <0.8.0
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
