@@ -1,0 +1,15 @@
+{
+  "httpHeaders": [
+    {
+      "urls": ["https://docs.github.com"],
+      "headers": {
+        "accept-encoding": "deflate, gzip, br, zstd"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    {
+      "pattern": "^https://github.com/trailofbits/medusa/"
+    }
+  ]
+}
