@@ -1,9 +1,12 @@
 package fuzzing
 
 import (
+	"bytes"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/fuzzing/types"
+	"math/big"
 	"sync"
 )
 
@@ -20,6 +23,8 @@ type AssertionTestCaseProvider struct {
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
 }
+
+// Define our ABI method
 
 // attachAssertionTestCaseProvider attaches a new AssertionTestCaseProvider to the Fuzzer and returns it.
 func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider {
@@ -45,12 +50,40 @@ func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
-// isAssertionVMError indicates whether a provided error returned from the EVM is an INVALID opcode error, indicative
-// of an assertion failure.
-func (t *AssertionTestCaseProvider) isAssertionVMError(err error) bool {
-	// See if the error can be cased to an invalid opcode error.
-	_, hitInvalidOpcode := err.(*vm.ErrInvalidOpCode)
-	return hitInvalidOpcode
+// isAssertionVMError indicates whether a provided execution returned from the EVM is due to a failed assert(...)
+// statement.
+func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionResult) bool {
+	// See if the error can be cased to an invalid opcode error. This happens in Solidity <0.8.0
+	_, hitInvalidOpcode := result.Err.(*vm.ErrInvalidOpCode)
+	if hitInvalidOpcode {
+		return true
+	}
+
+	// Otherwise, in Solidity >0.8.0, we have asserts working as reverts now, but with special return data.
+	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
+
+	// Verify the data can fit at least the selector + uint256
+	if len(result.ReturnData) >= 4+32 {
+		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
+		uintType, _ := abi.NewType("uint256", "", nil)
+		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
+			{Name: "", Type: uintType, Indexed: false},
+		}, abi.Arguments{})
+
+		// Verify the return data starts with the correct selector, then unpack the arguments.
+		if bytes.Compare(result.ReturnData[:4], panicReturnDataAbi.ID) == 0 {
+			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
+
+			// If they unpacked without issue, read the panic code
+			if err == nil && len(values) > 0 {
+				panicCode := values[0].(*big.Int)
+				if panicCode.Cmp(big.NewInt(1)) == 0 {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
@@ -70,7 +103,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	methodId := types.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an assertion error.
-	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult.Err)
+	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult)
 
 	return &methodId, encounteredAssertionVMError, nil
 }
