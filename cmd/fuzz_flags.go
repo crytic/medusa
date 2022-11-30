@@ -37,7 +37,7 @@ func addFuzzFlags() error {
 
 	// Tx sequence length
 	fuzzCmd.Flags().Int("seq-len", 0,
-		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.MaxTxSequenceLength))
+		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.CallSequenceLength))
 
 	// Deployment order
 	fuzzCmd.Flags().StringSlice("deployment-order", []string{},
@@ -107,7 +107,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update sequence length
 	if cmd.Flags().Changed("seq-len") {
-		projectConfig.Fuzzing.MaxTxSequenceLength, err = cmd.Flags().GetInt("seq-len")
+		projectConfig.Fuzzing.CallSequenceLength, err = cmd.Flags().GetInt("seq-len")
 		if err != nil {
 			return err
 		}
