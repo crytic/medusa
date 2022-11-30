@@ -184,15 +184,15 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
-			VerifierFunction: func(worker *FuzzerWorker, callSequence types.CallSequence) (bool, error) {
+			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
-				methodId2, testFailed2, err := t.checkAssertionFailures(worker, callSequence)
+				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(worker, shrunkenCallSequence)
 				if err != nil {
 					return false, err
 				}
 
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
-				return testFailed2 && *methodId == *methodId2, nil
+				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
 			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) error {
 				// When we're finished shrinking, update our test state and report it finalized.
