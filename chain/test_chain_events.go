@@ -19,7 +19,7 @@ type TestChainEvents struct {
 	// PendingBlockDiscarded emits events indicating a pending block was discarded before being committed to the chain.
 	PendingBlockDiscarded events.EventEmitter[PendingBlockDiscardedEvent]
 
-	// BlocksRemoved emits events indicating a block was removed from the chain.
+	// BlocksRemoved emits events indicating a block(s) was removed from the chain.
 	BlocksRemoved events.EventEmitter[BlocksRemovedEvent]
 
 	// ContractDeploymentAddedEventEmitter emits events indicating a new contract was created on chain. This is called
@@ -75,13 +75,13 @@ type PendingBlockDiscardedEvent struct {
 	Block *types.Block
 }
 
-// BlocksRemovedEvent describes an event where a block is removed from the TestChain. This only considers internally
+// BlocksRemovedEvent describes an event where a block(s) is removed from the TestChain. This only considers internally
 // committed blocks, not ones spoofed in between block number jumps.
 type BlocksRemovedEvent struct {
 	// Chain refers to the TestChain which emitted the event.
 	Chain *TestChain
 
-	// Blocks refers to the block that was removed from the Chain.
+	// Blocks refers to the block(s) that was removed from the Chain.
 	Blocks []*types.Block
 }
 

@@ -37,8 +37,7 @@ type testChainDeploymentsTracerCallFrame struct {
 	results []types.DeployedContractBytecodeChange
 }
 
-// newTestChainDeploymentsTracer creates a testChainDeploymentsTracer. It takes a TestChain, adds itself as a tracer for
-// it, and powers deployed contract events.
+// newTestChainDeploymentsTracer creates a testChainDeploymentsTracer
 func newTestChainDeploymentsTracer() *testChainDeploymentsTracer {
 	tracer := &testChainDeploymentsTracer{
 		selfDestructDestroysCode: true, // TODO: Update this when new EIP is introduced by checking the chain config.

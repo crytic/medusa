@@ -66,7 +66,7 @@ type FuzzingConfig struct {
 	// limits for how many transactions can be included per block.
 	BlockGasLimit uint64 `json:"blockGasLimit"`
 
-	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated trnasactions.
+	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
 	// Testing describes the configuration used for different testing strategies.
