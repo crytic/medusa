@@ -138,7 +138,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		}
 
 		// Parse the JSON
-		var compiledJson map[string]interface{}
+		var compiledJson map[string]any
 		err = json.Unmarshal(b, &compiledJson)
 		if err != nil {
 			return nil, "", err
@@ -152,9 +152,9 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		}
 
 		// Create a mapping between key (filename) and value (contract and ast information) each compilation unit
-		compilationMap, ok := compilationUnits.(map[string]interface{})
+		compilationMap, ok := compilationUnits.(map[string]any)
 		if !ok {
-			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]interface{} format: %s\n", compilationUnits)
+			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]any format: %s\n", compilationUnits)
 		}
 
 		// Iterate through compilationUnits
@@ -163,16 +163,16 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			compilation := types.NewCompilation()
 
 			// Create mapping between key (compiler / asts / contracts) and associated values
-			compilationUnitMap, ok := compilationUnit.(map[string]interface{})
+			compilationUnitMap, ok := compilationUnit.(map[string]any)
 			if !ok {
-				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]interface{} format: %s\n", compilationUnit)
+				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]any format: %s\n", compilationUnit)
 			}
 
 			// Create mapping between each file in compilation unit and associated Ast
-			AstMap := compilationUnitMap["asts"].(map[string]interface{})
+			AstMap := compilationUnitMap["asts"].(map[string]any)
 
 			// Create mapping between key (file name) and value (associated contracts in that file)
-			contractsMap, ok := compilationUnitMap["contracts"].(map[string]interface{})
+			contractsMap, ok := compilationUnitMap["contracts"].(map[string]any)
 			if !ok {
 				return nil, "", fmt.Errorf("cannot find 'contracts' key in compilationUnitMap: %s\n", compilationUnitMap)
 			}
@@ -180,22 +180,22 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			// Iterate through each contract FILE (note that each FILE might have more than one contract)
 			for _, contractsData := range contractsMap {
 				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
-				contractMap, ok := contractsData.(map[string]interface{})
+				contractMap, ok := contractsData.(map[string]any)
 				if !ok {
-					return nil, "", fmt.Errorf("contractsData is not in the map[string]interface{} format: %s\n", contractsData)
+					return nil, "", fmt.Errorf("contractsData is not in the map[string]any format: %s\n", contractsData)
 				}
 
 				// Iterate through each contract
 				for contractName, contractData := range contractMap {
 					// Create mapping between contract details (abi, bytecode) to actual values
-					contractDataMap, ok := contractData.(map[string]interface{})
+					contractDataMap, ok := contractData.(map[string]any)
 					if !ok {
-						return nil, "", fmt.Errorf("contractData is not in the map[string]interface{} format: %s\n", contractData)
+						return nil, "", fmt.Errorf("contractData is not in the map[string]any format: %s\n", contractData)
 					}
 
 					// Create mapping between "filenames" (key) associated with the contract and the various filename
 					// types (absolute, relative, short, long)
-					fileMap, ok := contractDataMap["filenames"].(map[string]interface{})
+					fileMap, ok := contractDataMap["filenames"].(map[string]any)
 					if !ok {
 						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractDataMap: %s\n", contractDataMap)
 					}

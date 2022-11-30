@@ -46,6 +46,11 @@ func (cm *CoverageMaps) Reset() {
 // Update updates the current coverage maps with the provided ones. It returns a boolean indicating whether
 // new coverage was achieved, or an error if one was encountered.
 func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
+	// If our maps provided are nil, do nothing
+	if coverageMaps == nil {
+		return false, nil
+	}
+
 	// Acquire our thread lock and defer our unlocking for when we exit this method
 	cm.updateLock.Lock()
 	defer cm.updateLock.Unlock()
@@ -127,8 +132,9 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 }
 
 // Equals checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
-// Note that the `map` field is what is being tested for equality. Not the cached values
 func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
+	// Note: the `map` field is what is being tested for equality. Not the cached values
+
 	// Iterate through all maps
 	for addr, aHashToCoverage := range a.maps {
 		bHashToCoverage, ok := b.maps[addr]

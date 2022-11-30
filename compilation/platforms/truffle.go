@@ -64,15 +64,15 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 
 	// Define our truffle structure to parse
 	type TruffleCompiledJson struct {
-		ContractName      string      `json:"contractName"`
-		Abi               interface{} `json:"abi"`
-		Bytecode          string      `json:"bytecode"`
-		DeployedBytecode  string      `json:"deployedBytecode"`
-		SourceMap         string      `json:"sourceMap"`
-		DeployedSourceMap string      `json:"deployedSourceMap"`
-		Source            string      `json:"source"`
-		SourcePath        string      `json:"sourcePath"`
-		Ast               interface{} `json:"ast"`
+		ContractName      string `json:"contractName"`
+		Abi               any    `json:"abi"`
+		Bytecode          string `json:"bytecode"`
+		DeployedBytecode  string `json:"deployedBytecode"`
+		SourceMap         string `json:"sourceMap"`
+		DeployedSourceMap string `json:"deployedSourceMap"`
+		Source            string `json:"source"`
+		SourcePath        string `json:"sourcePath"`
+		Ast               any    `json:"ast"`
 	}
 
 	// Loop for each truffle artifact to parse our compilations.

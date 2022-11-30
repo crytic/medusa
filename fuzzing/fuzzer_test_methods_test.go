@@ -50,38 +50,15 @@ func executeFuzzerTestMethodInternal(t *testing.T, config *config.ProjectConfig,
 }
 
 // getFuzzerTestingProjectConfig creates a default project configuration used for testing the Fuzzer.
-func getFuzzerTestingProjectConfig(compilationConfig *compilation.CompilationConfig) *config.ProjectConfig {
-	projectConfig := &config.ProjectConfig{
-		Fuzzing: config.FuzzingConfig{
-			Workers:                  3,
-			WorkerDatabaseEntryLimit: 10000,
-			Timeout:                  0,
-			TestLimit:                1_500_000,
-			MaxTxSequenceLength:      100,
-			SenderAddresses: []string{
-				"0x1111111111111111111111111111111111111111",
-				"0x2222222222222222222222222222222222222222",
-				"0x3333333333333333333333333333333333333333",
-			},
-			DeployerAddress: "0x1111111111111111111111111111111111111111",
-			Testing: config.TestingConfig{
-				StopOnFailedTest: true,
-				AssertionTesting: config.AssertionTestingConfig{
-					Enabled:         false,
-					TestViewMethods: false,
-				},
-				PropertyTesting: config.PropertyTestConfig{
-					Enabled: true,
-					TestPrefixes: []string{
-						"fuzz_",
-					},
-				},
-			},
-			CoverageEnabled: true,
-			CorpusDirectory: "corpus",
-		},
-		Compilation: compilationConfig,
-	}
+func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.CompilationConfig) *config.ProjectConfig {
+	projectConfig, err := config.GetDefaultProjectConfig("")
+	assert.NoError(t, err)
+	projectConfig.Compilation = compilationConfig
+	projectConfig.Fuzzing.Workers = 3
+	projectConfig.Fuzzing.WorkerResetLimit = 50
+	projectConfig.Fuzzing.Timeout = 0
+	projectConfig.Fuzzing.TestLimit = 1_500_000
+	projectConfig.Fuzzing.CallSequenceLength = 100
 	return projectConfig
 }
 

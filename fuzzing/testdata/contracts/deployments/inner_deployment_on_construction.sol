@@ -15,7 +15,7 @@ contract InnerDeployment {
 contract InnerDeploymentFactory {
     address a;
 
-    constructor() {
+    constructor() public {
         a = address(new InnerDeployment());
     }
 

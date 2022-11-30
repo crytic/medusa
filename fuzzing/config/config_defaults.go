@@ -19,20 +19,24 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
-			Workers:                  10,
-			WorkerDatabaseEntryLimit: 10000,
-			Timeout:                  0,
-			TestLimit:                0,
-			MaxTxSequenceLength:      100,
-			DeploymentOrder:          []string{},
-			CorpusDirectory:          "corpus",
-			CoverageEnabled:          true,
+			Workers:            10,
+			WorkerResetLimit:   50,
+			Timeout:            0,
+			TestLimit:          0,
+			CallSequenceLength: 100,
+			DeploymentOrder:    []string{},
+			CorpusDirectory:    "corpus",
+			CoverageEnabled:    true,
 			SenderAddresses: []string{
 				"0x1111111111111111111111111111111111111111",
 				"0x2222222222222222222222222222222222222222",
 				"0x3333333333333333333333333333333333333333",
 			},
-			DeployerAddress: "0x1111111111111111111111111111111111111111",
+			DeployerAddress:        "0x1111111111111111111111111111111111111111",
+			MaxBlockNumberDelay:    60480,
+			MaxBlockTimestampDelay: 604800,
+			BlockGasLimit:          125_000_000,
+			TransactionGasLimit:    12_500_000,
 			Testing: TestingConfig{
 				StopOnFailedTest: true,
 				AssertionTesting: AssertionTestingConfig{
