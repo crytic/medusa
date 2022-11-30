@@ -9,7 +9,7 @@ import (
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
-	corpusTypes "github.com/trailofbits/medusa/fuzzing/corpus"
+	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -44,7 +44,7 @@ type Fuzzer struct {
 	// metrics represents the metrics for the fuzzing campaign.
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
-	corpus *corpusTypes.Corpus
+	corpus *corpus.Corpus
 	// coverageMaps describes the total code coverage known to be achieved across the fuzzing campaign.
 	coverageMaps *coverage.CoverageMaps
 
@@ -441,7 +441,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set up the corpus
-	f.corpus, err = corpusTypes.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		return err
 	}
@@ -468,7 +468,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	f.coverageMaps, err = corpusTypes.MeasureCorpusCoverage(baseTestChain, f.corpus)
+	f.coverageMaps, err = corpus.MeasureCorpusCoverage(baseTestChain, f.corpus)
 	if err != nil {
 		return err
 	}
