@@ -35,7 +35,7 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 	}
 
 	// Parse the compiler version out of the output
-	exp := regexp.MustCompile("\\d+\\.\\d+\\.\\d+\\S*")
+	exp := regexp.MustCompile("\\d+\\.\\d+\\.\\d+")
 	versionStr := exp.FindString(string(out))
 	if versionStr == "" {
 		return nil, errors.New("could not parse solc version using 'solc --version'")
