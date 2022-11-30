@@ -62,7 +62,7 @@ func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionRes
 	// Otherwise, in Solidity >0.8.0, we have asserts working as reverts now, but with special return data.
 	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
 
-	// Verify the data can fit at least the selector + uint256
+	// Verify we have a revert, and our return data fits exactly the selector + uint256
 	if result.Err == vm.ErrExecutionReverted && len(result.ReturnData) == 4+32 {
 		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
 		uintType, _ := abi.NewType("uint256", "", nil)
