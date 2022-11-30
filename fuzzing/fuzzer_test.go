@@ -377,6 +377,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 		filePath: "testdata/contracts/value_generation/match_uints_xy.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.CorpusDirectory = "corpus"
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions

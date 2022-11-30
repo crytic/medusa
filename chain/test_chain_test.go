@@ -205,11 +205,11 @@ func TestChainDynamicDeployments(t *testing.T) {
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
-		// Create a solc provider
-		solc := platforms.NewSolcCompilationConfig(contractPath)
+		// Create a crytic compile provider
+		cryticCompile := platforms.NewCryticCompilationConfig(contractPath)
 
 		// Obtain our compilations and ensure we didn't encounter an error
-		compilations, _, err := solc.Compile()
+		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
 		assert.EqualValues(t, 1, len(compilations[0].Sources))
@@ -290,11 +290,11 @@ func TestChainCloning(t *testing.T) {
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
-		// Create a solc provider
-		solc := platforms.NewSolcCompilationConfig(contractPath)
+		// Create a crytic-compile provider
+		cryticCompile := platforms.NewCryticCompilationConfig(contractPath)
 
 		// Obtain our compilations and ensure we didn't encounter an error
-		compilations, _, err := solc.Compile()
+		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.True(t, len(compilations) > 0)
 
@@ -358,11 +358,11 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
-		// Create a solc provider
-		solc := platforms.NewSolcCompilationConfig(contractPath)
+		// Create a crytic-compile provider
+		cryticCompile := platforms.NewCryticCompilationConfig(contractPath)
 
 		// Obtain our compilations and ensure we didn't encounter an error
-		compilations, _, err := solc.Compile()
+		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.True(t, len(compilations) > 0)
 

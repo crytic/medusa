@@ -12,8 +12,8 @@ import (
 type TruffleCompilationConfig struct {
 	Target         string `json:"target"`
 	UseNpx         bool   `json:"useNpx"`
-	Command        string `json:"command,omitempty"`
-	BuildDirectory string `json:"buildDirectory,omitempty"`
+	Command        string `json:"command"`
+	BuildDirectory string `json:"buildDirectory"`
 }
 
 func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
@@ -27,6 +27,16 @@ func NewTruffleCompilationConfig(target string) *TruffleCompilationConfig {
 
 func (s *TruffleCompilationConfig) Platform() string {
 	return "truffle"
+}
+
+// GetTarget returns the target for compilation
+func (t *TruffleCompilationConfig) GetTarget() string {
+	return t.Target
+}
+
+// SetTarget sets the new target for compilation
+func (t *TruffleCompilationConfig) SetTarget(newTarget string) {
+	t.Target = newTarget
 }
 
 func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error) {

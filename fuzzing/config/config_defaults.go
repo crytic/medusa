@@ -25,7 +25,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestLimit:          0,
 			CallSequenceLength: 100,
 			DeploymentOrder:    []string{},
-			CorpusDirectory:    "corpus",
+			CorpusDirectory:    "",
 			CoverageEnabled:    true,
 			SenderAddresses: []string{
 				"0x1111111111111111111111111111111111111111",

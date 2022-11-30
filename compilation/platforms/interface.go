@@ -6,4 +6,6 @@ import "github.com/trailofbits/medusa/compilation/types"
 type PlatformConfig interface {
 	Compile() ([]types.Compilation, string, error)
 	Platform() string
+	GetTarget() string
+	SetTarget(string)
 }

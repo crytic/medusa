@@ -19,10 +19,10 @@ type CryticCompilationConfig struct {
 
 	// SolcVersion is the version of `solc` that will be installed prior to compiling with crytic-compile. If empty,
 	// no special version is installed prior to compilation.
-	SolcVersion string `json:"solcVersion,omitempty"`
+	SolcVersion string `json:"solcVersion"`
 
 	// ExportDirectory is the location to search for exported build artifacts. By default, we look in `./crytic-export`
-	ExportDirectory string `json:"exportDirectory,omitempty"`
+	ExportDirectory string `json:"exportDirectory"`
 
 	// Args are additional arguments that can be provided to `crytic-compile`
 	Args []string `json:"args"`
@@ -31,6 +31,16 @@ type CryticCompilationConfig struct {
 // Platform returns the platform type
 func (c *CryticCompilationConfig) Platform() string {
 	return "crytic-compile"
+}
+
+// GetTarget returns the target for compilation
+func (c *CryticCompilationConfig) GetTarget() string {
+	return c.Target
+}
+
+// SetTarget sets the new target for compilation
+func (c *CryticCompilationConfig) SetTarget(newTarget string) {
+	c.Target = newTarget
 }
 
 // NewCryticCompilationConfig returns the default configuration options while using `crytic-compile`
