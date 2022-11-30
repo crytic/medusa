@@ -9,11 +9,11 @@ type FuzzerMetrics struct {
 
 // fuzzerWorkerMetrics represents metrics for a single FuzzerWorker instance.
 type fuzzerWorkerMetrics struct {
-	// sequencesTested describes the amount of sequences of transactions which property tests were verified against.
+	// sequencesTested describes the amount of sequences of transactions which tests were run against.
 	sequencesTested uint64
 
-	// transactionsTested describes the amount of transactions which property tests were verified against.
-	transactionsTested uint64
+	// callsTested describes the amount of transactions/calls the fuzzer executed and ran tests against.
+	callsTested uint64
 
 	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
 	workerStartupCount uint64
@@ -29,8 +29,7 @@ func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	return &metrics
 }
 
-// SequencesTested returns the amount of sequences of transactions which property tests were verified against across
-// all workers.
+// SequencesTested returns the amount of sequences of transactions the fuzzer executed and ran tests against.
 func (m *FuzzerMetrics) SequencesTested() uint64 {
 	sequencesTested := uint64(0)
 	for _, workerMetrics := range m.workerMetrics {
@@ -39,18 +38,17 @@ func (m *FuzzerMetrics) SequencesTested() uint64 {
 	return sequencesTested
 }
 
-// TransactionsTested returns the amount of transactions which ran and then property tests were executed against across
-// all workers.
-func (m *FuzzerMetrics) TransactionsTested() uint64 {
+// CallsTested returns the amount of transactions/calls the fuzzer executed and ran tests against.
+func (m *FuzzerMetrics) CallsTested() uint64 {
 	transactionsTested := uint64(0)
 	for _, workerMetrics := range m.workerMetrics {
-		transactionsTested += workerMetrics.transactionsTested
+		transactionsTested += workerMetrics.callsTested
 	}
 	return transactionsTested
 }
 
-// WorkerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
-// This could happen due cases such as hitting memory constraints where re-generation frees resources.
+// WorkerStartupCount describes the amount of times the worker was spawned for this index. Workers are periodically
+// reset.
 func (m *FuzzerMetrics) WorkerStartupCount() uint64 {
 	workerStartupCount := uint64(0)
 	for _, workerMetrics := range m.workerMetrics {

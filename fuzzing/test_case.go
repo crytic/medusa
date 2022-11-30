@@ -17,7 +17,7 @@ const (
 	TestCaseStatusFailed TestCaseStatus = "FAILED"
 )
 
-// TestCase describes a test being run by a TestCaseProvider.
+// TestCase describes a test which is being conducted by a test provider attached to the Fuzzer.
 type TestCase interface {
 	// Status describes the TestCaseStatus used to define the current state of the test.
 	Status() TestCaseStatus

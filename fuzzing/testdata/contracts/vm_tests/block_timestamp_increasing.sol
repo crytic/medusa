@@ -1,4 +1,4 @@
-contract TestBlockTimestamp {
+contract TestContract {
     uint startingBlockTimestamp;
 
     constructor() public {
@@ -11,7 +11,7 @@ contract TestBlockTimestamp {
     }
 
     function fuzz_increase_block_timestamp() public view returns (bool) {
-        // ASSERTION: block timestamp should never increase more than 10
+        // ASSERTION: block timestamp should never increase more than 10 (we expect failure)
         return !(block.timestamp - startingBlockTimestamp >= 10);
     }
 }
