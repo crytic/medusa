@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
+	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -212,44 +213,6 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	}
 }
 
-// updateCoverageAndCorpus updates the corpus with the provided corpus input variables if new coverage was achieved
-// when executing the last call. Coverage is measured on the transactions in the last executed block, thus the last
-// block provided in the sequence is expected to be the last block constructed by the worker.
-func (fw *FuzzerWorker) updateCoverageAndCorpus(callSequence fuzzerTypes.CallSequence) error {
-	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
-	if fw.coverageTracer == nil || len(callSequence) == 0 {
-		return nil
-	}
-
-	// Obtain our coverage maps for our last call.
-	lastCallChainReference := callSequence[len(callSequence)-1].ChainReference
-	lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
-	lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
-
-	// Memory optimization: Remove them from the results now that we obtained them, to free memory later.
-	coverage.RemoveCoverageTracerResults(lastMessageResult)
-
-	// Merge the coverage maps into our total coverage maps and check if we had an update.
-	coverageUpdated, err := fw.fuzzer.coverageMaps.Update(lastMessageCoverageMaps)
-	if err != nil {
-		return err
-	}
-	if coverageUpdated {
-		// New coverage has been found with this call sequence, so we add it to the corpus.
-		err = fw.fuzzer.corpus.AddCallSequence(callSequence)
-		if err != nil {
-			return err
-		}
-
-		err = fw.fuzzer.corpus.Flush()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // generateFuzzedCall generates a new call sequence element which targets a state changing method in a contract
 // deployed to this FuzzerWorker's Chain with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
@@ -354,7 +317,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		callSequenceTested := callSequence[:i+1]
 
 		// Check for updates to coverage and corpus.
-		err := fw.updateCoverageAndCorpus(callSequenceTested)
+		err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, callSequenceTested)
 		if err != nil {
 			return true, err
 		}
@@ -420,7 +383,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
 		executePostStepFunc := func(currentIndex int) (bool, error) {
 			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
-			err := fw.updateCoverageAndCorpus(possibleShrunkSequence[:currentIndex+1])
+			err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, possibleShrunkSequence[:currentIndex+1])
 			if err != nil {
 				return true, err
 			}

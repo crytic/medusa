@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
@@ -258,49 +257,6 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	return testChain, err
 }
 
-// initializeCoverageMaps initializes our coverage maps by tracing initial deployments in the test chain and replaying
-// all call sequences stored in the corpus.
-func (f *Fuzzer) initializeCoverageMaps(baseTestChain *chain.TestChain) error {
-	// Create our coverage maps and a coverage tracer
-	f.coverageMaps = coverage.NewCoverageMaps()
-	coverageTracer := coverage.NewCoverageTracer()
-
-	// Clone our test chain with our coverage tracer.
-	testChain, err := baseTestChain.Clone([]vm.EVMLogger{coverageTracer}, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
-	}
-
-	// Next we measure coverage for every corpus call sequence.
-	corpusCallSequences := f.corpus.CallSequences()
-
-	// Cache current HeadBlockNumber so that you can reset back to it after every sequence
-	baseBlockNumber := testChain.HeadBlockNumber()
-
-	for _, sequence := range corpusCallSequences {
-		// Execute each call sequence, collecting coverage and updating it along the way
-		_, err = sequence.ExecuteOnChain(testChain, true, nil, func(index int) (bool, error) {
-			// Update our coverage maps for each call executed in our sequence.
-			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
-			_, covErr := f.coverageMaps.Update(covMaps)
-			if covErr != nil {
-				return true, fmt.Errorf("coverage map update encountered error: %v", err)
-			}
-			return false, nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps, encountered an error while executing call sequence: %v\n", err)
-		}
-
-		// Revert chain state to our starting point to test the next sequence.
-		err = testChain.RevertToBlockNumber(baseBlockNumber)
-		if err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
-		}
-	}
-	return nil
-}
-
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
@@ -511,8 +467,8 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
-	// Initialize our coverage maps
-	err = f.initializeCoverageMaps(baseTestChain)
+	// Initialize our coverage maps by measuring the coverage we get from the corpus.
+	f.coverageMaps, err = corpusTypes.MeasureCorpusCoverage(baseTestChain, f.corpus)
 	if err != nil {
 		return err
 	}
