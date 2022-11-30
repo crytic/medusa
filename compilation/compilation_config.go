@@ -2,6 +2,7 @@ package compilation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/compilation/types"
@@ -55,14 +56,68 @@ func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
 		return nil, "", fmt.Errorf("could not compile from configs: platform '%s' is unsupported", c.Platform)
 	}
 
-	// Allocate a platform config given our platform string in our compilation config
-	// It is necessary to do so as json.Unmarshal needs a concrete structure to populate
-	platformConfig := GetDefaultPlatformConfig(c.Platform)
-	err := json.Unmarshal(*c.PlatformConfig, &platformConfig)
+	// Get the platform config
+	platformConfig, err := c.GetPlatformConfig()
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Compile using our solc configs
-	return platformConfig.(platforms.PlatformConfig).Compile()
+	return platformConfig.Compile()
+}
+
+// GetPlatformConfig will return the de-serialized version of platforms.PlatformConfig for a given CompilationConfig
+func (c *CompilationConfig) GetPlatformConfig() (platforms.PlatformConfig, error) {
+	// Allocate a platform config given our platform string in our compilation config
+	// It is necessary to do so as json.Unmarshal needs a concrete structure to populate
+	platformConfig := GetDefaultPlatformConfig(c.Platform)
+	err := json.Unmarshal(*c.PlatformConfig, &platformConfig)
+	if err != nil {
+		return nil, err
+	}
+	return platformConfig, nil
+}
+
+// SetPlatformConfig replaces the current platform config with the one provided as an argument
+// Note that non-nil platform configs will not be accepted
+func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformConfig) error {
+	// No nil values allowed
+	if platformConfig == nil {
+		return errors.New("platformConfig must be non-nil")
+	}
+
+	// Update platform
+	c.Platform = platformConfig.Platform()
+
+	// Serialize
+	b, err := json.Marshal(platformConfig)
+	if err != nil {
+		return err
+	}
+
+	// Update the compilation config
+	platformConfigMsg := (*json.RawMessage)(&b)
+	c.PlatformConfig = platformConfigMsg
+
+	return nil
+}
+
+// SetTarget will update the compilation target in the underlying PlatformConfig
+func (c *CompilationConfig) SetTarget(newTarget string) error {
+	// De-serialize platform config
+	platformConfig, err := c.GetPlatformConfig()
+	if err != nil {
+		return err
+	}
+
+	// Update target
+	platformConfig.SetTarget(newTarget)
+
+	// Update this config's platformConfig
+	err = c.SetPlatformConfig(platformConfig)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

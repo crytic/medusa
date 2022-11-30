@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 )
 
@@ -43,8 +44,7 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	// DeploymentOrder determines the order in which the contracts should be deployed. After all contracts in this
-	// configuration variable are deployed, any remaining contracts will then be deployed
+	// DeploymentOrder determines the order in which the contracts should be deployed
 	DeploymentOrder []string `json:"deploymentOrder"`
 
 	// DeployerAddress describe the account address to be used to deploy contracts.
@@ -123,12 +123,6 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 		return nil, err
 	}
 
-	// Making validation a separate function in case we want to add other checks
-	// The only check currently is to make sure at least one test prefix is provided
-	err = projectConfig.Validate()
-	if err != nil {
-		return nil, err
-	}
 	return projectConfig, nil
 }
 
@@ -158,6 +152,11 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the worker count")
 	}
 
+	// Verify that the sequence length is a positive number
+	if p.Fuzzing.CallSequenceLength <= 0 {
+		return errors.New("project configuration must specify a positive number for the transaction sequence length")
+	}
+
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker reset limit")
@@ -169,6 +168,16 @@ func (p *ProjectConfig) Validate() error {
 	}
 	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
 		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
+	}
+
+	// Verify that senders are well-formed addresses
+	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
+		return errors.New("project configuration must specify only well-formed sender address(es)")
+	}
+
+	// Verify that deployer is a well-formed address
+	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
+		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
 	// Verify property testing fields.

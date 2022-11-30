@@ -1,6 +1,10 @@
 package main
 
-import "github.com/trailofbits/medusa/cmd"
+import (
+	"fmt"
+	"github.com/trailofbits/medusa/cmd"
+	"os"
+)
 
 func main() {
 	// Run our root CLI command, which contains all underlying command logic and will handle parsing/invocation.
@@ -9,6 +13,7 @@ func main() {
 	// Print any error we encountered
 	if err != nil {
 		// TODO: Replace this when we have an appropriate logger in place.
-		panic(err.Error())
+		fmt.Printf("ERROR:\n%s", err.Error())
+		os.Exit(1)
 	}
 }

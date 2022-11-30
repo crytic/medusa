@@ -6,13 +6,20 @@
 - Building from source on Windows, the `go-ethereum` dependency may require [TDM-GCC](https://stackoverflow.com/questions/43580131/exec-gcc-executable-file-not-found-in-path-when-trying-go-build) to build.
 
 ## Usage
-`medusa` is configuration file driven. Command-line arguments simply specify where to initialize a new medusa project configuration or where to ingest one.
+`medusa` can be configured both using a configuration file and with command line arguments.
 
 ### Initializing a project configuration
-To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a supported `platform` argument will present you a list of supported platforms.
+To create a `medusa` project configuration, invoke `medusa init [platform]` to create a configuration for the provided platform within your current working directory. Invoking this command without a `platform` argument will result in using `crytic-compile` as the default compilation platform. 
+
+> Note that the output of `medusa init`, which is equivalent to `medusa init crytic-compile`, is considered the **default configuration** of `medusa`
+
+### Using the CLI to modify project configuration initialization
+While running `medusa init`, you have access to two flags:
+1. `medusa init [platform] --out myConfig.json`: The `--out` value will determine the output path where your project configuration will live. Without `--out`, the default output path is `medusa.json` in the current working directory.
+2. `medusa init [platform] --target myContract.sol`: The `--target` value will determine the compilation target which can be a single file or project.
 
 ### Understanding the project configuration format
-After initializing a `medusa` project in a given directory, a `medusa.json` file will be created. This is the project configuration file which dictates compilation and fuzzing parameters for `medusa`.
+After initializing a `medusa` project in a given directory by running `medusa init [platform]`, a `medusa.json` file will be created (or a custom one if `--out` is used). This is the project configuration file which dictates compilation and fuzzing parameters for `medusa`.
 
 While the majority of the configuration structure is consistent, the `platform` which your project targets will offer differing compilation parameters. This means a project configuration for a `truffle` project will differ from one using `solc`.
 
@@ -96,6 +103,35 @@ The structure is described below:
   - `platform` refers to the type of platform to be used to compile the underlying target.
   - `platformConfig` is a platform-dependent structure which offers parameters for compiling the underlying project. Target paths are relative to the directory containing the `medusa` project configuration file.
 
+### Using the CLI to update project configuration
+In addition to using a project configuration file to provide the necessary parameters to `medusa`, you can also use `medusa`'s CLI. 
+Note that the CLI flags do not provide the same level of control to `medusa`'s system configuration as the configuration file does. Thus, the CLI flags and the configuration file can be used in tandem. This results in four distinct possibilities:
+1. **Configuration file with no CLI flags**: This will result in `medusa` retrieving all of its project configuration parameters directly from the file.
+2. **Configuration file with CLI flags**: This will result in `medusa` using the file as the base configuration and using the CLI arguments to override specific configuration items.
+3. **No configuration file and CLI flags**: This is equivalent to `medusa` using its **default configuration** (i.e. output of `medusa init`) and using the CLI arguments to override specific configuration items.
+4. **No configuration file and no CLI flags**: This is equivalent to `medusa` using its **default configuration**.
+
+Currently, the following flags can be used with the `medusa fuzz` command to update the configuration.
+- `medusa fuzz --config myConfig.json`: Will use the configuration in `myConfig.json` as the project configuration. If `--config` is not set, `medusa` will look for a `medusa.json` file in the current working directory. 
+- `medusa fuzz --target myContract.sol`: Will set the compilation target to `myContract.sol`
+- `medusa fuzz --workers 20`: Will set the number of `workers` to 20 threads
+- `medusa fuzz --timeout 1000`: Will set the `timeout` to 1000 seconds
+- `medusa fuzz --test-limit 50000`: Will set the `testLimit` to 50000 function calls
+- `medusa fuzz --seq-len 50`: Will set the `maxTxSequenceLength` to 50 transactions
+- `medusa fuzz --deployment-order "FirstContract,SecondContract"`: Will set the deployment order to `[FirstContract, SecondContract]`
+- `medusa fuzz --corpus-dir myCorpus`: Will set the corpus directory _path_ to `myCorpus`
+- `medusa fuzz --senders "0x10000,0x20000,0x30000"`: Will set the `senderAdddresses` to `[0x10000, 0x20000, 0x30000]`
+- `medusa fuzz --deployer "0x10000"`: Will set the `deployerAddress` to `0x10000`
+- `medusa fuzz --assertion-mode`: Will set `assertionTesting.enabled` to `true`
+
+### Running medusa
+
+We have a variety of different ways of running `medusa`:
+1. `medusa fuzz`: Run `medusa` using the configuration in `medusa.json` (or the **default configuration** if `medusa.json` can't be found) and no CLI updates
+4. `medusa fuzz --workers 20 --test-limit 50000`: Run `medusa` using the configuration in `medusa.json` (or the **default configuration** if `medusa.json` can't be found) and then override the `workers` and `testLimit` parameters
+2. `medusa fuzz --config myConfig.json`: Run `medusa` using the configuration in `myConfig.json` (or the **default configuration** if `myConfig.json` can't be found) and no CLI updates
+3. `medusa fuzz --config myConfig.json --workers 20 --test-limit 50000`: Run `medusa` using the configuration in `myConfig.json` (or the **default configuration** if `myConfig.json` can't be found) and then override the `workers` and `testLimit` parameters.
+
 ### Writing property tests
 Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 ```solidity
@@ -123,7 +159,7 @@ contract TestXY {
 
 
 ### Fuzzing with an existing project configuration
-To begin a fuzzing campaign, invoke `medusa fuzz` to compile and fuzz targets specified by a `medusa` project configuration in your current working directory, or invoke `medusa fuzz [config_path]` to specify a path to a configuration outside the current working directory.
+To begin a fuzzing campaign, invoke `medusa fuzz` to compile and fuzz targets specified by a `medusa.json` project configuration in your current working directory, or invoke `medusa fuzz --config [config_path]` to specify a unique configuration file.
 
 Invoking a fuzzing campaign, `medusa` will:
 - Compile the given targets
