@@ -28,6 +28,9 @@ type fuzzerSolcFileTest struct {
 	// filePath describes the relative path from the current package to the source file to be tested.
 	filePath string
 
+	// solcVersion describes the version of solc to use to compile this test.
+	solcVersion string
+
 	// configUpdates is a function which can be used to create updates to the default project configuration used for
 	// testing, allowing for greater configuration of tests.
 	configUpdates func(config *config.ProjectConfig)
@@ -51,7 +54,8 @@ func (c *fuzzerSolcFileTest) run(t *testing.T) {
 		// Run the test in our temporary test directory to avoid artifact pollution.
 		testutils.ExecuteInDirectory(t, contractTestPath, func() {
 			// Create a default solc platform config
-			solcPlatformConfig := platforms.NewSolcCompilationConfig(contractTestPath)
+			solcPlatformConfig := platforms.NewCryticCompilationConfig(contractTestPath)
+			solcPlatformConfig.SolcVersion = c.solcVersion
 
 			// Wrap the platform config in a compilation config
 			compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
