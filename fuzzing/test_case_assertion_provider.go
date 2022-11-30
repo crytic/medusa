@@ -63,7 +63,7 @@ func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionRes
 	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
 
 	// Verify the data can fit at least the selector + uint256
-	if len(result.ReturnData) >= 4+32 {
+	if result.Err == vm.ErrExecutionReverted && len(result.ReturnData) == 4+32 {
 		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
 		uintType, _ := abi.NewType("uint256", "", nil)
 		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
