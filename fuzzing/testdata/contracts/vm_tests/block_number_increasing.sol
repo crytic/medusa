@@ -1,4 +1,4 @@
-contract TestBlockNumber {
+contract TestContract {
     uint startingBlockNumber;
 
     constructor() public {
@@ -11,7 +11,7 @@ contract TestBlockNumber {
     }
 
     function fuzz_increase_block_number_by_10() public view returns (bool) {
-        // ASSERTION: block number should never increase more than 10
+        // ASSERTION: block number should never increase more than 10 (we expect failure)
         return !(block.number - startingBlockNumber >= 10);
     }
 }

@@ -21,9 +21,9 @@ type FuzzingConfig struct {
 	// Workers describes the amount of threads to use in fuzzing campaigns.
 	Workers int `json:"workers"`
 
-	// WorkerDatabaseEntryLimit describes an upper bound on the amount of entries that can exist in a worker database
-	// before it is pruned and recreated.
-	WorkerDatabaseEntryLimit int `json:"workerDatabaseEntryLimit"`
+	// WorkerResetLimit describes how many call sequences a worker should test before it is destroyed and recreated
+	// so that memory from its underlying chain is freed.
+	WorkerResetLimit int `json:"workerResetLimit"`
 
 	// Timeout describes a time in seconds for which the fuzzing operation should run. Providing negative or zero value
 	// will result in no timeout.
@@ -33,8 +33,8 @@ type FuzzingConfig struct {
 	// must be non-negative. A zero value indicates the test limit should not be enforced.
 	TestLimit uint64 `json:"testLimit"`
 
-	// MaxTxSequenceLength describes the maximum length a transaction sequence can be generated as.
-	MaxTxSequenceLength int `json:"maxTxSequenceLength"`
+	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
+	CallSequenceLength int `json:"callSequenceLength"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.
@@ -53,6 +53,21 @@ type FuzzingConfig struct {
 	// SenderAddresses describe a set of account addresses to be used to send state-changing txs (calls) in fuzzing
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
+
+	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
+	// compared to the previous.
+	MaxBlockNumberDelay uint64 `json:"blockNumberDelayMax"`
+
+	// MaxBlockTimestampDelay describes the maximum distance in timestamps the fuzzer will use when generating blocks
+	// compared to the previous.
+	MaxBlockTimestampDelay uint64 `json:"blockTimestampDelayMax"`
+
+	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
+	// limits for how many transactions can be included per block.
+	BlockGasLimit uint64 `json:"blockGasLimit"`
+
+	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
+	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
@@ -143,9 +158,17 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the worker count")
 	}
 
-	// Verify contract deployment order is not empty.
-	if len(p.Fuzzing.DeploymentOrder) == 0 {
-		return errors.New("project configuration must specify at least one contract to be deployed")
+	// Verify the worker reset limit is a positive number
+	if p.Fuzzing.WorkerResetLimit <= 0 {
+		return errors.New("project configuration must specify a positive number for the worker reset limit")
+	}
+
+	// Verify gas limits are appropriate
+	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
+		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
+	}
+	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
+		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
 	}
 
 	// Verify property testing fields.

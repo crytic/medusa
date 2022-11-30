@@ -17,7 +17,7 @@ import (
 //go:generate go get github.com/fjl/gencodec
 //go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_call_message_json.go
 
-// CallMessage implements Ethereum's core.Message, used to apply EVM/state updates.
+// CallMessage implements Ethereum's coreTypes.Message, used to apply EVM/state updates.
 type CallMessage struct {
 	// MsgFrom represents a core.Message's from parameter (sender), indicating who sent a transaction/message to the
 	// Ethereum core to apply a state update.
@@ -80,7 +80,7 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 	}
 }
 
-//Hash hashes the contents of a CallMessage
+// Hash hashes the contents of a CallMessage
 func (m *CallMessage) Hash() (string, error) {
 	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
 		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),

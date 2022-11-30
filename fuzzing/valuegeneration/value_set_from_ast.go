@@ -1,14 +1,15 @@
-package value_generation
+package valuegeneration
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strings"
 )
 
-// SeedFromAst allows a BaseValueSet to be seeded from an AST interface.
-func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
+// SeedFromAst allows a ValueSet to be seeded from an AST interface.
+func (vs *ValueSet) SeedFromAst(ast any) {
 	// Walk our AST while extracting values
-	walkAstNodes(ast, func(node map[string]interface{}) {
+	walkAstNodes(ast, func(node map[string]any) {
 		// Extract values depending on node type.
 		nodeType, obtainedNodeType := node["nodeType"].(string)
 		if obtainedNodeType && strings.EqualFold(nodeType, "Literal") {
@@ -19,13 +20,23 @@ func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 				return // fail silently to continue walking
 			}
 
-			// Seed BaseValueSet with literals
+			// Seed ValueSet with literals
 			if literalKind == "number" {
-				if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
-					bvs.AddInteger(*b)
+				if strings.HasPrefix(literalValue, "0x") {
+					if b, ok := big.NewInt(0).SetString(literalValue[2:], 16); ok {
+						vs.AddInteger(b)
+						vs.AddInteger(new(big.Int).Neg(b))
+						vs.AddAddress(common.BigToAddress(b))
+					}
+				} else {
+					if b, ok := big.NewInt(0).SetString(literalValue, 10); ok {
+						vs.AddInteger(b)
+						vs.AddInteger(new(big.Int).Neg(b))
+						vs.AddAddress(common.BigToAddress(b))
+					}
 				}
 			} else if literalKind == "string" {
-				bvs.AddString(literalValue)
+				vs.AddString(literalValue)
 			}
 		}
 	})
@@ -33,9 +44,9 @@ func (bvs *BaseValueSet) SeedFromAst(ast interface{}) {
 
 // walkAstNodes walks/iterates across an AST for each node, calling the provided walk function with each discovered node
 // as an argument.
-func walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
+func walkAstNodes(ast any, walkFunc func(node map[string]any)) {
 	// Try to parse our node as different types and walk all children.
-	if d, ok := ast.(map[string]interface{}); ok {
+	if d, ok := ast.(map[string]any); ok {
 		// If this dictionary contains keys 'id' and 'nodeType', we can assume it's an AST node
 		_, hasId := d["id"]
 		_, hasNodeType := d["nodeType"]
@@ -47,7 +58,7 @@ func walkAstNodes(ast interface{}, walkFunc func(node map[string]interface{})) {
 		for _, v := range d {
 			walkAstNodes(v, walkFunc)
 		}
-	} else if slice, ok := ast.([]interface{}); ok {
+	} else if slice, ok := ast.([]any); ok {
 		// Walk all elements of a slice.
 		for _, elem := range slice {
 			walkAstNodes(elem, walkFunc)

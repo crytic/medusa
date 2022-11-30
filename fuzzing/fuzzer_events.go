@@ -1,73 +1,50 @@
 package fuzzing
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/events"
 )
 
-// OnFuzzerStarting describes an event where a fuzzing.Fuzzer has initialized all state variables and is about to
+// FuzzerEvents defines event emitters for a Fuzzer.
+type FuzzerEvents struct {
+	// FuzzerStarting emits events when the Fuzzer initialized state and is ready to about to begin the main
+	// execution loop for the fuzzing campaign.
+	FuzzerStarting events.EventEmitter[FuzzerStartingEvent]
+
+	// FuzzerStopping emits events when the Fuzzer is exiting its main fuzzing loop.
+	FuzzerStopping events.EventEmitter[FuzzerStoppingEvent]
+
+	// WorkerCreated emits events when the Fuzzer creates a new FuzzerWorker during the fuzzing campaign.
+	WorkerCreated events.EventEmitter[FuzzerWorkerCreatedEvent]
+
+	// WorkerDestroyed emits events when the Fuzzer destroys an existing FuzzerWorker during the fuzzing
+	// campaign. This can occur even if a fuzzing campaign is not stopping, if a worker has reached resource limits.
+	WorkerDestroyed events.EventEmitter[FuzzerWorkerDestroyedEvent]
+}
+
+// FuzzerStartingEvent describes an event where a fuzzing.Fuzzer has initialized all state variables and is about to
 // begin spinning up instances of FuzzerWorker to start the fuzzing campaign.
-type OnFuzzerStarting struct {
+type FuzzerStartingEvent struct {
 	// Fuzzer represents the instance of the fuzzing.Fuzzer for which the event occurred.
 	Fuzzer *Fuzzer
 }
 
-// OnFuzzerStopping describes an event where a fuzzing.Fuzzer is exiting its main fuzzing loop.
-type OnFuzzerStopping struct {
+// FuzzerStoppingEvent describes an event where a fuzzing.Fuzzer is exiting the main fuzzing loop.
+type FuzzerStoppingEvent struct {
 	// Fuzzer represents the instance of the fuzzing.Fuzzer for which the event occurred.
 	Fuzzer *Fuzzer
+
+	// err describes a potential error returned by the fuzzer run.
+	err error
 }
 
-// OnWorkerCreated describes an event where a fuzzing.FuzzerWorker is created by a fuzzing.Fuzzer.
-type OnWorkerCreated struct {
+// FuzzerWorkerCreatedEvent describes an event where a fuzzing.FuzzerWorker is created by a fuzzing.Fuzzer.
+type FuzzerWorkerCreatedEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker
 }
 
-// OnWorkerDestroyed describes an event where a fuzzing.FuzzerWorker is destroyed by a fuzzing.Fuzzer.
-type OnWorkerDestroyed struct {
-	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
-	Worker *FuzzerWorker
-}
-
-// OnWorkerDeployedContractAdded describes an event where a fuzzing.FuzzerWorker detects a newly deployed contract in
-// its underlying test chain.
-type OnWorkerDeployedContractAdded struct {
-	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
-	Worker *FuzzerWorker
-
-	// ContractAddress describes the address of the deployed contract.
-	ContractAddress common.Address
-
-	// ContractDefinition describes the compiled contract artifact definition which the fuzzing.Fuzzer matched to the
-	// deployed bytecode. If this could not be resolved, a nil value is provided.
-	ContractDefinition *types.Contract
-}
-
-// OnWorkerDeployedContractDeleted describes an event where a fuzzing.FuzzerWorker detects a previously reported
-// deployed contract that no longer exists in the underlying test chain.
-type OnWorkerDeployedContractDeleted struct {
-	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
-	Worker *FuzzerWorker
-
-	// ContractAddress describes the address of the deployed contract.
-	ContractAddress common.Address
-
-	// ContractDefinition describes the compiled contract artifact definition which the fuzzing.Fuzzer matched to the
-	// deployed bytecode. If this could not be resolved, a nil value is provided.
-	ContractDefinition *types.Contract
-}
-
-// OnWorkerCallSequenceTesting describes an event where a fuzzing.FuzzerWorker is about to generate and test a new call
-// sequence.
-type OnWorkerCallSequenceTesting struct {
-	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
-	Worker *FuzzerWorker
-}
-
-// OnWorkerCallSequenceTested describes an event where a fuzzing.FuzzerWorker has finished generating and testing a new
-// call sequence.
-type OnWorkerCallSequenceTested struct {
+// FuzzerWorkerDestroyedEvent describes an event where a fuzzing.FuzzerWorker is destroyed by a fuzzing.Fuzzer.
+type FuzzerWorkerDestroyedEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker
 }

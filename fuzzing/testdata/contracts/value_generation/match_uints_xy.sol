@@ -1,4 +1,5 @@
-contract TestMagicNumbersXY {
+// This contract verifies two different, but specific uint function arguments will be provided by the fuzzer.
+contract TestContract {
     uint x;
     uint y;
 
@@ -10,12 +11,9 @@ contract TestMagicNumbersXY {
         y = value + 9;
     }
 
-    function setZ(uint value) public {
-        z = value + 7;
-    }
 
     function fuzz_never_specific_values() public view returns (bool) {
-        // ASSERTION: x should never be 10 at the same time y is 80 at the same time z is 14
-        return !(x == 10 && y == 80 && z == 14);
+        // ASSERTION: x should never be 10 at the same time y is 80
+        return !(x == 10 && y == 80);
     }
 }

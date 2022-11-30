@@ -23,7 +23,7 @@ func newTestChainBlockContext(testChain *TestChain, header *types.Header) vm.Blo
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).SetUint64(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     new(big.Int).Set(testChain.Head().Header().BaseFee),
+		BaseFee:     new(big.Int).Set(testChain.Head().Header.BaseFee),
 		GasLimit:    header.GasLimit,
 		Random:      &header.MixDigest,
 	}

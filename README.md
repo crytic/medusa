@@ -21,10 +21,10 @@ An example project configuration can be observed below:
 {
 	"fuzzing": {
 		"workers": 10,
-		"workerDatabaseEntryLimit": 10000,
+		"workerResetLimit": 50,
 		"timeout": 0,
 		"testLimit": 10000000,
-		"maxTxSequenceLength": 100,
+		"callSequenceLength": 100,
 		"corpusDirectory": "corpus",
 		"coverageEnabled": true,
 		"deploymentOrder": ["TestXY", "TestContract2"],
@@ -34,6 +34,10 @@ An example project configuration can be observed below:
 			"0x2222222222222222222222222222222222222222",
 			"0x3333333333333333333333333333333333333333"
 		],
+		"blockNumberDelayMax": 60480,
+		"blockTimestampDelayMax": 604800,
+		"blockGasLimit": 12500000,
+		"transactionGasLimit": 12500000,
 		"testing": {
 			"stopOnFailedTest": true,
 			"assertionTesting": {
@@ -61,11 +65,11 @@ An example project configuration can be observed below:
 The structure is described below:
 - `fuzzing` defines parameters for the fuzzing campaign:
   - `workers` defines the number of worker threads to parallelize fuzzing operations on.
-  - `workerDatabaseEntryLimit` defines how many keys a worker's memory database can contain before the worker is reset
-    - **Note**: this is a temporary logic for memory throttling
+  - `workerResetLimit` defines how many call sequences a worker should process on its underlying chain before being fully reset, freeing memory.
+    - **Note**: This setting, along with `workers` influence the speed and memory consumption of the fuzzer. Setting this value higher will result in greater memory consumption per worker. Setting it too high will result in the in-memory chain's database growing to a size that is slower to process. Setting it too low may result in frequent worker resets that are computationally expensive for complex contract deployments that need to be replayed during worker reconstruction.
   - `timeout` refers to the number of seconds before the fuzzing campaign should be terminated. If a zero value is provided, the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign is starting.
   - `testLimit` refers to a threshold of the number of function calls to make before the fuzzing campaign should be terminated. Must be a non-negative number. If a zero value is provided, no call limit will be enforced.
-  - `maxTxSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
+  - `callSequenceLength` defines the maximum number of function calls to generate in a single sequence that tries to violate property tests. For property tests which require many calls to violate, this number should be set sufficiently high.
   - `corpusDirectory` refers to the path where the corpus should be saved. The corpus collects artifacts during a fuzzing campaign that help drive fuzzer features (e.g. coverage-increasing call sequences which the fuzzer collects to be mutates).
   - `coverageEnabled` refers to whether coverage-increasing call sequences should be saved in the corpus for the fuzzer to mutate. This aims to help achieve greater coverage across contracts when testing.
   - `deploymentOrder` refers to the order in which compiled contracts (contracts resulting from compilation, as specified by the `compilation` config) should be deployed to the fuzzer on startup. At least one contract name must be specified here. 
@@ -74,6 +78,12 @@ The structure is described below:
       - **Note**: Changing this address may render entries in the corpus invalid. It is recommended to clear your corpus when doing so.
   - `senderAddresses` defines the account addresses used to send function calls to deployed contracts in the fuzzing campaign.
       - **Note**: Removing previously existing addresses may render entries in the corpus invalid. It is recommended to clear your corpus when doing so.
+  - `blockNumberDelayMax` defines the maximum block number jump the fuzzer should make between test transactions.
+  - `blockTimestampDelayMax` defines the maximum block timestamp jump the fuzzer should make between test transactions.
+  - `blockGasLimit` defines the maximum amount of gas a block's transactions can use in total (thus defining max transactions per block). 
+    - **Note**: It is advised not to change this naively, as a minimum must be set for the chain to operate.
+  - `transactionGasLimit` defines the amount of gas sent with each fuzzer-generated transaction.
+    - **Note**: It is advised not to change this naively, as a minimum must be set for the chain to operate.
   - `testing` defines the configuration for built-in test case providers which can be leveraged for fuzzing campaign.
     - `stopOnFailedTest` defines whether the fuzzer should exit after detecting the first failed test, or continue fuzzing to find other results.
     - `assertionTesting` describes configuration for assertion-based testing.

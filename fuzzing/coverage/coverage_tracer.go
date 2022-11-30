@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"fmt"
+	"github.com/trailofbits/medusa/chain/types"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"math/big"
 	"time"
@@ -9,6 +10,29 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
+
+// coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
+// querying them.
+const coverageTracerResultsKey = "CoverageTracerResults"
+
+// GetCoverageTracerResults obtains CoverageMaps stored by a CoverageTracer from message results. This is nil if
+// no CoverageMaps were recorded by a tracer (e.g. CoverageTracer was not attached during this message execution).
+func GetCoverageTracerResults(messageResults *types.CallMessageResults) *CoverageMaps {
+	// Try to obtain the results the tracer should've stored.
+	if genericResult, ok := messageResults.AdditionalResults[coverageTracerResultsKey]; ok {
+		if castedResult, ok := genericResult.(*CoverageMaps); ok {
+			return castedResult
+		}
+	}
+
+	// If we could not obtain them, return nil.
+	return nil
+}
+
+// RemoveCoverageTracerResults removes CoverageMaps stored by a CoverageTracer from message results.
+func RemoveCoverageTracerResults(messageResults *types.CallMessageResults) {
+	delete(messageResults.AdditionalResults, coverageTracerResultsKey)
+}
 
 // CoverageTracer implements vm.EVMLogger to collect information such as coverage maps
 // for fuzzing campaigns from EVM execution traces.
@@ -47,23 +71,13 @@ func NewCoverageTracer() *CoverageTracer {
 	return tracer
 }
 
-// CoverageMaps returns the coverage maps describing execution coverage recorded by the tracer.
-func (t *CoverageTracer) CoverageMaps() *CoverageMaps {
-	return t.coverageMaps
-}
-
-// Reset clears the state of the CoverageTracer.
-func (t *CoverageTracer) Reset() {
-	t.callDepth = 0
-	t.coverageMaps = NewCoverageMaps()
-	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
-	t.cachedCodeHashOriginal = common.Hash{}
-}
-
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureTxStart(gasLimit uint64) {
 	// Reset our capture state
 	t.callDepth = 0
+	t.coverageMaps = NewCoverageMaps()
+	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
+	t.cachedCodeHashOriginal = common.Hash{}
 
 	// Reset our call frame states.
 	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
@@ -162,4 +176,12 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 
 // CaptureFault records an execution fault, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+}
+
+// CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
+// tracer is used during transaction execution (block creation), the results can later be queried from the block.
+// This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
+func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+	// Store our tracer results.
+	results.AdditionalResults[coverageTracerResultsKey] = t.coverageMaps
 }

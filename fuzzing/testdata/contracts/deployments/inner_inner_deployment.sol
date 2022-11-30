@@ -14,7 +14,7 @@ contract InnerDeployment {
     }
 }
 
-// InnerDeploymentFactory deploys InnerDeployment to test inner deployments.
+// TestContract deploys InnerDeployment to test inner deployments.
 contract InnerDeploymentFactory {
     function deployInner() public returns (address) {
         return address(new InnerDeployment());

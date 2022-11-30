@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
+	"github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/utils"
 	"io/ioutil"
 	"os"
@@ -19,12 +19,9 @@ type Corpus struct {
 	// storageDirectory describes the directory to save corpus callSequencesByFilePath within.
 	storageDirectory string
 
-	// coverageMaps describes the total code coverage known to be achieved across all runs.
-	coverageMaps *coverage.CoverageMaps
-
 	// callSequences is a list of call sequences that increased coverage or otherwise were found to be valuable
 	// to the fuzzer.
-	callSequences []*corpusFile[*CorpusCallSequence]
+	callSequences []*corpusFile[types.CallSequence]
 
 	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
 	// callSequences.
@@ -48,8 +45,7 @@ type corpusFile[T any] struct {
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory: corpusDirectory,
-		coverageMaps:     coverage.NewCoverageMaps(),
-		callSequences:    make([]*corpusFile[*CorpusCallSequence], 0),
+		callSequences:    make([]*corpusFile[types.CallSequence], 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -70,16 +66,16 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			}
 
 			// Parse the call sequence data.
-			var entry CorpusCallSequence
-			err = json.Unmarshal(b, &entry)
+			var seq types.CallSequence
+			err = json.Unmarshal(b, &seq)
 			if err != nil {
 				return nil, err
 			}
 
 			// Add entry to corpus
-			corpus.callSequences = append(corpus.callSequences, &corpusFile[*CorpusCallSequence]{
+			corpus.callSequences = append(corpus.callSequences, &corpusFile[types.CallSequence]{
 				filePath: filePath,
-				data:     &entry,
+				data:     seq,
 			})
 		}
 	}
@@ -102,32 +98,27 @@ func (c *Corpus) CallSequencesDirectory() string {
 	return filepath.Join(c.StorageDirectory(), "call_sequences")
 }
 
-// CoverageMaps returns the total coverage collected across all runs.
-func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
-	return c.coverageMaps
-}
-
 // CallSequenceCount returns the count of call sequences recorded in the corpus.
 func (c *Corpus) CallSequenceCount() int {
 	return len(c.callSequences)
 }
 
-// AddCallSequence adds a CorpusCallSequence to the corpus and returns an error in case of an issue
-func (c *Corpus) AddCallSequence(corpusEntry CorpusCallSequence) error {
+// AddCallSequence adds a call sequence to the corpus and returns an error in case of an issue
+func (c *Corpus) AddCallSequence(seq types.CallSequence) error {
 	// Update our sequences with the new entry.
 	c.callSequencesLock.Lock()
-	c.callSequences = append(c.callSequences, &corpusFile[*CorpusCallSequence]{
+	c.callSequences = append(c.callSequences, &corpusFile[types.CallSequence]{
 		filePath: "",
-		data:     &corpusEntry,
+		data:     seq,
 	})
 	c.callSequencesLock.Unlock()
 	return nil
 }
 
-// CallSequences returns all the CorpusCallSequence known to the corpus. This should not be called frequently,
+// CallSequences returns all the call sequences known to the corpus. This should not be called frequently,
 // as the slice returned by this method is computed each time it is called.
-func (c *Corpus) CallSequences() []*CorpusCallSequence {
-	return utils.SliceSelect(c.callSequences, func(file *corpusFile[*CorpusCallSequence]) *CorpusCallSequence {
+func (c *Corpus) CallSequences() []types.CallSequence {
+	return utils.SliceSelect(c.callSequences, func(file *corpusFile[types.CallSequence]) types.CallSequence {
 		return file.data
 	})
 }

@@ -1,9 +1,13 @@
-contract TestBlockHash {
+// This contract stores every block hash of the previous 10 blocks that were recorded. If they have already been
+// recorded in a previous call, it checks all the ones set on the next call for inconsistency. This requires this
+// contract be called every block. Thus it requires a max block number delay of 1 to operate appropriately.
+contract TestContract {
     mapping(uint => bytes32) hashes;
+    mapping(uint => bool) hashesSet;
     bool failedTest;
     bool ranBefore;
+    uint lastBlockNumber;
     function updateBlockHashes() public {
-
         // ASSERTION: current block hash should always be zero.
         bytes32 current = blockhash(block.number);
         if (current != bytes32(0)) {
@@ -25,16 +29,24 @@ contract TestBlockHash {
 
             // If it's not the immediate last block (first time we'll record it), perform verification for our test.
             if (i > 1) {
-                if (ranBefore && hashes[block.number - i] != hash) {
-                    failedTest = true;
-                    return;
+                // Ensure we're not processing the block twice in the same block, or that this isn't the first time
+                // we're running it (as nothing would've been recorded).
+                if (lastBlockNumber != 0 && lastBlockNumber != block.number) {
+                    // If we found a hash that was set, but doesn't match, report a failure.
+                    if (hashesSet[block.number - i] && hashes[block.number - i] != hash) {
+                        failedTest = true;
+                        return;
+                    }
                 }
             }
 
             // Store the hash
             hashes[block.number - i] = hash;
+            hashesSet[block.number - i] = true;
         }
-        ranBefore = true;
+
+        // Set our current processed block number.
+        lastBlockNumber = block.number;
     }
 
     function fuzz_violate_block_hash_continuity() public view returns (bool) {
