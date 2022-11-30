@@ -590,9 +590,9 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 
-	// Create a new block for our test node, and set the block hash to an empty hash.
+	// Create a new block for our test node
 	t.pendingBlock = chainTypes.NewBlock(header)
-	t.pendingBlock.Hash = common.Hash{}
+	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 
 	// Emit our event for the pending block being created
 	err := t.Events.PendingBlockCreated.Publish(PendingBlockCreatedEvent{
