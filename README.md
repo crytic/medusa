@@ -50,7 +50,7 @@ We recommend you familiarize yourself with writing [assertion](https://github.co
 You can use the following command to run `medusa` against a contract:
 
 ```console
-medusa fuzz --target contract.sol --deployment-order ContractName1
+medusa fuzz --target contract.sol --deployment-order ContractName
 ```
 
 Where:
@@ -85,8 +85,8 @@ This will use the `medusa.json` configuration in the current directory and begin
 
 ## Running Unit Tests
 
-- Install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc`, `truffle`, and `hardhat` available on your system.
-- From the root of the project directory, invoke `go test -v ./...` on through command-line to run tests from all packages at or below the root.
+First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc`, `truffle`, and `hardhat` available on your system.
+- From the root of the repository, invoke `go test -v ./...` on through command-line to run tests from all packages at or below the root.
   - Or enter each package directory to run `go test -v .` to test the immediate package.
   - Note: the `-v` parameter provides verbose output.
 - Otherwise, use an IDE like [GoLand](https://www.jetbrains.com/go/) to visualize the tests and logically separate output.
@@ -98,4 +98,4 @@ For information about how to contribute to this project, check out the [CONTRIBU
 
 ## License
 
-medusa is licensed and distributed under the [AGPLv3](./LICENSE).
+`medusa` is licensed and distributed under the [AGPLv3](./LICENSE).
