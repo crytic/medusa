@@ -17,5 +17,6 @@ var rootCmd = &cobra.Command{
 // Execute provides an exportable function to invoke the CLI.
 // Returns an error if one was encountered.
 func Execute() error {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	return rootCmd.Execute()
 }
