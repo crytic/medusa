@@ -1,7 +1,7 @@
 # medusa
 
 `medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna). 
-It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows for custom user-extended testing methodology.
+It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
 
 ## Features
 
@@ -21,7 +21,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 
 To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `truffle`, `hardhat`) installed on your machine.
 
-You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/trailofbits/medusa) page.
+You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/trailofbits/medusa/releases) page.
 
 
 ### Building from source
@@ -39,17 +39,25 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 
 ## Usage
 
-`medusa` is primarily configuration file driven, though it can be run with a default config with CLI arguments that specify the target compilation path and contracts.
+Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
+We provide instructions for both below.
 
-### Command-line Only
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+
+
+### Command-line only
 
 You can use the following command to run `medusa` against a contract:
 
 ```console
-medusa fuzz --target contract.sol --deployment-order ContractName1,ContractName2
+medusa fuzz --target contract.sol --deployment-order ContractName1
 ```
 
-Where `--target` specifies the path `crytic-compile` should use to compile contracts, and `--deployment-order` specifies which contracts should be dpeloyed for testing.
+Where:
+- `--target` specifies the path `crytic-compile` should use to compile contracts
+- `--deployment-order` specifies comma-separated names of contracts to be deployed for testing.
+
+**Note:** Check out the [command-line interface](https://github.com/trailofbits/medusa/wiki/Command-Line-Interface) wiki page, or run `medusa --help` for more information.
 
 ### Configuration file driven
 
@@ -72,7 +80,7 @@ medusa fuzz
 
 This will use the `medusa.json` configuration in the current directory and begin the fuzzing campaign.
 
-Visit our [configuration]() wiki page for more information.
+**Note:** Check out the [project configuration](https://github.com/trailofbits/medusa/wiki/Project-Configuration) wiki page, or run `medusa --help` for more information.
 
 
 ## Running Unit Tests
