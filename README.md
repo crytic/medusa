@@ -61,7 +61,7 @@ Where:
 
 ### Configuration file driven
 
-The preferred method to use medusa to enter your project directory (hardhat directory, or directory with your contracts),
+The preferred method to use medusa is to enter your project directory (hardhat directory, or directory with your contracts),
 then execute the following command:
 
 ```console
@@ -93,7 +93,7 @@ First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc
 
 ## Contributing
 
-For information about how to contribute to this project, check out the [CONTRIBUTING](./CONTRIBUTING.md) guideline.
+For information about how to contribute to this project, check out the [CONTRIBUTING](./CONTRIBUTING.md) guidelines.
 
 
 ## License
