@@ -1,6 +1,7 @@
 package platforms
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -95,7 +96,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	}
 	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("could not deleted crytic-compile's export directory prior to compilation, error: %v", err)
 	}
 
 	// Validate args to make sure --export-format and --export-dir are not specified
@@ -161,7 +162,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		// Read the compiled JSON file data
 		b, err := ioutil.ReadFile(matches[i])
 		if err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data at path '%s', error: %v", matches[i], err)
 		}
 
 		// Parse the JSON
@@ -211,11 +212,21 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
 			}
 
+			// Decode our init and runtime bytecode
+			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+			}
+			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			}
+
 			// Add contract details
 			compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 				Abi:             *contractAbi,
-				InitBytecode:    contract.Bin,
-				RuntimeBytecode: contract.BinRuntime,
+				InitBytecode:    initBytecode,
+				RuntimeBytecode: runtimeBytecode,
 				SrcMapsInit:     contract.SrcMap,
 				SrcMapsRuntime:  contract.SrcMapRuntime,
 			}

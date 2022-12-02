@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
@@ -15,27 +14,17 @@ type CompiledContract struct {
 	Abi abi.ABI
 
 	// InitBytecode describes the bytecode used to deploy a contract.
-	InitBytecode string
+	InitBytecode []byte
 
 	// RuntimeBytecode represents the rudimentary bytecode to be expected once the contract has been successfully
 	// deployed. This may differ at runtime based on constructor arguments, immutables, linked libraries, etc.
-	RuntimeBytecode string
+	RuntimeBytecode []byte
 
 	// SrcMapsInit describes the source mappings to associate source file and bytecode segments in InitBytecode.
 	SrcMapsInit string
 
 	// SrcMapsRuntime describes the source mappings to associate source file and bytecode segments in RuntimeBytecode.
 	SrcMapsRuntime string
-}
-
-// InitBytecodeBytes returns the InitBytecode as a byte slice.
-func (c *CompiledContract) InitBytecodeBytes() ([]byte, error) {
-	return hex.DecodeString(strings.TrimPrefix(c.InitBytecode, "0x"))
-}
-
-// RuntimeBytecodeBytes returns the RuntimeBytecode as a byte slice.
-func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
-	return hex.DecodeString(strings.TrimPrefix(c.RuntimeBytecode, "0x"))
 }
 
 // ParseABIFromInterface parses a generic object into an abi.ABI and returns it, or an error if one occurs.

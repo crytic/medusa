@@ -821,18 +821,12 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 // test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
 // the resulting block the deployment transaction was processed in, and an error if one occurred.
 func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, deployer common.Address) (common.Address, *chainTypes.Block, error) {
-	// Obtain the byte code as a byte array
-	b, err := contract.InitBytecodeBytes()
-	if err != nil {
-		return common.Address{}, nil, fmt.Errorf("could not convert compiled contract bytecode from hex string to byte code")
-	}
-
 	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
 	// contracts.
 
 	// Create a message to represent our contract deployment.
 	value := big.NewInt(0)
-	msg := t.CreateMessage(deployer, nil, value, nil, nil, b)
+	msg := t.CreateMessage(deployer, nil, value, nil, nil, contract.InitBytecode)
 
 	// Create a new pending block we'll commit to chain
 	block, err := t.PendingBlockCreate()
