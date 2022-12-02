@@ -217,14 +217,14 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
 	// Loop for each contract in each compilation and deploy it to the test node.
 	for _, comp := range compilations {
-		for _, source := range comp.Sources {
+		for sourcePath, source := range comp.Sources {
 			// Seed our base value set from every source's AST
 			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
-				contractDefinition := fuzzerTypes.NewContract(contractName, &contract)
+				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
 				f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
 			}
 		}

@@ -9,14 +9,18 @@ type Contract struct {
 	// name represents the name of the contract.
 	name string
 
+	// sourcePath represents the key used to index the source file in the compilation it was derived from.
+	sourcePath string
+
 	// compiledContract describes the compiled contract data.
 	compiledContract *types.CompiledContract
 }
 
 // NewContract returns a new Contract instance with the provided information.
-func NewContract(name string, compiledContract *types.CompiledContract) *Contract {
+func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract) *Contract {
 	return &Contract{
 		name:             name,
+		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
 	}
 }
