@@ -749,7 +749,7 @@ func (t *TestChain) PendingBlockDiscard() error {
 	}
 
 	// Emit our pending block discarded event
-	err = t.Events.PendingBlockCommitted.Publish(PendingBlockCommittedEvent{
+	err = t.Events.PendingBlockDiscarded.Publish(PendingBlockDiscardedEvent{
 		Chain: t,
 		Block: pendingBlock,
 	})
