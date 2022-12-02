@@ -560,7 +560,7 @@ func (f *Fuzzer) printMetricsLoop() {
 			break
 		}
 
-		// Sleep for a second
+		// Sleep some time between print iterations
 		time.Sleep(time.Second * 3)
 	}
 }
