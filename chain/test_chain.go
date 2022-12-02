@@ -253,6 +253,11 @@ func (t *TestChain) Head() *chainTypes.Block {
 	return t.blocks[len(t.blocks)-1]
 }
 
+// State returns the current state.StateDB of the chain.
+func (t *TestChain) State() *state.StateDB {
+	return t.state
+}
+
 // HeadBlockNumber returns the test chain head's block number, where zero is the genesis block.
 func (t *TestChain) HeadBlockNumber() uint64 {
 	return t.Head().Header.Number.Uint64()
