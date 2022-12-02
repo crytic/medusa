@@ -242,6 +242,11 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 	return t.genesisDefinition
 }
 
+// State returns the current state.StateDB of the chain.
+func (t *TestChain) State() *state.StateDB {
+	return t.state
+}
+
 // CommittedBlocks returns the real blocks which were committed to the chain, where methods such as BlockFromNumber
 // return the simulated chain state with intermediate blocks injected for block number jumps, etc.
 func (t *TestChain) CommittedBlocks() []*chainTypes.Block {
@@ -251,11 +256,6 @@ func (t *TestChain) CommittedBlocks() []*chainTypes.Block {
 // Head returns the head of the chain (the latest block).
 func (t *TestChain) Head() *chainTypes.Block {
 	return t.blocks[len(t.blocks)-1]
-}
-
-// State returns the current state.StateDB of the chain.
-func (t *TestChain) State() *state.StateDB {
-	return t.state
 }
 
 // HeadBlockNumber returns the test chain head's block number, where zero is the genesis block.
