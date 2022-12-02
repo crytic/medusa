@@ -2,11 +2,12 @@ package valuegeneration
 
 import (
 	"encoding/hex"
+	"hash"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/maps"
-	"hash"
-	"math/big"
 )
 
 // ValueSet represents potential values of significance within the source code to be used in fuzz tests.
@@ -51,7 +52,7 @@ func (vs *ValueSet) Clone() *ValueSet {
 func (vs *ValueSet) Addresses() []common.Address {
 	res := make([]common.Address, len(vs.addresses))
 	count := 0
-	for k, _ := range vs.addresses {
+	for k := range vs.addresses {
 		res[count] = k
 		count++
 	}
@@ -93,7 +94,7 @@ func (vs *ValueSet) RemoveInteger(b *big.Int) {
 func (vs *ValueSet) Strings() []string {
 	res := make([]string, len(vs.strings))
 	count := 0
-	for k, _ := range vs.strings {
+	for k := range vs.strings {
 		res[count] = k
 		count++
 	}

@@ -2,6 +2,9 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
@@ -10,8 +13,6 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -367,7 +368,10 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (fuzzerTypes.CallSequence, error) {
 	// In case of any error, we defer an operation to revert our chain state. We purposefully ignore errors from it to
 	// prioritize any others which occurred.
-	defer fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+	defer func() {
+		// nolint:errcheck
+		fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+	}()
 
 	// Define another slice to store our tx sequence
 	// Note: We clone here as we don't want to overwrite our call sequence runtime results we store.
