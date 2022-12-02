@@ -612,8 +612,6 @@ func (f *Fuzzer) printExitingResults() {
 			testCountPassed++
 		} else if testCase.Status() == TestCaseStatusFailed {
 			testCountFailed++
-		} else {
-
 		}
 	}
 
