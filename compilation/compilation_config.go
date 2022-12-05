@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/compilation/types"
 )

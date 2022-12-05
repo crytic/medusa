@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
+	"regexp"
+	"strings"
+
 	"github.com/Masterminds/semver"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/utils"
-	"os/exec"
-	"regexp"
-	"strings"
 )
 
 type SolcCompilationConfig struct {
@@ -45,7 +46,7 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 	}
 
 	// Parse the compiler version out of the output
-	exp := regexp.MustCompile("\\d+\\.\\d+\\.\\d+")
+	exp := regexp.MustCompile(`\d+\.\d+\.\d+`)
 	versionStr := exp.FindString(string(out))
 	if versionStr == "" {
 		return nil, errors.New("could not parse solc version using 'solc --version'")
@@ -130,6 +131,9 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Parse our contracts from solc output
 	contracts, err := compiler.ParseCombinedJSON(cmdStdout, "solc", v.String(), v.String(), "")
+	if err != nil {
+		return nil, "", err
+	}
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
 		nameSplit := strings.Split(name, ":")

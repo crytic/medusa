@@ -2,12 +2,13 @@ package fuzzing
 
 import (
 	"bytes"
+	"math/big"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/fuzzing/types"
-	"math/big"
-	"sync"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -71,7 +72,7 @@ func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionRes
 		}, abi.Arguments{})
 
 		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Compare(result.ReturnData[:4], panicReturnDataAbi.ID) == 0 {
+		if bytes.Equal(result.ReturnData[:4], panicReturnDataAbi.ID) {
 			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
 
 			// If they unpacked without issue, read the panic code. We expect a panic code of 1.

@@ -3,13 +3,13 @@ package corpus
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/trailofbits/medusa/fuzzing/types"
-	"github.com/trailofbits/medusa/utils"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/google/uuid"
+	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/utils"
 )
 
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
@@ -60,7 +60,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			filePath := matches[i]
 
 			// Read the call sequence data.
-			b, err := ioutil.ReadFile(filePath)
+			b, err := os.ReadFile(filePath)
 			if err != nil {
 				return nil, err
 			}
@@ -160,7 +160,7 @@ func (c *Corpus) Flush() error {
 			}
 
 			// Write the JSON encoded data.
-			err = ioutil.WriteFile(sequenceFile.filePath, jsonEncodedData, os.ModePerm)
+			err = os.WriteFile(sequenceFile.filePath, jsonEncodedData, os.ModePerm)
 			if err != nil {
 				return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
 			}

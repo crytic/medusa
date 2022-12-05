@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/compilation/types"
 )
@@ -88,7 +89,7 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 		cutDeployedInitBytecode := c.InitBytecode[:len(contractInitBytecode)]
 
 		// If the byte code matches exactly, we treat this as a match.
-		if bytes.Compare(cutDeployedInitBytecode, contractInitBytecode) == 0 {
+		if bytes.Equal(cutDeployedInitBytecode, contractInitBytecode) {
 			return true
 		}
 	}
@@ -97,7 +98,7 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 	// process, e.g. smart contract constructor, will change the runtime code in most cases).
 	if canCompareRuntime {
 		// If the byte code matches exactly, we treat this as a match.
-		if bytes.Compare(c.RuntimeBytecode, contractRuntimeBytecode) == 0 {
+		if bytes.Equal(c.RuntimeBytecode, contractRuntimeBytecode) {
 			return true
 		}
 	}
