@@ -198,9 +198,8 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 			// Find out what source this exists in, or create one if our path somehow differed from any
 			// path not existing in the "sources" key at the root of the export.
-			parentSource, sourcePathExists := compilation.Sources[sourcePath]
-			if !sourcePathExists {
-				parentSource = types.CompiledSource{
+			if _, ok := compilation.Sources[sourcePath]; !ok {
+				parentSource := types.CompiledSource{
 					Ast:       nil,
 					Contracts: make(map[string]types.CompiledContract),
 				}
