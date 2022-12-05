@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/utils"
-	"io/ioutil"
 )
 
 type ProjectConfig struct {
@@ -108,7 +109,7 @@ type PropertyTestConfig struct {
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
 	fmt.Printf("Reading configuration file: %s\n", path)
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +137,7 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 	}
 
 	// Save it to the provided output path and return the result
-	err = ioutil.WriteFile(path, b, 0644)
+	err = os.WriteFile(path, b, 0644)
 	if err != nil {
 		return err
 	}

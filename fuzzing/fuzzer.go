@@ -3,6 +3,11 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -15,10 +20,6 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
-	"math/big"
-	"strings"
-	"sync"
-	"time"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -115,7 +116,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf(compilationOutput)
+		fmt.Printf("%s", compilationOutput)
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
@@ -544,12 +545,12 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 		workerStartupCount := f.metrics.WorkerStartupCount()
 
 		// Calculate time elapsed since the last update
-		secondsSinceLastUpdate := time.Now().Sub(lastPrintedTime).Seconds()
+		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
 		// Print a metrics update
 		fmt.Printf(
 			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, worker resets: %d/s\n",
-			time.Now().Sub(startTime).Round(time.Second),
+			time.Since(startTime).Round(time.Second),
 			callsTested,
 			uint64(float64(callsTested-lastCallsTested)/secondsSinceLastUpdate),
 			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),

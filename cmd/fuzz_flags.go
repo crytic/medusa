@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
@@ -50,11 +51,11 @@ func addFuzzFlags() error {
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},
-		fmt.Sprintf("account address(es) used to send state-changing txns"))
+		"account address(es) used to send state-changing txns")
 
 	// Deployer address
 	fuzzCmd.Flags().String("deployer", "",
-		fmt.Sprintf("account address used to deploy contracts"))
+		"account address used to deploy contracts")
 
 	// Assertion mode
 	fuzzCmd.Flags().Bool("assertion-mode", false,

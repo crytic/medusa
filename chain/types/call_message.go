@@ -2,14 +2,14 @@ package types
 
 import (
 	"encoding/hex"
-	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/crypto/sha3"
-	"math/big"
-	"strconv"
-	"strings"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -83,7 +83,7 @@ func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value
 // Hash hashes the contents of a CallMessage
 func (m *CallMessage) Hash() (string, error) {
 	msgSequenceString := strings.Join([]string{m.From().String(), m.To().String(),
-		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), fmt.Sprintf("%s", m.Data()),
+		m.Value().String(), strconv.FormatUint(m.Nonce(), 10), string(m.Data()),
 		strconv.FormatUint(m.Gas(), 10), m.GasFeeCap().String(), m.GasTipCap().String(),
 		m.GasPrice().String()}, ",")
 	hash := sha3.NewLegacyKeccak256()

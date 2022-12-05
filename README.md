@@ -1,11 +1,12 @@
 # medusa
 
-`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna). 
+`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna).
 It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
 
 ## Features
 
 `medusa` provides support for:
+
 - ✔️**Parallel fuzzing and testing** methodologies across multiple workers (threads)
 - ✔️**Assertion and property testing**: built-in support for writing basic Solidity property tests and assertion tests
 - ✔️**Mutational value generation**: fed by compilation and runtime values.
@@ -14,7 +15,6 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 - ✔️**Extensible low-level testing API** through events and hooks provided throughout the fuzzer, workers, and test chains.
 - ❌ **Extensible high-level testing API** allowing for the addition of per-contract or global post call/event property tests
 
-
 ## Installation
 
 ### Precompiled binaries
@@ -22,7 +22,6 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `truffle`, `hardhat`) installed on your machine.
 
 You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/trailofbits/medusa/releases) page.
-
 
 ### Building from source
 
@@ -36,14 +35,12 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 - Clone the repository, then execute `go build` in the repository root.
 - Go will automatically fetch all dependencies and build a binary for you in the same folder when completed.
 
-
 ## Usage
 
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
 We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
-
 
 ### Command-line only
 
@@ -54,6 +51,7 @@ medusa fuzz --target contract.sol --deployment-order ContractName
 ```
 
 Where:
+
 - `--target` specifies the path `crytic-compile` should use to compile contracts
 - `--deployment-order` specifies comma-separated names of contracts to be deployed for testing.
 
@@ -69,6 +67,7 @@ medusa init
 ```
 
 This will create a `medusa.json` in your current folder. There are two required fields that should be set correctly:
+
 - Set your `"target"` under `"compilation"` to point to the file/directory which `crytic-compile` should use to build your contracts.
 - Put the names of any contracts you wish to deploy and run tests against in the `"deploymentOrder"` field. This must be non-empty.
 
@@ -82,10 +81,10 @@ This will use the `medusa.json` configuration in the current directory and begin
 
 **Note:** Check out the [project configuration](https://github.com/trailofbits/medusa/wiki/Project-Configuration) wiki page, or run `medusa --help` for more information.
 
-
 ## Running Unit Tests
 
 First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc`, `truffle`, and `hardhat` available on your system.
+
 - From the root of the repository, invoke `go test -v ./...` on through command-line to run tests from all packages at or below the root.
   - Or enter each package directory to run `go test -v .` to test the immediate package.
   - Note: the `-v` parameter provides verbose output.
@@ -94,7 +93,6 @@ First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc
 ## Contributing
 
 For information about how to contribute to this project, check out the [CONTRIBUTING](./CONTRIBUTING.md) guidelines.
-
 
 ## License
 

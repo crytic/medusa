@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/fuzzing/config"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/trailofbits/medusa/compilation"
+	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // initCmd represents the command provider for init
@@ -58,7 +59,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// If we weren't provided an output path (flag was not used), we use our working directory
-	if outputFlagUsed == false {
+	if !outputFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			return err
