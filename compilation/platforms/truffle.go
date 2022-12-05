@@ -4,11 +4,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/trailofbits/medusa/compilation/types"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/trailofbits/medusa/compilation/types"
 )
 
 type TruffleCompilationConfig struct {
@@ -90,7 +91,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 	// Loop for each truffle artifact to parse our compilations.
 	for i := 0; i < len(matches); i++ {
 		// Read the compiled JSON file data
-		b, err := ioutil.ReadFile(matches[i])
+		b, err := os.ReadFile(matches[i])
 		if err != nil {
 			return nil, "", err
 		}

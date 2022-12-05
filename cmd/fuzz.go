@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/fuzzing"
-	"github.com/trailofbits/medusa/fuzzing/config"
 	"os"
 	"os/signal"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
+	"github.com/trailofbits/medusa/fuzzing"
+	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // fuzzCmd represents the command provider for fuzzing
@@ -55,7 +56,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// If --config was not used, look for `medusa.json` in the current work directory
-	if configFlagUsed == false {
+	if !configFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			return err
@@ -76,12 +77,12 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// Possibility #2: If the --config flag was used, and we couldn't find the file, we'll throw an error
-	if configFlagUsed == true && existenceError != nil {
+	if configFlagUsed && existenceError != nil {
 		return existenceError
 	}
 
 	// Possibility #3: --config flag was not used and medusa.json was not found, so use the default project config
-	if configFlagUsed == false && existenceError != nil {
+	if !configFlagUsed && existenceError != nil {
 		fmt.Printf("unable to find the config file at %v. will use the default project configuration for the "+
 			"%v compilation platform instead\n", configPath, DefaultCompilationPlatform)
 

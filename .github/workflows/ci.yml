@@ -1,0 +1,82 @@
+name: CI
+
+on: [pull_request, push, workflow_dispatch]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "^1.18.1"
+
+      - name: Actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          actionlint
+
+      - name: Prettier
+        run: |
+          npm install -g prettier
+          prettier --check '**.json' '**/*.md' '**/*.yml'
+
+      - name: Markdown link check
+        run: |
+          npm install -g markdown-link-check
+          markdown-link-check --config .github/workflows/resources/markdown_link_check.json ./*.md
+
+      - name: Format
+        run: |
+          go fmt ./...
+          git diff --exit-code
+
+      - name: Lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run
+
+  test:
+    strategy:
+      matrix:
+        environment: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.environment }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "^1.18.1"
+
+      - name: Install Node dependencies
+        run: npm install -g hardhat truffle
+
+      - name: Install Python dependencies
+        run: |
+          # Install from github until the following is released: https://github.com/crytic/crytic-compile/pull/309
+          pip3 install https://github.com/crytic/crytic-compile/archive/refs/heads/master.zip
+          pip3 install solc-select
+
+      - name: Install solc
+        run: |
+          solc-select install 0.8.17
+          solc-select use 0.8.17
+
+      - name: Test
+        run: go test ./...
+
+  all-checks:
+    needs: [lint, test]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: true

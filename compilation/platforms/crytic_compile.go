@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/utils"
 )
 
 // CryticCompilationConfig represents the various configuration options that can be provided by the user
@@ -160,7 +161,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	// Loop through each .json file for compilation units.
 	for i := 0; i < len(matches); i++ {
 		// Read the compiled JSON file data
-		b, err := ioutil.ReadFile(matches[i])
+		b, err := os.ReadFile(matches[i])
 		if err != nil {
 			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data at path '%s', error: %v", matches[i], err)
 		}
