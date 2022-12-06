@@ -97,7 +97,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	}
 	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
-		return nil, "", fmt.Errorf("could not deleted crytic-compile's export directory prior to compilation, error: %v", err)
+		return nil, "", fmt.Errorf("could not delete crytic-compile's export directory prior to compilation, error: %v", err)
 	}
 
 	// Validate args to make sure --export-format and --export-dir are not specified
@@ -183,8 +183,6 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				Contracts: make(map[string]types.CompiledContract),
 			}
 		}
-
-		// To be safe, we create a source for other
 
 		// Loop through all contracts and parse them into our types.
 		for sourceAndContractPath, contract := range solcExport.Contracts {
