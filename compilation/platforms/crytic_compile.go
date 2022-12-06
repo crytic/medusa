@@ -196,7 +196,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			sourcePath := sourceAndContractPath[:splitIndex]
 			contractName := sourceAndContractPath[splitIndex+1:]
 
-			// Find out what source this exists in, or create one if our path somehow differed from any
+			// Ensure a source exists for this, or create one if our path somehow differed from any
 			// path not existing in the "sources" key at the root of the export.
 			if _, ok := compilation.Sources[sourcePath]; !ok {
 				parentSource := types.CompiledSource{

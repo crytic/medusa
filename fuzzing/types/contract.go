@@ -30,6 +30,11 @@ func (c *Contract) Name() string {
 	return c.name
 }
 
+// SourcePath returns the path of the source file containing the contract.
+func (c *Contract) SourcePath() string {
+	return c.sourcePath
+}
+
 // CompiledContract returns the compiled contract information including source mappings, byte code, and ABI.
 func (c *Contract) CompiledContract() *types.CompiledContract {
 	return c.compiledContract
