@@ -154,8 +154,8 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		BinRuntime    string `json:"bin-runtime"`
 	}
 	type solcExportData struct {
-		Sources   map[string]solcExportSource `json:"sources"`
-		Contracts map[string]solcExportContract
+		Sources   map[string]solcExportSource   `json:"sources"`
+		Contracts map[string]solcExportContract `json:"contracts"`
 	}
 
 	// Loop through each .json file for compilation units.
