@@ -13,5 +13,5 @@ type ContractMethodID string
 // identify a contract and method definition and generate keys for mappings for a given method. It is unique
 // between multiple compilations of the same origin contract.
 func GetContractMethodID(contract *Contract, method *abi.Method) ContractMethodID {
-	return ContractMethodID(strings.Join([]string{contract.Name(), method.Sig, contract.sourcePath}, "/"))
+	return ContractMethodID(strings.Join([]string{contract.sourcePath, contract.Name(), method.Sig}, "/"))
 }
