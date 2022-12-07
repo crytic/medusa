@@ -79,6 +79,10 @@ type TestingConfig struct {
 	// StopOnFailedTest describes whether the fuzzing.Fuzzer should stop after detecting the first failed test.
 	StopOnFailedTest bool `json:"stopOnFailedTest"`
 
+	// StopOnFailedContractMatching describes whether the fuzzing.Fuzzer should stop after failing to match bytecode
+	// to determine which contract a deployed contract is.
+	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 

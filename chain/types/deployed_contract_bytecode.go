@@ -45,19 +45,9 @@ type DeployedContractBytecode struct {
 // IsMatch returns a boolean indicating whether the deployed contract bytecode is a match with the provided compiled
 // contract.
 func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) bool {
-	// Obtain the provided contract definition's init and runtime byte code/
-	contractInitBytecode, err := contract.InitBytecodeBytes()
-	if err != nil {
-		return false
-	}
-	contractRuntimeBytecode, err := contract.RuntimeBytecodeBytes()
-	if err != nil {
-		return false
-	}
-
 	// Check if we can compare init and runtime bytecode
-	canCompareInit := len(c.InitBytecode) > 0 && len(contractInitBytecode) > 0
-	canCompareRuntime := len(c.RuntimeBytecode) > 0 && len(contractRuntimeBytecode) > 0
+	canCompareInit := len(c.InitBytecode) > 0 && len(contract.InitBytecode) > 0
+	canCompareRuntime := len(c.RuntimeBytecode) > 0 && len(contract.RuntimeBytecode) > 0
 
 	// First try matching runtime bytecode contract metadata.
 	if canCompareRuntime {
@@ -65,7 +55,7 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 		// Note: We use runtime bytecode for this because init byte code can have matching metadata hashes for different
 		// contracts.
 		deploymentMetadata := types.ExtractContractMetadata(c.RuntimeBytecode)
-		definitionMetadata := types.ExtractContractMetadata(contractRuntimeBytecode)
+		definitionMetadata := types.ExtractContractMetadata(contract.RuntimeBytecode)
 		if deploymentMetadata != nil && definitionMetadata != nil {
 			deploymentBytecodeHash := deploymentMetadata.ExtractBytecodeHash()
 			definitionBytecodeHash := definitionMetadata.ExtractBytecodeHash()
@@ -80,16 +70,16 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 	// to match as a last ditch effort.
 	if canCompareInit {
 		// If the init byte code size is larger than what we initialized with, it is not a match.
-		if len(contractInitBytecode) > len(c.InitBytecode) {
+		if len(contract.InitBytecode) > len(c.InitBytecode) {
 			return false
 		}
 
 		// Cut down the contract init bytecode to the size of the definition's to attempt to strip away constructor
 		// arguments before performing a direct compare.
-		cutDeployedInitBytecode := c.InitBytecode[:len(contractInitBytecode)]
+		cutDeployedInitBytecode := c.InitBytecode[:len(contract.InitBytecode)]
 
 		// If the byte code matches exactly, we treat this as a match.
-		if bytes.Equal(cutDeployedInitBytecode, contractInitBytecode) {
+		if bytes.Equal(cutDeployedInitBytecode, contract.InitBytecode) {
 			return true
 		}
 	}
@@ -98,7 +88,7 @@ func (c *DeployedContractBytecode) IsMatch(contract *types.CompiledContract) boo
 	// process, e.g. smart contract constructor, will change the runtime code in most cases).
 	if canCompareRuntime {
 		// If the byte code matches exactly, we treat this as a match.
-		if bytes.Equal(c.RuntimeBytecode, contractRuntimeBytecode) {
+		if bytes.Equal(c.RuntimeBytecode, contract.RuntimeBytecode) {
 			return true
 		}
 	}

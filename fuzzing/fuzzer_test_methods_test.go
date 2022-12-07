@@ -59,6 +59,7 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	projectConfig.Fuzzing.Timeout = 0
 	projectConfig.Fuzzing.TestLimit = 1_500_000
 	projectConfig.Fuzzing.CallSequenceLength = 100
+	projectConfig.Fuzzing.Testing.StopOnFailedContractMatching = true
 	return projectConfig
 }
 

@@ -89,6 +89,11 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 
 // SetCoveredAt sets the coverage state of a given program counter location within a codeCoverageData.
 func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common.Hash, init bool, codeSize int, pc uint64) (bool, error) {
+	// If the code size is zero, do nothing
+	if codeSize == 0 {
+		return false, nil
+	}
+
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
