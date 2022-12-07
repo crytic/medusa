@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -217,14 +218,14 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
 	// Loop for each contract in each compilation and deploy it to the test node.
 	for _, comp := range compilations {
-		for _, source := range comp.Sources {
+		for sourcePath, source := range comp.Sources {
 			// Seed our base value set from every source's AST
 			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
-				contractDefinition := fuzzerTypes.NewContract(contractName, &contract)
+				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
 				f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
 			}
 		}
@@ -475,7 +476,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Start our printing loop now that we're about to begin fuzzing.
-	go f.runMetricsPrintLoop()
+	go f.printMetricsLoop()
 
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
@@ -503,19 +504,8 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 	}
 
-	// Print our test case results
-	fmt.Printf("\n")
-	fmt.Printf("Fuzzer stopped, test results follow below ...\n")
-	for _, testCase := range f.testCases {
-		// Obtain the test case message. If it is a non-empty string, we format our output for it specially.
-		// Otherwise, we exclude it.
-		msg := strings.TrimSpace(testCase.Message())
-		if msg != "" {
-			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg)
-		} else {
-			fmt.Printf("[%s] %s\n", testCase.Status(), testCase.Name())
-		}
-	}
+	// Print our results on exit.
+	f.printExitingResults()
 
 	// Return any encountered error.
 	return err
@@ -530,8 +520,8 @@ func (f *Fuzzer) Stop() {
 	}
 }
 
-// runMetricsPrintLoop prints metrics to the console in a loop until ctx signals a stopped operation.
-func (f *Fuzzer) runMetricsPrintLoop() {
+// printMetricsLoop prints metrics to the console in a loop until ctx signals a stopped operation.
+func (f *Fuzzer) printMetricsLoop() {
 	// Define our start time
 	startTime := time.Now()
 
@@ -571,7 +561,62 @@ func (f *Fuzzer) runMetricsPrintLoop() {
 			break
 		}
 
-		// Sleep for a second
+		// Sleep some time between print iterations
 		time.Sleep(time.Second * 3)
 	}
+}
+
+// printExitingResults prints the TestCase results prior to the fuzzer exiting.
+func (f *Fuzzer) printExitingResults() {
+	// Define the order our test cases should be sorted by when considering status.
+	testCaseDisplayOrder := map[TestCaseStatus]int{
+		TestCaseStatusNotStarted: 0,
+		TestCaseStatusPassed:     1,
+		TestCaseStatusFailed:     2,
+		TestCaseStatusRunning:    3,
+	}
+
+	// Sort the test cases by status and then ID.
+	sort.Slice(f.testCases, func(i int, j int) bool {
+		// Sort by order first
+		iStatusOrder := testCaseDisplayOrder[f.testCases[i].Status()]
+		jStatusOrder := testCaseDisplayOrder[f.testCases[j].Status()]
+		if iStatusOrder != jStatusOrder {
+			return iStatusOrder < jStatusOrder
+		}
+
+		// Then we sort by ID.
+		return strings.Compare(f.testCases[i].ID(), f.testCases[j].ID()) <= 0
+	})
+
+	// Define variables to track our final test count.
+	var (
+		testCountPassed int
+		testCountFailed int
+	)
+
+	// Print the results of each individual test case.
+	fmt.Printf("\n")
+	fmt.Printf("Fuzzer stopped, test results follow below ...\n")
+	for _, testCase := range f.testCases {
+		// Obtain the test case message. If it is a non-empty string, we format our output for it specially.
+		// Otherwise, we exclude it.
+		msg := strings.TrimSpace(testCase.Message())
+		if msg != "" {
+			fmt.Printf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg)
+		} else {
+			fmt.Printf("[%s] %s\n", testCase.Status(), testCase.Name())
+		}
+
+		// Tally our pass/fail count.
+		if testCase.Status() == TestCaseStatusPassed {
+			testCountPassed++
+		} else if testCase.Status() == TestCaseStatusFailed {
+			testCountFailed++
+		}
+	}
+
+	// Print our final tally of test statuses.
+	fmt.Printf("\n")
+	fmt.Printf("%d test(s) passed, %d test(s) failed\n", testCountPassed, testCountFailed)
 }

@@ -1,12 +1,14 @@
 package platforms
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/utils"
@@ -55,13 +57,13 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 }
 
 // validateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
-// or the `--export-dir` arguments. This is because `--export-format` has to be `standard` for the `crytic-compile`
+// or the `--export-dir` arguments. This is because `--export-format` has to be `solc` for the `crytic-compile`
 // integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
 func (c *CryticCompilationConfig) validateArgs() error {
 	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {
 		if arg == "--export-format" {
-			return errors.New("do not specify `--export-format` within crytic-compile arguments as the standard export format is always used")
+			return errors.New("do not specify `--export-format` within crytic-compile arguments as the solc export format is always used")
 		}
 		if arg == "--export-dir" {
 			return errors.New("do not specify `--export-dir` as an argument, use the BuildDirectory config variable instead")
@@ -72,8 +74,8 @@ func (c *CryticCompilationConfig) validateArgs() error {
 
 // getArgs returns the arguments to be provided to crytic-compile during compilation, or an error if one occurs.
 func (c *CryticCompilationConfig) getArgs() ([]string, error) {
-	// By default we export in solc-standard mode.
-	args := []string{c.Target, "--export-format", "standard"}
+	// By default we export in solc mode.
+	args := []string{c.Target, "--export-format", "solc"}
 
 	// Add --export-dir option if ExportDirectory is specified
 	if c.ExportDirectory != "" {
@@ -95,7 +97,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	}
 	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("could not delete crytic-compile's export directory prior to compilation, error: %v", err)
 	}
 
 	// Validate args to make sure --export-format and --export-dir are not specified
@@ -125,7 +127,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		}
 	}
 
-	// Run crytic-compile
+	// Run crytic-compile to compile and export our compilation artifacts.
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
@@ -137,112 +139,98 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		return nil, "", err
 	}
 
-	// Create a compilation list for a list of compilation units.
+	// Create a slice to track all our compilations parsed.
 	var compilationList []types.Compilation
+
+	// Define the structure of our crytic-compile export data.
+	type solcExportSource struct {
+		AST any `json:"AST"`
+	}
+	type solcExportContract struct {
+		SrcMap        string `json:"srcmap"`
+		SrcMapRuntime string `json:"srcmap-runtime"`
+		Abi           any    `json:"abi"`
+		Bin           string `json:"bin"`
+		BinRuntime    string `json:"bin-runtime"`
+	}
+	type solcExportData struct {
+		Sources   map[string]solcExportSource   `json:"sources"`
+		Contracts map[string]solcExportContract `json:"contracts"`
+	}
 
 	// Loop through each .json file for compilation units.
 	for i := 0; i < len(matches); i++ {
 		// Read the compiled JSON file data
 		b, err := os.ReadFile(matches[i])
 		if err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data at path '%s', error: %v", matches[i], err)
 		}
 
 		// Parse the JSON
-		var compiledJson map[string]any
-		err = json.Unmarshal(b, &compiledJson)
+		var solcExport solcExportData
+		err = json.Unmarshal(b, &solcExport)
 		if err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data, error: %v", err)
 		}
 
-		// Index into "compilation_units" key
-		compilationUnits, ok := compiledJson["compilation_units"]
-		if !ok {
-			// If our json file does not have any compilation units, it is not a file of interest
-			continue
-		}
+		// Create a compilation object that will store the contracts and source information.
+		compilation := types.NewCompilation()
 
-		// Create a mapping between key (filename) and value (contract and ast information) each compilation unit
-		compilationMap, ok := compilationUnits.(map[string]any)
-		if !ok {
-			return nil, "", fmt.Errorf("compilationUnits is not in the map[string]any format: %s\n", compilationUnits)
-		}
-
-		// Iterate through compilationUnits
-		for _, compilationUnit := range compilationMap {
-			// Create a compilation object that will store the contracts and asts for a single compilation unit
-			compilation := types.NewCompilation()
-
-			// Create mapping between key (compiler / asts / contracts) and associated values
-			compilationUnitMap, ok := compilationUnit.(map[string]any)
-			if !ok {
-				return nil, "", fmt.Errorf("compilationUnit is not in the map[string]any format: %s\n", compilationUnit)
+		// Loop through all sources and parse them into our types.
+		for sourcePath, source := range solcExport.Sources {
+			compilation.Sources[sourcePath] = types.CompiledSource{
+				Ast:       source.AST,
+				Contracts: make(map[string]types.CompiledContract),
 			}
+		}
 
-			// Create mapping between each file in compilation unit and associated Ast
-			AstMap := compilationUnitMap["asts"].(map[string]any)
-
-			// Create mapping between key (file name) and value (associated contracts in that file)
-			contractsMap, ok := compilationUnitMap["contracts"].(map[string]any)
-			if !ok {
-				return nil, "", fmt.Errorf("cannot find 'contracts' key in compilationUnitMap: %s\n", compilationUnitMap)
+		// Loop through all contracts and parse them into our types.
+		for sourceAndContractPath, contract := range solcExport.Contracts {
+			// Split our source and contract path, as it takes the form sourcePath:contractName
+			splitIndex := strings.LastIndex(sourceAndContractPath, ":")
+			if splitIndex == -1 {
+				return nil, "", fmt.Errorf("expected contract path to be of form \"<source path>:<contract_name>\"")
 			}
+			sourcePath := sourceAndContractPath[:splitIndex]
+			contractName := sourceAndContractPath[splitIndex+1:]
 
-			// Iterate through each contract FILE (note that each FILE might have more than one contract)
-			for _, contractsData := range contractsMap {
-				// Create mapping between all contracts in a file (key) to it's data (abi, etc.)
-				contractMap, ok := contractsData.(map[string]any)
-				if !ok {
-					return nil, "", fmt.Errorf("contractsData is not in the map[string]any format: %s\n", contractsData)
+			// Ensure a source exists for this, or create one if our path somehow differed from any
+			// path not existing in the "sources" key at the root of the export.
+			if _, ok := compilation.Sources[sourcePath]; !ok {
+				parentSource := types.CompiledSource{
+					Ast:       nil,
+					Contracts: make(map[string]types.CompiledContract),
 				}
-
-				// Iterate through each contract
-				for contractName, contractData := range contractMap {
-					// Create mapping between contract details (abi, bytecode) to actual values
-					contractDataMap, ok := contractData.(map[string]any)
-					if !ok {
-						return nil, "", fmt.Errorf("contractData is not in the map[string]any format: %s\n", contractData)
-					}
-
-					// Create mapping between "filenames" (key) associated with the contract and the various filename
-					// types (absolute, relative, short, long)
-					fileMap, ok := contractDataMap["filenames"].(map[string]any)
-					if !ok {
-						return nil, "", fmt.Errorf("cannot find 'filenames' key in contractDataMap: %s\n", contractDataMap)
-					}
-
-					// Create unique source path which is going to be absolute path
-					sourcePath := fmt.Sprintf("%v", fileMap["absolute"])
-
-					// Parse the ABI
-					contractAbi, err := types.ParseABIFromInterface(contractDataMap["abi"])
-					if err != nil {
-						return nil, "", fmt.Errorf("Unable to parse ABI: %s\n", contractDataMap["abi"])
-					}
-
-					// Check if sourcePath has already been set (note that a sourcePath (i.e., file) can have more
-					// than one contract)
-					// sourcePath is also the key for the AstMap
-					if _, ok := compilation.Sources[sourcePath]; !ok {
-						compilation.Sources[sourcePath] = types.CompiledSource{
-							Ast:       AstMap[sourcePath],
-							Contracts: make(map[string]types.CompiledContract),
-						}
-					}
-
-					// Add contract details
-					compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
-						Abi:             *contractAbi,
-						RuntimeBytecode: fmt.Sprintf("%v", contractDataMap["bin-runtime"]),
-						InitBytecode:    fmt.Sprintf("%v", contractDataMap["bin"]),
-						SrcMapsInit:     fmt.Sprintf("%v", contractDataMap["srcmap"]),
-						SrcMapsRuntime:  fmt.Sprintf("%v", contractDataMap["srcmap-runtime"]),
-					}
-				}
+				compilation.Sources[sourcePath] = parentSource
 			}
-			// Append compilation object to compilationList
-			compilationList = append(compilationList, *compilation)
+
+			// Parse the ABI
+			contractAbi, err := types.ParseABIFromInterface(contract.Abi)
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
+			}
+
+			// Decode our init and runtime bytecode
+			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+			}
+			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			}
+
+			// Add contract details
+			compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
+				Abi:             *contractAbi,
+				InitBytecode:    initBytecode,
+				RuntimeBytecode: runtimeBytecode,
+				SrcMapsInit:     contract.SrcMap,
+				SrcMapsRuntime:  contract.SrcMapRuntime,
+			}
 		}
+
+		compilationList = append(compilationList, *compilation)
 	}
 	// Return the compilationList
 	return compilationList, string(out), nil

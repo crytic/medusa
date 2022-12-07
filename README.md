@@ -13,7 +13,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 - ✔️**Coverage collecting**: Coverage increasing call sequences are stored in the corpus
 - ❌ **Coverage guided**: Coverage increasing call sequences from the corpus are mutated to further guide the fuzzing campaign
 - ✔️**Extensible low-level testing API** through events and hooks provided throughout the fuzzer, workers, and test chains.
-- ❌ **Extensible high-level testing API** allowing for the addition of per-contract or global post call/event property tests
+- ❌ **Extensible high-level testing API** allowing for the addition of per-contract or global post call/event property tests with minimal effort.
 
 ## Installation
 

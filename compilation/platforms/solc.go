@@ -1,6 +1,7 @@
 package platforms
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,11 +147,21 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 			continue
 		}
 
+		// Decode our init and runtime bytecode
+		initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+		}
+		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+		}
+
 		// Construct our compiled contract
 		compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 			Abi:             *contractAbi,
-			RuntimeBytecode: contract.RuntimeCode,
-			InitBytecode:    contract.Code,
+			InitBytecode:    initBytecode,
+			RuntimeBytecode: runtimeBytecode,
 			SrcMapsInit:     contract.Info.SrcMap.(string),
 			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
 		}

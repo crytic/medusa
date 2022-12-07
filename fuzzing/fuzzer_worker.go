@@ -158,8 +158,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	}
 
 	// If we didn't match any deployment, report it.
-	if !matchedDeployment {
-		// TODO: More elegant error handling/messaging
+	if !matchedDeployment && fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
 		return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
 	}
 	return nil
