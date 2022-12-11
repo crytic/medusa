@@ -486,7 +486,7 @@ func (t *TestChain) CreateMessage(from common.Address, to *common.Address, value
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg *chainTypes.CallMessage) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error) {
 	// Obtain our state snapshot (note: this is different from the test chain snapshot)
 	snapshot := t.state.Snapshot()
 
@@ -615,7 +615,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
+func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
@@ -639,7 +639,7 @@ func (t *TestChain) PendingBlockAddTx(message *chainTypes.CallMessage) error {
 
 	// Apply our transaction
 	var usedGas uint64
-	receipt, executionResult, err := vendored.EVMApplyTransaction(message.ToEVMMessage(), t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
+	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
@@ -767,7 +767,7 @@ func (t *TestChain) PendingBlockDiscard() error {
 // emitContractChangeEvents emits events for contract deployments being added or removed by playing through a list
 // of provided message results. If reverting, the inverse events are emitted.
 func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*chainTypes.CallMessageResults) error {
-	// If we're not reverting, we simply play events for our contract deployment changes in order. If we are, we inverse
+	// If we're not reverting, we simply play events for our contract deployment changes in order. If we are, inverse
 	// all the events.
 	var err error
 	if !reverting {
