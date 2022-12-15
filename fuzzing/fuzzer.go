@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"github.com/trailofbits/medusa/fuzzing/integrations/slither"
 	"math/big"
 	"sort"
 	"strings"
@@ -56,6 +57,9 @@ type Fuzzer struct {
 	testCasesLock sync.Mutex
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
+
+	// SlitherData holds the data that was obtained by running slither's echidna printer
+	SlitherData *slither.SlitherData
 
 	// Events describes the event system for the Fuzzer.
 	Events FuzzerEvents
@@ -123,6 +127,29 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.AddCompilationTargets(compilations)
 	}
 
+	// Run the slither printer after compilation
+	// Note that we do not exit if running slither fails
+	// TODO: Can this logic be put somewhere else?
+	if fuzzer.config.Fuzzing.SlitherPrinterEnabled {
+		// Get the platform configuration
+		platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
+		if err != nil {
+			return nil, err
+		}
+
+		// Run the printer on the same target as the one for compilation
+		fuzzer.SlitherData, err = slither.RunPrinter(platformConfig.GetTarget())
+		if err != nil {
+			fmt.Printf("unable to successfully run slither: %v\n", err.Error())
+		} else {
+			// If there were no failures, add all the constants to the base value set before cloning
+			err = fuzzer.SlitherData.AddConstantsToValueSet(fuzzer.baseValueSet)
+			if err != nil {
+				fmt.Printf("unable to successfully add constants found from slither to the base value set: %v\n", err.Error())
+			}
+		}
+	}
+
 	// Register any default providers if specified.
 	if fuzzer.config.Fuzzing.Testing.PropertyTesting.Enabled {
 		attachPropertyTestCaseProvider(fuzzer)
@@ -130,6 +157,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
+
 	return fuzzer, nil
 }
 
