@@ -31,7 +31,6 @@ func RunPrinter(target string) (*SlitherData, error) {
 	// The actual printer data will be stored in the results[`results`][`printers`] key. The value of `printers` is
 	// actually a _list_ of mappings where the `description` key at the 0th index will hold the data for the `echidna` printer
 	type rawSlitherOutput struct {
-		Success bool                        `json:"success"`
 		Error   any                         `json:"error"`
 		Results map[string][]map[string]any `json:"results"`
 	}
@@ -44,7 +43,7 @@ func RunPrinter(target string) (*SlitherData, error) {
 	}
 
 	// For some reason, the printer or slither failed to run, exit out
-	if rawOutput.Error != nil || !rawOutput.Success {
+	if rawOutput.Error != nil {
 		return nil, fmt.Errorf("slither returned the following error: %v\n", rawOutput.Error)
 	}
 
