@@ -130,7 +130,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Run the slither printer after compilation
 	// Note that we do not exit if running slither fails
 	// TODO: Can this logic be put somewhere else?
-	if fuzzer.config.Fuzzing.SlitherPrinterEnabled {
+	if fuzzer.config.Fuzzing.SlitherEnabled {
 		// Get the platform configuration
 		platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
 		if err != nil {

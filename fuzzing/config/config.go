@@ -70,8 +70,8 @@ type FuzzingConfig struct {
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
-	// SlitherPrinterEnabled will determine whether slither's echidna printer should be run for additional information.
-	SlitherPrinterEnabled bool `json:"slitherPrintedEnabled"`
+	// SlitherEnabled will determine whether slither should be run for additional mining of constants and magic values
+	SlitherEnabled bool `json:"slitherEnabled"`
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
