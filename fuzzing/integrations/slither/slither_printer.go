@@ -64,7 +64,7 @@ func RunPrinter(target string) (*SlitherData, error) {
 	}
 
 	// Create the parse-able version of all the constants found in the target
-	slitherData.AllConstants, err = newConstantsSet(slitherData.ConstantsUsed)
+	slitherData.Constants, err = makeConstantsList(slitherData.ConstantsUsed)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing the constants in the output: %v\n", err.Error())
 	}

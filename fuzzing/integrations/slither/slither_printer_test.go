@@ -3,13 +3,12 @@ package slither
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/platforms"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils/testutils"
 	"testing"
 )
 
-// TestRunPrinterAndValueSetAddition will test that slither's echidna printer runs successfully and then will also make
-// sure that all the constants can be added to the base value set.
+// TestRunPrinterAndValueSetAddition will test that slither's echidna printer runs successfully and make sure all the
+// constants show up in the SlitherData.Constants field.
 func TestRunPrinterAndValueSetAddition(t *testing.T) {
 	// Set target and copy it to the test directory
 	target := "testdata/contracts/slither_constants.sol"
@@ -25,18 +24,14 @@ func TestRunPrinterAndValueSetAddition(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Ensure that there are four constants from the SlitherConstants contract
-		assert.Equal(t, len(slitherData.GetConstantsInContract("SlitherConstants")), 4)
+		constants := slitherData.GetConstantsInContract("SlitherConstants")
+		assert.Equal(t, len(constants), 4)
 
-		// Now we will add these constants to the base value set
-		vs := valuegeneration.NewValueSet()
-		err = slitherData.AddConstantsToValueSet(vs)
-		assert.NoError(t, err)
+		// Ensure that there are 2 constants for each function
+		constants = slitherData.GetConstantsInMethod("SlitherConstants", "echidna_uint()")
+		assert.Equal(t, len(constants), 2)
 
-		// Check to make sure that the three integer values are in the value set
-		for _, val := range vs.Integers() {
-			if val.Uint64() != 2 && val.Uint64() != 0 && val.Uint64() != 2e18 {
-				assert.Fail(t, "constants are not set in the base value set")
-			}
-		}
+		constants = slitherData.GetConstantsInMethod("SlitherConstants", "echidna_ether()")
+		assert.Equal(t, len(constants), 2)
 	})
 }

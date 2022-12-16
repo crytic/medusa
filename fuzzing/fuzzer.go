@@ -143,7 +143,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			fmt.Printf("unable to successfully run slither: %v\n", err.Error())
 		} else {
 			// If there were no failures, add all the constants to the base value set before cloning
-			err = fuzzer.SlitherData.AddConstantsToValueSet(fuzzer.baseValueSet)
+			err = fuzzer.baseValueSet.AddSlitherConstants(fuzzer.SlitherData)
 			if err != nil {
 				fmt.Printf("unable to successfully add constants found from slither to the base value set: %v\n", err.Error())
 			}
