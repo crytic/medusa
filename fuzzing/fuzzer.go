@@ -278,9 +278,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 			if contract.Name() == contractName {
 				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 				// TODO: We can add logic for deploying contracts with constructor arguments here.
+				args := []any(nil)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
 					// Deploy the contract using our deployer address.
-					_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+					_, _, err := testChain.DeployContract(contract.CompiledContract(), args, fuzzer.deployer)
 					if err != nil {
 						return err
 					}
