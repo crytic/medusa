@@ -276,15 +276,23 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-				// TODO: We can add logic for deploying contracts with constructor arguments here.
-				args := []any(nil)
-				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-					// Deploy the contract using our deployer address.
-					_, _, err := testChain.DeployContract(contract.CompiledContract(), args, fuzzer.deployer)
+				var args []any
+				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
+					if !ok {
+						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+					}
+					decoded, err := utils.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs, jsonArgs)
 					if err != nil {
 						return err
 					}
+					args = decoded
+				}
+
+				// Deploy the contract using our deployer address.
+				_, _, err := testChain.DeployContract(contract.CompiledContract(), args, fuzzer.deployer)
+				if err != nil {
+					return err
 				}
 
 				// Set our found flag to true.

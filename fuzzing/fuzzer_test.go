@@ -255,6 +255,34 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 }
 
+// TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
+// their properties are tested appropriately.
+func TestDeploymentsWithArgs(t *testing.T) {
+	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs"}
+			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
+				"DeploymentWithArgs": {
+					"_x": "123456789",
+					"_y": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473",
+				},
+			}
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check to see if there are any failures
+			assertFailedTestsExpected(f, true)
+		},
+	})
+}
+
 // TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
 func TestValueGenerationGenerateAllTypes(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
