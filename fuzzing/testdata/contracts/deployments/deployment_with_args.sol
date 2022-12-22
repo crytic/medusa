@@ -1,11 +1,18 @@
 // This contract is used to test deployment of contracts with constructor arguments.
 contract DeploymentWithArgs {
-    uint x;
-    bytes y;
+    struct Abc {
+        uint a;
+        bytes b;
+    }
 
-    constructor(uint _x, bytes memory _y) {
+    uint x;
+    bytes2 y;
+    Abc z;
+
+    constructor(uint _x, bytes2 _y, Abc memory _z) {
         x = _x;
         y = _y;
+        z = _z;
     }
 
     function fuzz_checkX() public returns (bool) {
@@ -13,7 +20,11 @@ contract DeploymentWithArgs {
     }
 
     function fuzz_checkY() public returns (bool) {
-        return y.length == 0;
+        return y != 0x5465;
+    }
+
+    function fuzz_checkZ() public returns (bool) {
+        return z.a == 0;
     }
 
     function dummyFunction(uint a) public {
