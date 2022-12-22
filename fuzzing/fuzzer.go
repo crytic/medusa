@@ -270,6 +270,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	}
 
 	// Loop for all contracts to deploy
+	deployedContractAddr := make(map[string]common.Address)
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
@@ -282,7 +283,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					if !ok {
 						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
 					}
-					decoded, err := utils.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs, jsonArgs)
+					decoded, err := utils.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs,
+						jsonArgs, deployedContractAddr)
 					if err != nil {
 						return err
 					}
@@ -290,11 +292,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				}
 
 				// Deploy the contract using our deployer address.
-				_, _, err := testChain.DeployContract(contract.CompiledContract(), args, fuzzer.deployer)
+				addr, _, err := testChain.DeployContract(contract.CompiledContract(), args, fuzzer.deployer)
 				if err != nil {
 					return err
 				}
-
+				deployedContractAddr[contractName] = addr
 				// Set our found flag to true.
 				found = true
 				break

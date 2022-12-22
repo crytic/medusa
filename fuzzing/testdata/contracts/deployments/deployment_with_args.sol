@@ -32,3 +32,20 @@ contract DeploymentWithArgs {
         a = 8;
     }
 }
+
+contract Dependent {
+    address deployed;
+
+    constructor(address _deployed) {
+        deployed = _deployed;
+    }
+
+    function fuzz_checkDeployed() public returns (bool) {
+        return deployed == 0x0000000000000000000000000000000000000000;
+    }
+
+    function dummyFunction(uint a) public {
+        // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+        a = 8;
+    }
+}

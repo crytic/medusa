@@ -260,9 +260,10 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 func TestDeploymentsWithArgs(t *testing.T) {
 	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
+		filePath:    "testdata/contracts/deployments/deployment_with_args.sol",
+		solcVersion: "0.8.17", // Need to set it back to newer version as it was set to 0.7.0 in previous test
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs"}
+			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs", "Dependent"}
 			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
 				"DeploymentWithArgs": {
 					"_x": "123456789",
@@ -271,6 +272,9 @@ func TestDeploymentsWithArgs(t *testing.T) {
 						"a": "1234",
 						"b": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473",
 					},
+				},
+				"Dependent": {
+					"_deployed": "DeployedContract:DeploymentWithArgs",
 				},
 			}
 			config.Fuzzing.Testing.StopOnFailedTest = false
@@ -282,7 +286,7 @@ func TestDeploymentsWithArgs(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if there are any failures
-			assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 3)
+			assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 4)
 		},
 	})
 }
