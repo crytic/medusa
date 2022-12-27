@@ -130,6 +130,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
+	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
+		attachOptimizationTestCaseProvider(fuzzer)
+	}
 	return fuzzer, nil
 }
 
