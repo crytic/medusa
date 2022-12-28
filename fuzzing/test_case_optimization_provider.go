@@ -11,7 +11,7 @@ import (
 
 // OptimizationTestCaseProvider is a provider for on-chain optimization tests.
 // Optimization tests are represented as publicly-accessible view functions which have a name prefix specified by a
-// config.FuzzingConfig. They take no input arguments and return an integer value that needs to be maximize.
+// config.FuzzingConfig. They take no input arguments and return an integer value that needs to be maximized.
 type OptimizationTestCaseProvider struct {
 	// fuzzer describes the Fuzzer which this provider is attached to.
 	fuzzer *Fuzzer
@@ -130,10 +130,8 @@ func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWork
 		return fmt.Errorf("failed to parse optimization test method success status from return value '%s'", optimizationTestMethod.Method.Name)
 	}
 
-	// Update test case value if the new value is larger than existing value
-	if newValue.Cmp(testCase.value) == 1 {
-		testCase.value = newValue
-	}
+	// update the value stored in test case
+	testCase.UpdateValue(newValue)
 
 	// Return our status from our optimization test method
 	return nil

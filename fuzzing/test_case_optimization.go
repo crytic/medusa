@@ -6,6 +6,7 @@ import (
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"math/big"
 	"strings"
+	"sync"
 )
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
@@ -14,7 +15,11 @@ type OptimizationTestCase struct {
 	targetContract *fuzzerTypes.Contract
 	targetMethod   abi.Method
 	callSequence   *fuzzerTypes.CallSequence
-	value          *big.Int
+
+	// value is used to store the maximum value returned by the test method
+	value *big.Int
+	// valueLock is used for thread-synchronization when updating the value
+	valueLock sync.Mutex
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
@@ -48,7 +53,7 @@ func (t *OptimizationTestCase) Message() string {
 	// We print final value in case the test case passed for optimization test
 	if t.Status() == TestCaseStatusPassed {
 		return fmt.Sprintf(
-			"Optimization test for method \"%s.%s\" resulted the optimized value: %s",
+			"Optimization test for method \"%s.%s\" resulted in the maximum value: %s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.value,
@@ -57,12 +62,22 @@ func (t *OptimizationTestCase) Message() string {
 	return ""
 }
 
-// Value obtains the value that has been computed by fuzzer
+// ID obtains a unique identifier for a test result.
+func (t *OptimizationTestCase) ID() string {
+	return strings.Replace(fmt.Sprintf("OPTIMIZATION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
+}
+
+// Value obtains the maximum value returned by the test method found till now
 func (t *OptimizationTestCase) Value() *big.Int {
 	return t.value
 }
 
-// ID obtains a unique identifier for a test result.
-func (t *OptimizationTestCase) ID() string {
-	return strings.Replace(fmt.Sprintf("OPTIMIZATION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
+// UpdateValue updates test case value if the new value is larger than the existing value
+func (t *OptimizationTestCase) UpdateValue(newValue *big.Int) {
+	t.valueLock.Lock()
+	defer t.valueLock.Unlock()
+
+	if newValue.Cmp(t.value) == 1 {
+		t.value = new(big.Int).Set(newValue)
+	}
 }
