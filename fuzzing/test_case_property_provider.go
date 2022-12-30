@@ -84,8 +84,8 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 
 	// Call the underlying contract
 	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the assertions.
-	value := big.NewInt(0)
-	msg := worker.Chain().CreateMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, value, nil, nil, data)
+	msg := types.NewCallMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, 0, big.NewInt(0), worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, data)
+	msg.FillFromTestChainProperties(worker.chain)
 	res, err := worker.Chain().CallContract(msg)
 	if err != nil {
 		return false, fmt.Errorf("failed to call property test method: %v", err)
@@ -135,13 +135,13 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 				// Create our property test case
 				propertyTestCase := &PropertyTestCase{
 					status:         TestCaseStatusNotStarted,
-					targetContract: &contract,
+					targetContract: contract,
 					targetMethod:   method,
 					callSequence:   nil,
 				}
 
 				// Add to our test cases and register them with the fuzzer
-				methodId := types.GetContractMethodID(&contract, &method)
+				methodId := types.GetContractMethodID(contract, &method)
 				t.testCases[methodId] = propertyTestCase
 				t.fuzzer.RegisterTestCase(propertyTestCase)
 			}

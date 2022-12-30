@@ -180,7 +180,7 @@ type CallSequenceElement struct {
 	Contract *Contract
 
 	// Call represents the underlying message call.
-	Call *types.CallMessage `json:"call"`
+	Call *CallMessage `json:"call"`
 
 	// BlockNumberDelay defines how much the block number should advance when executing this transaction, compared to
 	// the last executed transaction. If zero, this indicates the call should be included in the current pending block.
@@ -203,7 +203,7 @@ type CallSequenceElement struct {
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
-func NewCallSequenceElement(contract *Contract, call *types.CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
+func NewCallSequenceElement(contract *Contract, call *CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
 	callSequenceElement := &CallSequenceElement{
 		Contract:            contract,
 		Call:                call,
@@ -279,9 +279,9 @@ func (cse *CallSequenceElement) String() string {
 // MarshalJSON provides the default serialization routine for a CallSequenceElement.
 func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Call                *types.CallMessage `json:"call"`
-		BlockNumberDelay    uint64             `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64             `json:"blockTimestampDelay"`
+		Call                *CallMessage `json:"call"`
+		BlockNumberDelay    uint64       `json:"blockNumberDelay"`
+		BlockTimestampDelay uint64       `json:"blockTimestampDelay"`
 	}{
 		Call:                cse.Call,
 		BlockNumberDelay:    cse.BlockNumberDelay,
@@ -293,9 +293,9 @@ func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
 func (cse *CallSequenceElement) UnmarshalJSON(data []byte) error {
 	// Define our definition and deserialize our data.
 	type jsonDefinition struct {
-		Call                *types.CallMessage `json:"call"`
-		BlockNumberDelay    uint64             `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64             `json:"blockTimestampDelay"`
+		Call                *CallMessage `json:"call"`
+		BlockNumberDelay    uint64       `json:"blockNumberDelay"`
+		BlockTimestampDelay uint64       `json:"blockTimestampDelay"`
 	}
 	var def jsonDefinition
 	if err := json.Unmarshal(data, &def); err != nil {
@@ -330,6 +330,6 @@ type CallSequenceElementChainReference struct {
 }
 
 // MessageResults obtains the results of executing the CallSequenceElement.
-func (cr *CallSequenceElementChainReference) MessageResults() *types.CallMessageResults {
+func (cr *CallSequenceElementChainReference) MessageResults() *types.MessageResults {
 	return cr.Block.MessageResults[cr.TransactionIndex]
 }

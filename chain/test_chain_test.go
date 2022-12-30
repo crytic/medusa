@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/utils"
@@ -235,9 +236,25 @@ func TestChainDynamicDeployments(t *testing.T) {
 							return nil
 						})
 
-						// Deploy the currently indexed contract
-						_, block, err := chain.DeployContract(&contract, senders[0])
+						// Deploy the currently indexed contract next
+
+						// Create a message to represent our contract deployment.
+						msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+						// Create a new pending block we'll commit to chain
+						block, err := chain.PendingBlockCreate()
 						assert.NoError(t, err)
+
+						// Add our transaction to the block
+						err = chain.PendingBlockAddTx(msg)
+						assert.NoError(t, err)
+
+						// Commit the pending block to the chain, so it becomes the new head.
+						err = chain.PendingBlockCommit()
+						assert.NoError(t, err)
+
+						// Ensure our transaction succeeded
+						assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 						deployCount++
 
 						// There should've been two address deployments, an outer and inner deployment.
@@ -308,9 +325,25 @@ func TestChainCloning(t *testing.T) {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
-							// Deploy the currently indexed contract
-							_, _, err = chain.DeployContract(&contract, senders[0])
+							// Deploy the currently indexed contract next
+
+							// Create a message to represent our contract deployment.
+							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+							// Create a new pending block we'll commit to chain
+							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
+
+							// Add our transaction to the block
+							err = chain.PendingBlockAddTx(msg)
+							assert.NoError(t, err)
+
+							// Commit the pending block to the chain, so it becomes the new head.
+							err = chain.PendingBlockCommit()
+							assert.NoError(t, err)
+
+							// Ensure our transaction succeeded
+							assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 
 							// Ensure we could get our state
 							_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -376,9 +409,23 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
-							// Deploy the currently indexed contract
-							_, _, err = chain.DeployContract(&contract, senders[0])
+							// Create a message to represent our contract deployment.
+							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+							// Create a new pending block we'll commit to chain
+							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
+
+							// Add our transaction to the block
+							err = chain.PendingBlockAddTx(msg)
+							assert.NoError(t, err)
+
+							// Commit the pending block to the chain, so it becomes the new head.
+							err = chain.PendingBlockCommit()
+							assert.NoError(t, err)
+
+							// Ensure our transaction succeeded
+							assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 
 							// Ensure we could get our state
 							_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())

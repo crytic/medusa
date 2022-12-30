@@ -21,7 +21,7 @@ type Block struct {
 	Messages []core.Message
 
 	// MessageResults represents the results recorded while executing transactions.
-	MessageResults []*CallMessageResults
+	MessageResults []*MessageResults
 }
 
 // NewBlock returns a new Block with the provided parameters.
@@ -31,7 +31,7 @@ func NewBlock(header *types.Header) *Block {
 		Hash:           header.Hash(),
 		Header:         header,
 		Messages:       make([]core.Message, 0),
-		MessageResults: make([]*CallMessageResults, 0),
+		MessageResults: make([]*MessageResults, 0),
 	}
 	return block
 }

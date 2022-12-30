@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"sort"
 	"strings"
@@ -37,7 +38,7 @@ type Fuzzer struct {
 	// deployer describes an account address used to deploy contracts in fuzzing campaigns.
 	deployer common.Address
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
-	contractDefinitions []fuzzerTypes.Contract
+	contractDefinitions fuzzerTypes.Contracts
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -91,7 +92,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		senders:             senders,
 		deployer:            deployer,
 		baseValueSet:        valuegeneration.NewValueSet(),
-		contractDefinitions: make([]fuzzerTypes.Contract, 0),
+		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
@@ -134,7 +135,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 }
 
 // ContractDefinitions exposes the contract definitions registered with the Fuzzer.
-func (f *Fuzzer) ContractDefinitions() []fuzzerTypes.Contract {
+func (f *Fuzzer) ContractDefinitions() fuzzerTypes.Contracts {
 	return slices.Clone(f.contractDefinitions)
 }
 
@@ -226,7 +227,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
-				f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
+				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
 	}
@@ -279,10 +280,31 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 				// TODO: We can add logic for deploying contracts with constructor arguments here.
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-					// Deploy the contract using our deployer address.
-					_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+					// Create a message to represent our contract deployment.
+					msg := fuzzerTypes.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, contract.CompiledContract().InitBytecode)
+					msg.FillFromTestChainProperties(testChain)
+
+					// Create a new pending block we'll commit to chain
+					block, err := testChain.PendingBlockCreate()
 					if err != nil {
 						return err
+					}
+
+					// Add our transaction to the block
+					err = testChain.PendingBlockAddTx(msg)
+					if err != nil {
+						return err
+					}
+
+					// Commit the pending block to the chain, so it becomes the new head.
+					err = testChain.PendingBlockCommit()
+					if err != nil {
+						return err
+					}
+
+					// Ensure our transaction succeeded
+					if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 					}
 				}
 
@@ -470,7 +492,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	f.coverageMaps, err = corpus.MeasureCorpusCoverage(baseTestChain, f.corpus)
+	f.coverageMaps, err = corpus.MeasureCorpusCoverage(f.corpus, baseTestChain, f.contractDefinitions)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
@@ -53,9 +52,9 @@ func getMockCallSequenceElement() *types.CallSequenceElement {
 }
 
 // getMockCallSequenceElementCall creates a mock CallMessage for testing
-func getMockCallSequenceElementCall() *chainTypes.CallMessage {
+func getMockCallSequenceElementCall() *types.CallMessage {
 	to := common.BigToAddress(big.NewInt(rand.Int63()))
-	txn := chainTypes.CallMessage{
+	txn := types.CallMessage{
 		MsgFrom:      common.BigToAddress(big.NewInt(rand.Int63())),
 		MsgTo:        &to,
 		MsgNonce:     rand.Uint64(),

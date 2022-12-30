@@ -126,13 +126,13 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 				// Create our test case
 				testCase := &AssertionTestCase{
 					status:         TestCaseStatusNotStarted,
-					targetContract: &contract,
+					targetContract: contract,
 					targetMethod:   method,
 					callSequence:   nil,
 				}
 
 				// Add to our test cases and register them with the fuzzer
-				methodId := types.GetContractMethodID(&contract, &method)
+				methodId := types.GetContractMethodID(contract, &method)
 				t.testCases[methodId] = testCase
 				t.fuzzer.RegisterTestCase(testCase)
 			}

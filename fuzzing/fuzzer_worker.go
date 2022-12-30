@@ -128,38 +128,31 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	// Add the contract address to our value set so our generator can use it in calls.
 	fw.valueSet.AddAddress(event.Contract.Address)
 
-	// Loop through all our known contract definitions
-	matchedDeployment := false
-	for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {
-		contractDefinition := &fw.fuzzer.contractDefinitions[i]
-
-		// If we have a match, register the deployed contract.
-		if event.Contract.IsMatch(contractDefinition.CompiledContract()) {
-			// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
-			fw.deployedContracts[event.Contract.Address] = contractDefinition
-
-			// Update our state changing methods
-			fw.updateStateChangingMethods()
-
-			// Emit an event indicating the worker detected a new contract deployment on its chain.
-			err := fw.Events.ContractAdded.Publish(FuzzerWorkerContractAddedEvent{
-				Worker:             fw,
-				ContractAddress:    event.Contract.Address,
-				ContractDefinition: contractDefinition,
-			})
-			if err != nil {
-				return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
-			}
-
-			// Skip to the next deployed contract to evaluate
-			matchedDeployment = true
-			break
+	// Try to match it to a known contract definition
+	matchedDefinition := fw.fuzzer.contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+	// If we didn't match any deployment, report it.
+	if matchedDefinition == nil {
+		if fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
+			return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+		} else {
+			return nil
 		}
 	}
 
-	// If we didn't match any deployment, report it.
-	if !matchedDeployment && fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
-		return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
+	fw.deployedContracts[event.Contract.Address] = matchedDefinition
+
+	// Update our state changing methods
+	fw.updateStateChangingMethods()
+
+	// Emit an event indicating the worker detected a new contract deployment on its chain.
+	err := fw.Events.ContractAdded.Publish(FuzzerWorkerContractAddedEvent{
+		Worker:             fw,
+		ContractAddress:    event.Contract.Address,
+		ContractDefinition: matchedDefinition,
+	})
+	if err != nil {
+		return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
 	}
 	return nil
 }
@@ -237,12 +230,6 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 		args[i] = valuegeneration.GenerateAbiValue(fw.valueGenerator, &input.Type)
 	}
 
-	// Encode our parameters.
-	data, err := selectedMethod.Contract.CompiledContract().Abi.Pack(selectedMethod.Method.Name, args...)
-	if err != nil {
-		return nil, fmt.Errorf("could not generate tx due to error: %v", err)
-	}
-
 	// If this is a payable function, generate value to send
 	var value *big.Int
 	value = big.NewInt(0)
@@ -251,9 +238,15 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 	}
 
 	// Create our message using the provided parameters.
+	// We fill out some fields and populate the rest from our TestChain properties.
 	// TODO: We likely want to generate use TransactionGasLimit as a max and generate a sensible number in its range.
 	// TODO: We likely want to make gasPrice configurable similarly.
-	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, &fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, data)
+	msg := fuzzerTypes.NewCallMessageWithAbiValueData(selectedSender, &selectedMethod.Address, 0, value, fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, &fuzzerTypes.CallMessageDataAbiValues{
+		Method:      &selectedMethod.Method,
+		MethodID:    selectedMethod.Method.ID,
+		InputValues: args,
+	})
+	msg.FillFromTestChainProperties(fw.chain)
 
 	// Determine our delay values for this element
 	// TODO: If we want more txs to be added together in a block, we should add a switch to make a 0 block number
@@ -447,34 +440,33 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 // and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
 func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
-	// Clone our setup base chain.
+	// Clone our chain, attaching our necessary components for fuzzing post-genesis, prior to all blocks being copied.
+	// This means any tracers added or events subscribed to within this inner function are done so prior to chain
+	// setup (initial contract deployments), so data regarding that can be tracked as well.
 	var err error
-	fw.chain, err = chain.NewTestChainWithGenesis(baseTestChain.GenesisDefinition())
-	if err != nil {
-		return false, err
-	}
+	fw.chain, err = baseTestChain.Clone(func(initializedChain *chain.TestChain) error {
+		// Subscribe our chain event handlers
+		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
+		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-	// Subscribe our chain event handlers
-	fw.chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
-	fw.chain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
+		// Emit an event indicating the worker has created its chain.
+		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
+			Worker: fw,
+			Chain:  initializedChain,
+		})
+		if err != nil {
+			return fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
+		}
 
-	// Emit an event indicating the worker has created its chain.
-	err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
-		Worker: fw,
-		Chain:  fw.chain,
+		// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
+		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
+			fw.coverageTracer = coverage.NewCoverageTracer()
+			initializedChain.AddTracer(fw.coverageTracer, true, false)
+		}
+		return nil
 	})
-	if err != nil {
-		return false, fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
-	}
 
-	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
-	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
-		fw.coverageTracer = coverage.NewCoverageTracer()
-		fw.chain.AddTracer(fw.coverageTracer, true, false)
-	}
-
-	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).
-	err = baseTestChain.CopyTo(fw.chain)
+	// If we encountered an error during cloning, return it.
 	if err != nil {
 		return false, err
 	}
