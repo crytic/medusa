@@ -9,9 +9,9 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.3.0
+	golang.org/x/crypto v0.4.0
 	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9
-	golang.org/x/net v0.2.0
+	golang.org/x/net v0.3.0
 )
 
 require (
@@ -43,7 +43,7 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
