@@ -223,8 +223,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath:    filePath,
-			solcVersion: "0.7.0", // this test depends on solc <0.8.0
+			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
@@ -253,6 +252,42 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 			},
 		})
 	}
+}
+
+// TestDeploymentsWithArgs runs tests to ensure contracts deployed with config provided constructor arguments are
+// deployed as expected. It expects all properties should fail (indicating values provided were set accordingly).
+func TestDeploymentsWithArgs(t *testing.T) {
+	// This contract deploys a contract with specific constructor arguments. Property tests will fail if they are
+	// set correctly.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs", "Dependent"}
+			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
+				"DeploymentWithArgs": {
+					"_x": "123456789",
+					"_y": "0x5465",
+					"_z": map[string]any{
+						"a": "0x4d2",
+						"b": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473",
+					},
+				},
+				"Dependent": {
+					"_deployed": "DeployedContract:DeploymentWithArgs",
+				},
+			}
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check to see if there are any failures
+			assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 4)
+		},
+	})
 }
 
 // TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
