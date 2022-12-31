@@ -257,7 +257,8 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 // TestDeploymentsWithArgs runs tests to ensure contracts deployed with config provided constructor arguments are
 // deployed as expected. It expects all properties should fail (indicating values provided were set accordingly).
 func TestDeploymentsWithArgs(t *testing.T) {
-	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
+	// This contract deploys a contract with specific constructor arguments. Property tests will fail if they are
+	// set correctly.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
 		configUpdates: func(config *config.ProjectConfig) {

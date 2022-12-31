@@ -826,7 +826,7 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 // test node, using the address provided as the deployer. Returns the address of the deployed contract if successful,
 // the resulting block the deployment transaction was processed in, and an error if one occurred.
 func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, args []any, deployer common.Address) (common.Address, *chainTypes.Block, error) {
-	// ABI encoding constructor args and appending to the end of the bytecode
+	// ABI encode constructor arguments and append them to the end of the bytecode
 	initBytecodeWithArgs := append([]byte(nil), contract.InitBytecode...)
 	if len(contract.Abi.Constructor.Inputs) > 0 {
 		data, err := contract.Abi.Pack("", args...)
