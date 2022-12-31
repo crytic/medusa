@@ -283,7 +283,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					if !ok {
 						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
 					}
-					decoded, err := utils.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs,
+					decoded, err := valuegeneration.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
 					if err != nil {
 						return err

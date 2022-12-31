@@ -16,7 +16,7 @@ contract DeploymentWithArgs {
     }
 
     function fuzz_checkX() public returns (bool) {
-        return x == 0;
+        return x != 123456789;
     }
 
     function fuzz_checkY() public returns (bool) {
@@ -24,7 +24,7 @@ contract DeploymentWithArgs {
     }
 
     function fuzz_checkZ() public returns (bool) {
-        return z.a == 0;
+        return z.a != 0x4d2;
     }
 
     function dummyFunction(uint a) public {

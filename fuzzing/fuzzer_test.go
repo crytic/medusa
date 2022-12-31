@@ -223,8 +223,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath:    filePath,
-			solcVersion: "0.7.0", // this test depends on solc <0.8.0
+			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
@@ -255,13 +254,12 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 }
 
-// TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
-// their properties are tested appropriately.
+// TestDeploymentsWithArgs runs tests to ensure contracts deployed with config provided constructor arguments are
+// deployed as expected. It expects all properties should fail (indicating values provided were set accordingly).
 func TestDeploymentsWithArgs(t *testing.T) {
 	// This contract deploys an inner contract upon construction, which contains properties that will produce a failure.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath:    "testdata/contracts/deployments/deployment_with_args.sol",
-		solcVersion: "0.8.17", // Need to set it back to newer version as it was set to 0.7.0 in previous test
+		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs", "Dependent"}
 			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
@@ -269,7 +267,7 @@ func TestDeploymentsWithArgs(t *testing.T) {
 					"_x": "123456789",
 					"_y": "0x5465",
 					"_z": map[string]any{
-						"a": "1234",
+						"a": "0x4d2",
 						"b": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473",
 					},
 				},
