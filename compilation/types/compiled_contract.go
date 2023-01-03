@@ -3,7 +3,9 @@ package types
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"golang.org/x/exp/slices"
 	"strings"
 )
 
@@ -108,4 +110,20 @@ func ParseABIFromInterface(i any) (*abi.ABI, error) {
 		}
 	}
 	return &result, nil
+}
+
+// GetDeploymentMessageData is a helper method used create contract deployment message data for the given contract.
+// This data can be set in transaction/message structs "data" field to indicate the packed init bytecode and constructor
+// argument data to use.
+func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) {
+	// ABI encode constructor arguments and append them to the end of the bytecode
+	initBytecodeWithArgs := slices.Clone(c.InitBytecode)
+	if len(c.Abi.Constructor.Inputs) > 0 {
+		data, err := c.Abi.Pack("", args...)
+		if err != nil {
+			return nil, fmt.Errorf("could not encode constructor arguments due to error: %v", err)
+		}
+		initBytecodeWithArgs = append(initBytecodeWithArgs, data...)
+	}
+	return initBytecodeWithArgs, nil
 }

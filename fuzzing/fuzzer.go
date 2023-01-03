@@ -271,44 +271,66 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	}
 
 	// Loop for all contracts to deploy
+	deployedContractAddr := make(map[string]common.Address)
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-				// TODO: We can add logic for deploying contracts with constructor arguments here.
-				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-					// Create a message to represent our contract deployment.
-					msg := fuzzerTypes.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, contract.CompiledContract().InitBytecode)
-					msg.FillFromTestChainProperties(testChain)
-
-					// Create a new pending block we'll commit to chain
-					block, err := testChain.PendingBlockCreate()
+				args := make([]any, 0)
+				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
+					if !ok {
+						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+					}
+					decoded, err := valuegeneration.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs,
+						jsonArgs, deployedContractAddr)
 					if err != nil {
 						return err
 					}
-
-					// Add our transaction to the block
-					err = testChain.PendingBlockAddTx(msg)
-					if err != nil {
-						return err
-					}
-
-					// Commit the pending block to the chain, so it becomes the new head.
-					err = testChain.PendingBlockCommit()
-					if err != nil {
-						return err
-					}
-
-					// Ensure our transaction succeeded
-					if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
-					}
+					args = decoded
 				}
 
-				// Set our found flag to true.
+				// Constructor our deployment message/tx data field
+				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
+				if err != nil {
+					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+				}
+
+				// Create a message to represent our contract deployment.
+				msg := fuzzerTypes.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, msgData)
+				msg.FillFromTestChainProperties(testChain)
+
+				// Create a new pending block we'll commit to chain
+				block, err := testChain.PendingBlockCreate()
+				if err != nil {
+					return err
+				}
+
+				// Add our transaction to the block
+				err = testChain.PendingBlockAddTx(msg)
+				if err != nil {
+					return err
+				}
+
+				// Commit the pending block to the chain, so it becomes the new head.
+				err = testChain.PendingBlockCommit()
+				if err != nil {
+					return err
+				}
+
+				// Ensure our transaction succeeded
+				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+				}
+
+				// Record our deployed contract so the next config-specified constructor args can reference this
+				// contract by name.
+				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
+
+				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
+				// inner loop to process the next contract to deploy in the outer loop.
 				found = true
 				break
 			}
