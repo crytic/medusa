@@ -177,7 +177,7 @@ func (cs CallSequence) Clone() CallSequence {
 // It contains the information regarding the contract/method being called as well as the call message data itself.
 type CallSequenceElement struct {
 	// Contract describes the contract which was targeted by a transaction.
-	Contract *Contract
+	Contract *Contract `json:"-"`
 
 	// Call represents the underlying message call.
 	Call *CallMessage `json:"call"`
@@ -199,7 +199,7 @@ type CallSequenceElement struct {
 	// ChainReference describes the inclusion of the Call as a transaction in a block. This block may not yet be
 	// committed to its underlying chain if this is a CallSequenceElement was just executed. Additional transactions
 	// may be included before the block is committed. This reference will remain compatible after the block finalizes.
-	ChainReference *CallSequenceElementChainReference
+	ChainReference *CallSequenceElementChainReference `json:"-"`
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
@@ -276,39 +276,9 @@ func (cse *CallSequenceElement) String() string {
 	)
 }
 
-// MarshalJSON provides the default serialization routine for a CallSequenceElement.
-func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&struct {
-		Call                *CallMessage `json:"call"`
-		BlockNumberDelay    uint64       `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64       `json:"blockTimestampDelay"`
-	}{
-		Call:                cse.Call,
-		BlockNumberDelay:    cse.BlockNumberDelay,
-		BlockTimestampDelay: cse.BlockTimestampDelay,
-	})
-}
-
-// UnmarshalJSON provides the default deserialization routine for a CallSequenceElement.
-func (cse *CallSequenceElement) UnmarshalJSON(data []byte) error {
-	// Define our definition and deserialize our data.
-	type jsonDefinition struct {
-		Call                *CallMessage `json:"call"`
-		BlockNumberDelay    uint64       `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64       `json:"blockTimestampDelay"`
-	}
-	var def jsonDefinition
-	if err := json.Unmarshal(data, &def); err != nil {
-		return err
-	}
-	cse.Call = def.Call
-	cse.BlockNumberDelay = def.BlockNumberDelay
-	cse.BlockTimestampDelay = def.BlockTimestampDelay
-	return nil
-}
-
 // Clone creates a copy of the underlying CallSequenceElement.
 func (cse *CallSequenceElement) Clone() *CallSequenceElement {
+	// TODO: Deep clone the call.
 	return &CallSequenceElement{
 		Contract:            cse.Contract,
 		Call:                cse.Call,

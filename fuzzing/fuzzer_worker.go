@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -239,11 +238,9 @@ func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, 
 
 	// Create our message using the provided parameters.
 	// We fill out some fields and populate the rest from our TestChain properties.
-	// TODO: We likely want to generate use TransactionGasLimit as a max and generate a sensible number in its range.
-	// TODO: We likely want to make gasPrice configurable similarly.
+	// TODO: We likely want to make gasPrice fluctuate within some sensible range here.
 	msg := fuzzerTypes.NewCallMessageWithAbiValueData(selectedSender, &selectedMethod.Address, 0, value, fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, &fuzzerTypes.CallMessageDataAbiValues{
 		Method:      &selectedMethod.Method,
-		MethodID:    selectedMethod.Method.ID,
 		InputValues: args,
 	})
 	msg.FillFromTestChainProperties(fw.chain)
@@ -310,7 +307,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		callSequenceTested := callSequence[:i+1]
 
 		// Check for updates to coverage and corpus.
-		err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, callSequenceTested)
+		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(callSequenceTested)
 		if err != nil {
 			return true, err
 		}
@@ -379,7 +376,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
 		executePostStepFunc := func(currentIndex int) (bool, error) {
 			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
-			err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, possibleShrunkSequence[:currentIndex+1])
+			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(possibleShrunkSequence[:currentIndex+1])
 			if err != nil {
 				return true, err
 			}

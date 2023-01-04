@@ -53,9 +53,9 @@ type CallMessage struct {
 	// value is not used.
 	MsgData []byte `json:"data,omitempty"`
 
-	// MsgData represents the underlying message data to be sent to the receiver. If the receiver is a smart contract,
-	// this will likely house your call parameters and other serialized data. This overrides MsgData if it is set,
-	// allowing Data to be sourced from method ABI input arguments instead.
+	// MsgDataAbiValues represents the underlying message data to be sent to the receiver. If the receiver is a smart
+	// contract, this will likely house your call parameters and other serialized data. This overrides MsgData if it is
+	// set, allowing Data to be sourced from method ABI input arguments instead.
 	MsgDataAbiValues *CallMessageDataAbiValues `json:"data_abi_values,omitempty"`
 }
 
@@ -151,17 +151,56 @@ func (m *CallMessage) Data() []byte {
 func (m *CallMessage) AccessList() coreTypes.AccessList { return nil }
 func (m *CallMessage) IsFake() bool                     { return true }
 
+// CallMessageDataAbiValues describes a CallMessage Data field which is represented by ABI input argument values.
+// This is represented at runtime by an abi.Method and its input values.
+// Note: The data may be serialized. When deserializing, the Resolve method must be called to resolve the abi.Method
+// and transform the encoded input data into compatible input values for the method.
 type CallMessageDataAbiValues struct {
-	Method      *abi.Method
-	MethodID    []byte
+	// Method defines the ABI method definition used to pack input argument values.
+	Method *abi.Method
+
+	// InputValues represents the ABI packable input argument values to use alongside the Method to produce the call
+	// data.
 	InputValues []any
+
+	// methodName stores the name of Method when decoding from JSON. The Method will be resolved using this internal
+	// reference when Resolve is called.
+	methodName string
+
+	// encodedInputValues stores the raw encoded input values when decoding from JSON. The actual InputValues will be
+	// decoded using this and the resolved Method once Resolve is called.
+	encodedInputValues []any
 }
 
+// callMessageDataAbiValuesMarshal is used as an internal struct to represent JSON serialized data for
+// CallMessageDataAbiValues.
 type callMessageDataAbiValuesMarshal struct {
-	MethodID    hexutil.Bytes     `json:"methodId"`
-	InputValues []json.RawMessage `json:"inputValues"`
+	MethodName         string `json:"methodName"`
+	EncodedInputValues []any  `json:"inputValues"`
 }
 
+// Resolve takes a previously unmarshalled CallMessageDataAbiValues and resolves all internal data needed for it to be
+// used at runtime by resolving the abi.Method it references from the provided contract ABI.
+func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
+	// Try to resolve the method from our contract ABI.
+	if resolvedMethod, ok := contractAbi.Methods[d.methodName]; ok {
+		d.Method = &resolvedMethod
+	}
+
+	// Now that we've resolved the method, decode our encoded input values.
+	decodedArguments, err := valuegeneration.DecodeJSONArgumentsFromSlice(d.Method.Inputs, d.encodedInputValues, make(map[string]common.Address))
+	if err != nil {
+		return err
+	}
+
+	// If we've decoded arguments successfully, set them and clear our encoded arguments as they're no longer needed.
+	d.InputValues = decodedArguments
+	d.encodedInputValues = nil
+	return nil
+}
+
+// Pack packs all the ABI argument InputValues into call data for the relevant Method it targets. If this was
+// deserialized, Resolve must be called first to resolve necessary runtime data (such as the Method).
 func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
 	// We must have set an ABI method at runtime to serialize this.
 	if d.Method == nil {
@@ -185,6 +224,8 @@ func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
 	return callData, nil
 }
 
+// MarshalJSON provides custom JSON marshalling for the struct.
+// Returns the JSON marshalled data, or an error if one occurs.
 func (d *CallMessageDataAbiValues) MarshalJSON() ([]byte, error) {
 	// We must have set an ABI method at runtime to serialize this.
 	if d.Method == nil {
@@ -198,23 +239,21 @@ func (d *CallMessageDataAbiValues) MarshalJSON() ([]byte, error) {
 	}
 
 	// For every input we have, we serialize it.
-	inputValues := make([]json.RawMessage, len(d.Method.Inputs))
-	for i := 0; i < len(inputValues); i++ {
-		serializedInput, err := json.Marshal(valuegeneration.AbiValueToMap(&d.Method.Inputs[i].Type, d.InputValues[i]))
-		if err != nil {
-			return nil, err
-		}
-		inputValues[i] = serializedInput
+	inputValuesEncoded, err := valuegeneration.EncodeJSONArgumentsToSlice(d.Method.Inputs, d.InputValues)
+	if err != nil {
+		return nil, err
 	}
 
 	// Now create our outer struct and marshal all the data and return it.
 	marshalData := callMessageDataAbiValuesMarshal{
-		MethodID:    d.Method.ID,
-		InputValues: inputValues,
+		MethodName:         d.Method.Name,
+		EncodedInputValues: inputValuesEncoded,
 	}
 	return json.Marshal(marshalData)
 }
 
+// UnmarshalJSON provides custom JSON unmarshalling for the struct.
+// Returns an error if one occurs.
 func (d *CallMessageDataAbiValues) UnmarshalJSON(b []byte) error {
 	// Decode our intermediate structure
 	var marshalData callMessageDataAbiValuesMarshal
@@ -223,23 +262,8 @@ func (d *CallMessageDataAbiValues) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	// Verify our method ID
-	if len(marshalData.MethodID) != 4 {
-		return fmt.Errorf("ABI call data JSON unmarshaling failed, expected a 4 byte method ID, but a %d byte one was provided", len(marshalData.MethodID))
-	}
-
-	// Copy out all of our input arguments
-	inputValues := make([]any, len(marshalData.InputValues))
-	for i := 0; i < len(inputValues); i++ {
-		var inputValue any
-		err = json.Unmarshal(marshalData.InputValues[i], &inputValue)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Set our data in our actual structure now
-	d.MethodID = marshalData.MethodID
-	d.InputValues = inputValues
+	d.methodName = marshalData.MethodName
+	d.encodedInputValues = marshalData.EncodedInputValues
 	return nil
 }

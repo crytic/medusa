@@ -135,7 +135,7 @@ func TestChainBehaviour(t *testing.T) {
 			config.Fuzzing.Workers = 1
 			config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) // we just need a few oog txs to test
 			config.Fuzzing.Timeout = 10                                          // to be safe, we set a 10s timeout
-			config.Fuzzing.TransactionGasLimit = 100000                          // we set this low, so contract execution runs out of gas earlier.
+			config.Fuzzing.TransactionGasLimit = 500000                          // we set this low, so contract execution runs out of gas earlier.
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -426,7 +426,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
@@ -442,7 +442,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 
 			// Check to see if we have some coverage
 			assertCorpusCallSequencesCollected(f, true)
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same
 			assert.True(t, originalCoverage.Equals(newCoverage))
@@ -471,7 +471,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
@@ -489,7 +489,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if original and new coverage are the same
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 			assert.False(t, originalCoverage.Equals(newCoverage))
 		},
 	})

@@ -17,7 +17,6 @@ import (
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
@@ -48,8 +47,6 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
-	// coverageMaps describes the total code coverage known to be achieved across the fuzzing campaign.
-	coverageMaps *coverage.CoverageMaps
 
 	// testCases contains every TestCase registered with the Fuzzer.
 	testCases []TestCase
@@ -100,7 +97,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			ChainSetupFunc:        chainSetupFromCompilations,
 			CallSequenceTestFuncs: make([]CallSequenceTestFunc, 0),
 		},
-		coverageMaps: nil,
 	}
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
@@ -284,7 +280,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					if !ok {
 						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
 					}
-					decoded, err := valuegeneration.DecodeJSONArguments(contract.CompiledContract().Abi.Constructor.Inputs,
+					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
 					if err != nil {
 						return err
@@ -514,7 +510,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	f.coverageMaps, err = corpus.MeasureCorpusCoverage(f.corpus, baseTestChain, f.contractDefinitions)
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
 		return err
 	}
