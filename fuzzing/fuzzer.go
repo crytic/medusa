@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -16,8 +19,8 @@ import (
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
@@ -47,6 +50,10 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
+
+	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
+	// used by the Fuzzer's subcomponents are derived from this one.
+	randomProvider *rand.Rand
 
 	// testCases contains every TestCase registered with the Fuzzer.
 	testCases []TestCase
@@ -295,7 +302,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				}
 
 				// Create a message to represent our contract deployment.
-				msg := fuzzerTypes.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, msgData)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, msgData)
 				msg.FillFromTestChainProperties(testChain)
 
 				// Create a new pending block we'll commit to chain
@@ -342,7 +349,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 // defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a valuegeneration.MutatingValueGenerator with a
 // default configuration. Returns the generator or an error, if one occurs.
-func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error) {
 	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 1,
@@ -359,7 +366,7 @@ func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.Valu
 			RandomStringMaxSize: 100,
 		},
 	}
-	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet)
+	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet, randomProvider)
 	return valueGenerator, nil
 }
 
@@ -373,10 +380,17 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 	// Workers are "reset" when they hit some config-defined limit. They are destroyed and recreated at the same index.
 	// For now, we create our available index queue before initializing some providers and entering our main loop.
-	availableWorkerIndexes := make([]int, f.config.Fuzzing.Workers)
+	type availableWorkerSlot struct {
+		index          int
+		randomProvider *rand.Rand
+	}
+	availableWorkerSlotQueue := make([]availableWorkerSlot, f.config.Fuzzing.Workers)
 	availableWorkerIndexedLock := sync.Mutex{}
-	for i := 0; i < len(availableWorkerIndexes); i++ {
-		availableWorkerIndexes[i] = i
+	for i := 0; i < len(availableWorkerSlotQueue); i++ {
+		availableWorkerSlotQueue[i] = availableWorkerSlot{
+			index:          i,
+			randomProvider: randomutils.ForkRandomProvider(f.randomProvider),
+		}
 	}
 
 	// Define a flag that indicates whether we have not cancelled o
@@ -392,17 +406,17 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 		// Pop a worker index off of our queue
 		availableWorkerIndexedLock.Lock()
-		workerIndex := availableWorkerIndexes[0]
-		availableWorkerIndexes = availableWorkerIndexes[1:]
+		workerSlotInfo := availableWorkerSlotQueue[0]
+		availableWorkerSlotQueue = availableWorkerSlotQueue[1:]
 		availableWorkerIndexedLock.Unlock()
 
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
 		// keeping us at our desired thread capacity. If we encounter an error, we store it and continue
 		// processing the cleanup logic to exit gracefully.
-		go func(workerIndex int) {
+		go func(workerSlotInfo availableWorkerSlot) {
 			// Create a new worker for this fuzzing.
-			worker, workerCreatedErr := newFuzzerWorker(f, workerIndex)
-			f.workers[workerIndex] = worker
+			worker, workerCreatedErr := newFuzzerWorker(f, workerSlotInfo.index, workerSlotInfo.randomProvider)
+			f.workers[workerSlotInfo.index] = worker
 			if err == nil && workerCreatedErr != nil {
 				err = workerCreatedErr
 			}
@@ -429,7 +443,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 			// Free our worker id before unblocking our channel, as a free one will be expected.
 			availableWorkerIndexedLock.Lock()
-			availableWorkerIndexes = append(availableWorkerIndexes, workerIndex)
+			availableWorkerSlotQueue = append(availableWorkerSlotQueue, workerSlotInfo)
 			availableWorkerIndexedLock.Unlock()
 
 			// Publish an event indicating we destroyed a worker.
@@ -440,7 +454,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
 			<-threadReserveChannel
-		}(workerIndex)
+		}(workerSlotInfo)
 	}
 
 	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
@@ -453,7 +467,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	for {
 		// Obtain the count of free workers.
 		availableWorkerIndexedLock.Lock()
-		freeWorkers := len(availableWorkerIndexes)
+		freeWorkers := len(availableWorkerSlotQueue)
 		availableWorkerIndexedLock.Unlock()
 
 		// We keep waiting until every worker is free
@@ -472,6 +486,9 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 func (f *Fuzzer) Start() error {
 	// Define our variable to catch errors
 	var err error
+
+	// While we're fuzzing, we'll want to have an initialized random provider.
+	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Create our running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())

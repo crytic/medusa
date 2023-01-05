@@ -1,4 +1,4 @@
-package weightedrandom
+package randomutils
 
 import (
 	"fmt"
@@ -8,29 +8,29 @@ import (
 	"time"
 )
 
-// Choice describes a weighted, randomly selectable object for use with a Chooser.
-type Choice[T any] struct {
-	// Data describes the wrapped data that a Chooser should return when making a random Choice selection.
+// WeightedRandomChoice describes a weighted, randomly selectable object for use with a WeightedRandomChooser.
+type WeightedRandomChoice[T any] struct {
+	// Data describes the wrapped data that a WeightedRandomChooser should return when making a random WeightedRandomChoice selection.
 	Data T
 
-	// weight describes a value indicating the likelihood of this Choice to appear in a random selection.
-	// Its probability is calculated as current weight / all weights in a Chooser.
+	// weight describes a value indicating the likelihood of this WeightedRandomChoice to appear in a random selection.
+	// Its probability is calculated as current weight / all weights in a WeightedRandomChooser.
 	weight *big.Int
 }
 
-// NewChoice creates a Choice with the given underlying data and weight to use when added to a Chooser.
-func NewChoice[T any](data T, weight *big.Int) *Choice[T] {
-	return &Choice[T]{
+// NewWeightedRandomChoice creates a WeightedRandomChoice with the given underlying data and weight to use when added to a WeightedRandomChooser.
+func NewWeightedRandomChoice[T any](data T, weight *big.Int) *WeightedRandomChoice[T] {
+	return &WeightedRandomChoice[T]{
 		Data:   data,
 		weight: new(big.Int).Set(weight),
 	}
 }
 
-// Chooser takes a series of Choice objects which wrap underlying data, and returns one
+// WeightedRandomChooser takes a series of WeightedRandomChoice objects which wrap underlying data, and returns one
 // of the weighted options randomly.
-type Chooser[T any] struct {
+type WeightedRandomChooser[T any] struct {
 	// choices describes the weighted choices from which the chooser will randomly select.
-	choices []*Choice[T]
+	choices []*WeightedRandomChoice[T]
 
 	// totalWeight describes the sum of all weights in choices. This is stored here so it does not need to be
 	// recomputed.
@@ -42,22 +42,23 @@ type Chooser[T any] struct {
 	randomProviderLock *sync.Mutex
 }
 
-// NewChooser creates a Chooser with a new random provider and mutex lock.
-func NewChooser[T any]() *Chooser[T] {
-	return NewChooserWithRand[T](rand.New(rand.NewSource(time.Now().Unix())), &sync.Mutex{})
+// NewWeightedRandomChooser creates a WeightedRandomChooser with a new random provider and mutex lock.
+func NewWeightedRandomChooser[T any]() *WeightedRandomChooser[T] {
+	return NewWeightedRandomChooserWithRand[T](rand.New(rand.NewSource(time.Now().Unix())), &sync.Mutex{})
 }
 
-// NewChooserWithRand creates a Chooser with the provided random provider and mutex lock to be acquired when using it.
-func NewChooserWithRand[T any](randomProvider *rand.Rand, randomProviderLock *sync.Mutex) *Chooser[T] {
-	return &Chooser[T]{
-		choices:            make([]*Choice[T], 0),
+// NewWeightedRandomChooserWithRand creates a WeightedRandomChooser with the provided random provider and mutex lock to be acquired when using it.
+func NewWeightedRandomChooserWithRand[T any](randomProvider *rand.Rand, randomProviderLock *sync.Mutex) *WeightedRandomChooser[T] {
+	return &WeightedRandomChooser[T]{
+		choices:            make([]*WeightedRandomChoice[T], 0),
 		randomProvider:     randomProvider,
 		randomProviderLock: randomProviderLock,
+		totalWeight:        big.NewInt(0),
 	}
 }
 
-// AddChoices adds weighted choices to the Chooser, allowing for future random selection.
-func (c *Chooser[T]) AddChoices(choices ...*Choice[T]) {
+// AddChoices adds weighted choices to the WeightedRandomChooser, allowing for future random selection.
+func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T]) {
 	// Acquire our lock during the duration of this method.
 	c.randomProviderLock.Lock()
 	defer c.randomProviderLock.Unlock()
@@ -71,8 +72,8 @@ func (c *Chooser[T]) AddChoices(choices ...*Choice[T]) {
 	c.choices = append(c.choices, choices...)
 }
 
-// Choose selects a random weighted item from the Chooser, or returns an error if one occurs.
-func (c *Chooser[T]) Choose() (*T, error) {
+// Choose selects a random weighted item from the WeightedRandomChooser, or returns an error if one occurs.
+func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	// If we have no choices or 0 total weight, return nil.
 	if len(c.choices) == 0 || c.totalWeight.Cmp(big.NewInt(0)) == 0 {
 		return nil, fmt.Errorf("could not return a weighted random choice because no choices exist with non-zero weights")

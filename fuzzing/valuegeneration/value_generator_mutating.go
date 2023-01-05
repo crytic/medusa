@@ -5,6 +5,7 @@ import (
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
 	"math/big"
+	"math/rand"
 )
 
 // MutatingValueGenerator is a provider used to generate function inputs and call arguments using mutation-based
@@ -47,12 +48,12 @@ type MutatingValueGeneratorConfig struct {
 }
 
 // NewMutatingValueGenerator creates a new MutatingValueGenerator using a provided base_value_set.ValueSet to seed base-values for mutation.
-func NewMutatingValueGenerator(config *MutatingValueGeneratorConfig, valueSet *ValueSet) *MutatingValueGenerator {
+func NewMutatingValueGenerator(config *MutatingValueGeneratorConfig, valueSet *ValueSet, randomProvider *rand.Rand) *MutatingValueGenerator {
 	// Create and return our generator
 	generator := &MutatingValueGenerator{
 		config:               config,
 		valueSet:             valueSet,
-		RandomValueGenerator: NewRandomValueGenerator(config.RandomValueGeneratorConfig),
+		RandomValueGenerator: NewRandomValueGenerator(config.RandomValueGeneratorConfig, randomProvider),
 	}
 
 	// Ensure some initial values this mutator will depend on for basic mutations to the set.
@@ -67,20 +68,15 @@ func NewMutatingValueGenerator(config *MutatingValueGeneratorConfig, valueSet *V
 // as a random number of mutations which should be performed (within the mutation range specified by the
 // ValueGeneratorConfig).
 func (g *MutatingValueGenerator) getMutationParams(inputsLen int) (int, int) {
-	g.randomProviderLock.Lock()
 	inputIdx := g.randomProvider.Intn(inputsLen)
 	mutationCount := g.randomProvider.Intn(((g.config.MaxMutationRounds - g.config.MinMutationRounds) + 1) + g.config.MinMutationRounds)
-	g.randomProviderLock.Unlock()
-
 	return inputIdx, mutationCount
 }
 
 // GenerateAddress obtains an existing address from its underlying value set or generates a random one.
 func (g *MutatingValueGenerator) GenerateAddress() common.Address {
 	// If our bias directs us to, use the random generator instead
-	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
-	g.randomProviderLock.Unlock()
 	if randomGeneratorDecision < g.config.RandomAddressBias {
 		return g.RandomValueGenerator.GenerateAddress()
 	}
@@ -133,9 +129,7 @@ var integerMutationMethods = []func(*MutatingValueGenerator, *big.Int, ...*big.I
 // GenerateInteger generates an integer of the provided properties and returns a big.Int representing it.
 func (g *MutatingValueGenerator) GenerateInteger(signed bool, bitLength int) *big.Int {
 	// If our bias directs us to, use the random generator instead
-	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
-	g.randomProviderLock.Unlock()
 	if randomGeneratorDecision < g.config.RandomIntegerBias {
 		return g.RandomValueGenerator.GenerateInteger(signed, bitLength)
 	}
@@ -162,9 +156,7 @@ func (g *MutatingValueGenerator) GenerateInteger(signed bool, bitLength int) *bi
 	// Perform the appropriate number of mutations.
 	for i := 0; i < mutationCount; i++ {
 		// Mutate input
-		g.randomProviderLock.Lock()
 		input = integerMutationMethods[g.randomProvider.Intn(len(integerMutationMethods))](g, input, inputs...)
-		g.randomProviderLock.Unlock()
 
 		// Correct value boundaries (underflow/overflow)
 		input = utils.ConstrainIntegerToBounds(input, min, max)
@@ -233,9 +225,7 @@ var bytesMutationMethods = []func(*MutatingValueGenerator, []byte, ...[]byte) []
 func (g *MutatingValueGenerator) GenerateBytes() []byte {
 	// If we have no inputs or our bias directs us to, use the random generator instead
 	inputs := g.valueSet.Bytes()
-	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
-	g.randomProviderLock.Unlock()
 	if len(inputs) == 0 || randomGeneratorDecision < g.config.RandomBytesBias {
 		return g.RandomValueGenerator.GenerateBytes()
 	}
@@ -246,9 +236,7 @@ func (g *MutatingValueGenerator) GenerateBytes() []byte {
 
 	// Mutate the data for our desired number of rounds
 	for i := 0; i < mutationCount; i++ {
-		g.randomProviderLock.Lock()
 		input = bytesMutationMethods[g.randomProvider.Intn(len(bytesMutationMethods))](g, input, inputs...)
-		g.randomProviderLock.Unlock()
 	}
 
 	return input
@@ -316,9 +304,7 @@ var stringMutationMethods = []func(*MutatingValueGenerator, string, ...string) s
 func (g *MutatingValueGenerator) GenerateString() string {
 	// If we have no inputs or our bias directs us to, use the random generator instead
 	inputs := g.valueSet.Strings()
-	g.randomProviderLock.Lock()
 	randomGeneratorDecision := g.randomProvider.Float32()
-	g.randomProviderLock.Unlock()
 	if len(inputs) == 0 || randomGeneratorDecision < g.config.RandomStringBias {
 		return g.RandomValueGenerator.GenerateString()
 	}
@@ -329,9 +315,7 @@ func (g *MutatingValueGenerator) GenerateString() string {
 
 	// Mutate the data for our desired number of rounds
 	for i := 0; i < mutationCount; i++ {
-		g.randomProviderLock.Lock()
 		input = stringMutationMethods[g.randomProvider.Intn(len(stringMutationMethods))](g, input, inputs...)
-		g.randomProviderLock.Unlock()
 	}
 
 	return input

@@ -1,11 +1,12 @@
-package types
+package calls
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/chain/types"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"strconv"
 	"strings"
 )
@@ -177,7 +178,7 @@ func (cs CallSequence) Clone() CallSequence {
 // It contains the information regarding the contract/method being called as well as the call message data itself.
 type CallSequenceElement struct {
 	// Contract describes the contract which was targeted by a transaction.
-	Contract *Contract `json:"-"`
+	Contract *fuzzingTypes.Contract `json:"-"`
 
 	// Call represents the underlying message call.
 	Call *CallMessage `json:"call"`
@@ -203,7 +204,7 @@ type CallSequenceElement struct {
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
-func NewCallSequenceElement(contract *Contract, call *CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
+func NewCallSequenceElement(contract *fuzzingTypes.Contract, call *CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
 	callSequenceElement := &CallSequenceElement{
 		Contract:            contract,
 		Call:                call,
@@ -293,13 +294,13 @@ func (cse *CallSequenceElement) Clone() *CallSequenceElement {
 type CallSequenceElementChainReference struct {
 	// Block describes the block the CallSequenceElement.Call was included in as a transaction. This block may be
 	// pending commitment to the chain, or already committed.
-	Block *types.Block
+	Block *chainTypes.Block
 
 	// TransactionIndex describes the index at which the transaction was included into the Block.
 	TransactionIndex int
 }
 
 // MessageResults obtains the results of executing the CallSequenceElement.
-func (cr *CallSequenceElementChainReference) MessageResults() *types.MessageResults {
+func (cr *CallSequenceElementChainReference) MessageResults() *chainTypes.MessageResults {
 	return cr.Block.MessageResults[cr.TransactionIndex]
 }

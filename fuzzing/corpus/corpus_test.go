@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
 	"math/rand"
@@ -32,8 +32,8 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 }
 
 // getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
-func getMockCallSequence(size int) types.CallSequence {
-	cs := make(types.CallSequence, size)
+func getMockCallSequence(size int) calls.CallSequence {
+	cs := make(calls.CallSequence, size)
 	for i := 0; i < size; i++ {
 		cs[i] = getMockCallSequenceElement()
 	}
@@ -41,8 +41,8 @@ func getMockCallSequence(size int) types.CallSequence {
 }
 
 // getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
-func getMockCallSequenceElement() *types.CallSequenceElement {
-	return &types.CallSequenceElement{
+func getMockCallSequenceElement() *calls.CallSequenceElement {
+	return &calls.CallSequenceElement{
 		Contract:            nil,
 		Call:                getMockCallSequenceElementCall(),
 		BlockNumberDelay:    rand.Uint64(),
@@ -52,9 +52,9 @@ func getMockCallSequenceElement() *types.CallSequenceElement {
 }
 
 // getMockCallSequenceElementCall creates a mock CallMessage for testing
-func getMockCallSequenceElementCall() *types.CallMessage {
+func getMockCallSequenceElementCall() *calls.CallMessage {
 	to := common.BigToAddress(big.NewInt(rand.Int63()))
-	txn := types.CallMessage{
+	txn := calls.CallMessage{
 		MsgFrom:      common.BigToAddress(big.NewInt(rand.Int63())),
 		MsgTo:        &to,
 		MsgNonce:     rand.Uint64(),
@@ -69,7 +69,7 @@ func getMockCallSequenceElementCall() *types.CallMessage {
 }
 
 // testCorpusCallSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
-func testCorpusCallSequencesEqual(t *testing.T, expected types.CallSequence, actual types.CallSequence) {
+func testCorpusCallSequencesEqual(t *testing.T, expected calls.CallSequence, actual calls.CallSequence) {
 	// Ensure the lengths of both sequences are the same
 	assert.EqualValues(t, len(expected), len(actual), "Different number of calls in sequences")
 
@@ -80,7 +80,7 @@ func testCorpusCallSequencesEqual(t *testing.T, expected types.CallSequence, act
 }
 
 // testCorpusBlockHeadersAreEqual tests whether two CorpusBlockHeader objects are equal to each other
-func testCorpusCallSequenceElementsEqual(t *testing.T, expected types.CallSequenceElement, actual types.CallSequenceElement) {
+func testCorpusCallSequenceElementsEqual(t *testing.T, expected calls.CallSequenceElement, actual calls.CallSequenceElement) {
 	// Make sure the call is equal
 	assert.EqualValues(t, *expected.Call, *actual.Call)
 
@@ -130,7 +130,7 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Unmarshal byte array
-			var sameEntry types.CallSequence
+			var sameEntry calls.CallSequence
 			err = json.Unmarshal(b, &sameEntry)
 			assert.NoError(t, err)
 

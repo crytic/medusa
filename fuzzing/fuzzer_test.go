@@ -3,8 +3,9 @@ package fuzzing
 import (
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,16 +25,16 @@ func TestFuzzerHooks(t *testing.T) {
 			// Attach to fuzzer hooks which simply set a success state.
 			var valueGenOk, chainSetupOk, callSeqTestFuncOk bool
 			existingValueGenFunc := f.fuzzer.Hooks.NewValueGeneratorFunc
-			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error) {
 				valueGenOk = true
-				return existingValueGenFunc(fuzzer, valueSet)
+				return existingValueGenFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
 			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
-			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 				callSeqTestFuncOk = true
 				return make([]ShrinkCallSequenceRequest, 0), nil
 			})

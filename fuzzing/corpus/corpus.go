@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/weightedrandom"
+	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
@@ -29,11 +30,11 @@ type Corpus struct {
 
 	// callSequences is a list of call sequences that increased coverage or otherwise were found to be valuable
 	// to the fuzzer.
-	callSequences []*corpusFile[types.CallSequence]
+	callSequences []*corpusFile[calls.CallSequence]
 
 	// weightedCallSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
-	weightedCallSequenceChooser *weightedrandom.Chooser[types.CallSequence]
+	weightedCallSequenceChooser *randomutils.WeightedRandomChooser[calls.CallSequence]
 
 	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
 	// callSequences.
@@ -58,7 +59,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory: corpusDirectory,
 		coverageMaps:     coverage.NewCoverageMaps(),
-		callSequences:    make([]*corpusFile[types.CallSequence], 0),
+		callSequences:    make([]*corpusFile[calls.CallSequence], 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -79,14 +80,14 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			}
 
 			// Parse the call sequence data.
-			var seq types.CallSequence
+			var seq calls.CallSequence
 			err = json.Unmarshal(b, &seq)
 			if err != nil {
 				return nil, err
 			}
 
 			// Add entry to corpus
-			corpus.callSequences = append(corpus.callSequences, &corpusFile[types.CallSequence]{
+			corpus.callSequences = append(corpus.callSequences, &corpusFile[calls.CallSequence]{
 				filePath: filePath,
 				data:     seq,
 			})
@@ -125,20 +126,20 @@ func (c *Corpus) CallSequenceCount() int {
 
 // Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
 // (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
-func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contracts types.Contracts) error {
+func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) error {
 	// Acquire our call sequences lock during the duration of this method.
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
 
 	// Create a weighted chooser
-	c.weightedCallSequenceChooser = weightedrandom.NewChooser[types.CallSequence]()
+	c.weightedCallSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
 
 	// Create new coverage maps to track total coverage and a coverage tracer to do so.
 	c.coverageMaps = coverage.NewCoverageMaps()
 	coverageTracer := coverage.NewCoverageTracer()
 
 	// Create our structure and event listeners to track deployed contracts
-	deployedContracts := make(map[common.Address]*types.Contract, 0)
+	deployedContracts := make(map[common.Address]*contracts.Contract, 0)
 
 	// Clone our test chain, adding listeners for contract deployment events from genesis.
 	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
@@ -148,7 +149,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contracts types.Cont
 		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
 		// sequences.
 		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event chain.ContractDeploymentsAddedEvent) error {
-			matchedContract := contracts.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+			matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
 			if matchedContract != nil {
 				deployedContracts[event.Contract.Address] = matchedContract
 			}
@@ -227,7 +228,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contracts types.Cont
 		// If the sequence was replayed successfully, we add a weighted choice for it, for future selection. If it was
 		// not, we simply exclude it from our chooser and print a warning.
 		if sequenceInvalidError == nil {
-			c.weightedCallSequenceChooser.AddChoices(weightedrandom.NewChoice[types.CallSequence](sequence, big.NewInt(1)))
+			c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
 		} else {
 			fmt.Printf("corpus item '%v' disabled due to error when replaying it: %v\n", sequenceFileData.filePath, sequenceInvalidError)
 		}
@@ -242,15 +243,21 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contracts types.Cont
 }
 
 // AddCallSequence adds a call sequence to the corpus and returns an error in case of an issue
-func (c *Corpus) AddCallSequence(seq types.CallSequence) error {
-	// Update our sequences with the new entry.
+func (c *Corpus) AddCallSequence(seq calls.CallSequence) error {
+	// Acquire a thread lock during the duration of this method
 	c.callSequencesLock.Lock()
-	c.callSequences = append(c.callSequences, &corpusFile[types.CallSequence]{
+	defer c.callSequencesLock.Unlock()
+
+	// Update our sequences with the new entry.
+	c.callSequences = append(c.callSequences, &corpusFile[calls.CallSequence]{
 		filePath: "",
 		data:     seq,
 	})
-	c.weightedCallSequenceChooser.AddChoices(weightedrandom.NewChoice[types.CallSequence](seq, big.NewInt(1)))
-	c.callSequencesLock.Unlock()
+
+	// If we have initialized a chooser, add our call sequence item to it.
+	if c.weightedCallSequenceChooser != nil {
+		c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](seq, big.NewInt(1)))
+	}
 	return nil
 }
 
@@ -258,7 +265,7 @@ func (c *Corpus) AddCallSequence(seq types.CallSequence) error {
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
 // Returns an error if one occurs.
-func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence types.CallSequence) error {
+func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence) error {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
 		return nil
@@ -298,7 +305,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence types.CallSequenc
 }
 
 // RandomCallSequence returns a weighted random call sequence from the Corpus, or an error if one occurs.
-func (c *Corpus) RandomCallSequence() (*types.CallSequence, error) {
+func (c *Corpus) RandomCallSequence() (*calls.CallSequence, error) {
 	// If we didn't initialize a chooser, return an error
 	if c.weightedCallSequenceChooser == nil {
 		return nil, fmt.Errorf("corpus could not return a random call sequence because the corpus was not initialized")

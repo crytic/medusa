@@ -3,6 +3,7 @@ package valuegeneration
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+	"math/rand"
 )
 
 // ValueGenerator represents an interface for a provider used to generate function inputs and call arguments for use
@@ -22,4 +23,6 @@ type ValueGenerator interface {
 	GenerateString() string
 	// GenerateInteger generates/selects an integer to use when populating inputs.
 	GenerateInteger(signed bool, bitLength int) *big.Int
+	// RandomProvider returns the internal random provider used for value generation.
+	RandomProvider() *rand.Rand
 }

@@ -5,8 +5,6 @@ import (
 	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"math/rand"
-	"sync"
-	"time"
 )
 
 // RandomValueGenerator represents an interface for a provider used to generate transaction fields and call arguments
@@ -17,8 +15,6 @@ type RandomValueGenerator struct {
 
 	// randomProvider offers a source of random data.
 	randomProvider *rand.Rand
-	// randomProviderLock is a lock to offer thread safety to the random number generator.
-	randomProviderLock sync.Mutex
 }
 
 // RandomValueGeneratorConfig defines the parameters for a RandomValueGenerator.
@@ -38,11 +34,11 @@ type RandomValueGeneratorConfig struct {
 }
 
 // NewRandomValueGenerator creates a new RandomValueGenerator with a new random provider.
-func NewRandomValueGenerator(config *RandomValueGeneratorConfig) *RandomValueGenerator {
+func NewRandomValueGenerator(config *RandomValueGeneratorConfig, randomProvider *rand.Rand) *RandomValueGenerator {
 	// Create and return our generator
 	generator := &RandomValueGenerator{
 		config:         config,
-		randomProvider: rand.New(rand.NewSource(time.Now().Unix())),
+		randomProvider: randomProvider,
 	}
 	return generator
 }
@@ -51,9 +47,7 @@ func NewRandomValueGenerator(config *RandomValueGeneratorConfig) *RandomValueGen
 func (g *RandomValueGenerator) GenerateAddress() common.Address {
 	// Generate random bytes of the address length, then convert it to an address.
 	addressBytes := make([]byte, common.AddressLength)
-	g.randomProviderLock.Lock()
 	g.randomProvider.Read(addressBytes)
-	g.randomProviderLock.Unlock()
 	return common.BytesToAddress(addressBytes)
 }
 
@@ -66,37 +60,29 @@ func (g *RandomValueGenerator) GenerateArrayLength() int {
 
 // GenerateBool generates a random bool to use when populating inputs.
 func (g *RandomValueGenerator) GenerateBool() bool {
-	g.randomProviderLock.Lock()
-	defer g.randomProviderLock.Unlock()
 	return g.randomProvider.Uint32()%2 == 0
 }
 
 // GenerateBytes generates a random dynamic-sized byte array to use when populating inputs.
 func (g *RandomValueGenerator) GenerateBytes() []byte {
-	g.randomProviderLock.Lock()
 	rangeSize := uint64(g.config.RandomBytesMaxSize-g.config.RandomBytesMinSize) + 1
 	b := make([]byte, int(g.randomProvider.Uint64()%rangeSize)+g.config.RandomBytesMinSize)
 	g.randomProvider.Read(b)
-	g.randomProviderLock.Unlock()
 	return b
 }
 
 // GenerateFixedBytes generates a random fixed-sized byte array to use when populating inputs.
 func (g *RandomValueGenerator) GenerateFixedBytes(length int) []byte {
-	g.randomProviderLock.Lock()
 	b := make([]byte, length)
 	g.randomProvider.Read(b)
-	g.randomProviderLock.Unlock()
 	return b
 }
 
 // GenerateString generates a random dynamic-sized string to use when populating inputs.
 func (g *RandomValueGenerator) GenerateString() string {
-	g.randomProviderLock.Lock()
 	rangeSize := uint64(g.config.RandomStringMaxSize-g.config.RandomStringMinSize) + 1
 	b := make([]byte, int(g.randomProvider.Uint64()%rangeSize)+g.config.RandomStringMinSize)
 	g.randomProvider.Read(b)
-	g.randomProviderLock.Unlock()
 	return string(b)
 }
 
@@ -104,13 +90,16 @@ func (g *RandomValueGenerator) GenerateString() string {
 func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.Int {
 	// Fill a byte array of the appropriate size with random bytes
 	b := make([]byte, bitLength/8)
-	g.randomProviderLock.Lock()
 	g.randomProvider.Read(b)
-	g.randomProviderLock.Unlock()
 
 	// Create an unsigned integer.
 	res := big.NewInt(0).SetBytes(b)
 
 	// Constrain our integer bounds
 	return utils.ConstrainIntegerToBitLength(res, signed, bitLength)
+}
+
+// RandomProvider returns the internal random provider used for value generation.
+func (g *RandomValueGenerator) RandomProvider() *rand.Rand {
+	return g.randomProvider
 }
