@@ -92,4 +92,4 @@ WORKDIR /medusa
 
 # Copy the contents of the current directory (where the Dockerfile is located)
 # into the working directory in the image
-COPY ../ .
+COPY . .
