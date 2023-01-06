@@ -9,11 +9,11 @@
 FROM medusa AS go_get
 RUN go get ./...
 
-# A stage to run unit_tests and export them to the medusa_unit_tests.log file
+# A stage to run unit tests and export them to the medusa_unit_tests.log file
 FROM go_get AS unit_tests_stage
 RUN go test -v ./... > medusa_unit_tests.log
 
-# A stage to save only unit tests log
+# A stage to save only unit tests log file
 FROM scratch AS unit_tests_log
 COPY --from=unit_tests_stage /medusa/medusa_unit_tests.log .
 
