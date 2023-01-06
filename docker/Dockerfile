@@ -39,6 +39,7 @@ ARG HARDHAT_VERSION=latest
 ARG TRUFFLE_VERSION=latest
 
 # Update the package list and install necessary ones
+# `build-essential`/`python3-dev` are used by crytic-compile's python dependencies
 RUN apt-get update && \
     apt-get upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-suggests --no-install-recommends \
@@ -70,6 +71,7 @@ RUN curl https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash 
     && npm install -g hardhat@$HARDHAT_VERSION \ 
     && npm cache clean --force
 
+# Update the PATH environment variable to include the node binary directory
 ENV PATH=$PATH:/usr/local/nvm/versions/node/v$NODE_VERSION/bin/
 
 # Use the solc-select tool to install the specified version of the Solidity
