@@ -39,9 +39,6 @@ type Corpus struct {
 	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
 	// callSequences.
 	callSequencesLock sync.Mutex
-
-	// flushLock provides thread synchronization to prevent concurrent access errors when calling Flush.
-	flushLock sync.Mutex
 }
 
 // corpusFile represents corpus data and its state on the filesystem.
@@ -328,8 +325,6 @@ func (c *Corpus) Flush() error {
 	}
 
 	// Lock while flushing the corpus items to avoid concurrent access issues.
-	c.flushLock.Lock()
-	defer c.flushLock.Unlock()
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
 

@@ -480,7 +480,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 			if !ok {
 				return nil, fmt.Errorf("can not parse struct field %s, error: %s", fieldName, err)
 			}
-			st.Field(i).Set(reflect.ValueOf(eleValue))
+			reflectionutils.SetField(st.Field(i), eleValue)
 		}
 		v = st.Interface()
 	default:

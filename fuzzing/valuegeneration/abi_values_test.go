@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // TestABIRoundtripEncodingAllTypes runs tests to ABI value encoding works round-trip for argument values of all types.
@@ -20,7 +22,7 @@ func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 		RandomBytesMaxSize:  200,
 		RandomStringMinSize: 5,
 		RandomStringMaxSize: 200,
-	})
+	}, rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	// Define our argument types to test round trip serialization for.
 	args := abi.Arguments{

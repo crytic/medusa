@@ -10,7 +10,6 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/maps"
-	"math/big"
 	"math/rand"
 )
 
@@ -40,6 +39,9 @@ type FuzzerWorker struct {
 
 	// randomProvider provides random data as inputs to decisions throughout the worker.
 	randomProvider *rand.Rand
+	// sequenceGenerator creates entirely new or mutated call sequences based on corpus call sequences, for use in
+	// fuzzing campaigns.
+	sequenceGenerator *CallSequenceGenerator
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
@@ -65,7 +67,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	}
 
 	// Create a fuzzing worker struct, referencing our parent fuzzing.
-	worker := FuzzerWorker{
+	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
@@ -75,8 +77,9 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		valueSet:             valueSet,
 		valueGenerator:       valueGenerator,
 	}
+	worker.sequenceGenerator = NewCallSequenceGenerator(worker)
 
-	return &worker, nil
+	return worker, nil
 }
 
 // WorkerIndex returns the index of this FuzzerWorker in relation to its parent Fuzzer.
@@ -208,69 +211,6 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	}
 }
 
-// generateFuzzedCall generates a new call sequence element which targets a state changing method in a contract
-// deployed to this FuzzerWorker's Chain with fuzzed call data.
-// Returns the call sequence element, or an error if one was encountered.
-func (fw *FuzzerWorker) generateFuzzedCall() (*calls.CallSequenceElement, error) {
-	// Verify we have state changing methods to call
-	if len(fw.stateChangingMethods) == 0 {
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
-	}
-
-	// Select a random method and sender
-	selectedMethod := &fw.stateChangingMethods[fw.randomProvider.Intn(len(fw.stateChangingMethods))]
-	selectedSender := fw.fuzzer.senders[fw.randomProvider.Intn(len(fw.fuzzer.senders))]
-
-	// Generate fuzzed parameters for the function call
-	args := make([]any, len(selectedMethod.Method.Inputs))
-	for i := 0; i < len(args); i++ {
-		// Create our fuzzed parameters.
-		input := selectedMethod.Method.Inputs[i]
-		args[i] = valuegeneration.GenerateAbiValue(fw.valueGenerator, &input.Type)
-	}
-
-	// If this is a payable function, generate value to send
-	var value *big.Int
-	value = big.NewInt(0)
-	if selectedMethod.Method.StateMutability == "payable" {
-		value = fw.valueGenerator.GenerateInteger(false, 64)
-	}
-
-	// Create our message using the provided parameters.
-	// We fill out some fields and populate the rest from our TestChain properties.
-	// TODO: We likely want to make gasPrice fluctuate within some sensible range here.
-	msg := calls.NewCallMessageWithAbiValueData(selectedSender, &selectedMethod.Address, 0, value, fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, &calls.CallMessageDataAbiValues{
-		Method:      &selectedMethod.Method,
-		InputValues: args,
-	})
-	msg.FillFromTestChainProperties(fw.chain)
-
-	// Determine our delay values for this element
-	// TODO: If we want more txs to be added together in a block, we should add a switch to make a 0 block number
-	//  jump occur more often here.
-	blockNumberDelay := uint64(0)
-	blockTimestampDelay := uint64(0)
-	if fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay > 0 {
-		blockNumberDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay + 1)
-	}
-	if fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay > 0 {
-		blockTimestampDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
-	}
-
-	// For each block we jump, we need a unique time stamp for chain semantics, so if our block number jump is too small,
-	// while our timestamp jump is larger, we cap it.
-	if blockNumberDelay > blockTimestampDelay {
-		if blockTimestampDelay == 0 {
-			blockNumberDelay = 0
-		} else {
-			blockNumberDelay %= blockTimestampDelay
-		}
-	}
-
-	// Return our call sequence element.
-	return calls.NewCallSequenceElement(selectedMethod.Contract, msg, blockNumberDelay, blockTimestampDelay), nil
-}
-
 // testCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
@@ -284,6 +224,9 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 		}
 	}()
 
+	// Request our sequence generator prepare for generation of our call sequence
+	fw.sequenceGenerator.NewSequence(len(callSequence))
+
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
@@ -292,7 +235,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 		// If our current call sequence element is nil, generate one.
 		var err error
 		if callSequence[i] == nil {
-			callSequence[i], err = fw.generateFuzzedCall()
+			callSequence[i], err = fw.sequenceGenerator.GenerateElement()
 			if err != nil {
 				return true, err
 			}
