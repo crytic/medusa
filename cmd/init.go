@@ -16,9 +16,6 @@ import (
 // and to cache supported platforms for CLI arguments validation
 var supportedPlatforms = compilation.GetSupportedCompilationPlatforms()
 
-// Get all possible commands of the "init" flag and append them with `--out` and `--target`
-var commandsOfInit = append(supportedPlatforms, "--out", "--target")
-
 // initCmd represents the command provider for init
 var initCmd = &cobra.Command{
 	Use:   "init [platform]",
@@ -69,6 +66,9 @@ var initCmd = &cobra.Command{
 				return []string{"--target"}, cobra.ShellCompDirectiveNoFileComp
 			}
 		}
+
+		// Get all possible commands of the "init" flag and append them with `--out` and `--target`
+		commandsOfInit := append(supportedPlatforms, "--out", "--target")
 
 		// Platform not provided, suggest them with `--out` and `--target`
 		return commandsOfInit, cobra.ShellCompDirectiveNoFileComp
