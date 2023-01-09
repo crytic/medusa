@@ -829,9 +829,14 @@ func (t *TestChain) DeployContract(contract *compilationTypes.CompiledContract, 
 	// Constructor args don't need ABI encoding and appending to the end of the bytecode since there are none for these
 	// contracts.
 
+	initBytecode, err := contract.InitBytecodeBytes()
+	if err != nil {
+		return common.Address{}, nil, fmt.Errorf("could not convert compiled contract bytecode from hex string to byte code")
+	}
+
 	// Create a message to represent our contract deployment.
 	value := big.NewInt(0)
-	msg := t.CreateMessage(deployer, nil, value, nil, nil, contract.InitBytecode)
+	msg := t.CreateMessage(deployer, nil, value, nil, nil, initBytecode)
 
 	// Create a new pending block we'll commit to chain
 	block, err := t.PendingBlockCreate()

@@ -1,7 +1,6 @@
 package platforms
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,7 +103,6 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Create a compilation unit out of this.
 	compilation := types.NewCompilation()
-
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
 		if sourcesMap, ok := sources.(map[string]any); ok {
@@ -135,6 +133,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
 		nameSplit := strings.Split(name, ":")
@@ -147,23 +146,14 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 			continue
 		}
 
-		// Decode our init and runtime bytecode
-		initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-		}
-		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
-		}
-
 		// Construct our compiled contract
 		compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
 			Abi:             *contractAbi,
-			InitBytecode:    initBytecode,
-			RuntimeBytecode: runtimeBytecode,
+			InitBytecode:    contract.Code,
+			RuntimeBytecode: contract.RuntimeCode,
 			SrcMapsInit:     contract.Info.SrcMap.(string),
 			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
+			PlaceholderSet:  types.ParseBytecodeForPlaceholders(contract.Code),
 		}
 	}
 

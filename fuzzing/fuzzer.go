@@ -36,8 +36,12 @@ type Fuzzer struct {
 	senders []common.Address
 	// deployer describes an account address used to deploy contracts in fuzzing campaigns.
 	deployer common.Address
+
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
 	contractDefinitions []fuzzerTypes.Contract
+	// libraryDefinitions defines the libraries that need to be deployed before any contracts are deployed
+	libraryDefinitions []fuzzerTypes.Contract
+
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -92,6 +96,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		deployer:            deployer,
 		baseValueSet:        valuegeneration.NewValueSet(),
 		contractDefinitions: make([]fuzzerTypes.Contract, 0),
+		libraryDefinitions:  make([]fuzzerTypes.Contract, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
@@ -226,7 +231,14 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
-				f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
+				// Add the compiled contract to either the list of contracts or libraries
+				if contract.IsLibrary() {
+					// Add the library to the library definitions list
+					f.libraryDefinitions = append(f.libraryDefinitions, *contractDefinition)
+				} else {
+					// Add the contract to the contract definitions list
+					f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
+				}
 			}
 		}
 	}
@@ -269,6 +281,21 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		return fmt.Errorf("you must specify a contract deployment order within your project configuration")
 	}
 
+	// Store a mapping between library name + placeholder to the deployed address of the library
+	placeholderToLibraryAddress := make(map[string]common.Address, 0)
+
+	// Deploy each library
+	for _, library := range fuzzer.libraryDefinitions {
+		addr, _, err := testChain.DeployContract(library.CompiledContract(), fuzzer.deployer)
+		if err != nil {
+			return err
+		}
+
+		// Store a mapping for name and placeholder to support all Solidity versions
+		placeholderToLibraryAddress[library.Name()] = addr
+		placeholderToLibraryAddress[library.Placeholder()] = addr
+	}
+
 	// Loop for all contracts to deploy
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
@@ -276,6 +303,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
+				// Need to replace any placeholders with library addresses
+				err := contract.CompiledContract().LinkInitAndRuntimeBytecode(placeholderToLibraryAddress)
+				if err != nil {
+					return err
+				}
+
 				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 				// TODO: We can add logic for deploying contracts with constructor arguments here.
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {

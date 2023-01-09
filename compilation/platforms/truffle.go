@@ -1,15 +1,12 @@
 package platforms
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/trailofbits/medusa/compilation/types"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-
-	"github.com/trailofbits/medusa/compilation/types"
 )
 
 type TruffleCompilationConfig struct {
@@ -117,23 +114,14 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 			}
 		}
 
-		// Decode our init and runtime bytecode
-		initBytecode, err := hex.DecodeString(strings.TrimPrefix(compiledJson.Bytecode, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", compiledJson.ContractName)
-		}
-		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(compiledJson.DeployedBytecode, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", compiledJson.ContractName)
-		}
-
 		// Add our contract to the source
 		compilation.Sources[compiledJson.SourcePath].Contracts[compiledJson.ContractName] = types.CompiledContract{
 			Abi:             *contractAbi,
-			InitBytecode:    initBytecode,
-			RuntimeBytecode: runtimeBytecode,
+			InitBytecode:    compiledJson.Bytecode,
+			RuntimeBytecode: compiledJson.DeployedBytecode,
 			SrcMapsInit:     compiledJson.SourceMap,
 			SrcMapsRuntime:  compiledJson.DeployedSourceMap,
+			PlaceholderSet:  types.ParseBytecodeForPlaceholders(compiledJson.Bytecode),
 		}
 	}
 

@@ -9,11 +9,8 @@ type Compilation struct {
 
 // NewCompilation returns a new, empty Compilation object.
 func NewCompilation() *Compilation {
-	// Create our compilation
-	compilation := &Compilation{
+	// Create and return our compilation
+	return &Compilation{
 		Sources: make(map[string]CompiledSource),
 	}
-
-	// Return the compilation.
-	return compilation
 }
