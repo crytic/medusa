@@ -29,7 +29,11 @@ Bash:
 		}
 		switch args[0] {
 		case "bash":
-			cmd.Root().GenBashCompletion(os.Stdout)
+			err := cmd.Root().GenBashCompletion(os.Stdout)
+			if err != nil {
+				fmt.Printf("Error: Unable to generate a bash completion")
+				return
+			}
 		}
 	},
 }
