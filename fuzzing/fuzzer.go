@@ -583,7 +583,10 @@ func (f *Fuzzer) printMetricsLoop() {
 	startTime := time.Now()
 
 	// Define cached variables for our metrics to calculate deltas.
-	var lastCallsTested, lastSequencesTested, lastWorkerStartupCount uint64
+	lastCallsTested := big.NewInt(0)
+	lastSequencesTested := big.NewInt(0)
+	lastWorkerStartupCount := big.NewInt(0)
+
 	lastPrintedTime := time.Time{}
 	for !utils.CheckContextDone(f.ctx) {
 		// Obtain our metrics
@@ -596,12 +599,13 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, worker resets: %d/s\n",
+			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, cov: %d\n",
 			time.Since(startTime).Round(time.Second),
 			callsTested,
-			uint64(float64(callsTested-lastCallsTested)/secondsSinceLastUpdate),
-			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
-			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
+			f.corpus.ActiveCallSequenceCount(),
 		)
 
 		// Update our delta tracking metrics
@@ -612,7 +616,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// If we reached our transaction threshold, halt
 		testLimit := f.config.Fuzzing.TestLimit
-		if testLimit > 0 && callsTested >= testLimit {
+		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
 			fmt.Printf("transaction test limit reached, halting now ...\n")
 			f.Stop()
 			break

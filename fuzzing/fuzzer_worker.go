@@ -10,6 +10,7 @@ import (
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/maps"
+	"math/big"
 	"math/rand"
 )
 
@@ -225,7 +226,10 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 	}()
 
 	// Request our sequence generator prepare for generation of our call sequence
-	fw.sequenceGenerator.NewSequence(len(callSequence))
+	err := fw.sequenceGenerator.NewSequence(len(callSequence))
+	if err != nil {
+		return 0, nil, err
+	}
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
@@ -235,7 +239,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 		// If our current call sequence element is nil, generate one.
 		var err error
 		if callSequence[i] == nil {
-			callSequence[i], err = fw.sequenceGenerator.GenerateElement()
+			callSequence[i], err = fw.sequenceGenerator.PopSequenceElement()
 			if err != nil {
 				return true, err
 			}
@@ -250,7 +254,8 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 		callSequenceTested := callSequence[:i+1]
 
 		// Check for updates to coverage and corpus.
-		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(callSequenceTested)
+		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(callSequenceTested, new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)))
 		if err != nil {
 			return true, err
 		}
@@ -266,7 +271,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 		}
 
 		// Update our metrics
-		fw.workerMetrics().callsTested++
+		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -325,7 +330,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
 		executePostStepFunc := func(currentIndex int) (bool, error) {
 			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
-			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(possibleShrunkSequence[:currentIndex+1])
+			// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(possibleShrunkSequence[:currentIndex+1], new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)))
 			if err != nil {
 				return true, err
 			}
@@ -427,7 +433,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	}
 
 	// Increase our generation metric as we successfully generated a test node
-	fw.workerMetrics().workerStartupCount++
+	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
@@ -477,7 +483,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Update our sequences tested metrics
-		fw.workerMetrics().sequencesTested++
+		fw.workerMetrics().sequencesTested.Add(fw.workerMetrics().sequencesTested, big.NewInt(1))
 		sequencesTested++
 	}
 

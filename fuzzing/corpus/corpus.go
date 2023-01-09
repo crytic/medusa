@@ -116,9 +116,18 @@ func (c *Corpus) CallSequencesDirectory() string {
 	return filepath.Join(c.StorageDirectory(), "call_sequences")
 }
 
-// CallSequenceCount returns the count of call sequences recorded in the corpus.
+// CallSequenceCount returns the total number of call sequences in the corpus, some of which may be inactive/not in use.
 func (c *Corpus) CallSequenceCount() int {
 	return len(c.callSequences)
+}
+
+// ActiveCallSequenceCount returns the count of call sequences recorded in the corpus which have been validated and are
+// ready for use by RandomCallSequence.
+func (c *Corpus) ActiveCallSequenceCount() int {
+	if c.weightedCallSequenceChooser == nil {
+		return 0
+	}
+	return c.weightedCallSequenceChooser.ChoiceCount()
 }
 
 // Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
@@ -240,7 +249,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 }
 
 // AddCallSequence adds a call sequence to the corpus and returns an error in case of an issue
-func (c *Corpus) AddCallSequence(seq calls.CallSequence) error {
+func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int) error {
 	// Acquire a thread lock during the duration of this method
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
@@ -253,7 +262,10 @@ func (c *Corpus) AddCallSequence(seq calls.CallSequence) error {
 
 	// If we have initialized a chooser, add our call sequence item to it.
 	if c.weightedCallSequenceChooser != nil {
-		c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](seq, big.NewInt(1)))
+		if weight == nil {
+			weight = big.NewInt(1)
+		}
+		c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](seq, weight))
 	}
 	return nil
 }
@@ -262,7 +274,7 @@ func (c *Corpus) AddCallSequence(seq calls.CallSequence) error {
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
 // Returns an error if one occurs.
-func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence) error {
+func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence, weight *big.Int) error {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
 		return nil
@@ -288,7 +300,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 	}
 	if coverageUpdated {
 		// New coverage has been found with this call sequence, so we add it to the corpus.
-		err = c.AddCallSequence(callSequence)
+		err = c.AddCallSequence(callSequence, weight)
 		if err != nil {
 			return err
 		}
@@ -302,7 +314,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 }
 
 // RandomCallSequence returns a weighted random call sequence from the Corpus, or an error if one occurs.
-func (c *Corpus) RandomCallSequence() (*calls.CallSequence, error) {
+func (c *Corpus) RandomCallSequence() (calls.CallSequence, error) {
 	// If we didn't initialize a chooser, return an error
 	if c.weightedCallSequenceChooser == nil {
 		return nil, fmt.Errorf("corpus could not return a random call sequence because the corpus was not initialized")
@@ -310,11 +322,10 @@ func (c *Corpus) RandomCallSequence() (*calls.CallSequence, error) {
 
 	// Pick a random call sequence, then clone it before returning it, so the original is untainted.
 	seq, err := c.weightedCallSequenceChooser.Choose()
-	if seq != nil {
-		clone := seq.Clone()
-		seq = &clone
+	if seq == nil || err != nil {
+		return nil, err
 	}
-	return seq, err
+	return seq.Clone(), err
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.

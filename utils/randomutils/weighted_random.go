@@ -58,6 +58,11 @@ func NewWeightedRandomChooserWithRand[T any](randomProvider *rand.Rand, randomPr
 	}
 }
 
+// ChoiceCount returns the count of choices added to this provider.
+func (c *WeightedRandomChooser[T]) ChoiceCount() int {
+	return len(c.choices)
+}
+
 // AddChoices adds weighted choices to the WeightedRandomChooser, allowing for future random selection.
 func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T]) {
 	// Acquire our lock during the duration of this method.
