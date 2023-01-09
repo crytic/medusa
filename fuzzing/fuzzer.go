@@ -268,9 +268,14 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// Verify contract deployment order is not empty.
+	// Verify contract deployment order is not empty. If it's empty, but we only have one contract definition,
+	// we can infer the deployment order. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
-		return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+		if len(fuzzer.contractDefinitions) == 1 {
+			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
+		} else {
+			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+		}
 	}
 
 	// Loop for all contracts to deploy
@@ -301,8 +306,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
 				}
 
-				// Create a message to represent our contract deployment.
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, msgData)
+				// Create a message to represent our contract deployment (we let deployments consume the whole block
+				// gas limit rather than use tx gas limit)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
 				msg.FillFromTestChainProperties(testChain)
 
 				// Create a new pending block we'll commit to chain
