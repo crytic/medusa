@@ -9,7 +9,15 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/fuzzing/config"
+	"github.com/trailofbits/medusa/utils"
 )
+
+// Get supported platforms for customized static completions of "init" flag `$ medusa init <tab> <tab>`
+// and to cache supported platforms for CLI arguments validation
+var supportedPlatforms = compilation.GetSupportedCompilationPlatforms()
+
+// Get all possible commands of the "init" flag and append them with `--out` and `--target`
+var commandsOfInit = append(supportedPlatforms, "--out", "--target")
 
 // initCmd represents the command provider for init
 var initCmd = &cobra.Command{
@@ -18,6 +26,53 @@ var initCmd = &cobra.Command{
 	Long:  `Initializes a project configuration`,
 	Args:  cmdValidateInitArgs,
 	RunE:  cmdRunInit,
+
+	// Run dynamic completion of nouns
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Check if the --target flag has been provided
+		targetFlagSet := cmd.Flag("target").Changed
+
+		// Check if the --out flag has been provided
+		outFlagSet := cmd.Flag("out").Changed
+
+		// If both flags have been provided, don't autocomplete any further
+		if targetFlagSet && outFlagSet {
+			return []string{}, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// Check if the `platform` was provided and is supported
+		if len(args) == 1 && utils.Contains(supportedPlatforms, args[0]) {
+
+			// If the --target flag has been provided, suggest the --out flag
+			if targetFlagSet {
+				return []string{"--out"}, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			// If the --out flag has been provided, suggest the --target flag
+			if outFlagSet {
+				return []string{"--target"}, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			// If neither flag has been provided, suggest both flags
+			return []string{"--out", "--target"}, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// When the platform is not provided, assume the default is used and suggest --target and --out
+		if targetFlagSet || outFlagSet {
+			// If the --target flag has been provided, suggest the --out flag
+			if targetFlagSet {
+				return []string{"--out"}, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			// If the --out flag has been provided, suggest the --target flag
+			if outFlagSet {
+				return []string{"--target"}, cobra.ShellCompDirectiveNoFileComp
+			}
+		}
+
+		// Platform not provided, suggest them with `--out` and `--target`
+		return commandsOfInit, cobra.ShellCompDirectiveNoFileComp
+	},
 }
 
 func init() {
@@ -33,9 +88,6 @@ func init() {
 
 // cmdValidateInitArgs validates CLI arguments
 func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
-	// Cache supported platforms
-	supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
-
 	// Make sure we have no more than 1 arg
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
 		return fmt.Errorf("init accepts at most 1 platform argument (options: %s). "+
