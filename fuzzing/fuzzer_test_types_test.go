@@ -54,8 +54,8 @@ func (c *fuzzerSolcFileTest) run(t *testing.T) {
 		// Run the test in our temporary test directory to avoid artifact pollution.
 		testutils.ExecuteInDirectory(t, contractTestPath, func() {
 			// Create a default solc platform config
-			solcPlatformConfig := platforms.NewSolcCompilationConfig(contractTestPath)
-			//solcPlatformConfig.SolcVersion = c.solcVersion
+			solcPlatformConfig := platforms.NewCryticCompilationConfig(contractTestPath)
+			solcPlatformConfig.SolcVersion = c.solcVersion
 
 			// Wrap the platform config in a compilation config
 			compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)

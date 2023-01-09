@@ -106,10 +106,7 @@ func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
 // in the runtime bytecode of the CompiledContract is LibraryIndicator, then the contract is a library.
 // See https://docs.soliditylang.org/en/v0.8.17/contracts.html#call-protection-for-libraries
 func (c *CompiledContract) IsLibrary() bool {
-	if c.RuntimeBytecode[:LibraryIndicatorLength] == LibraryIndicator {
-		return true
-	}
-	return false
+	return c.RuntimeBytecode[:LibraryIndicatorLength] == LibraryIndicator
 }
 
 // LinkInitAndRuntimeBytecode will link all libraries to the init and runtime bytecode of a contract.
@@ -119,7 +116,7 @@ func (c *CompiledContract) LinkInitAndRuntimeBytecode(placeholderToLibraryAddres
 	runtimeBytecode := strings.ReplaceAll(strings.ReplaceAll(c.RuntimeBytecode, "_", ""), "$", "")
 
 	// Replace each placeholder with its associated address or throw an error if we cannot find the associated placeholder
-	for placeholder, _ := range c.PlaceholderSet {
+	for placeholder := range c.PlaceholderSet {
 		if libraryAddress, found := placeholderToLibraryAddress[placeholder]; !found {
 			return fmt.Errorf("unable to find the following placeholder %v\n in this init bytecode: %v\n", placeholder, initBytecode)
 		} else {

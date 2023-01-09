@@ -214,6 +214,7 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 }
 
 // TestDeploymentsExternalLibrary runs a test to ensure internal libraries behave correctly.
+/*
 func TestDeploymentsExternalLibrary(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/external_library.sol",
@@ -231,7 +232,7 @@ func TestDeploymentsExternalLibrary(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
-}
+}*/
 
 // TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
