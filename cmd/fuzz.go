@@ -2,14 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/trailofbits/medusa/fuzzing"
+	"github.com/trailofbits/medusa/fuzzing/config"
 	"os"
 	"os/signal"
 	"path/filepath"
-
-	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/fuzzing"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // fuzzCmd represents the command provider for fuzzing
@@ -27,7 +26,7 @@ var fuzzCmd = &cobra.Command{
 		// Visit all the flags and if the flag is not changed append to unusedFlags list
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if !flag.Changed {
-				unusedFlags = append(unusedFlags, flag.Name)
+				unusedFlags = append(unusedFlags, "--"+flag.Name)
 			}
 		})
 		// Return unused flags for autocompletion
