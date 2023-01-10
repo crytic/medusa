@@ -20,16 +20,22 @@ var fuzzCmd = &cobra.Command{
 	RunE:  cmdRunFuzz,
 	// Run dynamic completion of nouns
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		// Collect list of flags that were not changed
+		// Gather a list of flags that are available to be used in the current command but have not been used yet
 		var unusedFlags []string
 
-		// Visit all the flags and if the flag is not changed append to unusedFlags list
+		// Examine all the flags, and add any flags that have not been set in the current command line
+		// to a list of unused flags
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if !flag.Changed {
-				unusedFlags = append(unusedFlags, flag.Name)
+				// When adding a flag to a command, include the "--" prefix to indicate that it is a flag
+				// and not a positional argument. Additionally, when the user presses the TAB key twice after typing
+				// a flag name, the "--" prefix will appear again, indicating that more flags are available and that
+				// none of the arguments are positional.
+				unusedFlags = append(unusedFlags, "--"+flag.Name)
 			}
 		})
-		// Return unused flags for autocompletion
+		// Provide a list of flags that can be used in the current command (but have not been used yet)
+		// for autocompletion suggestions
 		return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 	},
 }

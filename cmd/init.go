@@ -25,24 +25,30 @@ var initCmd = &cobra.Command{
 	RunE:  cmdRunInit,
 	// Run dynamic completion of nouns
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		// Collect list of flags that were not changed
+		// Gather a list of flags that are available to be used in the current command but have not been used yet
 		var unusedFlags []string
 
-		// Visit all the flags and if the flag is not changed append to unusedFlags list
+		// Examine all the flags, and add any flags that have not been set in the current command line
+		// to a list of unused flags
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if !flag.Changed {
-				unusedFlags = append(unusedFlags, flag.Name)
+				// When adding a flag to a command, include the "--" prefix to indicate that it is a flag
+				// and not a positional argument. Additionally, when the user presses the TAB key twice after typing
+				// a flag name, the "--" prefix will appear again, indicating that more flags are available and that
+				// none of the arguments are positional.
+				unusedFlags = append(unusedFlags, "--"+flag.Name)
 			}
 		})
 
-		// When default platform is not provided append unusedFlags with platforms
-		// When a --target or --out is provided - assume the default platform is used
+		// If a default platform is not specified, add a list of available platforms to the list of unused flags.
+		// If the --target or --out flag is set, it is assumed that the default platform is being used.
 		if len(args) == 0 && !(cmd.Flag("target").Changed || cmd.Flag("out").Changed) {
 			unusedFlags = append(unusedFlags, supportedPlatforms...)
 			//return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Return unused flags for autocompletion
+		// Provide a list of flags that can be used in the current command (but have not been used yet)
+		// for autocompletion suggestions
 		return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 	},
 }

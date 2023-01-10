@@ -3,25 +3,48 @@ package cmd
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"log"
 	"os"
 )
 
-// completionCmd represents the completion command
-var completionCmd = &cobra.Command{
-	Use: "completion bash",
-	Short: "Generate shell completion code for specified shell (bash) and evaluate it " +
-		"to enable interactive completion of kubectl commands",
-	Long: `To load completions:
+const generalComDesc = `
+Generate the autocompletion script for medusa for the specific shell.
 
 Bash:
+To load completions in the current shell session:
 
-  $ source <(%[1]s completion bash), e.g. source <(medusa completion bash)
+    source <(medusa completion bash)
 
-  # To load completions for each session, execute once:
-  # Linux:
-  $ %[1]s completion bash > /etc/bash_completion.d/%[1]s
-  # macOS:
-  $ %[1]s completion bash > $(brew --prefix)/etc/bash_completion.d/%[1]s`,
+To load completions for every new session, execute once:
+- Linux:
+      medusa completion bash > /etc/bash_completion.d/medusa
+
+- macOS:
+      medusa completion bash > /usr/local/etc/bash_completion.d/medusa
+
+Zsh:
+To load completions in the current shell session:
+
+    source <(medusa completion zsh)
+
+To load completions for every new session, execute once:
+
+    medusa completion zsh > "${fpath[1]}/_medusa"
+
+PowerShell:
+To load completions in the current shell session:
+PS> medusa completion powershell | Out-String | Invoke-Expression
+
+To load completions for every new session, run:
+PS> medusa completion powershell > medusa.ps1
+and source this file from your PowerShell profile.
+`
+
+// completionCmd represents the completion command
+var completionCmd = &cobra.Command{
+	Use:   "completion",
+	Short: "generate the autocompletion script for medusa for the specific shell",
+	Long:  generalComDesc,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			fmt.Printf("Error: No shell specified")
@@ -29,10 +52,19 @@ Bash:
 		}
 		switch args[0] {
 		case "bash":
-			err := cmd.Root().GenBashCompletion(os.Stdout)
+			err := runCompletionBash(cmd)
 			if err != nil {
-				fmt.Printf("Error: Unable to generate a bash completion")
-				return
+				log.Fatalln("Error: unable to generate a bash completion")
+			}
+		case "zsh":
+			err := runCompletionZsh(cmd)
+			if err != nil {
+				log.Fatalln("Error: unable to generate a zsh completion")
+			}
+		case "powershell":
+			err := runCompletionPowerShell(cmd)
+			if err != nil {
+				log.Fatalln("Error: unable to generate a powershell completion")
 			}
 		}
 	},
@@ -40,4 +72,31 @@ Bash:
 
 func init() {
 	rootCmd.AddCommand(completionCmd)
+}
+
+// runCompletionBash generates and prints Bash completion code to the STDOUT
+func runCompletionBash(cmd *cobra.Command) error {
+	err := cmd.Root().GenBashCompletionV2(os.Stdout, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// runCompletionZsh generates and prints ZSH completion code to the STDOUT
+func runCompletionZsh(cmd *cobra.Command) error {
+	err := cmd.Root().GenZshCompletion(os.Stdout)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// runCompletionPowerShell generates and prints ZSH completion code to the STDOUT
+func runCompletionPowerShell(cmd *cobra.Command) error {
+	err := cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+	if err != nil {
+		return err
+	}
+	return nil
 }
