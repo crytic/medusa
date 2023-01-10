@@ -36,7 +36,7 @@ var initCmd = &cobra.Command{
 		})
 
 		// When default platform is not provided append unusedFlags with platforms
-		// When a --target or --out is provided - assume the default one is used
+		// When a --target or --out is provided - assume the default platform is used
 		if len(args) == 0 && !(cmd.Flag("target").Changed || cmd.Flag("out").Changed) {
 			unusedFlags = append(unusedFlags, supportedPlatforms...)
 			//return unusedFlags, cobra.ShellCompDirectiveNoFileComp
