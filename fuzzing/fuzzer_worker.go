@@ -128,12 +128,14 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	// Add the contract address to our value set so our generator can use it in calls.
 	fw.valueSet.AddAddress(event.Contract.Address)
 
+	// TODO: Is there an O(1) way to do this?
+	// If a library was just deployed then ignore it and move on
 	for _, libraryDefinition := range fw.fuzzer.libraryDefinitions {
 		if event.Contract.IsMatch(libraryDefinition.CompiledContract()) {
 			return nil
 		}
 	}
-	
+
 	// Loop through all our known contract definitions
 	matchedDeployment := false
 	for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {

@@ -304,11 +304,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
 				// Need to replace any placeholders with library addresses
-				err := contract.CompiledContract().LinkInitAndRuntimeBytecode(placeholderToLibraryAddress)
-				if err != nil {
-					return err
+				if len(contract.CompiledContract().PlaceholderSet) > 0 {
+					err := contract.CompiledContract().LinkInitAndRuntimeBytecode(placeholderToLibraryAddress)
+					if err != nil {
+						return err
+					}
 				}
-
+				
 				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
 				// TODO: We can add logic for deploying contracts with constructor arguments here.
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {

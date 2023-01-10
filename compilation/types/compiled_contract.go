@@ -30,7 +30,7 @@ type CompiledContract struct {
 	// SrcMapsRuntime describes the source mappings to associate source file and bytecode segments in RuntimeBytecode.
 	SrcMapsRuntime string
 
-	// PlaceholderSet describes the set of library placeholders identified in the contract that need to be replaced with
+	// PlaceholderSet describes the set of library placeholders identified in the bytecode that need to be replaced with
 	// library addresses at deploy-time
 	PlaceholderSet map[string]any
 }
@@ -63,7 +63,7 @@ func ParseABIFromInterface(i any) (*abi.ABI, error) {
 }
 
 // ParseBytecodeForPlaceholders will parse bytecode for all library placeholders and return them as a set. These placeholders will be
-// replaced with the addresses of the deployed libraries at deploy-time.
+// replaced with the addresses of the deployed libraries at deploy-time. An empty set is returned if there are no placeholders.
 func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
 	// Identify all library placeholder substrings
 	exp := regexp.MustCompile(`__(\$[0-9a-zA-Z]*\$|\w*)__`)
@@ -91,13 +91,13 @@ func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
 }
 
 // InitBytecodeBytes returns the InitBytecode as a byte slice. Note that this function is guaranteed to return an error
-// if the CompiledContract needs library linking.
+// if the CompiledContract needs library linking. Call LinkInitAndRuntimeBytecode first to ensure that library linking is complete.
 func (c *CompiledContract) InitBytecodeBytes() ([]byte, error) {
 	return hex.DecodeString(strings.TrimPrefix(c.InitBytecode, "0x"))
 }
 
 // RuntimeBytecodeBytes returns the RuntimeBytecode as a byte slice. Note that this function is guaranteed to return an error
-// if the CompiledContract needs library linking.
+// if the CompiledContract needs library linking. Call LinkInitAndRuntimeBytecode first to ensure that library linking is complete.
 func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
 	return hex.DecodeString(strings.TrimPrefix(c.RuntimeBytecode, "0x"))
 }
@@ -109,20 +109,21 @@ func (c *CompiledContract) IsLibrary() bool {
 	return c.RuntimeBytecode[:LibraryIndicatorLength] == LibraryIndicator
 }
 
-// LinkInitAndRuntimeBytecode will link all libraries to the init and runtime bytecode of a contract.
+// LinkInitAndRuntimeBytecode will link all libraries to the init and runtime bytecode of a contract using the given
+// mapping of placeholder to address.
 func (c *CompiledContract) LinkInitAndRuntimeBytecode(placeholderToLibraryAddress map[string]common.Address) error {
-	// Remove the `_` and `$` special characters
+	// Remove the `_` and `$` special characters from the bytecode
 	initBytecode := strings.ReplaceAll(strings.ReplaceAll(c.InitBytecode, "_", ""), "$", "")
 	runtimeBytecode := strings.ReplaceAll(strings.ReplaceAll(c.RuntimeBytecode, "_", ""), "$", "")
 
 	// Replace each placeholder with its associated address or throw an error if we cannot find the associated placeholder
 	for placeholder := range c.PlaceholderSet {
-		if libraryAddress, found := placeholderToLibraryAddress[placeholder]; !found {
-			return fmt.Errorf("unable to find the following placeholder %v\n in this init bytecode: %v\n", placeholder, initBytecode)
-		} else {
+		if libraryAddress, found := placeholderToLibraryAddress[placeholder]; found {
 			libraryAddressString := strings.TrimPrefix(libraryAddress.String(), "0x")
 			initBytecode = strings.ReplaceAll(initBytecode, placeholder, libraryAddressString)
 			runtimeBytecode = strings.ReplaceAll(runtimeBytecode, placeholder, libraryAddressString)
+		} else {
+			return fmt.Errorf("unable to find the following placeholder: %v in the following bytecode: %v\n", placeholder, initBytecode)
 		}
 	}
 
