@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/spf13/pflag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/fuzzing/config"
-	"github.com/trailofbits/medusa/utils"
 )
 
 // Get supported platforms for customized static completions of "init" flag `$ medusa init <tab> <tab>`
@@ -23,59 +23,27 @@ var initCmd = &cobra.Command{
 	Long:  `Initializes a project configuration`,
 	Args:  cmdValidateInitArgs,
 	RunE:  cmdRunInit,
-
 	// Run dynamic completion of nouns
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		terminator := "--"
-		outFlag := terminator + cmd.Flag("out").Name
-		targetFlag := terminator + cmd.Flag("target").Name
+		// Collect list of flags that were not changed
+		var unusedFlags []string
 
-		// Check if the --target flag has been provided
-		targetFlagSet := cmd.Flag("target").Changed
+		// Visit all the flags and if the flag is not changed append to unusedFlags list
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+			if !flag.Changed {
+				unusedFlags = append(unusedFlags, flag.Name)
+			}
+		})
 
-		// Check if the --out flag has been provided
-		outFlagSet := cmd.Flag("out").Changed
-
-		// If both flags have been provided, don't autocomplete any further
-		if targetFlagSet && outFlagSet {
-			return []string{}, cobra.ShellCompDirectiveNoFileComp
+		// When default platform is not provided append unusedFlags with platforms
+		// When a --target or --out is provided - assume the default one is used
+		if len(args) == 0 && !(cmd.Flag("target").Changed || cmd.Flag("out").Changed) {
+			unusedFlags = append(unusedFlags, supportedPlatforms...)
+			//return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Check if the `platform` was provided and is supported
-		if len(args) == 1 && utils.Contains(supportedPlatforms, args[0]) {
-
-			// If the --target flag has been provided, suggest the --out flag
-			if targetFlagSet {
-				return []string{outFlag}, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			// If the --out flag has been provided, suggest the --target flag
-			if outFlagSet {
-				return []string{targetFlag}, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			// If neither flag has been provided, suggest both flags
-			return []string{outFlag, targetFlag}, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		// When the platform is not provided, assume the default is used and suggest --target and --out
-		if targetFlagSet || outFlagSet {
-			// If the --target flag has been provided, suggest the --out flag
-			if targetFlagSet {
-				return []string{outFlag}, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			// If the --out flag has been provided, suggest the --target flag
-			if outFlagSet {
-				return []string{targetFlag}, cobra.ShellCompDirectiveNoFileComp
-			}
-		}
-
-		// Get all possible commands of the "init" flag and append them with `--out` and `--target`
-		commandsOfInit := append(supportedPlatforms, outFlag, targetFlag)
-
-		// Platform not provided, suggest them with `--out` and `--target`
-		return commandsOfInit, cobra.ShellCompDirectiveNoFileComp
+		// Return unused flags for autocompletion
+		return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 	},
 }
 
