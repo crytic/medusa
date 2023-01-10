@@ -2,13 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/trailofbits/medusa/fuzzing"
 	"github.com/trailofbits/medusa/fuzzing/config"
-	"os"
-	"os/signal"
-	"path/filepath"
 )
 
 // fuzzCmd represents the command provider for fuzzing

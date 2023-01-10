@@ -37,15 +37,3 @@ func SliceWhere[T any](x []T, f func(x T) bool) []T {
 	}
 	return r
 }
-
-// Contains checks if a given element e is contained in a slice of elements s. The function takes a slice of elements
-// of type T, which must be comparable, and an element of the same type T. The function returns a boolean value
-// indicating whether the element e is contained in the slice s.
-func Contains[T comparable](s []T, e T) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
-}
