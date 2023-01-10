@@ -26,6 +26,10 @@ var initCmd = &cobra.Command{
 
 	// Run dynamic completion of nouns
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		terminator := "--"
+		outFlag := terminator + cmd.Flag("out").Name
+		targetFlag := terminator + cmd.Flag("target").Name
+
 		// Check if the --target flag has been provided
 		targetFlagSet := cmd.Flag("target").Changed
 
@@ -42,33 +46,33 @@ var initCmd = &cobra.Command{
 
 			// If the --target flag has been provided, suggest the --out flag
 			if targetFlagSet {
-				return []string{"--out"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{outFlag}, cobra.ShellCompDirectiveNoFileComp
 			}
 
 			// If the --out flag has been provided, suggest the --target flag
 			if outFlagSet {
-				return []string{"--target"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{targetFlag}, cobra.ShellCompDirectiveNoFileComp
 			}
 
 			// If neither flag has been provided, suggest both flags
-			return []string{"--out", "--target"}, cobra.ShellCompDirectiveNoFileComp
+			return []string{outFlag, targetFlag}, cobra.ShellCompDirectiveNoFileComp
 		}
 
 		// When the platform is not provided, assume the default is used and suggest --target and --out
 		if targetFlagSet || outFlagSet {
 			// If the --target flag has been provided, suggest the --out flag
 			if targetFlagSet {
-				return []string{"--out"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{outFlag}, cobra.ShellCompDirectiveNoFileComp
 			}
 
 			// If the --out flag has been provided, suggest the --target flag
 			if outFlagSet {
-				return []string{"--target"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{targetFlag}, cobra.ShellCompDirectiveNoFileComp
 			}
 		}
 
 		// Get all possible commands of the "init" flag and append them with `--out` and `--target`
-		commandsOfInit := append(supportedPlatforms, "--out", "--target")
+		commandsOfInit := append(supportedPlatforms, outFlag, targetFlag)
 
 		// Platform not provided, suggest them with `--out` and `--target`
 		return commandsOfInit, cobra.ShellCompDirectiveNoFileComp

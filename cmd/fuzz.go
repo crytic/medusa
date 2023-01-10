@@ -18,6 +18,11 @@ var fuzzCmd = &cobra.Command{
 	Long:  `Starts a fuzzing campaign`,
 	Args:  cmdValidateFuzzArgs,
 	RunE:  cmdRunFuzz,
+
+	// Run dynamic completion of nouns
+	//ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	//
+	//},
 }
 
 // cmdValidateFuzzArgs makes sure that there are no positional arguments provided to the fuzz command
