@@ -44,7 +44,6 @@ var initCmd = &cobra.Command{
 		// If the --target or --out flag is set, it is assumed that the default platform is being used.
 		if len(args) == 0 && !(cmd.Flag("target").Changed || cmd.Flag("out").Changed) {
 			unusedFlags = append(unusedFlags, supportedPlatforms...)
-			//return unusedFlags, cobra.ShellCompDirectiveNoFileComp
 		}
 
 		// Provide a list of flags that can be used in the current command (but have not been used yet)
