@@ -207,8 +207,6 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	msg.FillFromTestChainProperties(g.worker.chain)
 
 	// Determine our delay values for this element
-	// TODO: If we want more txs to be added together in a block, we should add a switch to make a 0 block number
-	//  jump occur more often here.
 	blockNumberDelay := uint64(0)
 	blockTimestampDelay := uint64(0)
 	if g.worker.fuzzer.config.Fuzzing.MaxBlockNumberDelay > 0 {

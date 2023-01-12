@@ -10,20 +10,8 @@ import (
 	"time"
 )
 
-// TestABIRoundtripEncodingAllTypes runs tests to ABI value encoding works round-trip for argument values of all types.
-// It generates values using a ValueGenerator, then encodes them, decodes them, and re-encodes them again to ensure
-// re-encoded data matches the originally encoded data.
-func TestABIRoundtripEncodingAllTypes(t *testing.T) {
-	// Create a value generator
-	valueGenerator := NewRandomValueGenerator(&RandomValueGeneratorConfig{
-		RandomArrayMinSize:  3,
-		RandomArrayMaxSize:  10,
-		RandomBytesMinSize:  5,
-		RandomBytesMaxSize:  200,
-		RandomStringMinSize: 5,
-		RandomStringMaxSize: 200,
-	}, rand.New(rand.NewSource(time.Now().UnixNano())))
-
+// getTestABIArguments obtains ABI arguments of various types for use in testing ABI value related methods.
+func getTestABIArguments() abi.Arguments {
 	// Define our argument types to test round trip serialization for.
 	args := abi.Arguments{
 		{
@@ -168,7 +156,26 @@ func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 		)
 	}
 
-	// TODO: Add tuple test.
+	// TODO: Add tuple argument.
+	return args
+}
+
+// TestABIRoundtripEncodingAllTypes runs tests to ensure ABI value encoding works round-trip for argument values of all
+// types. It generates values using a ValueGenerator, then encodes them, decodes them, and re-encodes them again to
+// verify re-encoded data matches the originally encoded data.
+func TestABIRoundtripEncodingAllTypes(t *testing.T) {
+	// Create a value generator
+	valueGenerator := NewRandomValueGenerator(&RandomValueGeneratorConfig{
+		RandomArrayMinSize:  3,
+		RandomArrayMaxSize:  10,
+		RandomBytesMinSize:  5,
+		RandomBytesMaxSize:  200,
+		RandomStringMinSize: 5,
+		RandomStringMaxSize: 200,
+	}, rand.New(rand.NewSource(time.Now().UnixNano())))
+
+	// Obtain our test ABI arguments
+	args := getTestABIArguments()
 
 	// Loop for each input argument
 	for _, arg := range args {
@@ -192,6 +199,49 @@ func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 			// Compare the encoded and re-encoded values.
 			matched := reflect.DeepEqual(encodedValue, reencodedValue)
 			assert.True(t, matched, "round trip encoded->decoded->re-encoded ABI argument values did not match for '%v'.\nENCODED1: %v\nENCODED2: %v\n", arg.Name, encodedValue, reencodedValue)
+		}
+	}
+}
+
+// TestABIGenerationAndMutation runs tests to ABI value encoding works round-trip for argument values of all types.
+// It generates values using a ValueGenerator, then encodes them, decodes them, and re-encodes them again to ensure
+// re-encoded data matches the originally encoded data.
+func TestABIGenerationAndMutation(t *testing.T) {
+	// Create a value generator
+	valueGenConfig := &MutatingValueGeneratorConfig{
+		MinMutationRounds: 0,
+		MaxMutationRounds: 1,
+		RandomAddressBias: 0.5,
+		RandomIntegerBias: 0.5,
+		RandomStringBias:  0.5,
+		RandomBytesBias:   0.5,
+		RandomValueGeneratorConfig: &RandomValueGeneratorConfig{
+			RandomArrayMinSize:  0,
+			RandomArrayMaxSize:  100,
+			RandomBytesMinSize:  0,
+			RandomBytesMaxSize:  100,
+			RandomStringMinSize: 0,
+			RandomStringMaxSize: 100,
+		},
+	}
+	valueGenerator := NewMutatingValueGenerator(valueGenConfig, NewValueSet(), rand.New(rand.NewSource(time.Now().UnixNano())))
+
+	// Obtain our test ABI arguments
+	args := getTestABIArguments()
+
+	// Loop for each input argument
+	for _, arg := range args {
+		// Test each argument round trip serialization with different generated values (iterate a number of times).
+		for i := 0; i < 10; i++ {
+			// Generate a value for this argument
+			value := GenerateAbiValue(valueGenerator, &arg.Type)
+
+			// Mutate and ensure no error occurred.
+			mutatedValue, err := MutateAbiValue(valueGenerator, &arg.Type, value)
+			assert.NoError(t, err)
+
+			// Verify the types of the value and mutated value are the same
+			assert.EqualValues(t, reflect.ValueOf(value).Type().String(), reflect.ValueOf(mutatedValue).Type().String())
 		}
 	}
 }

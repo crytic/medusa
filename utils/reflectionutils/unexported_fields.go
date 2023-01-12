@@ -36,25 +36,3 @@ func SetField(field reflect.Value, value any) {
 	// Otherwise we try to simply fetch the data.
 	field.Set(reflect.ValueOf(value))
 }
-
-// ArrayToSlice converts a reflected array into a slice.
-// Returns the slice.
-func ArrayToSlice(reflectedArray reflect.Value) any {
-	sliceType := reflect.SliceOf(reflectedArray.Type().Elem())
-	resultingSlice := reflect.MakeSlice(sliceType, reflectedArray.Len(), reflectedArray.Len())
-	for i := 0; i < reflectedArray.Len(); i++ {
-		resultingSlice.Index(i).Set(reflect.ValueOf(reflectedArray.Index(i).Interface()))
-	}
-	return resultingSlice.Interface()
-}
-
-// SliceToArray converts a reflected slice into an array of the same size.
-// Returns the array.
-func SliceToArray(reflectedSlice reflect.Value) any {
-	arrayType := reflect.ArrayOf(reflectedSlice.Len(), reflectedSlice.Type().Elem())
-	resultingArray := reflect.New(arrayType).Elem()
-	for i := 0; i < reflectedSlice.Len(); i++ {
-		resultingArray.Index(i).Set(reflect.ValueOf(reflectedSlice.Index(i).Interface()))
-	}
-	return resultingArray.Interface()
-}
