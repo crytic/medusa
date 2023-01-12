@@ -320,3 +320,39 @@ func (g *MutatingValueGenerator) GenerateString() string {
 
 	return input
 }
+
+// MutateAddress takes an address input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateAddress(addr common.Address) common.Address {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateAddress()
+}
+
+// MutateBool takes a boolean input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateBool(bl bool) bool {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateBool()
+}
+
+// MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateBytes(b []byte) []byte {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateBytes()
+}
+
+// MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateFixedBytes(b []byte) []byte {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateFixedBytes(len(b))
+}
+
+// MutateString takes a string input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateString(s string) string {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateString()
+}
+
+// MutateInteger takes an integer input and returns a mutated value based off the input.
+func (g *MutatingValueGenerator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
+	// TODO: Perform mutations against the supplied input here.
+	return g.GenerateInteger(signed, bitLength)
+}

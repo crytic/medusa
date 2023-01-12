@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/chain"
+	"golang.org/x/exp/slices"
 	"math/big"
 )
 
@@ -147,3 +148,27 @@ func (m *CallMessage) Data() []byte {
 }
 func (m *CallMessage) AccessList() coreTypes.AccessList { return nil }
 func (m *CallMessage) IsFake() bool                     { return true }
+
+// Clone creates a copy of the given message and its underlying components, or an error if one occurs.
+func (m *CallMessage) Clone() (*CallMessage, error) {
+	// Clone our underlying ABI values data if we have any.
+	clonedAbiValues, err := m.MsgDataAbiValues.Clone()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a message with the same data copied over.
+	clone := &CallMessage{
+		MsgFrom:          m.MsgFrom,
+		MsgTo:            m.MsgTo,
+		MsgNonce:         m.MsgNonce,
+		MsgValue:         new(big.Int).Set(m.MsgValue),
+		MsgGas:           m.MsgGas,
+		MsgGasPrice:      new(big.Int).Set(m.MsgGasPrice),
+		MsgGasFeeCap:     new(big.Int).Set(m.MsgGasFeeCap),
+		MsgGasTipCap:     new(big.Int).Set(m.MsgGasTipCap),
+		MsgData:          slices.Clone(m.MsgData),
+		MsgDataAbiValues: clonedAbiValues,
+	}
+	return clone, nil
+}

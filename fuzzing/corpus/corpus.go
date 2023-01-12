@@ -325,7 +325,7 @@ func (c *Corpus) RandomCallSequence() (calls.CallSequence, error) {
 	if seq == nil || err != nil {
 		return nil, err
 	}
-	return seq.Clone(), err
+	return seq.Clone()
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.

@@ -166,12 +166,16 @@ func (cs CallSequence) String() string {
 }
 
 // Clone creates a copy of the underlying CallSequence.
-func (cs CallSequence) Clone() CallSequence {
+func (cs CallSequence) Clone() (CallSequence, error) {
+	var err error
 	r := make(CallSequence, len(cs))
 	for i := 0; i < len(r); i++ {
-		r[i] = cs[i].Clone()
+		r[i], err = cs[i].Clone()
+		if err != nil {
+			return nil, nil
+		}
 	}
-	return r
+	return r, nil
 }
 
 // CallSequenceElement describes a single call in a call sequence (tx sequence) targeting a specific contract.
@@ -213,6 +217,25 @@ func NewCallSequenceElement(contract *fuzzingTypes.Contract, call *CallMessage, 
 		ChainReference:      nil,
 	}
 	return callSequenceElement
+}
+
+// Clone creates a copy of the underlying CallSequenceElement.
+func (cse *CallSequenceElement) Clone() (*CallSequenceElement, error) {
+	// Clone our call
+	clonedCall, err := cse.Call.Clone()
+	if err != nil {
+		return nil, err
+	}
+
+	// Clone the element
+	clone := &CallSequenceElement{
+		Contract:            cse.Contract,
+		Call:                clonedCall,
+		BlockNumberDelay:    cse.BlockNumberDelay,
+		BlockTimestampDelay: cse.BlockTimestampDelay,
+		ChainReference:      cse.ChainReference,
+	}
+	return clone, nil
 }
 
 // Method obtains the abi.Method targeted by the CallSequenceElement.Call, or an error if one occurred while obtaining
@@ -275,18 +298,6 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.Value().String(),
 		cse.Call.From(),
 	)
-}
-
-// Clone creates a copy of the underlying CallSequenceElement.
-func (cse *CallSequenceElement) Clone() *CallSequenceElement {
-	// TODO: Deep clone the call.
-	return &CallSequenceElement{
-		Contract:            cse.Contract,
-		Call:                cse.Call,
-		BlockNumberDelay:    cse.BlockNumberDelay,
-		BlockTimestampDelay: cse.BlockTimestampDelay,
-		ChainReference:      cse.ChainReference,
-	}
 }
 
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being

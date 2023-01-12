@@ -72,6 +72,20 @@ func NewCallSequenceGenerator(worker *FuzzerWorker) *CallSequenceGenerator {
 			},
 			big.NewInt(100),
 		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncCorpusHead,
+				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
+			},
+			big.NewInt(80),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncCorpusTail,
+				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
+			},
+			big.NewInt(10),
+		),
 	)
 
 	return generator
@@ -263,6 +277,19 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 // to a call sequence element, prior to it being fetched.
 // Returns an error if one occurs.
 func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, element *calls.CallSequenceElement) error {
-	// TODO: We'll want to mutate the underlying ABI call data.
+	// If this element has no ABI value based call data, exit early.
+	if element.Call == nil || element.Call.MsgDataAbiValues == nil {
+		return nil
+	}
+
+	// Loop for each input value and mutate it
+	abiValuesMsgData := element.Call.MsgDataAbiValues
+	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
+		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.worker.valueGenerator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
+		if err != nil {
+			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
+		}
+		abiValuesMsgData.InputValues[i] = mutatedInput
+	}
 	return nil
 }

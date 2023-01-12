@@ -20,9 +20,10 @@ const addressJSONContractNameOverridePrefix = "DeployedContract:"
 // The generated value is returned.
 func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 	// Determine the type of value to generate based on the ABI type.
-	if inputType.T == abi.AddressTy {
+	switch inputType.T {
+	case abi.AddressTy:
 		return generator.GenerateAddress()
-	} else if inputType.T == abi.UintTy {
+	case abi.UintTy:
 		if inputType.Size == 64 {
 			return generator.GenerateInteger(false, inputType.Size).Uint64()
 		} else if inputType.Size == 32 {
@@ -34,7 +35,7 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		} else {
 			return generator.GenerateInteger(false, inputType.Size)
 		}
-	} else if inputType.T == abi.IntTy {
+	case abi.IntTy:
 		if inputType.Size == 64 {
 			return generator.GenerateInteger(true, inputType.Size).Int64()
 		} else if inputType.Size == 32 {
@@ -46,13 +47,13 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		} else {
 			return generator.GenerateInteger(true, inputType.Size)
 		}
-	} else if inputType.T == abi.BoolTy {
+	case abi.BoolTy:
 		return generator.GenerateBool()
-	} else if inputType.T == abi.StringTy {
+	case abi.StringTy:
 		return generator.GenerateString()
-	} else if inputType.T == abi.BytesTy {
+	case abi.BytesTy:
 		return generator.GenerateBytes()
-	} else if inputType.T == abi.FixedBytesTy {
+	case abi.FixedBytesTy:
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
 		array := reflect.Indirect(reflect.New(inputType.GetType()))
@@ -61,14 +62,14 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 			array.Index(i).Set(bytes.Index(i))
 		}
 		return array.Interface()
-	} else if inputType.T == abi.ArrayTy {
+	case abi.ArrayTy:
 		// Read notes for fixed bytes to understand the need to create this array through reflection.
 		array := reflect.Indirect(reflect.New(inputType.GetType()))
 		for i := 0; i < array.Len(); i++ {
 			array.Index(i).Set(reflect.ValueOf(GenerateAbiValue(generator, inputType.Elem)))
 		}
 		return array.Interface()
-	} else if inputType.T == abi.SliceTy {
+	case abi.SliceTy:
 		// Dynamic sized arrays are represented as slices.
 		sliceSize := generator.GenerateArrayLength()
 		slice := reflect.MakeSlice(inputType.GetType(), sliceSize, sliceSize)
@@ -76,21 +77,23 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 			slice.Index(i).Set(reflect.ValueOf(GenerateAbiValue(generator, inputType.Elem)))
 		}
 		return slice.Interface()
-	} else if inputType.T == abi.TupleTy {
+	case abi.TupleTy:
 		// Tuples are used to represent structs. For go-ethereum's ABI provider, we're intended to supply matching
 		// struct implementations, so we create and populate them through reflection.
 		st := reflect.Indirect(reflect.New(inputType.GetType()))
 		for i := 0; i < len(inputType.TupleElems); i++ {
-			st.Field(i).Set(reflect.ValueOf(GenerateAbiValue(generator, inputType.TupleElems[i])))
+			field := st.Field(i)
+			fieldValue := GenerateAbiValue(generator, inputType.TupleElems[i])
+			reflectionutils.SetField(field, fieldValue)
 		}
 		return st.Interface()
+	default:
+		// Unexpected types will result in a panic as we should support these values as soon as possible:
+		// - Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
+		//	 see cases of it unless Solidity was updated in the future.
+		// - FixedPoint types are currently unsupported.
+		panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
 	}
-
-	// Unexpected types will result in a panic as we should support these values as soon as possible:
-	// - Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
-	//	 see cases of it unless Solidity was updated in the future.
-	// - FixedPoint types are currently unsupported.
-	panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
 }
 
 // EncodeJSONArgumentsToMap encodes provided go-ethereum ABI packable input values into a generic JSON type values
@@ -256,7 +259,9 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 		reflectedTuple := reflect.ValueOf(value)
 		tupleData := make(map[string]any)
 		for i := 0; i < len(inputType.TupleElems); i++ {
-			fieldData, err := encodeJSONArgument(inputType.TupleElems[i], reflectionutils.GetField(reflectedTuple.FieldByName(inputType.TupleRawNames[i])))
+			field := reflectedTuple.Field(i)
+			fieldValue := reflectionutils.GetField(field)
+			fieldData, err := encodeJSONArgument(inputType.TupleElems[i], fieldValue)
 			if err != nil {
 				return nil, err
 			}
@@ -471,6 +476,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 		// Tuples are used to represent structs. struct fields are dynamic therefore we create them through reflection.
 		st := reflect.Indirect(reflect.New(inputType.GetType()))
 		for i, eleType := range inputType.TupleElems {
+			field := st.Field(i)
 			fieldName := inputType.TupleRawNames[i]
 			fieldValue, ok := object[fieldName]
 			if !ok {
@@ -480,7 +486,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 			if !ok {
 				return nil, fmt.Errorf("can not parse struct field %s, error: %s", fieldName, err)
 			}
-			reflectionutils.SetField(st.Field(i), eleValue)
+			reflectionutils.SetField(field, eleValue)
 		}
 		v = st.Interface()
 	default:
@@ -489,4 +495,153 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	}
 
 	return v, nil
+}
+
+// MutateAbiValue takes an ABI packable input value, alongside its type definition and a value generator, to mutate
+// existing ABI input values.
+func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (any, error) {
+	// Switch on the type of value and mutate it recursively.
+	switch inputType.T {
+	case abi.AddressTy:
+		addr, ok := value.(common.Address)
+		if !ok {
+			return nil, fmt.Errorf("could not mutate address input as the value provided is not an address type")
+		}
+		return generator.MutateAddress(addr), nil
+	case abi.UintTy:
+		if inputType.Size == 64 {
+			v, ok := value.(uint64)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return generator.MutateInteger(new(big.Int).SetUint64(v), false, inputType.Size).Uint64(), nil
+		} else if inputType.Size == 32 {
+			v, ok := value.(uint32)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return uint32(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+		} else if inputType.Size == 16 {
+			v, ok := value.(uint16)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return uint16(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+		} else if inputType.Size == 8 {
+			v, ok := value.(uint8)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return uint8(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+		} else {
+			v, ok := value.(*big.Int)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return generator.MutateInteger(new(big.Int).Set(v), false, inputType.Size), nil
+		}
+	case abi.IntTy:
+		if inputType.Size == 64 {
+			v, ok := value.(int64)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return generator.MutateInteger(new(big.Int).SetInt64(v), true, inputType.Size).Int64(), nil
+		} else if inputType.Size == 32 {
+			v, ok := value.(int32)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return int32(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+		} else if inputType.Size == 16 {
+			v, ok := value.(int16)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return int16(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+		} else if inputType.Size == 8 {
+			v, ok := value.(int8)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return int8(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+		} else {
+			v, ok := value.(*big.Int)
+			if !ok {
+				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return generator.MutateInteger(new(big.Int).Set(v), true, inputType.Size), nil
+		}
+	case abi.BoolTy:
+		v, ok := value.(bool)
+		if !ok {
+			return nil, fmt.Errorf("could not mutate boolean input as the value provided is not a boolean type")
+		}
+		return generator.MutateBool(v), nil
+	case abi.StringTy:
+		v, ok := value.(string)
+		if !ok {
+			return nil, fmt.Errorf("could not mutate string input as the value provided is not a string type")
+		}
+		return generator.MutateString(v), nil
+	case abi.BytesTy:
+		v, ok := value.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("could not mutate dynamic-sized bytes input as the value provided is not a byte slice type")
+		}
+		return generator.MutateBytes(v), nil
+	case abi.FixedBytesTy:
+		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
+		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
+		valueAsSlice := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
+		mutatedValue := generator.MutateFixedBytes(valueAsSlice)
+		mutatedValueAsArray := reflectionutils.SliceToArray(reflect.ValueOf(mutatedValue))
+		mutatedValueAsArrayLen := reflect.ValueOf(mutatedValueAsArray).Len()
+		if mutatedValueAsArrayLen != inputType.Size {
+			return nil, fmt.Errorf("could not mutate fixed-sized bytes input as the mutated value returned was not of the correct length. expected %v, got %v", inputType.Size, mutatedValueAsArrayLen)
+		}
+		return mutatedValueAsArray, nil
+	case abi.ArrayTy:
+		// TODO: Add an array mutation method to value generators, use it here first before the subsequence code
+
+		// Look through our array, recursively mutate each element, and set the result in the array.
+		array := reflect.ValueOf(value)
+		for i := 0; i < array.Len(); i++ {
+			mutatedArrayElem, err := MutateAbiValue(generator, inputType.Elem, array.Index(i).Interface())
+			if err != nil {
+				return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
+			}
+			array.Index(i).Set(reflect.ValueOf(mutatedArrayElem))
+		}
+		return array.Interface(), nil
+	case abi.SliceTy:
+		// TODO: Add an slice mutation method to value generators, use it here first before the subsequence code
+
+		// Dynamic sized arrays are represented as slices.
+		slice := reflect.ValueOf(value)
+		for i := 0; i < slice.Len(); i++ {
+			mutatedArrayElem, err := MutateAbiValue(generator, inputType.Elem, slice.Index(i).Interface())
+			if err != nil {
+				return nil, fmt.Errorf("could not mutate slice input as the value generator encountered an error: %v", err)
+			}
+			slice.Index(i).Set(reflect.ValueOf(mutatedArrayElem))
+		}
+		return slice.Interface(), nil
+	case abi.TupleTy:
+		// Structs are used to represent tuples. These are created dynamically. We cannot mutate the existing struct
+		// and must create a new one, as some fields may be un-assignable otherwise.
+		reflectedOriginalTuple := reflect.ValueOf(value)
+		reflectedNewTuple := reflect.Indirect(reflect.New(inputType.GetType()))
+		for i := 0; i < len(inputType.TupleElems); i++ {
+			fieldValue := reflectionutils.GetField(reflectedOriginalTuple.Field(i))
+			mutatedValue, err := MutateAbiValue(generator, inputType.TupleElems[i], fieldValue)
+			if err != nil {
+				return nil, fmt.Errorf("could not mutate struct/tuple input as the value generator encountered an error: %v", err)
+			}
+			reflectionutils.SetField(reflectedNewTuple.Field(i), mutatedValue)
+		}
+		return reflectedNewTuple.Interface(), nil
+	default:
+		return nil, fmt.Errorf("could not mutate argument, type is unsupported: %v", inputType)
+	}
 }

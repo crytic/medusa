@@ -36,6 +36,32 @@ type callMessageDataAbiValuesMarshal struct {
 	EncodedInputValues []any  `json:"inputValues"`
 }
 
+// Clone creates a copy of the given message data and its underlying components, or an error if one occurs.
+func (m *CallMessageDataAbiValues) Clone() (*CallMessageDataAbiValues, error) {
+	// Create a cloned struct
+	clone := &CallMessageDataAbiValues{
+		Method:             m.Method,
+		InputValues:        nil, // set lower
+		methodName:         m.methodName,
+		encodedInputValues: m.encodedInputValues,
+	}
+
+	// If we have a method, clone our input values by packing/unpacking them.
+	if m.Method != nil {
+		data, err := m.Method.Inputs.Pack(m.InputValues...)
+		if err != nil {
+			return nil, err
+		}
+
+		clone.InputValues, err = m.Method.Inputs.Unpack(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return clone, nil
+}
+
 // Resolve takes a previously unmarshalled CallMessageDataAbiValues and resolves all internal data needed for it to be
 // used at runtime by resolving the abi.Method it references from the provided contract ABI.
 func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {

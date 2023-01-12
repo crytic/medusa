@@ -43,6 +43,11 @@ func NewRandomValueGenerator(config *RandomValueGeneratorConfig, randomProvider 
 	return generator
 }
 
+// RandomProvider returns the internal random provider used for value generation.
+func (g *RandomValueGenerator) RandomProvider() *rand.Rand {
+	return g.randomProvider
+}
+
 // GenerateAddress generates a random address to use when populating inputs.
 func (g *RandomValueGenerator) GenerateAddress() common.Address {
 	// Generate random bytes of the address length, then convert it to an address.
@@ -99,7 +104,32 @@ func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.
 	return utils.ConstrainIntegerToBitLength(res, signed, bitLength)
 }
 
-// RandomProvider returns the internal random provider used for value generation.
-func (g *RandomValueGenerator) RandomProvider() *rand.Rand {
-	return g.randomProvider
+// MutateAddress takes an address input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateAddress(addr common.Address) common.Address {
+	return g.GenerateAddress()
+}
+
+// MutateBool takes a boolean input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateBool(bl bool) bool {
+	return g.GenerateBool()
+}
+
+// MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateBytes(b []byte) []byte {
+	return g.GenerateBytes()
+}
+
+// MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateFixedBytes(b []byte) []byte {
+	return g.GenerateFixedBytes(len(b))
+}
+
+// MutateString takes a string input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateString(s string) string {
+	return g.GenerateString()
+}
+
+// MutateInteger takes an integer input and returns a mutated value based off the input.
+func (g *RandomValueGenerator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
+	return g.GenerateInteger(signed, bitLength)
 }

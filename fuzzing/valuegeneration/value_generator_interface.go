@@ -23,6 +23,20 @@ type ValueGenerator interface {
 	GenerateString() string
 	// GenerateInteger generates/selects an integer to use when populating inputs.
 	GenerateInteger(signed bool, bitLength int) *big.Int
+
+	// MutateAddress takes an address input and returns a mutated value based off the input.
+	MutateAddress(addr common.Address) common.Address
+	// MutateBool takes a boolean input and returns a mutated value based off the input.
+	MutateBool(bl bool) bool
+	// MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
+	MutateBytes(b []byte) []byte
+	// MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
+	MutateFixedBytes(b []byte) []byte
+	// MutateString takes a string input and returns a mutated value based off the input.
+	MutateString(s string) string
+	// MutateInteger takes an integer input and returns a mutated value based off the input.
+	MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int
+
 	// RandomProvider returns the internal random provider used for value generation.
 	RandomProvider() *rand.Rand
 }

@@ -219,14 +219,15 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, []ShrinkCallSequenceRequest, error) {
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
+	var err error
 	defer func() {
-		if err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
-			panic(err.Error())
+		if err == nil {
+			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
 	}()
 
 	// Request our sequence generator prepare for generation of our call sequence
-	err := fw.sequenceGenerator.NewSequence(len(callSequence))
+	err = fw.sequenceGenerator.NewSequence(len(callSequence))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -305,20 +306,23 @@ func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, 
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
 	// In case of any error, we defer an operation to revert our chain state. We purposefully ignore errors from it to
 	// prioritize any others which occurred.
+	var err error
 	defer func() {
-		// nolint:errcheck
-		fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		if err == nil {
+			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		}
 	}()
 
-	// Define another slice to store our tx sequence
-	// Note: We clone here as we don't want to overwrite our call sequence runtime results we store.
-	optimizedSequence := callSequence.Clone()
+	// Define a variable to track our most optimized sequence across all optimization iterations.
+	optimizedSequence := callSequence
 
 	for i := 0; i < len(optimizedSequence); {
-		// Recreate our sequence without the item at this index
-		possibleShrunkSequence := make(calls.CallSequence, 0)
-		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[:i].Clone()...)
-		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[i+1:].Clone()...)
+		// Recreate our current optimized sequence without the item at this index
+		possibleShrunkSequence, err := optimizedSequence.Clone()
+		if err != nil {
+			return nil, err
+		}
+		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
 
 		// Our pre-step method will simply correct the call message in case any fields are not correct due to shrinking.
 		executePreStepFunc := func(currentIndex int) (bool, error) {
@@ -380,12 +384,12 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	}
 
 	// After we finished shrinking, report our result and return it.
-	err := shrinkRequest.FinishedCallback(fw, optimizedSequence)
+	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
 	if err != nil {
 		return nil, err
 	}
 
-	return optimizedSequence, nil
+	return optimizedSequence, err
 }
 
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
