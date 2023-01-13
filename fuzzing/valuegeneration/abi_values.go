@@ -71,7 +71,7 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		return array.Interface()
 	case abi.SliceTy:
 		// Dynamic sized arrays are represented as slices.
-		sliceSize := generator.GenerateArrayLength()
+		sliceSize := generator.GenerateArrayOfLength()
 		slice := reflect.MakeSlice(inputType.GetType(), sliceSize, sliceSize)
 		for i := 0; i < slice.Len(); i++ {
 			slice.Index(i).Set(reflect.ValueOf(GenerateAbiValue(generator, inputType.Elem)))
@@ -201,31 +201,62 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		}
 		return mutatedValueAsArray, nil
 	case abi.ArrayTy:
-		// TODO: Add an array mutation method to value generators, use it here first before the subsequence code
-
 		// Look through our array, recursively mutate each element, and set the result in the array.
 		// Note: We create a copy, as existing arrays may not be assignable.
 		array := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
+
+		// Mutate our array structure first
+		mutatedValues := generator.MutateArray(reflectionutils.GetReflectedArrayValues(array), true)
+
+		// Create a new array of the appropriate size
+		array = reflect.New(reflect.ArrayOf(array.Len(), array.Type().Elem())).Elem()
+
+		// Next mutate each element in the array.
 		for i := 0; i < array.Len(); i++ {
-			mutatedArrayElem, err := MutateAbiValue(generator, inputType.Elem, array.Index(i).Interface())
-			if err != nil {
-				return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
+			// Obtain the element's reflected value to access its getter/setters
+			reflectedElement := array.Index(i)
+
+			// If any item is nil, we generate a new element in its place instead. Otherwise, we mutate the existing value.
+			if mutatedValues[i] == nil {
+				generatedElement := GenerateAbiValue(generator, inputType.Elem)
+				reflectedElement.Set(reflect.ValueOf(generatedElement))
+			} else {
+				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
+				if err != nil {
+					return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
+				}
+				reflectedElement.Set(reflect.ValueOf(mutatedElement))
 			}
-			array.Index(i).Set(reflect.ValueOf(mutatedArrayElem))
 		}
+
 		return array.Interface(), nil
 	case abi.SliceTy:
-		// TODO: Add a slice mutation method to value generators, use it here first before the subsequence code
-
 		// Dynamic sized arrays are represented as slices.
 		// Note: We create a copy, as existing slices may not be assignable.
 		slice := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
+
+		// Mutate our slice structure first
+		mutatedValues := generator.MutateArray(reflectionutils.GetReflectedArrayValues(slice), false)
+
+		// Create a new slice of the appropriate size
+		slice = reflect.MakeSlice(reflect.SliceOf(slice.Type().Elem()), len(mutatedValues), len(mutatedValues))
+
+		// Next mutate each element in the slice.
 		for i := 0; i < slice.Len(); i++ {
-			mutatedSliceElem, err := MutateAbiValue(generator, inputType.Elem, slice.Index(i).Interface())
-			if err != nil {
-				return nil, fmt.Errorf("could not mutate slice input as the value generator encountered an error: %v", err)
+			// Obtain the element's reflected value to access its getter/setters
+			reflectedElement := slice.Index(i)
+
+			// If any item is nil, we generate a new element in its place instead. Otherwise, we mutate the existing value.
+			if mutatedValues[i] == nil {
+				generatedElement := GenerateAbiValue(generator, inputType.Elem)
+				reflectedElement.Set(reflect.ValueOf(generatedElement))
+			} else {
+				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
+				if err != nil {
+					return nil, fmt.Errorf("could not mutate slice input as the value generator encountered an error: %v", err)
+				}
+				reflectedElement.Set(reflect.ValueOf(mutatedElement))
 			}
-			slice.Index(i).Set(reflect.ValueOf(mutatedSliceElem))
 		}
 		return slice.Interface(), nil
 	case abi.TupleTy:

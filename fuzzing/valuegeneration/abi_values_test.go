@@ -166,12 +166,12 @@ func getTestABIArguments() abi.Arguments {
 func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 	// Create a value generator
 	valueGenerator := NewRandomValueGenerator(&RandomValueGeneratorConfig{
-		RandomArrayMinSize:  3,
-		RandomArrayMaxSize:  10,
-		RandomBytesMinSize:  5,
-		RandomBytesMaxSize:  200,
-		RandomStringMinSize: 5,
-		RandomStringMaxSize: 200,
+		GenerateRandomArrayMinSize:  3,
+		GenerateRandomArrayMaxSize:  10,
+		GenerateRandomBytesMinSize:  5,
+		GenerateRandomBytesMaxSize:  200,
+		GenerateRandomStringMinSize: 5,
+		GenerateRandomStringMaxSize: 200,
 	}, rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	// Obtain our test ABI arguments
@@ -209,19 +209,29 @@ func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 func TestABIGenerationAndMutation(t *testing.T) {
 	// Create a value generator
 	valueGenConfig := &MutatingValueGeneratorConfig{
-		MinMutationRounds: 0,
-		MaxMutationRounds: 1,
-		RandomAddressBias: 0.5,
-		RandomIntegerBias: 0.5,
-		RandomStringBias:  0.5,
-		RandomBytesBias:   0.5,
+		MinMutationRounds:               0,
+		MaxMutationRounds:               1,
+		GenerateRandomAddressBias:       0.5,
+		GenerateRandomIntegerBias:       0.5,
+		GenerateRandomStringBias:        0.5,
+		GenerateRandomBytesBias:         0.5,
+		MutateAddressProbability:        0.8,
+		MutateArrayStructureProbability: 0.8,
+		MutateBoolProbability:           0.8,
+		MutateBytesProbability:          0.8,
+		MutateBytesGenerateNewBias:      0.45,
+		MutateFixedBytesProbability:     0.8,
+		MutateStringProbability:         0.8,
+		MutateStringGenerateNewBias:     0.7,
+		MutateIntegerProbability:        0.8,
+		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &RandomValueGeneratorConfig{
-			RandomArrayMinSize:  0,
-			RandomArrayMaxSize:  100,
-			RandomBytesMinSize:  0,
-			RandomBytesMaxSize:  100,
-			RandomStringMinSize: 0,
-			RandomStringMaxSize: 100,
+			GenerateRandomArrayMinSize:  0,
+			GenerateRandomArrayMaxSize:  100,
+			GenerateRandomBytesMinSize:  0,
+			GenerateRandomBytesMaxSize:  100,
+			GenerateRandomStringMinSize: 0,
+			GenerateRandomStringMaxSize: 100,
 		},
 	}
 	valueGenerator := NewMutatingValueGenerator(valueGenConfig, NewValueSet(), rand.New(rand.NewSource(time.Now().UnixNano())))
