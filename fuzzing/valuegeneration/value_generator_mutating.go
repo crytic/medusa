@@ -258,9 +258,9 @@ func (g *MutatingValueGenerator) mutateBytesInternal(b []byte) []byte {
 	inputIdx, mutationCount := g.getMutationParams(len(inputs))
 	var input []byte
 	if b != nil {
-		b = slices.Clone(b)
+		input = slices.Clone(b)
 	} else {
-		b = slices.Clone(inputs[inputIdx])
+		input = slices.Clone(inputs[inputIdx])
 	}
 
 	// Mutate the data for our desired number of rounds
