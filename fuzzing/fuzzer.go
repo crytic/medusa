@@ -100,9 +100,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
-			NewValueGeneratorFunc: defaultNewValueGeneratorFunc,
-			ChainSetupFunc:        chainSetupFromCompilations,
-			CallSequenceTestFuncs: make([]CallSequenceTestFunc, 0),
+			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
+			ChainSetupFunc:                     chainSetupFromCompilations,
+			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 		},
 	}
 
@@ -353,9 +353,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a valuegeneration.MutatingValueGenerator with a
-// default configuration. Returns the generator or an error, if one occurs.
-func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error) {
+// defaultNewCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
+// CallSequenceGeneratorConfig with a default configuration. Returns the config or an error, if one occurs.
+func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
+	// Create the underlying value generator for the worker and its sequence generator.
 	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
@@ -383,7 +384,17 @@ func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.Valu
 		},
 	}
 	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet, randomProvider)
-	return valueGenerator, nil
+
+	// Create a sequence generator config which uses the created value generator.
+	sequenceGenConfig := &CallSequenceGeneratorConfig{
+		NewSequenceProbability:           0.3,
+		RandomUnmodifiedCorpusHeadWeight: 800,
+		RandomUnmodifiedCorpusTailWeight: 100,
+		RandomMutatedCorpusHeadWeight:    80,
+		RandomMutatedCorpusTailWeight:    10,
+		ValueGenerator:                   valueGenerator,
+	}
+	return sequenceGenConfig, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.

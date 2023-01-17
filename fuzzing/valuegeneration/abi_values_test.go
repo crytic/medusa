@@ -242,7 +242,7 @@ func TestABIGenerationAndMutation(t *testing.T) {
 	// Loop for each input argument
 	for _, arg := range args {
 		// Test each argument round trip serialization with different generated values (iterate a number of times).
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 50; i++ {
 			// Generate a value for this argument
 			value := GenerateAbiValue(valueGenerator, &arg.Type)
 
