@@ -3,13 +3,14 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/utils/reflectionutils"
 	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/trailofbits/medusa/utils/reflectionutils"
 )
 
 // addressJSONContractNameOverridePrefix defines a string prefix which is to be followed by a contract name. The
@@ -283,6 +284,194 @@ func EncodeJSONArgumentsToSlice(inputs abi.Arguments, values []any) ([]any, erro
 		encodedArgs[i] = arg
 	}
 	return encodedArgs, nil
+}
+
+// EncodeABIArgumentsToString encodes provided go-ethereum ABI package input values into string that is appropriately
+// human-readably formatted for console output purpose.
+// Returns the string, or an error if one occurs.
+func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, error) {
+	// Create a variable to store string arguments, fill it with the respective arguments
+	var encodedArgs = make([]string, len(inputs))
+
+	// Iterate over inputs
+	for i, input := range inputs {
+		arg, err := EncodeABIArgumentToString(&input.Type, values[i])
+		if err != nil {
+			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
+				"name: %v, abi type: %v, value: %v error: %s",
+				input.Name, input.Type, values[i], err)
+			return "<unresolved args>", err
+		}
+		encodedArgs[i] = arg
+	}
+
+	return strings.Join(encodedArgs, ", "), nil
+}
+
+// EncodeABIArgumentToString encodes a provided go-ethereum ABI packable input value of a given type, into
+// string in the specific format, depending on the input's type.
+// Returns the string, or an error if one occurs.
+func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
+	switch inputType.T {
+	case abi.AddressTy:
+		// Prepare an address type. Return as a lowercase string without "".
+		addr, ok := value.(common.Address)
+		if !ok {
+			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
+		}
+		return strings.ToLower(addr.String()), nil
+	case abi.UintTy:
+		// Prepare uint type. Return as a string without "".
+		switch inputType.Size {
+		case 64:
+			v, ok := value.(uint64)
+			if !ok {
+				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatUint(v, 10), nil
+		case 32:
+			v, ok := value.(uint32)
+			if !ok {
+				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatUint(uint64(v), 10), nil
+		case 16:
+			v, ok := value.(uint16)
+			if !ok {
+				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatUint(uint64(v), 10), nil
+		case 8:
+			v, ok := value.(uint8)
+			if !ok {
+				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatUint(uint64(v), 10), nil
+		default:
+			v, ok := value.(*big.Int)
+			if !ok {
+				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return v.String(), nil
+		}
+	case abi.IntTy:
+		// Prepare int type. Return as a string without "".
+		switch inputType.Size {
+		case 64:
+			v, ok := value.(int64)
+			if !ok {
+				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatInt(v, 10), nil
+		case 32:
+			v, ok := value.(int32)
+			if !ok {
+				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatInt(int64(v), 10), nil
+		case 16:
+			v, ok := value.(int16)
+			if !ok {
+				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatInt(int64(v), 10), nil
+		case 8:
+			v, ok := value.(int8)
+			if !ok {
+				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return strconv.FormatInt(int64(v), 10), nil
+		default:
+			v, ok := value.(*big.Int)
+			if !ok {
+				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+			}
+			return v.String(), nil
+		}
+	case abi.BoolTy:
+		// Return a bool type. Return as a string without "".
+		b, ok := value.(bool)
+		if !ok {
+			return "", fmt.Errorf("could not encode bool as the value provided is not of the correct type")
+		}
+		return strconv.FormatBool(b), nil
+	case abi.StringTy:
+		// Prepare a string type. Return string is enclosed with "". The returned string uses Go escape
+		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
+		str, ok := value.(string)
+		if !ok {
+			return "", fmt.Errorf("could not encode string as the value provided is not of the correct type")
+		}
+		return strconv.QuoteToASCII(str), nil
+	case abi.BytesTy:
+		// Prepare a byte array. Return as a string enclosed with "". The returned string uses Go escape
+		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
+		b, ok := value.([]byte)
+		if !ok {
+			return "", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
+		}
+		return strconv.QuoteToASCII(string(b)), nil
+	case abi.FixedBytesTy:
+		// Prepare a fixed-size byte array. Return as a string enclosed with "". The returned string uses Go escape
+		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
+
+		// TODO: Error checking to ensure `value` is of the correct type.
+		b := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
+		return strconv.QuoteToASCII(string(b)), nil
+	case abi.ArrayTy:
+		// Prepare an array. Return as a string enclosed with [], where specific elements are comma-separated.
+		reflectedArray := reflect.ValueOf(value)
+		arrayData := make([]string, 0)
+		for i := 0; i < reflectedArray.Len(); i++ {
+			elementData, err := EncodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			if err != nil {
+				return "", err
+			}
+			arrayData = append(arrayData, elementData)
+		}
+		str := "[" + strings.Join(arrayData, ", ") + "]"
+		return str, nil
+	case abi.SliceTy:
+		// Prepare a dynamic array. Return as a string enclosed with [], where specific elements are comma-separated.
+		reflectedArray := reflect.ValueOf(value)
+		sliceData := make([]string, 0)
+		for i := 0; i < reflectedArray.Len(); i++ {
+			elementData, err := EncodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			if err != nil {
+				return "", err
+			}
+			sliceData = append(sliceData, elementData)
+		}
+
+		str := "[" + strings.Join(sliceData, ", ") + "]"
+		return str, nil
+	case abi.TupleTy:
+		// Prepare a tuple/struct. Return as a string enclosed with {}, where specific elements are presented
+		// as a key: value and comma-separated.
+		reflectedTuple := reflect.ValueOf(value)
+		tupleData := make(map[string]string)
+		for i := 0; i < len(inputType.TupleElems); i++ {
+			field := reflectedTuple.Field(i)
+			fieldValue := reflectionutils.GetField(field)
+			fieldData, err := EncodeABIArgumentToString(inputType.TupleElems[i], fieldValue)
+
+			if err != nil {
+				return "", err
+			}
+			tupleData[inputType.TupleRawNames[i]] = fieldData
+		}
+
+		// `keyValue` slice stores strings of the underlying struct/tuple's key and values in the specific format.
+		var keyValue []string
+		for key, val := range tupleData {
+			keyValue = append(keyValue, fmt.Sprintf("%v: %v", key, val))
+		}
+
+		str := "{" + strings.Join(keyValue, ", ") + "}"
+		return str, nil
+	default:
+		return "", fmt.Errorf("could not encode argument, type is unsupported: %v", inputType)
+	}
 }
 
 // encodeJSONArgument encodes a provided go-ethereum ABI packable input value of a given type, into generic JSON

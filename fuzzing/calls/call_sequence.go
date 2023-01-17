@@ -1,14 +1,15 @@
 package calls
 
 import (
-	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/trailofbits/medusa/chain"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"strconv"
-	"strings"
+	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
@@ -267,13 +268,9 @@ func (cse *CallSequenceElement) String() string {
 	args, err := method.Inputs.Unpack(cse.Call.Data()[4:])
 	argsText := "<unresolved args>"
 	if err == nil {
-		// Serialize our args to a JSON string and set it as our method name if we succeeded.
-		// TODO: Byte arrays are encoded as base64 strings, so this should be represented another way in the future:
-		//  Reference: https://stackoverflow.com/questions/14177862/how-to-marshal-a-byte-uint8-array-as-json-array-in-go
-		var argsJson []byte
-		argsJson, err = json.Marshal(args)
-		if err == nil {
-			argsText = string(argsJson)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
+		if err != nil {
+			argsText = "<unresolved args>"
 		}
 	}
 
