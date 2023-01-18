@@ -271,7 +271,7 @@ func TestEncodeABIArgumentToString(t *testing.T) {
 			value := GenerateAbiValue(valueGenerator, &arg.Type)
 
 			// Encode the generated value for this argument and ensure no error occurred.
-			_, err := EncodeABIArgumentToString(&arg.Type, value)
+			_, err := encodeABIArgumentToString(&arg.Type, value)
 			assert.NoError(t, err)
 		}
 	}

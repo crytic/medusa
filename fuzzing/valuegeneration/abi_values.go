@@ -295,29 +295,33 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, err
 
 	// Iterate over inputs
 	for i, input := range inputs {
-		arg, err := EncodeABIArgumentToString(&input.Type, values[i])
+		// Encode the input value of a given type
+		arg, err := encodeABIArgumentToString(&input.Type, values[i])
 		if err != nil {
+			// If error occurs while encoding the input value, return error message
 			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
 				"name: %v, abi type: %v, value: %v error: %s",
 				input.Name, input.Type, values[i], err)
 			return "<unresolved args>", err
 		}
+		// Store the encoded argument at the current index in the encodedArgs slice
 		encodedArgs[i] = arg
 	}
-
+	// Join the encoded arguments with a ", " separator
 	return strings.Join(encodedArgs, ", "), nil
 }
 
-// EncodeABIArgumentToString encodes a provided go-ethereum ABI packable input value of a given type, into
+// encodeABIArgumentToString encodes a provided go-ethereum ABI packable input value of a given type, into
 // string in the specific format, depending on the input's type.
 // Returns the string, or an error if one occurs.
-func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
+func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
+	// Switch on the type of the input argument to determine how to encode it
 	switch inputType.T {
 	case abi.AddressTy:
 		// Prepare an address type. Return as a lowercase string without "".
 		addr, ok := value.(common.Address)
 		if !ok {
-			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
+			return "<unresolved arg>", fmt.Errorf("could not encode address input as the value provided is not an address type")
 		}
 		return strings.ToLower(addr.String()), nil
 	case abi.UintTy:
@@ -326,31 +330,31 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		case 64:
 			v, ok := value.(uint64)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(v, 10), nil
 		case 32:
 			v, ok := value.(uint32)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 16:
 			v, ok := value.(uint16)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 8:
 			v, ok := value.(uint8)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
@@ -360,31 +364,31 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		case 64:
 			v, ok := value.(int64)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(v, 10), nil
 		case 32:
 			v, ok := value.(int32)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 16:
 			v, ok := value.(int16)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 8:
 			v, ok := value.(int8)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "<unresolved arg>", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
@@ -392,7 +396,7 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Return a bool type. Return as a string without "".
 		b, ok := value.(bool)
 		if !ok {
-			return "", fmt.Errorf("could not encode bool as the value provided is not of the correct type")
+			return "<unresolved arg>", fmt.Errorf("could not encode bool as the value provided is not of the correct type")
 		}
 		return strconv.FormatBool(b), nil
 	case abi.StringTy:
@@ -400,7 +404,7 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		str, ok := value.(string)
 		if !ok {
-			return "", fmt.Errorf("could not encode string as the value provided is not of the correct type")
+			return "<unresolved arg>", fmt.Errorf("could not encode string as the value provided is not of the correct type")
 		}
 		return strconv.QuoteToASCII(str), nil
 	case abi.BytesTy:
@@ -408,7 +412,7 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		b, ok := value.([]byte)
 		if !ok {
-			return "", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
+			return "<unresolved arg>", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
 		}
 		return strconv.QuoteToASCII(string(b)), nil
 	case abi.FixedBytesTy:
@@ -417,60 +421,81 @@ func EncodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 
 		// TODO: Error checking to ensure `value` is of the correct type.
 		b := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
+		// Convert the byte array to a string and use the QuoteToASCII method to format the string with Go escape sequences.
 		return strconv.QuoteToASCII(string(b)), nil
 	case abi.ArrayTy:
 		// Prepare an array. Return as a string enclosed with [], where specific elements are comma-separated.
 		reflectedArray := reflect.ValueOf(value)
+		// Initialize an empty array to store the encoded elements
 		arrayData := make([]string, 0)
+		// Iterate through the elements of the input array
 		for i := 0; i < reflectedArray.Len(); i++ {
-			elementData, err := EncodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			// Encode the element of a given type at the current index
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
 			if err != nil {
-				return "", err
+				return "<unresolved arg>", err
 			}
+			// Append the encoded element to the arrayData
 			arrayData = append(arrayData, elementData)
 		}
+		// Join the elements of the arrayData with ", " and enclose it with "[]"
 		str := "[" + strings.Join(arrayData, ", ") + "]"
 		return str, nil
 	case abi.SliceTy:
 		// Prepare a dynamic array. Return as a string enclosed with [], where specific elements are comma-separated.
 		reflectedArray := reflect.ValueOf(value)
+		// Initialize an empty slice to store the encoded elements
 		sliceData := make([]string, 0)
+		// Iterate through the elements of the input slice
 		for i := 0; i < reflectedArray.Len(); i++ {
-			elementData, err := EncodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			// Encode the element of a given type at the current index
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
 			if err != nil {
-				return "", err
+				return "<unresolved arg>", err
 			}
+			// Append the encoded element to the sliceData
 			sliceData = append(sliceData, elementData)
 		}
-
+		// Join the elements of the sliceData with ", " and enclose it with "[]"
 		str := "[" + strings.Join(sliceData, ", ") + "]"
 		return str, nil
 	case abi.TupleTy:
 		// Prepare a tuple/struct. Return as a string enclosed with {}, where specific elements are presented
-		// as a key: value and comma-separated.
-		reflectedTuple := reflect.ValueOf(value)
-		tupleData := make(map[string]string)
-		for i := 0; i < len(inputType.TupleElems); i++ {
-			field := reflectedTuple.Field(i)
-			fieldValue := reflectionutils.GetField(field)
-			fieldData, err := EncodeABIArgumentToString(inputType.TupleElems[i], fieldValue)
+		// as a `key: value` and comma-separated.
 
+		// Get the reflected value of the input tuple/struct
+		reflectedTuple := reflect.ValueOf(value)
+		// Initialize an empty map to store the encoded elements
+		tupleData := make(map[string]string)
+		// Iterate through the elements of the input tuple/struct
+		for i := 0; i < len(inputType.TupleElems); i++ {
+			// Get the field of the tuple/struct at the current index
+			field := reflectedTuple.Field(i)
+			// Get the value of the field
+			fieldValue := reflectionutils.GetField(field)
+			// Encode the field value of a given type
+			fieldData, err := encodeABIArgumentToString(inputType.TupleElems[i], fieldValue)
+			// Check if there is an error while encoding the field value
 			if err != nil {
-				return "", err
+				return "<unresolved arg>", err
 			}
+			// Add the encoded field value to the tupleData map with the name of the field as the key
 			tupleData[inputType.TupleRawNames[i]] = fieldData
 		}
 
 		// `keyValue` slice stores strings of the underlying struct/tuple's key and values in the specific format.
 		var keyValue []string
+		// Iterate through the tupleData map
 		for key, val := range tupleData {
+			// Append the key-value pair in the format "key: value" to the keyValue slice
 			keyValue = append(keyValue, fmt.Sprintf("%v: %v", key, val))
 		}
 
+		// Join the elements of the keyValue with ", " and enclose it with "{}"
 		str := "{" + strings.Join(keyValue, ", ") + "}"
 		return str, nil
 	default:
-		return "", fmt.Errorf("could not encode argument, type is unsupported: %v", inputType)
+		return "<unsupported arg>", fmt.Errorf("could not encode argument, type is unsupported: %v", inputType)
 	}
 }
 

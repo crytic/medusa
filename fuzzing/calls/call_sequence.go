@@ -266,7 +266,7 @@ func (cse *CallSequenceElement) String() string {
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	args, err := method.Inputs.Unpack(cse.Call.Data()[4:])
-	argsText := "<unresolved args>"
+	argsText := "<unable to unpack args>"
 	if err == nil {
 		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
 		if err != nil {
