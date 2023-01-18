@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/fuzzing"
 	"github.com/trailofbits/medusa/fuzzing/config"
+	"github.com/trailofbits/medusa/utils"
 )
 
 // fuzzCmd represents the command provider for fuzzing
@@ -111,6 +113,42 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	fuzzer, err := fuzzing.NewFuzzer(*projectConfig)
 	if err != nil {
 		return err
+	}
+
+	// Check if any method in the ABI starts with a configured prefix when property testing is enabled.
+	if projectConfig.Fuzzing.Testing.PropertyTesting.Enabled {
+		// slice that contains `testPrefixes` from the project configuration
+		testPrefixes := projectConfig.Fuzzing.Testing.PropertyTesting.TestPrefixes
+
+		// A variable that store the status whether any method starts with appropriate prefix
+		contains := false
+
+		// deploymentOrder
+		deploymentOrder := projectConfig.Fuzzing.DeploymentOrder
+		// Iterate over contracts definitions
+		for _, contract := range fuzzer.ContractDefinitions() {
+			// Check if the contract name is deployed (set up in the deploymentOrder)
+			if utils.Contains(deploymentOrder, contract.Name()) {
+				// Iterate over all possible methods in the specific contract
+				methods := contract.CompiledContract().Abi.Methods
+
+				for key := range methods {
+					// Iterate over all testPrefixes from the configuration files
+					// And mark if any of them has appropriate prefix
+					for _, prefix := range testPrefixes {
+						if strings.HasPrefix(key, prefix) {
+							contains = true
+							break
+						}
+					}
+				}
+			}
+		}
+		// Return error if no method starts with a prefix from testPrefixes
+		if !contains {
+			return fmt.Errorf("not found any method with the prefixes [%s] in the ABI",
+				strings.Join(testPrefixes, ", "))
+		}
 	}
 
 	// Stop our fuzzing on keyboard interrupts
