@@ -38,9 +38,7 @@ func SliceWhere[T any](x []T, f func(x T) bool) []T {
 	return r
 }
 
-// Contains checks if a given element e is contained in a slice of elements s. The function takes a slice of elements
-// of type T, which must be comparable, and an element of the same type T. The function returns a boolean value
-// indicating whether the element e is contained in the slice s.
+// Contains checks if a specific value (v) is present in a slice (elems) of a comparable type (T).
 func Contains[T comparable](elems []T, v T) bool {
 	for _, s := range elems {
 		if v == s {
