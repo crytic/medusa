@@ -175,7 +175,7 @@ func (t *testChainDeploymentsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *testChainDeploymentsTracer) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+func (t *testChainDeploymentsTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Set our results. This is an internal tracer used by the test chain, so we don't need to use the
 	// "additional results" field as other tracers might, we instead populate the field explicitly defined.
 	results.ContractDeploymentChanges = t.results

@@ -2,6 +2,7 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -17,10 +18,10 @@ type Block struct {
 	// of a transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction
 	// fields plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field
 	// in a message).
-	Messages []*CallMessage
+	Messages []core.Message
 
 	// MessageResults represents the results recorded while executing transactions.
-	MessageResults []*CallMessageResults
+	MessageResults []*MessageResults
 }
 
 // NewBlock returns a new Block with the provided parameters.
@@ -29,8 +30,8 @@ func NewBlock(header *types.Header) *Block {
 	block := &Block{
 		Hash:           header.Hash(),
 		Header:         header,
-		Messages:       make([]*CallMessage, 0),
-		MessageResults: make([]*CallMessageResults, 0),
+		Messages:       make([]core.Message, 0),
+		MessageResults: make([]*MessageResults, 0),
 	}
 	return block
 }

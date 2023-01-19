@@ -1,11 +1,12 @@
-package types
+package calls
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/chain/types"
+	chainTypes "github.com/trailofbits/medusa/chain/types"
+	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"strconv"
 	"strings"
 )
@@ -165,22 +166,26 @@ func (cs CallSequence) String() string {
 }
 
 // Clone creates a copy of the underlying CallSequence.
-func (cs CallSequence) Clone() CallSequence {
+func (cs CallSequence) Clone() (CallSequence, error) {
+	var err error
 	r := make(CallSequence, len(cs))
 	for i := 0; i < len(r); i++ {
-		r[i] = cs[i].Clone()
+		r[i], err = cs[i].Clone()
+		if err != nil {
+			return nil, nil
+		}
 	}
-	return r
+	return r, nil
 }
 
 // CallSequenceElement describes a single call in a call sequence (tx sequence) targeting a specific contract.
 // It contains the information regarding the contract/method being called as well as the call message data itself.
 type CallSequenceElement struct {
 	// Contract describes the contract which was targeted by a transaction.
-	Contract *Contract
+	Contract *fuzzingTypes.Contract `json:"-"`
 
 	// Call represents the underlying message call.
-	Call *types.CallMessage `json:"call"`
+	Call *CallMessage `json:"call"`
 
 	// BlockNumberDelay defines how much the block number should advance when executing this transaction, compared to
 	// the last executed transaction. If zero, this indicates the call should be included in the current pending block.
@@ -199,11 +204,11 @@ type CallSequenceElement struct {
 	// ChainReference describes the inclusion of the Call as a transaction in a block. This block may not yet be
 	// committed to its underlying chain if this is a CallSequenceElement was just executed. Additional transactions
 	// may be included before the block is committed. This reference will remain compatible after the block finalizes.
-	ChainReference *CallSequenceElementChainReference
+	ChainReference *CallSequenceElementChainReference `json:"-"`
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
-func NewCallSequenceElement(contract *Contract, call *types.CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
+func NewCallSequenceElement(contract *fuzzingTypes.Contract, call *CallMessage, blockNumberDelay uint64, blockTimestampDelay uint64) *CallSequenceElement {
 	callSequenceElement := &CallSequenceElement{
 		Contract:            contract,
 		Call:                call,
@@ -212,6 +217,25 @@ func NewCallSequenceElement(contract *Contract, call *types.CallMessage, blockNu
 		ChainReference:      nil,
 	}
 	return callSequenceElement
+}
+
+// Clone creates a copy of the underlying CallSequenceElement.
+func (cse *CallSequenceElement) Clone() (*CallSequenceElement, error) {
+	// Clone our call
+	clonedCall, err := cse.Call.Clone()
+	if err != nil {
+		return nil, err
+	}
+
+	// Clone the element
+	clone := &CallSequenceElement{
+		Contract:            cse.Contract,
+		Call:                clonedCall,
+		BlockNumberDelay:    cse.BlockNumberDelay,
+		BlockTimestampDelay: cse.BlockTimestampDelay,
+		ChainReference:      cse.ChainReference,
+	}
+	return clone, nil
 }
 
 // Method obtains the abi.Method targeted by the CallSequenceElement.Call, or an error if one occurred while obtaining
@@ -276,60 +300,18 @@ func (cse *CallSequenceElement) String() string {
 	)
 }
 
-// MarshalJSON provides the default serialization routine for a CallSequenceElement.
-func (cse *CallSequenceElement) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&struct {
-		Call                *types.CallMessage `json:"call"`
-		BlockNumberDelay    uint64             `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64             `json:"blockTimestampDelay"`
-	}{
-		Call:                cse.Call,
-		BlockNumberDelay:    cse.BlockNumberDelay,
-		BlockTimestampDelay: cse.BlockTimestampDelay,
-	})
-}
-
-// UnmarshalJSON provides the default deserialization routine for a CallSequenceElement.
-func (cse *CallSequenceElement) UnmarshalJSON(data []byte) error {
-	// Define our definition and deserialize our data.
-	type jsonDefinition struct {
-		Call                *types.CallMessage `json:"call"`
-		BlockNumberDelay    uint64             `json:"blockNumberDelay"`
-		BlockTimestampDelay uint64             `json:"blockTimestampDelay"`
-	}
-	var def jsonDefinition
-	if err := json.Unmarshal(data, &def); err != nil {
-		return err
-	}
-	cse.Call = def.Call
-	cse.BlockNumberDelay = def.BlockNumberDelay
-	cse.BlockTimestampDelay = def.BlockTimestampDelay
-	return nil
-}
-
-// Clone creates a copy of the underlying CallSequenceElement.
-func (cse *CallSequenceElement) Clone() *CallSequenceElement {
-	return &CallSequenceElement{
-		Contract:            cse.Contract,
-		Call:                cse.Call,
-		BlockNumberDelay:    cse.BlockNumberDelay,
-		BlockTimestampDelay: cse.BlockTimestampDelay,
-		ChainReference:      cse.ChainReference,
-	}
-}
-
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being
 // included in a block as a transaction.
 type CallSequenceElementChainReference struct {
 	// Block describes the block the CallSequenceElement.Call was included in as a transaction. This block may be
 	// pending commitment to the chain, or already committed.
-	Block *types.Block
+	Block *chainTypes.Block
 
 	// TransactionIndex describes the index at which the transaction was included into the Block.
 	TransactionIndex int
 }
 
 // MessageResults obtains the results of executing the CallSequenceElement.
-func (cr *CallSequenceElementChainReference) MessageResults() *types.CallMessageResults {
+func (cr *CallSequenceElementChainReference) MessageResults() *chainTypes.MessageResults {
 	return cr.Block.MessageResults[cr.TransactionIndex]
 }

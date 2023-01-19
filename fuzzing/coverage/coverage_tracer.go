@@ -17,7 +17,7 @@ const coverageTracerResultsKey = "CoverageTracerResults"
 
 // GetCoverageTracerResults obtains CoverageMaps stored by a CoverageTracer from message results. This is nil if
 // no CoverageMaps were recorded by a tracer (e.g. CoverageTracer was not attached during this message execution).
-func GetCoverageTracerResults(messageResults *types.CallMessageResults) *CoverageMaps {
+func GetCoverageTracerResults(messageResults *types.MessageResults) *CoverageMaps {
 	// Try to obtain the results the tracer should've stored.
 	if genericResult, ok := messageResults.AdditionalResults[coverageTracerResultsKey]; ok {
 		if castedResult, ok := genericResult.(*CoverageMaps); ok {
@@ -30,7 +30,7 @@ func GetCoverageTracerResults(messageResults *types.CallMessageResults) *Coverag
 }
 
 // RemoveCoverageTracerResults removes CoverageMaps stored by a CoverageTracer from message results.
-func RemoveCoverageTracerResults(messageResults *types.CallMessageResults) {
+func RemoveCoverageTracerResults(messageResults *types.MessageResults) {
 	delete(messageResults.AdditionalResults, coverageTracerResultsKey)
 }
 
@@ -181,7 +181,7 @@ func (t *CoverageTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Store our tracer results.
 	results.AdditionalResults[coverageTracerResultsKey] = t.coverageMaps
 }

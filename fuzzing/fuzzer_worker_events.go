@@ -4,7 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // FuzzerWorkerEvents defines event emitters for a FuzzerWorker.
@@ -44,7 +44,7 @@ type FuzzerWorkerContractAddedEvent struct {
 
 	// ContractDefinition describes the compiled contract artifact definition which the fuzzing.Fuzzer matched to the
 	// deployed bytecode. If this could not be resolved, a nil value is provided.
-	ContractDefinition *types.Contract
+	ContractDefinition *contracts.Contract
 }
 
 // FuzzerWorkerContractDeletedEvent describes an event where a fuzzing.FuzzerWorker detects a previously reported
@@ -58,7 +58,7 @@ type FuzzerWorkerContractDeletedEvent struct {
 
 	// ContractDefinition describes the compiled contract artifact definition which the fuzzing.Fuzzer matched to the
 	// deployed bytecode. If this could not be resolved, a nil value is provided.
-	ContractDefinition *types.Contract
+	ContractDefinition *contracts.Contract
 }
 
 // FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker is created its underlying chain.

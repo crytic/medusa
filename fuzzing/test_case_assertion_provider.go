@@ -2,13 +2,14 @@ package fuzzing
 
 import (
 	"bytes"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -19,7 +20,7 @@ type AssertionTestCaseProvider struct {
 	fuzzer *Fuzzer
 
 	// testCases is a map of contract-method IDs to assertion test cases.GetContractMethodID
-	testCases map[types.ContractMethodID]*AssertionTestCase
+	testCases map[contracts.ContractMethodID]*AssertionTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
@@ -89,7 +90,7 @@ func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionRes
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
 // Returns the method ID, a boolean indicating if an assertion test failed, or an error if one occurs.
-func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker, callSequence types.CallSequence) (*types.ContractMethodID, bool, error) {
+func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker, callSequence calls.CallSequence) (*contracts.ContractMethodID, bool, error) {
 	// If we have an empty call sequence, we cannot have an assertion failure
 	if len(callSequence) == 0 {
 		return nil, false, nil
@@ -101,7 +102,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	if err != nil {
 		return nil, false, err
 	}
-	methodId := types.GetContractMethodID(lastCall.Contract, lastCallMethod)
+	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an assertion error.
 	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult)
@@ -113,7 +114,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 // in a "not started" state for every method to test discovered in the contract definitions known to the Fuzzer.
 func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
-	t.testCases = make(map[types.ContractMethodID]*AssertionTestCase)
+	t.testCases = make(map[contracts.ContractMethodID]*AssertionTestCase)
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
@@ -126,13 +127,13 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 				// Create our test case
 				testCase := &AssertionTestCase{
 					status:         TestCaseStatusNotStarted,
-					targetContract: &contract,
+					targetContract: contract,
 					targetMethod:   method,
 					callSequence:   nil,
 				}
 
 				// Add to our test cases and register them with the fuzzer
-				methodId := types.GetContractMethodID(&contract, &method)
+				methodId := contracts.GetContractMethodID(contract, &method)
 				t.testCases[methodId] = testCase
 				t.fuzzer.RegisterTestCase(testCase)
 			}
@@ -175,7 +176,7 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 	// Loop through all methods and find ones for which we have tests
 	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
 		// Obtain an identifier for this pair
-		methodId := types.GetContractMethodID(event.ContractDefinition, &method)
+		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
 
 		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
 		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
@@ -192,7 +193,7 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 // callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether invariants
 // in methods to test are upheld after each call the Fuzzer makes when testing a call sequence.
-func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 	// Create a list of shrink call sequence verifiers, which we populate for each failed test we want a call sequence
 	// shrunk for.
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
@@ -218,7 +219,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
-			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) (bool, error) {
+			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
 				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(worker, shrunkenCallSequence)
 				if err != nil {
@@ -228,7 +229,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) error {
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
 				// When we're finished shrinking, update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence

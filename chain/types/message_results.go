@@ -5,9 +5,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// CallMessageResults represents metadata obtained from the execution of a CallMessage in a Block.
+// MessageResults represents metadata obtained from the execution of a CallMessage in a Block.
 // This contains results such as contracts deployed, and other variables tracked by a chain.TestChain.
-type CallMessageResults struct {
+type MessageResults struct {
 	// ExecutionResult describes the core.ExecutionResult returned after processing a given call.
 	ExecutionResult *core.ExecutionResult
 

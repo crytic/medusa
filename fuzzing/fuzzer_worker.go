@@ -2,17 +2,16 @@ package fuzzing
 
 import (
 	"fmt"
-	"math/big"
-	"math/rand"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/corpus"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/maps"
+	"math/big"
+	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -39,12 +38,14 @@ type FuzzerWorker struct {
 	// before executing tests.
 	stateChangingMethods []fuzzerTypes.DeployedContractMethod
 
+	// randomProvider provides random data as inputs to decisions throughout the worker.
+	randomProvider *rand.Rand
+	// sequenceGenerator creates entirely new or mutated call sequences based on corpus call sequences, for use in
+	// fuzzing campaigns.
+	sequenceGenerator *CallSequenceGenerator
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
-	// valueGenerator generates values for use in the fuzzing campaign (e.g. when populating abi function call
-	// arguments)
-	valueGenerator valuegeneration.ValueGenerator
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
@@ -53,28 +54,29 @@ type FuzzerWorker struct {
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
 // Fuzzer instance supplied.
 // Returns the new FuzzerWorker
-func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int) (*FuzzerWorker, error) {
+func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand) (*FuzzerWorker, error) {
 	// Clone the fuzzer's base value set, so we can build on it with runtime values.
 	valueSet := fuzzer.baseValueSet.Clone()
 
-	// Create a value generator for the worker
-	valueGenerator, err := fuzzer.Hooks.NewValueGeneratorFunc(fuzzer, valueSet)
+	// Create a config for our call sequence generator for this new worker.
+	callSequenceGenConfig, err := fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc(fuzzer, valueSet, randomProvider)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a fuzzing worker struct, referencing our parent fuzzing.
-	worker := FuzzerWorker{
+	// Create a new worker with the data provided.
+	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
 		coverageTracer:       nil,
+		randomProvider:       randomProvider,
 		valueSet:             valueSet,
-		valueGenerator:       valueGenerator,
 	}
+	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 
-	return &worker, nil
+	return worker, nil
 }
 
 // WorkerIndex returns the index of this FuzzerWorker in relation to its parent Fuzzer.
@@ -118,8 +120,8 @@ func (fw *FuzzerWorker) ValueSet() *valuegeneration.ValueSet {
 }
 
 // ValueGenerator obtains the value generator used by this worker.
-func (fw *FuzzerWorker) ValueGenerator() *valuegeneration.ValueSet {
-	return fw.valueSet
+func (fw *FuzzerWorker) ValueGenerator() valuegeneration.ValueGenerator {
+	return fw.sequenceGenerator.config.ValueGenerator
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
@@ -128,38 +130,31 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	// Add the contract address to our value set so our generator can use it in calls.
 	fw.valueSet.AddAddress(event.Contract.Address)
 
-	// Loop through all our known contract definitions
-	matchedDeployment := false
-	for i := 0; i < len(fw.fuzzer.contractDefinitions); i++ {
-		contractDefinition := &fw.fuzzer.contractDefinitions[i]
-
-		// If we have a match, register the deployed contract.
-		if event.Contract.IsMatch(contractDefinition.CompiledContract()) {
-			// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
-			fw.deployedContracts[event.Contract.Address] = contractDefinition
-
-			// Update our state changing methods
-			fw.updateStateChangingMethods()
-
-			// Emit an event indicating the worker detected a new contract deployment on its chain.
-			err := fw.Events.ContractAdded.Publish(FuzzerWorkerContractAddedEvent{
-				Worker:             fw,
-				ContractAddress:    event.Contract.Address,
-				ContractDefinition: contractDefinition,
-			})
-			if err != nil {
-				return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
-			}
-
-			// Skip to the next deployed contract to evaluate
-			matchedDeployment = true
-			break
+	// Try to match it to a known contract definition
+	matchedDefinition := fw.fuzzer.contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+	// If we didn't match any deployment, report it.
+	if matchedDefinition == nil {
+		if fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
+			return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+		} else {
+			return nil
 		}
 	}
 
-	// If we didn't match any deployment, report it.
-	if !matchedDeployment && fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
-		return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+	// Set our deployed contract address in our deployed contract lookup, so we can reference it later.
+	fw.deployedContracts[event.Contract.Address] = matchedDefinition
+
+	// Update our state changing methods
+	fw.updateStateChangingMethods()
+
+	// Emit an event indicating the worker detected a new contract deployment on its chain.
+	err := fw.Events.ContractAdded.Publish(FuzzerWorkerContractAddedEvent{
+		Worker:             fw,
+		ContractAddress:    event.Contract.Address,
+		ContractDefinition: matchedDefinition,
+	})
+	if err != nil {
+		return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
 	}
 	return nil
 }
@@ -213,86 +208,25 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	}
 }
 
-// generateFuzzedCall generates a new call sequence element which targets a state changing method in a contract
-// deployed to this FuzzerWorker's Chain with fuzzed call data.
-// Returns the call sequence element, or an error if one was encountered.
-func (fw *FuzzerWorker) generateFuzzedCall() (*fuzzerTypes.CallSequenceElement, error) {
-	// TODO: Replace use of rand.Intn here as we'll want to use a seeded worker-specific rng for reproducibility in
-	//  the value generator, here, and elsewhere.
-
-	// Verify we have state changing methods to call
-	if len(fw.stateChangingMethods) == 0 {
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
-	}
-
-	// Select a random method and sender
-	selectedMethod := &fw.stateChangingMethods[rand.Intn(len(fw.stateChangingMethods))]
-	selectedSender := fw.fuzzer.senders[rand.Intn(len(fw.fuzzer.senders))]
-
-	// Generate fuzzed parameters for the function call
-	args := make([]any, len(selectedMethod.Method.Inputs))
-	for i := 0; i < len(args); i++ {
-		// Create our fuzzed parameters.
-		input := selectedMethod.Method.Inputs[i]
-		args[i] = valuegeneration.GenerateAbiValue(fw.valueGenerator, &input.Type)
-	}
-
-	// Encode our parameters.
-	data, err := selectedMethod.Contract.CompiledContract().Abi.Pack(selectedMethod.Method.Name, args...)
-	if err != nil {
-		return nil, fmt.Errorf("could not generate tx due to error: %v", err)
-	}
-
-	// If this is a payable function, generate value to send
-	var value *big.Int
-	value = big.NewInt(0)
-	if selectedMethod.Method.StateMutability == "payable" {
-		value = fw.valueGenerator.GenerateInteger(false, 64)
-	}
-
-	// Create our message using the provided parameters.
-	// TODO: We likely want to generate use TransactionGasLimit as a max and generate a sensible number in its range.
-	// TODO: We likely want to make gasPrice configurable similarly.
-	msg := fw.chain.CreateMessage(selectedSender, &selectedMethod.Address, value, &fw.fuzzer.config.Fuzzing.TransactionGasLimit, nil, data)
-
-	// Determine our delay values for this element
-	// TODO: If we want more txs to be added together in a block, we should add a switch to make a 0 block number
-	//  jump occur more often here.
-	blockNumberDelay := uint64(0)
-	blockTimestampDelay := uint64(0)
-	if fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay > 0 {
-		blockNumberDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockNumberDelay + 1)
-	}
-	if fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay > 0 {
-		blockTimestampDelay = fw.valueGenerator.GenerateInteger(false, 64).Uint64() % (fw.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
-	}
-
-	// For each block we jump, we need a unique time stamp for chain semantics, so if our block number jump is too small,
-	// while our timestamp jump is larger, we cap it.
-	if blockNumberDelay > blockTimestampDelay {
-		if blockTimestampDelay == 0 {
-			blockNumberDelay = 0
-		} else {
-			blockNumberDelay %= blockTimestampDelay
-		}
-	}
-
-	// Return our call sequence element.
-	return fuzzerTypes.NewCallSequenceElement(selectedMethod.Contract, msg, blockNumberDelay, blockTimestampDelay), nil
-}
-
 // testCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
-func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) (int, []ShrinkCallSequenceRequest, error) {
+func (fw *FuzzerWorker) testCallSequence(callSequence calls.CallSequence) (int, []ShrinkCallSequenceRequest, error) {
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
+	var err error
 	defer func() {
-		if err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
-			panic(err.Error())
+		if err == nil {
+			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
 	}()
+
+	// Request our sequence generator prepare for generation of our call sequence
+	err = fw.sequenceGenerator.NewSequence(len(callSequence))
+	if err != nil {
+		return 0, nil, err
+	}
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
@@ -302,7 +236,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		// If our current call sequence element is nil, generate one.
 		var err error
 		if callSequence[i] == nil {
-			callSequence[i], err = fw.generateFuzzedCall()
+			callSequence[i], err = fw.sequenceGenerator.PopSequenceElement()
 			if err != nil {
 				return true, err
 			}
@@ -317,7 +251,8 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		callSequenceTested := callSequence[:i+1]
 
 		// Check for updates to coverage and corpus.
-		err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, callSequenceTested)
+		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(callSequenceTested, new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)))
 		if err != nil {
 			return true, err
 		}
@@ -333,7 +268,7 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 		}
 
 		// Update our metrics
-		fw.workerMetrics().callsTested++
+		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -364,29 +299,39 @@ func (fw *FuzzerWorker) testCallSequence(callSequence fuzzerTypes.CallSequence) 
 // calls which can be removed that continue to satisfy the provided shrink verifier.
 // Returns a call sequence that was optimized to include as little calls as possible to trigger the
 // expected conditions, or an error if one occurred.
-func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (fuzzerTypes.CallSequence, error) {
+func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
 	// In case of any error, we defer an operation to revert our chain state. We purposefully ignore errors from it to
 	// prioritize any others which occurred.
+	var err error
 	defer func() {
-		// nolint:errcheck
-		fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		if err == nil {
+			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		}
 	}()
 
-	// Define another slice to store our tx sequence
-	// Note: We clone here as we don't want to overwrite our call sequence runtime results we store.
-	optimizedSequence := callSequence.Clone()
+	// Define a variable to track our most optimized sequence across all optimization iterations.
+	optimizedSequence := callSequence
 
 	for i := 0; i < len(optimizedSequence); {
-		// Recreate our sequence without the item at this index
-		possibleShrunkSequence := make(fuzzerTypes.CallSequence, 0)
-		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[:i].Clone()...)
-		possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[i+1:].Clone()...)
+		// Recreate our current optimized sequence without the item at this index
+		possibleShrunkSequence, err := optimizedSequence.Clone()
+		if err != nil {
+			return nil, err
+		}
+		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
+
+		// Our pre-step method will simply correct the call message in case any fields are not correct due to shrinking.
+		executePreStepFunc := func(currentIndex int) (bool, error) {
+			possibleShrunkSequence[currentIndex].Call.FillFromTestChainProperties(fw.chain)
+			return false, nil
+		}
 
 		// Our post-step method will check coverage and call all testing functions. If one returns a request for a shrunk
 		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
 		executePostStepFunc := func(currentIndex int) (bool, error) {
 			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
-			err := corpus.UpdateCorpusAndCoverageMaps(fw.fuzzer.coverageMaps, fw.fuzzer.corpus, possibleShrunkSequence[:currentIndex+1])
+			// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(possibleShrunkSequence[:currentIndex+1], new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)))
 			if err != nil {
 				return true, err
 			}
@@ -400,7 +345,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 		}
 
 		// Execute our call sequence.
-		executedCount, err := possibleShrunkSequence.ExecuteOnChain(fw.chain, true, nil, executePostStepFunc)
+		executedCount, err := possibleShrunkSequence.ExecuteOnChain(fw.chain, true, executePreStepFunc, executePostStepFunc)
 		if err != nil {
 			return nil, err
 		}
@@ -435,46 +380,45 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence fuzzerTypes.CallSequence
 	}
 
 	// After we finished shrinking, report our result and return it.
-	err := shrinkRequest.FinishedCallback(fw, optimizedSequence)
+	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
 	if err != nil {
 		return nil, err
 	}
 
-	return optimizedSequence, nil
+	return optimizedSequence, err
 }
 
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
 // and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
 func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
-	// Clone our setup base chain.
+	// Clone our chain, attaching our necessary components for fuzzing post-genesis, prior to all blocks being copied.
+	// This means any tracers added or events subscribed to within this inner function are done so prior to chain
+	// setup (initial contract deployments), so data regarding that can be tracked as well.
 	var err error
-	fw.chain, err = chain.NewTestChainWithGenesis(baseTestChain.GenesisDefinition())
-	if err != nil {
-		return false, err
-	}
+	fw.chain, err = baseTestChain.Clone(func(initializedChain *chain.TestChain) error {
+		// Subscribe our chain event handlers
+		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
+		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-	// Subscribe our chain event handlers
-	fw.chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
-	fw.chain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
+		// Emit an event indicating the worker has created its chain.
+		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
+			Worker: fw,
+			Chain:  initializedChain,
+		})
+		if err != nil {
+			return fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
+		}
 
-	// Emit an event indicating the worker has created its chain.
-	err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
-		Worker: fw,
-		Chain:  fw.chain,
+		// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
+		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
+			fw.coverageTracer = coverage.NewCoverageTracer()
+			initializedChain.AddTracer(fw.coverageTracer, true, false)
+		}
+		return nil
 	})
-	if err != nil {
-		return false, fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
-	}
 
-	// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
-	if fw.fuzzer.config.Fuzzing.CoverageEnabled {
-		fw.coverageTracer = coverage.NewCoverageTracer()
-		fw.chain.AddTracer(fw.coverageTracer, true, false)
-	}
-
-	// Copy our chain data from our base chain to this one (triggering all relevant events along the way).
-	err = baseTestChain.CopyTo(fw.chain)
+	// If we encountered an error during cloning, return it.
 	if err != nil {
 		return false, err
 	}
@@ -489,7 +433,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	}
 
 	// Increase our generation metric as we successfully generated a test node
-	fw.workerMetrics().workerStartupCount++
+	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
@@ -514,7 +458,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Define our call sequence slice to populate.
-		callSequence := make(fuzzerTypes.CallSequence, fw.fuzzer.config.Fuzzing.CallSequenceLength)
+		callSequence := make(calls.CallSequence, fw.fuzzer.config.Fuzzing.CallSequenceLength)
 
 		// Test a newly generated call sequence (nil entries are filled by the method during testing)
 		txsTested, shrinkVerifiers, err := fw.testCallSequence(callSequence)
@@ -539,7 +483,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Update our sequences tested metrics
-		fw.workerMetrics().sequencesTested++
+		fw.workerMetrics().sequencesTested.Add(fw.workerMetrics().sequencesTested, big.NewInt(1))
 		sequencesTested++
 	}
 

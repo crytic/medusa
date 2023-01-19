@@ -1,4 +1,4 @@
-package types
+package contracts
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
