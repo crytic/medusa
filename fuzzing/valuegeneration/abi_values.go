@@ -576,11 +576,11 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 			v = val
 		}
 	case abi.BoolTy:
-		str, ok := value.(bool)
+		bl, ok := value.(bool)
 		if !ok {
 			return nil, fmt.Errorf("invalid bool value")
 		}
-		v = str
+		v = bl
 	case abi.StringTy:
 		str, ok := value.(string)
 		if !ok {
