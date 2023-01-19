@@ -2,10 +2,6 @@ package valuegeneration
 
 import (
 	"encoding/hex"
-	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/integrations/slither"
-	"github.com/trailofbits/medusa/utils"
 	"hash"
 	"math/big"
 
@@ -145,48 +141,4 @@ func (vs *ValueSet) RemoveBytes(b []byte) {
 	vs.hashProvider.Reset()
 
 	delete(vs.bytes, hashStr)
-}
-
-// AddSlitherConstants will add all the constants in the slither.SlitherData slither.Constants to the value set
-// TODO: This should be removed for something more general that can switch on abi.Type
-func (vs *ValueSet) AddSlitherConstants(slitherData *slither.SlitherData) error {
-	// Iterate across all constants
-	for _, constant := range slitherData.Constants {
-		switch constant.Type.T {
-		case abi.IntTy:
-			// Add intX to value set
-			b, success := new(big.Int).SetString(constant.Value, 10)
-			if !success {
-				return fmt.Errorf("unable to convert %v into a base-10 integer\n", constant.Value)
-			}
-			vs.AddInteger(b)
-		case abi.UintTy:
-			// Add uintX to value set
-			b, success := new(big.Int).SetString(constant.Value, 10)
-			if !success {
-				return fmt.Errorf("unable to convert %v into a base-10 integer\n", constant.Value)
-			}
-			vs.AddInteger(b)
-		case abi.AddressTy:
-			// Add address to value set
-			addr, err := utils.HexStringToAddress(constant.Value)
-			if err != nil {
-				return err
-			}
-			vs.AddAddress(addr)
-		case abi.StringTy:
-			// Add string to value set
-			vs.AddString(constant.Value)
-		case abi.BytesTy:
-			// Add bytes to value set
-			vs.AddBytes([]byte(constant.Value))
-		case abi.FixedBytesTy:
-			// Add fixed bytes to value set
-			vs.AddBytes([]byte(constant.Value))
-		default:
-			return fmt.Errorf("invalid abi type identified for slither constant:%v\n", constant.Type.T)
-		}
-	}
-
-	return nil
 }

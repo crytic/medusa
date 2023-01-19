@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
 	"github.com/trailofbits/medusa/fuzzing/integrations/slither"
+	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -63,8 +63,8 @@ type Fuzzer struct {
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
 
-	// SlitherData holds the data that was obtained by running slither's echidna printer
-	SlitherData *slither.SlitherData
+	// slitherData holds the data that was obtained by running slither's echidna printer
+	slitherData *slither.SlitherData
 
 	// Events describes the event system for the Fuzzer.
 	Events FuzzerEvents
@@ -133,7 +133,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// Run the slither printer after compilation
 	// Note that we do not exit if running slither fails
-	// TODO: Can this logic be put somewhere else?
 	if fuzzer.config.Fuzzing.SlitherEnabled {
 		// Get the platform configuration
 		platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
@@ -142,12 +141,12 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		}
 
 		// Run the printer on the same target as the one for compilation
-		fuzzer.SlitherData, err = slither.RunPrinter(platformConfig.GetTarget())
+		fuzzer.slitherData, err = slither.RunPrinter(platformConfig.GetTarget())
 		if err != nil {
 			fmt.Printf("unable to successfully run slither: %v\n", err.Error())
 		} else {
 			// If there were no failures, add all the constants to the base value set before cloning
-			err = fuzzer.baseValueSet.AddSlitherConstants(fuzzer.SlitherData)
+			err = fuzzer.slitherData.AddConstantsToValueSet(fuzzer.baseValueSet)
 			if err != nil {
 				fmt.Printf("unable to successfully add constants found from slither to the base value set: %v\n", err.Error())
 			}
@@ -178,6 +177,11 @@ func (f *Fuzzer) Config() config.ProjectConfig {
 // (e.g. for use in mutation operations).
 func (f *Fuzzer) BaseValueSet() *valuegeneration.ValueSet {
 	return f.baseValueSet
+}
+
+// SlitherData exposes the underlying data that was retrieved by running slither's echidna printer
+func (f *Fuzzer) SlitherData() *slither.SlitherData {
+	return f.slitherData
 }
 
 // SenderAddresses exposes the account addresses from which state changing fuzzed transactions will be sent by a

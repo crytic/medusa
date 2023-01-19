@@ -324,6 +324,7 @@ func TestValueGenerationSolving(t *testing.T) {
 		//"testdata/contracts/value_generation/match_ints_xy.sol",
 		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
+		"testdata/contracts/value_generation/match_constant_folding.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
