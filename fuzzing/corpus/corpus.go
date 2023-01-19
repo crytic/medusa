@@ -218,7 +218,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
 			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return true, err
+				return true, covErr
 			}
 			return false, nil
 		}
