@@ -3,8 +3,9 @@ package fuzzing
 import (
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,17 +24,17 @@ func TestFuzzerHooks(t *testing.T) {
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
 			var valueGenOk, chainSetupOk, callSeqTestFuncOk bool
-			existingValueGenFunc := f.fuzzer.Hooks.NewValueGeneratorFunc
-			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+			existingSeqGenConfigFunc := f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc
+			f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
 				valueGenOk = true
-				return existingValueGenFunc(fuzzer, valueSet)
+				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
 			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
-			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 				callSeqTestFuncOk = true
 				return make([]ShrinkCallSequenceRequest, 0), nil
 			})
@@ -135,7 +136,7 @@ func TestChainBehaviour(t *testing.T) {
 			config.Fuzzing.Workers = 1
 			config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) // we just need a few oog txs to test
 			config.Fuzzing.Timeout = 10                                          // to be safe, we set a 10s timeout
-			config.Fuzzing.TransactionGasLimit = 100000                          // we set this low, so contract execution runs out of gas earlier.
+			config.Fuzzing.TransactionGasLimit = 500000                          // we set this low, so contract execution runs out of gas earlier.
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -223,8 +224,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath:    filePath,
-			solcVersion: "0.7.0", // this test depends on solc <0.8.0
+			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
@@ -253,6 +253,42 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 			},
 		})
 	}
+}
+
+// TestDeploymentsWithArgs runs tests to ensure contracts deployed with config provided constructor arguments are
+// deployed as expected. It expects all properties should fail (indicating values provided were set accordingly).
+func TestDeploymentsWithArgs(t *testing.T) {
+	// This contract deploys a contract with specific constructor arguments. Property tests will fail if they are
+	// set correctly.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs", "Dependent"}
+			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
+				"DeploymentWithArgs": {
+					"_x": "123456789",
+					"_y": "0x5465",
+					"_z": map[string]any{
+						"a": "0x4d2",
+						"b": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473",
+					},
+				},
+				"Dependent": {
+					"_deployed": "DeployedContract:DeploymentWithArgs",
+				},
+			}
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check to see if there are any failures
+			assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 4)
+		},
+	})
 }
 
 // TestValueGenerationGenerateAllTypes runs a test to ensure various types of fuzzer inputs can be generated.
@@ -391,7 +427,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
@@ -407,7 +443,7 @@ func TestInitializeCoverageMaps(t *testing.T) {
 
 			// Check to see if we have some coverage
 			assertCorpusCallSequencesCollected(f, true)
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same
 			assert.True(t, originalCoverage.Equals(newCoverage))
@@ -436,7 +472,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
@@ -454,7 +490,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if original and new coverage are the same
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 			assert.False(t, originalCoverage.Equals(newCoverage))
 		},
 	})

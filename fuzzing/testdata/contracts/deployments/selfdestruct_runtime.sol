@@ -2,7 +2,7 @@
 // trigger a selfdestruct. This is used to test contract existence checks.
 contract InnerDeployment {
     function destroy() public {
-        selfdestruct(address(0));
+        selfdestruct(payable(address(0)));
     }
 }
 

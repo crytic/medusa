@@ -1,6 +1,8 @@
 package fuzzing
 
-import "github.com/trailofbits/medusa/fuzzing/types"
+import (
+	"github.com/trailofbits/medusa/fuzzing/calls"
+)
 
 // TestCaseStatus defines the status of a TestCase as a string-represented enum.
 type TestCaseStatus string
@@ -24,7 +26,7 @@ type TestCase interface {
 
 	// CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
 	// This should be nil if the result is not related to the CallSequence.
-	CallSequence() *types.CallSequence
+	CallSequence() *calls.CallSequence
 
 	// Name describes the name of the test case.
 	Name() string

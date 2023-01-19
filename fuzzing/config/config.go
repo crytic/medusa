@@ -48,6 +48,9 @@ type FuzzingConfig struct {
 	// DeploymentOrder determines the order in which the contracts should be deployed
 	DeploymentOrder []string `json:"deploymentOrder"`
 
+	// Constructor arguments for contracts deployment. It is available only in init mode
+	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
+
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
 
