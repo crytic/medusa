@@ -123,7 +123,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		// A variable that store the status whether any method starts with appropriate prefix
 		contains := false
 
-		// deploymentOrder
+		// get the deployment order from the project's config file
 		deploymentOrder := projectConfig.Fuzzing.DeploymentOrder
 		// Iterate over contracts definitions
 		for _, contract := range fuzzer.ContractDefinitions() {
