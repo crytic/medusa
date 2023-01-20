@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 )
@@ -325,10 +326,7 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	}
 
 	// Determine a random position to slice the call sequence.
-	maxLength := len(sequence)
-	if len(corpusSequence) < maxLength {
-		maxLength = len(corpusSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
 
 	return nil
@@ -345,10 +343,7 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	}
 
 	// Determine a random position to slice the call sequence.
-	maxLength := len(sequence)
-	if len(corpusSequence) < maxLength {
-		maxLength = len(corpusSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	targetLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	copy(sequence[len(sequence)-targetLength:], corpusSequence[len(corpusSequence)-targetLength:])
 
@@ -371,20 +366,14 @@ func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequ
 	}
 
 	// Determine a random position to slice off the head of the call sequence.
-	maxLength := len(sequence)
-	if len(headSequence) < maxLength {
-		maxLength = len(headSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(headSequence))
 	headSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 
 	// Copy the head of the first corpus sequence to our destination sequence.
 	copy(sequence, headSequence[:headSequenceLength])
 
 	// Determine a random position to slice off the tail of the call sequence.
-	maxLength = len(sequence) - headSequenceLength
-	if len(tailSequence) < maxLength {
-		maxLength = len(tailSequence)
-	}
+	maxLength = utils.Min(len(sequence)-headSequenceLength, len(tailSequence))
 	tailSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength + 1)
 
 	// Copy the tail of the second corpus sequence to our destination sequence (after the head sequence portion).
@@ -409,28 +398,19 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 	}
 
 	// Determine how many transactions to take from the first sequence and slice it.
-	maxLength := len(sequence)
-	if len(firstSequence) < maxLength {
-		maxLength = len(firstSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(firstSequence))
 	firstSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	firstSequence = firstSequence[:firstSequenceLength]
 
 	// Determine how many transactions to take from the second sequence and slice it.
-	maxLength = len(sequence) - firstSequenceLength
-	if len(secondSequence) < maxLength {
-		maxLength = len(secondSequence)
-	}
+	maxLength = utils.Min(len(sequence)-firstSequenceLength, len(secondSequence))
 	secondSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength + 1)
 	secondSequence = secondSequence[:secondSequenceLength]
 
 	// Now that we have both sequences, and we know they will not exceed our destination sequence length, interleave
 	// them.
-	largestSequenceSize := firstSequenceLength
-	if secondSequenceLength > largestSequenceSize {
-		largestSequenceSize = secondSequenceLength
-	}
 	destIndex := 0
+	largestSequenceSize := utils.Max(firstSequenceLength, secondSequenceLength)
 	for i := 0; i < largestSequenceSize; i++ {
 		if i < len(firstSequence) {
 			sequence[destIndex] = firstSequence[i]
