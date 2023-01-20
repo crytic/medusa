@@ -3,7 +3,8 @@ package fuzzing
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ type AssertionTestCase struct {
 	status         TestCaseStatus
 	targetContract *fuzzerTypes.Contract
 	targetMethod   abi.Method
-	callSequence   *fuzzerTypes.CallSequence
+	callSequence   *calls.CallSequence
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
@@ -22,7 +23,7 @@ func (t *AssertionTestCase) Status() TestCaseStatus {
 
 // CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
 // This should be nil if the result is not related to the CallSequence.
-func (t *AssertionTestCase) CallSequence() *fuzzerTypes.CallSequence {
+func (t *AssertionTestCase) CallSequence() *calls.CallSequence {
 	return t.callSequence
 }
 

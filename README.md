@@ -11,7 +11,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 - ✔️**Assertion and property testing**: built-in support for writing basic Solidity property tests and assertion tests
 - ✔️**Mutational value generation**: fed by compilation and runtime values.
 - ✔️**Coverage collecting**: Coverage increasing call sequences are stored in the corpus
-- ❌ **Coverage guided**: Coverage increasing call sequences from the corpus are mutated to further guide the fuzzing campaign
+- ✔️**Coverage guided fuzzing**: Coverage increasing call sequences from the corpus are mutated to further guide the fuzzing campaign
 - ✔️**Extensible low-level testing API** through events and hooks provided throughout the fuzzer, workers, and test chains.
 - ❌ **Extensible high-level testing API** allowing for the addition of per-contract or global post call/event property tests with minimal effort.
 
