@@ -387,12 +387,16 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 
 	// Create a sequence generator config which uses the created value generator.
 	sequenceGenConfig := &CallSequenceGeneratorConfig{
-		NewSequenceProbability:           0.3,
-		RandomUnmodifiedCorpusHeadWeight: 800,
-		RandomUnmodifiedCorpusTailWeight: 100,
-		RandomMutatedCorpusHeadWeight:    80,
-		RandomMutatedCorpusTailWeight:    10,
-		ValueGenerator:                   valueGenerator,
+		NewSequenceProbability:                   0.3,
+		RandomUnmodifiedCorpusHeadWeight:         800,
+		RandomUnmodifiedCorpusTailWeight:         100,
+		RandomUnmodifiedSpliceAtRandomWeight:     200,
+		RandomUnmodifiedInterleaveAtRandomWeight: 100,
+		RandomMutatedCorpusHeadWeight:            80,
+		RandomMutatedCorpusTailWeight:            10,
+		RandomMutatedSpliceAtRandomWeight:        20,
+		RandomMutatedInterleaveAtRandomWeight:    10,
+		ValueGenerator:                           valueGenerator,
 	}
 	return sequenceGenConfig, nil
 }
