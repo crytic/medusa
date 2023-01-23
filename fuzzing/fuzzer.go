@@ -100,9 +100,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
-			NewValueGeneratorFunc: defaultNewValueGeneratorFunc,
-			ChainSetupFunc:        chainSetupFromCompilations,
-			CallSequenceTestFuncs: make([]CallSequenceTestFunc, 0),
+			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
+			ChainSetupFunc:                     chainSetupFromCompilations,
+			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 		},
 	}
 
@@ -353,27 +353,52 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a valuegeneration.MutatingValueGenerator with a
-// default configuration. Returns the generator or an error, if one occurs.
-func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error) {
+// defaultNewCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
+// CallSequenceGeneratorConfig with a default configuration. Returns the config or an error, if one occurs.
+func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
+	// Create the underlying value generator for the worker and its sequence generator.
 	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
-		MinMutationRounds: 0,
-		MaxMutationRounds: 1,
-		RandomAddressBias: 0.5,
-		RandomIntegerBias: 0.5,
-		RandomStringBias:  0.5,
-		RandomBytesBias:   0.5,
+		MinMutationRounds:               0,
+		MaxMutationRounds:               1,
+		GenerateRandomAddressBias:       0.5,
+		GenerateRandomIntegerBias:       0.5,
+		GenerateRandomStringBias:        0.5,
+		GenerateRandomBytesBias:         0.5,
+		MutateAddressProbability:        0.1,
+		MutateArrayStructureProbability: 0.1,
+		MutateBoolProbability:           0.1,
+		MutateBytesProbability:          0.1,
+		MutateBytesGenerateNewBias:      0.45,
+		MutateFixedBytesProbability:     0.1,
+		MutateStringProbability:         0.1,
+		MutateStringGenerateNewBias:     0.7,
+		MutateIntegerProbability:        0.1,
+		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
-			RandomArrayMinSize:  0,
-			RandomArrayMaxSize:  100,
-			RandomBytesMinSize:  0,
-			RandomBytesMaxSize:  100,
-			RandomStringMinSize: 0,
-			RandomStringMaxSize: 100,
+			GenerateRandomArrayMinSize:  0,
+			GenerateRandomArrayMaxSize:  100,
+			GenerateRandomBytesMinSize:  0,
+			GenerateRandomBytesMaxSize:  100,
+			GenerateRandomStringMinSize: 0,
+			GenerateRandomStringMaxSize: 100,
 		},
 	}
 	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet, randomProvider)
-	return valueGenerator, nil
+
+	// Create a sequence generator config which uses the created value generator.
+	sequenceGenConfig := &CallSequenceGeneratorConfig{
+		NewSequenceProbability:                   0.3,
+		RandomUnmodifiedCorpusHeadWeight:         800,
+		RandomUnmodifiedCorpusTailWeight:         100,
+		RandomUnmodifiedSpliceAtRandomWeight:     200,
+		RandomUnmodifiedInterleaveAtRandomWeight: 100,
+		RandomMutatedCorpusHeadWeight:            80,
+		RandomMutatedCorpusTailWeight:            10,
+		RandomMutatedSpliceAtRandomWeight:        20,
+		RandomMutatedInterleaveAtRandomWeight:    10,
+		ValueGenerator:                           valueGenerator,
+	}
+	return sequenceGenConfig, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.

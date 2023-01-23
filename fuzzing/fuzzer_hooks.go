@@ -9,8 +9,12 @@ import (
 
 // FuzzerHooks defines the hooks that can be used for the Fuzzer on an API level.
 type FuzzerHooks struct {
-	// NewValueGeneratorFunc describes the function to use to set up a new value generator per worker.
-	NewValueGeneratorFunc NewValueGeneratorFunc
+	// NewCallSequenceGeneratorConfigFunc describes the function to use to set up a new CallSequenceGeneratorConfig,
+	// defining parameters for a new FuzzerWorker's CallSequenceGenerator.
+	// Note: The value generator provided within the config must be either thread safe, or a new instance must be
+	// provided per call to avoid concurrent access issues between workers.
+	NewCallSequenceGeneratorConfigFunc NewCallSequenceGeneratorConfigFunc
+
 	// ChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
 	ChainSetupFunc TestChainSetupFunc
 
@@ -19,10 +23,10 @@ type FuzzerHooks struct {
 	CallSequenceTestFuncs []CallSequenceTestFunc
 }
 
-// NewValueGeneratorFunc defines a method which is called to create a valuegeneration.ValueGenerator for a worker
-// when it is created. It takes the current fuzzer as an argument for context, and is expected to return a generator,
-// or an error if one is encountered.
-type NewValueGeneratorFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error)
+// NewCallSequenceGeneratorConfigFunc defines a method is called to create a new CallSequenceGeneratorConfig, defining
+// the parameters for the new FuzzerWorker to use when creating its CallSequenceGenerator used to power fuzzing.
+// Returns a new CallSequenceGeneratorConfig, or an error if one is encountered.
+type NewCallSequenceGeneratorConfigFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error)
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error

@@ -46,9 +46,6 @@ type FuzzerWorker struct {
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
-	// valueGenerator generates values for use in the fuzzing campaign (e.g. when populating abi function call
-	// arguments)
-	valueGenerator valuegeneration.ValueGenerator
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
@@ -61,13 +58,13 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	// Clone the fuzzer's base value set, so we can build on it with runtime values.
 	valueSet := fuzzer.baseValueSet.Clone()
 
-	// Create a value generator for the worker
-	valueGenerator, err := fuzzer.Hooks.NewValueGeneratorFunc(fuzzer, valueSet, randomProvider)
+	// Create a config for our call sequence generator for this new worker.
+	callSequenceGenConfig, err := fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc(fuzzer, valueSet, randomProvider)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a fuzzing worker struct, referencing our parent fuzzing.
+	// Create a new worker with the data provided.
 	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
@@ -76,9 +73,8 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
-		valueGenerator:       valueGenerator,
 	}
-	worker.sequenceGenerator = NewCallSequenceGenerator(worker)
+	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 
 	return worker, nil
 }
@@ -124,8 +120,8 @@ func (fw *FuzzerWorker) ValueSet() *valuegeneration.ValueSet {
 }
 
 // ValueGenerator obtains the value generator used by this worker.
-func (fw *FuzzerWorker) ValueGenerator() *valuegeneration.ValueSet {
-	return fw.valueSet
+func (fw *FuzzerWorker) ValueGenerator() valuegeneration.ValueGenerator {
+	return fw.sequenceGenerator.config.ValueGenerator
 }
 
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.

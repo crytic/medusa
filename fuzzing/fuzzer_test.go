@@ -24,10 +24,10 @@ func TestFuzzerHooks(t *testing.T) {
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
 			var valueGenOk, chainSetupOk, callSeqTestFuncOk bool
-			existingValueGenFunc := f.fuzzer.Hooks.NewValueGeneratorFunc
-			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueGenerator, error) {
+			existingSeqGenConfigFunc := f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc
+			f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
 				valueGenOk = true
-				return existingValueGenFunc(fuzzer, valueSet, randomProvider)
+				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
 			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {

@@ -54,7 +54,7 @@ type CallMessage struct {
 	// MsgDataAbiValues represents the underlying message data to be sent to the receiver. If the receiver is a smart
 	// contract, this will likely house your call parameters and other serialized data. This overrides MsgData if it is
 	// set, allowing Data to be sourced from method ABI input arguments instead.
-	MsgDataAbiValues *CallMessageDataAbiValues `json:"data_abi_values,omitempty"`
+	MsgDataAbiValues *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
 }
 
 // callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
@@ -160,7 +160,7 @@ func (m *CallMessage) Clone() (*CallMessage, error) {
 	// Create a message with the same data copied over.
 	clone := &CallMessage{
 		MsgFrom:          m.MsgFrom,
-		MsgTo:            m.MsgTo,
+		MsgTo:            m.MsgTo, // this value should be read-only, so we re-use it rather than cloning.
 		MsgNonce:         m.MsgNonce,
 		MsgValue:         new(big.Int).Set(m.MsgValue),
 		MsgGas:           m.MsgGas,

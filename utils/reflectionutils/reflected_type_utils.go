@@ -1,6 +1,7 @@
 package reflectionutils
 
 import (
+	"fmt"
 	"reflect"
 )
 
@@ -27,6 +28,7 @@ func SliceToArray(reflectedSlice reflect.Value) any {
 }
 
 // CopyReflectedType creates a shallow copy of a reflected value. It supports slices, arrays, or structs.
+// This method panics if an array, slice, or struct type is not provided.
 // Returns the reflected copied value.
 func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 	switch reflectedValue.Kind() {
@@ -53,4 +55,43 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 		return newStruct
 	}
 	panic("failed to copy reflected value, type not supported")
+}
+
+// GetReflectedArrayValues obtains the values of each element of a reflected array or slice variable.
+// This method panics if an array or slice type is not provided.
+// Returns a slice containing all values of each element in the provided array or slice.
+func GetReflectedArrayValues(reflectedArray reflect.Value) []any {
+	switch reflectedArray.Kind() {
+	case reflect.Slice:
+		fallthrough
+	case reflect.Array:
+		values := make([]any, reflectedArray.Len())
+		for i := 0; i < len(values); i++ {
+			values[i] = GetField(reflectedArray.Index(i))
+		}
+		return values
+	}
+	panic("failed to get reflected array values, type not supported")
+}
+
+// SetReflectedArrayValues takes an array or slice of the same length as the values provided, and sets each element
+// to the corresponding element of the values provided.
+// Returns an error if one occurred during value setting.
+func SetReflectedArrayValues(reflectedArray reflect.Value, values []any) error {
+	switch reflectedArray.Kind() {
+	case reflect.Slice:
+		fallthrough
+	case reflect.Array:
+		// Validate the length of our array is equal to the length of values provided.
+		if reflectedArray.Len() != len(values) {
+			return fmt.Errorf("failed to set reflected array values, a slice/array of length %v was provided, while %v values were provided", reflectedArray.Len(), len(values))
+		}
+
+		// Set each element in the array to the corresponding element of the values provided.
+		for i := 0; i < len(values); i++ {
+			SetField(reflectedArray.Index(i), values[i])
+		}
+		return nil
+	}
+	panic("failed to set reflected array values, type not supported")
 }

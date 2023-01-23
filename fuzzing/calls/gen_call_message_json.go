@@ -24,7 +24,7 @@ func (c CallMessage) MarshalJSON() ([]byte, error) {
 		MsgGasFeeCap     *hexutil.Big              `json:"gasFeeCap"`
 		MsgGasTipCap     *hexutil.Big              `json:"gasTipCap"`
 		MsgData          hexutil.Bytes             `json:"data,omitempty"`
-		MsgDataAbiValues *CallMessageDataAbiValues `json:"data_abi_values,omitempty"`
+		MsgDataAbiValues *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
 	}
 	var enc CallMessage
 	enc.MsgFrom = c.MsgFrom
@@ -52,7 +52,7 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 		MsgGasFeeCap     *hexutil.Big              `json:"gasFeeCap"`
 		MsgGasTipCap     *hexutil.Big              `json:"gasTipCap"`
 		MsgData          *hexutil.Bytes            `json:"data,omitempty"`
-		MsgDataAbiValues *CallMessageDataAbiValues `json:"data_abi_values,omitempty"`
+		MsgDataAbiValues *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
 	}
 	var dec CallMessage
 	if err := json.Unmarshal(input, &dec); err != nil {
