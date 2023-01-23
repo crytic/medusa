@@ -2,10 +2,11 @@ package fuzzing
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"strings"
 )
 
 // AssertionTestCase describes a test being run by a AssertionTestCaseProvider.

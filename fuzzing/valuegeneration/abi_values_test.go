@@ -2,12 +2,13 @@ package valuegeneration
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/stretchr/testify/assert"
 )
 
 // getTestABIArguments obtains ABI arguments of various types for use in testing ABI value related methods.
@@ -252,6 +253,36 @@ func TestABIGenerationAndMutation(t *testing.T) {
 
 			// Verify the types of the value and mutated value are the same
 			assert.EqualValues(t, reflect.ValueOf(value).Type().String(), reflect.ValueOf(mutatedValue).Type().String())
+		}
+	}
+}
+
+// TestEncodeABIArgumentToString runs tests to ensure that  a provided go-ethereum ABI packable input value of a given
+// type is encoded to string in the specific format, depending on the input's type.
+func TestEncodeABIArgumentToString(t *testing.T) {
+	// Create a value generator
+	valueGenerator := NewRandomValueGenerator(&RandomValueGeneratorConfig{
+		GenerateRandomArrayMinSize:  3,
+		GenerateRandomArrayMaxSize:  10,
+		GenerateRandomBytesMinSize:  5,
+		GenerateRandomBytesMaxSize:  200,
+		GenerateRandomStringMinSize: 5,
+		GenerateRandomStringMaxSize: 200,
+	}, rand.New(rand.NewSource(time.Now().UnixNano())))
+
+	// Obtain our test ABI arguments
+	args := getTestABIArguments()
+
+	// Loop for each input argument
+	for _, arg := range args {
+		// Test each argument encoding to string with different generated values (iterate a number of times).
+		for i := 0; i < 10; i++ {
+			// Generate a value for this argument
+			value := GenerateAbiValue(valueGenerator, &arg.Type)
+
+			// Encode the generated value for this argument and ensure no error occurred.
+			_, err := encodeABIArgumentToString(&arg.Type, value)
+			assert.NoError(t, err)
 		}
 	}
 }
