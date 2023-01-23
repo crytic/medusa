@@ -494,10 +494,11 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Prepare a tuple/struct. Return as a string enclosed with {}, where specific elements are presented
 		// as a `key: value` and comma-separated.
 
+		// Initialize an array to store our string representations of each tuple/struct field.
+		tupleData := make([]string, 0)
+
 		// Get the reflected value of the input tuple/struct
 		reflectedTuple := reflect.ValueOf(value)
-		// Initialize an empty map to store the encoded elements
-		tupleData := make(map[string]string)
 		// Iterate through the elements of the input tuple/struct
 		for i := 0; i < len(inputType.TupleElems); i++ {
 			// Get the field of the tuple/struct at the current index
@@ -510,20 +511,13 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			// Add the encoded field value to the tupleData map with the name of the field as the key
-			tupleData[inputType.TupleRawNames[i]] = fieldData
+
+			// Append the key-value pair in the format "key: value" to our tuple dat
+			tupleData = append(tupleData, fmt.Sprintf("%v: %v", inputType.TupleRawNames[i], fieldData))
 		}
 
-		// `keyValue` slice stores strings of the underlying struct/tuple's key and values in the specific format.
-		var keyValue []string
-		// Iterate through the tupleData map
-		for key, val := range tupleData {
-			// Append the key-value pair in the format "key: value" to the keyValue slice
-			keyValue = append(keyValue, fmt.Sprintf("%v: %v", key, val))
-		}
-
-		// Join the elements of the keyValue with ", " and enclose it with "{}"
-		str := "{" + strings.Join(keyValue, ", ") + "}"
+		// Join the tuple string elements and close them in braces.
+		str := "{" + strings.Join(tupleData, ", ") + "}"
 		return str, nil
 	default:
 		return "", fmt.Errorf("could not encode argument as string, type is unsupported: %v", inputType)
