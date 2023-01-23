@@ -497,7 +497,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 	})
 }
 
-// TestDoNotStartIfNoTests will ensure that if the fuzzer has no tests on start, the fuzzing campaign do not start.
+// TestDoNotStartIfNoTests will ensure that if the fuzzer has no tests on start, the fuzzing campaign does not start.
 func TestDoNotStartIfNoTests(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/contracts_without_tests/no_tests_of_any_kind.sol",

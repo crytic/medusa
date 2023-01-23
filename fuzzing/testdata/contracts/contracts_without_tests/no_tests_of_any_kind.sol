@@ -1,4 +1,4 @@
-// This contract ensures the fuzzer do not run if no tests of any kind exist.
+// This contract ensures the fuzzer does not run if no tests of any kind exist.
 contract NoTests {
     string public message;
 
