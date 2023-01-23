@@ -70,7 +70,7 @@ type TestChain struct {
 	Events TestChainEvents
 
 	// testChainConfig represents the medusa's blockchain settings during fuzzing
-	testChainConfig TestChainConfig
+	//testChainConfig *TestChainConfig
 }
 
 // TestChainConfig represents medusa's chain configuration. Both the core config (`CoreConfig`) which determines
