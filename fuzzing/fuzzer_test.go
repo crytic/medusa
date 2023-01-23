@@ -1,12 +1,13 @@
 package fuzzing
 
 import (
+	"math/rand"
+	"testing"
+
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"math/rand"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/fuzzing/config"
@@ -492,6 +493,23 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			// Check to see if original and new coverage are the same
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 			assert.False(t, originalCoverage.Equals(newCoverage))
+		},
+	})
+}
+
+// TestDoNotStartIfNoTests will ensure that if the fuzzer has no tests on start, the fuzzing campaign do not start.
+func TestDoNotStartIfNoTests(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/contracts_without_tests/no_tests_of_any_kind.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"NoTests"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+
+			// Check to see if an error is returned (the fuzzer has no tests on start)
+			assert.Error(t, err)
 		},
 	})
 }

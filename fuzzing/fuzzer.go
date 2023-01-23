@@ -10,20 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
+	"github.com/trailofbits/medusa/utils/randomutils"
 	"golang.org/x/exp/slices"
 )
 
@@ -571,6 +570,12 @@ func (f *Fuzzer) Start() error {
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
 		return err
+	}
+
+	// Check if the fuzzer has tests on start
+	if len(f.testCases) == 0 {
+		// Do not start the fuzzing campaign if no tests of any kind exist
+		return fmt.Errorf("no tests of any kind (assertion tests/property tests/custom tests added on an API level) exist")
 	}
 
 	// Run the main worker loop
