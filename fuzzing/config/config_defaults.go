@@ -1,8 +1,6 @@
 package config
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/compilation"
@@ -61,31 +59,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		},
 		Compilation: compilationConfig,
 		ChainConfig: &chain.TestChainConfig{
-			CoreConfig: &params.ChainConfig{
-				ChainID:                       big.NewInt(1),
-				HomesteadBlock:                big.NewInt(0),
-				DAOForkBlock:                  nil,
-				DAOForkSupport:                false,
-				EIP150Block:                   big.NewInt(0),
-				EIP155Block:                   big.NewInt(0),
-				EIP158Block:                   big.NewInt(0),
-				ByzantiumBlock:                big.NewInt(0),
-				ConstantinopleBlock:           big.NewInt(0),
-				PetersburgBlock:               big.NewInt(0),
-				IstanbulBlock:                 big.NewInt(0),
-				MuirGlacierBlock:              big.NewInt(0),
-				BerlinBlock:                   big.NewInt(0),
-				LondonBlock:                   big.NewInt(0),
-				ArrowGlacierBlock:             big.NewInt(0),
-				GrayGlacierBlock:              big.NewInt(0),
-				MergeNetsplitBlock:            nil,
-				ShanghaiBlock:                 nil,
-				CancunBlock:                   nil,
-				TerminalTotalDifficulty:       nil,
-				TerminalTotalDifficultyPassed: false,
-				Ethash:                        new(params.EthashConfig),
-				Clique:                        nil,
-			},
+			CoreConfig: params.TestChainConfig,
 		},
 	}
 
