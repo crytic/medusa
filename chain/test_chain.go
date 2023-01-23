@@ -82,10 +82,10 @@ type TestChainConfig struct {
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation.
-func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig TestChainConfig) (*TestChain, error) {
+func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig params.ChainConfig) (*TestChain, error) {
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
-		Config:    testChainConfig.CoreConfig, // Get the core chain configuration
+		Config:    &testChainConfig, // Get the core chain configuration
 		Nonce:     0,
 		Timestamp: 0,
 		ExtraData: []byte{
