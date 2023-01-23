@@ -3,6 +3,7 @@ package calls
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -68,6 +69,8 @@ func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
 	// Try to resolve the method from our contract ABI.
 	if resolvedMethod, ok := contractAbi.Methods[d.methodName]; ok {
 		d.Method = &resolvedMethod
+	} else {
+		return fmt.Errorf("could not resolve method '%v' from the given contract ABI", d.methodName)
 	}
 
 	// Now that we've resolved the method, decode our encoded input values.

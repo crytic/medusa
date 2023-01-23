@@ -3,15 +3,16 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/trailofbits/medusa/utils/randomutils"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -387,12 +388,16 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 
 	// Create a sequence generator config which uses the created value generator.
 	sequenceGenConfig := &CallSequenceGeneratorConfig{
-		NewSequenceProbability:           0.3,
-		RandomUnmodifiedCorpusHeadWeight: 800,
-		RandomUnmodifiedCorpusTailWeight: 100,
-		RandomMutatedCorpusHeadWeight:    80,
-		RandomMutatedCorpusTailWeight:    10,
-		ValueGenerator:                   valueGenerator,
+		NewSequenceProbability:                   0.3,
+		RandomUnmodifiedCorpusHeadWeight:         800,
+		RandomUnmodifiedCorpusTailWeight:         100,
+		RandomUnmodifiedSpliceAtRandomWeight:     200,
+		RandomUnmodifiedInterleaveAtRandomWeight: 100,
+		RandomMutatedCorpusHeadWeight:            80,
+		RandomMutatedCorpusTailWeight:            10,
+		RandomMutatedSpliceAtRandomWeight:        20,
+		RandomMutatedInterleaveAtRandomWeight:    10,
+		ValueGenerator:                           valueGenerator,
 	}
 	return sequenceGenConfig, nil
 }

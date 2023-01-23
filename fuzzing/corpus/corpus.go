@@ -3,16 +3,17 @@ package corpus
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/randomutils"
-	"math/big"
-	"os"
-	"path/filepath"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
@@ -218,7 +219,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
 			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return true, err
+				return true, covErr
 			}
 			return false, nil
 		}
