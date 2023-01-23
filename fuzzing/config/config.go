@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/utils"
 )
@@ -16,6 +17,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// ChainConfig describes the core configuration that determines blockchain settings during fuzzing.
+	ChainConfig *chain.TestChainConfig `json:"testChainConfig"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -195,5 +199,7 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
+
+	// TODO: add validations of core config, etc.
 	return nil
 }
