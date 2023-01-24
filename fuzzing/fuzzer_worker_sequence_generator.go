@@ -4,42 +4,10 @@ import (
 	"fmt"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 )
-
-// CallSequenceGeneratorConfig defines the configuration for a CallSequenceGenerator to be created and used by a
-// FuzzerWorker to generate call sequences in a fuzzing campaign.
-type CallSequenceGeneratorConfig struct {
-	// NewSequenceProbability defines the probability that the CallSequenceGenerator should generate an entirely new
-	// sequence rather than mutating one from the corpus.
-	NewSequenceProbability float32
-
-	// RandomUnmodifiedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the head of a corpus sequence (without mutations) and append newly generated calls
-	// to the end of it.
-	RandomUnmodifiedCorpusHeadWeight uint64
-
-	// RandomUnmodifiedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the tail of a corpus sequence (without mutations) and prepend newly generated calls
-	// to the start of it.
-	RandomUnmodifiedCorpusTailWeight uint64
-
-	// RandomMutatedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the head of a corpus sequence (with mutations) and append newly generated calls
-	// to the end of it.
-	RandomMutatedCorpusHeadWeight uint64
-
-	// RandomMutatedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the tao; of a corpus sequence (with mutations) and prepend newly generated calls
-	// to the start of it.
-	RandomMutatedCorpusTailWeight uint64
-
-	// ValueGenerator defines the value provider to use when generating or mutating call sequences. This is used both
-	// for ABI call data generation, and generation of additional values such as the "value" field of a
-	// transaction/call.
-	ValueGenerator valuegeneration.ValueGenerator
-}
 
 // CallSequenceGenerator generates call sequences iteratively per element, for use in fuzzing campaigns. It is attached
 // to a FuzzerWorker and uses its runtime context
@@ -67,6 +35,59 @@ type CallSequenceGenerator struct {
 	// mutationStrategyChooser is a weighted random selector of functions that prepare the CallSequenceGenerator with
 	// a baseSequence derived from corpus entries.
 	mutationStrategyChooser *randomutils.WeightedRandomChooser[CallSequenceGeneratorMutationStrategy]
+}
+
+// CallSequenceGeneratorConfig defines the configuration for a CallSequenceGenerator to be created and used by a
+// FuzzerWorker to generate call sequences in a fuzzing campaign.
+type CallSequenceGeneratorConfig struct {
+	// NewSequenceProbability defines the probability that the CallSequenceGenerator should generate an entirely new
+	// sequence rather than mutating one from the corpus.
+	NewSequenceProbability float32
+
+	// RandomUnmodifiedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking the head of a corpus sequence (without mutations) and append newly generated calls
+	// to the end of it.
+	RandomUnmodifiedCorpusHeadWeight uint64
+
+	// RandomUnmodifiedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking the tail of a corpus sequence (without mutations) and prepend newly generated calls
+	// to the start of it.
+	RandomUnmodifiedCorpusTailWeight uint64
+
+	// RandomUnmodifiedSpliceAtRandomWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking two corpus sequences (without mutations) and splicing them before joining them
+	// together.
+	RandomUnmodifiedSpliceAtRandomWeight uint64
+
+	// RandomUnmodifiedInterleaveAtRandomWeight defines the weight that the CallSequenceGenerator should use the call
+	// sequence generation strategy of taking two corpus sequences (without mutations) and interleaving a random
+	// number of calls from each.
+	RandomUnmodifiedInterleaveAtRandomWeight uint64
+
+	// RandomMutatedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking the head of a corpus sequence (with mutations) and append newly generated calls
+	// to the end of it.
+	RandomMutatedCorpusHeadWeight uint64
+
+	// RandomMutatedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking the tao; of a corpus sequence (with mutations) and prepend newly generated calls
+	// to the start of it.
+	RandomMutatedCorpusTailWeight uint64
+
+	// RandomMutatedSpliceAtRandomWeight defines the weight that the CallSequenceGenerator should use the call sequence
+	// generation strategy of taking two corpus sequences (with mutations) and splicing them before joining them
+	// together.
+	RandomMutatedSpliceAtRandomWeight uint64
+
+	// RandomMutatedInterleaveAtRandomWeight defines the weight that the CallSequenceGenerator should use the call
+	// sequence generation strategy of taking two corpus sequences (with mutations) and interleaving a random
+	// number of calls from each.
+	RandomMutatedInterleaveAtRandomWeight uint64
+
+	// ValueGenerator defines the value provider to use when generating or mutating call sequences. This is used both
+	// for ABI call data generation, and generation of additional values such as the "value" field of a
+	// transaction/call.
+	ValueGenerator valuegeneration.ValueGenerator
 }
 
 // CallSequenceGeneratorFunc defines a method used to populate a provided call sequence with generated calls.
@@ -113,6 +134,20 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 		),
 		randomutils.NewWeightedRandomChoice(
 			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncSpliceAtRandom,
+				PrefetchModifyCallFunc:    nil,
+			},
+			new(big.Int).SetUint64(config.RandomUnmodifiedSpliceAtRandomWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncInterleaveAtRandom,
+				PrefetchModifyCallFunc:    nil,
+			},
+			new(big.Int).SetUint64(config.RandomUnmodifiedInterleaveAtRandomWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
 				CallSequenceGeneratorFunc: callSeqGenFuncCorpusHead,
 				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
 			},
@@ -124,6 +159,20 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
 			},
 			new(big.Int).SetUint64(config.RandomMutatedCorpusTailWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncSpliceAtRandom,
+				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
+			},
+			new(big.Int).SetUint64(config.RandomMutatedSpliceAtRandomWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncInterleaveAtRandom,
+				PrefetchModifyCallFunc:    prefetchModifyCallFuncMutate,
+			},
+			new(big.Int).SetUint64(config.RandomMutatedInterleaveAtRandomWeight),
 		),
 	)
 
@@ -277,10 +326,7 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	}
 
 	// Determine a random position to slice the call sequence.
-	maxLength := len(sequence)
-	if len(corpusSequence) < maxLength {
-		maxLength = len(corpusSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
 
 	return nil
@@ -297,13 +343,84 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	}
 
 	// Determine a random position to slice the call sequence.
-	maxLength := len(sequence)
-	if len(corpusSequence) < maxLength {
-		maxLength = len(corpusSequence)
-	}
+	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	targetLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	copy(sequence[len(sequence)-targetLength:], corpusSequence[len(corpusSequence)-targetLength:])
 
+	return nil
+}
+
+// callSeqGenFuncSpliceAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is based off of two corpus call sequence entries, from which a random length head and tail are
+// respectively sliced and joined together.
+// Returns an error if one occurs.
+func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	// Obtain two corpus call sequence entries
+	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	if err != nil {
+		return fmt.Errorf("could not obtain head corpus call sequence for splice-at-random corpus mutation: %v", err)
+	}
+	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	if err != nil {
+		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
+	}
+
+	// Determine a random position to slice off the head of the call sequence.
+	maxLength := utils.Min(len(sequence), len(headSequence))
+	headSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
+
+	// Copy the head of the first corpus sequence to our destination sequence.
+	copy(sequence, headSequence[:headSequenceLength])
+
+	// Determine a random position to slice off the tail of the call sequence.
+	maxLength = utils.Min(len(sequence)-headSequenceLength, len(tailSequence))
+	tailSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength + 1)
+
+	// Copy the tail of the second corpus sequence to our destination sequence (after the head sequence portion).
+	copy(sequence[headSequenceLength:], tailSequence[len(tailSequence)-tailSequenceLength:])
+
+	return nil
+}
+
+// callSeqGenFuncInterleaveAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is based off of two corpus call sequence entries, from which a random number of transactions are
+// taken and interleaved (each element of one sequence will be followed by an element of the other).
+// Returns an error if one occurs.
+func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	// Obtain two corpus call sequence entries
+	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	if err != nil {
+		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
+	}
+	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	if err != nil {
+		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
+	}
+
+	// Determine how many transactions to take from the first sequence and slice it.
+	maxLength := utils.Min(len(sequence), len(firstSequence))
+	firstSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
+	firstSequence = firstSequence[:firstSequenceLength]
+
+	// Determine how many transactions to take from the second sequence and slice it.
+	maxLength = utils.Min(len(sequence)-firstSequenceLength, len(secondSequence))
+	secondSequenceLength := sequenceGenerator.worker.randomProvider.Intn(maxLength + 1)
+	secondSequence = secondSequence[:secondSequenceLength]
+
+	// Now that we have both sequences, and we know they will not exceed our destination sequence length, interleave
+	// them.
+	destIndex := 0
+	largestSequenceSize := utils.Max(firstSequenceLength, secondSequenceLength)
+	for i := 0; i < largestSequenceSize; i++ {
+		if i < len(firstSequence) {
+			sequence[destIndex] = firstSequence[i]
+			destIndex++
+		}
+		if i < len(secondSequence) {
+			sequence[destIndex] = secondSequence[i]
+			destIndex++
+		}
+	}
 	return nil
 }
 
