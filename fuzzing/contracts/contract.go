@@ -1,8 +1,26 @@
-package types
+package contracts
 
 import (
 	"github.com/trailofbits/medusa/compilation/types"
 )
+
+// Contracts describes an array of contracts
+type Contracts []*Contract
+
+// MatchBytecode takes init and/or runtime bytecode and attempts to match it to a contract definition in the
+// current list of contracts. It returns the contract definition if found. Otherwise, it returns nil.
+func (c Contracts) MatchBytecode(initBytecode []byte, runtimeBytecode []byte) *Contract {
+	// Loop through all our contract definitions to find a match.
+	for i := 0; i < len(c); i++ {
+		// If we have a match, register the deployed contract.
+		if c[i].CompiledContract().IsMatch(initBytecode, runtimeBytecode) {
+			return c[i]
+		}
+	}
+
+	// If we found no definition, return nil.
+	return nil
+}
 
 // Contract describes a compiled smart contract.
 type Contract struct {

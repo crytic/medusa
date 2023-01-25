@@ -18,7 +18,7 @@ type TestChainTracer interface {
 	// CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 	// tracer is used during transaction execution (block creation), the results can later be queried from the block.
 	// This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-	CaptureTxEndSetAdditionalResults(results *types.CallMessageResults)
+	CaptureTxEndSetAdditionalResults(results *types.MessageResults)
 }
 
 // TestChainTracerRouter acts as a vm.EVMLogger or TestChainTracer splitter, allowing multiple tracers to be used in
@@ -119,7 +119,7 @@ func (t *TestChainTracerRouter) CaptureFault(pc uint64, op vm.OpCode, gas, cost 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *TestChainTracerRouter) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+func (t *TestChainTracerRouter) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Call the underlying method for each registered tracer.
 	for _, tracer := range t.tracers {
 		// Try to cast each tracer to a TestChainTracer and forward the call to it.

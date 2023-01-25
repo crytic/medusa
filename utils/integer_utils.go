@@ -91,3 +91,21 @@ func Abs[T constraints.Integer](x T) T {
 	}
 	return x
 }
+
+// Min provides generic support for various integer types to be compared and the minimum of two values returned.
+// Returns the minimum of the two values provided.
+func Min[T constraints.Ordered](x T, y T) T {
+	if x <= y {
+		return x
+	}
+	return y
+}
+
+// Max provides generic support for various integer types to be compared and the maximum of two values returned.
+// Returns the maximum of the two values provided.
+func Max[T constraints.Ordered](x T, y T) T {
+	if x >= y {
+		return x
+	}
+	return y
+}
