@@ -65,6 +65,9 @@ type TestChain struct {
 	// chainConfig represents the configuration used to instantiate and manage this chain.
 	chainConfig *params.ChainConfig
 
+	// vmConfigExtensions defines EVM extensions to use with each chain call or transaction.
+	vmConfigExtensions *vm.ConfigExtensions
+
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
 }
@@ -130,6 +133,10 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		chainConfig:             genesisDefinition.Config,
+		vmConfigExtensions: &vm.ConfigExtensions{
+			OverrideCodeSizeCheck: false,
+			AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
+		},
 	}
 
 	// Add our contract deployment tracer to this chain by default.
@@ -216,6 +223,11 @@ func (t *TestChain) AddTracer(tracer vm.EVMLogger, txs bool, calls bool) {
 // GenesisDefinition returns the core.Genesis definition used to initialize the chain.
 func (t *TestChain) GenesisDefinition() *core.Genesis {
 	return t.genesisDefinition
+}
+
+// VmConfigExtensions returns a config used for VM-fork extensions.
+func (t *TestChain) VmConfigExtensions() *vm.ConfigExtensions {
+	return t.vmConfigExtensions
 }
 
 // State returns the current state.StateDB of the chain.
@@ -448,7 +460,12 @@ func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error
 	blockContext := newTestChainBlockContext(t, t.Head().Header)
 
 	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{
+		Debug:            true,
+		Tracer:           t.callTracerRouter,
+		NoBaseFee:        true,
+		ConfigExtensions: t.vmConfigExtensions,
+	})
 
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
@@ -581,9 +598,10 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
-		Debug:     true,
-		Tracer:    t.transactionTracerRouter,
-		NoBaseFee: true,
+		Debug:            true,
+		Tracer:           t.transactionTracerRouter,
+		NoBaseFee:        true,
+		ConfigExtensions: t.vmConfigExtensions,
 	})
 
 	// Apply our transaction
