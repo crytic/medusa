@@ -1,6 +1,10 @@
 package config
 
-import "github.com/trailofbits/medusa/compilation"
+import (
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/trailofbits/medusa/chain"
+	"github.com/trailofbits/medusa/compilation"
+)
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
 // based on the provided platform, or a nil one if an empty string is provided.
@@ -54,6 +58,9 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			},
 		},
 		Compilation: compilationConfig,
+		ChainConfig: &chain.TestChainConfig{
+			CoreConfig: params.TestChainConfig,
+		},
 	}
 
 	// Return the project configuration

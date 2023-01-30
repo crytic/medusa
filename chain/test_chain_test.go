@@ -1,17 +1,19 @@
 package chain
 
 import (
+	"math/big"
+	"math/rand"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/testutils"
-	"math/big"
-	"math/rand"
-	"testing"
 )
 
 // verifyChain verifies various state properties in a TestChain, such as if previous block hashes are correct,
@@ -73,8 +75,9 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 		}
 	}
 
-	// Create a test chain
-	chain, err := NewTestChain(genesisAlloc)
+	// Create a test chain with a default test chain configuration
+	chain, err := NewTestChain(genesisAlloc, *params.TestChainConfig)
+
 	assert.NoError(t, err)
 
 	return chain, senders

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 
+	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/utils"
 )
@@ -16,6 +18,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// ChainConfig describes the core configuration that determines blockchain settings during fuzzing.
+	ChainConfig *chain.TestChainConfig `json:"testChainConfig"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -195,5 +200,104 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
+
+	// Medusa's chain settings verification
+
+	// Verify the chainId is a positive number
+	if p.ChainConfig.CoreConfig.ChainID.Cmp(big.NewInt(0)) < 0 {
+		return errors.New("chain configuration must specify a positive number for the chainId")
+	}
+
+	// Verify that HomesteadBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.HomesteadBlock != nil && p.ChainConfig.CoreConfig.HomesteadBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Homestead switch block, or nil for no fork")
+	}
+
+	// Verify that DAOForkBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.DAOForkBlock != nil && p.ChainConfig.CoreConfig.DAOForkBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the DAO hard-fork switch block, or nil for no fork")
+	}
+
+	// Verify that EIP150Block is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.EIP150Block.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the EIP150 HF block, or nil for no fork")
+	}
+
+	// Verify that EIP155Block is greater than or equal to zero
+	if p.ChainConfig.CoreConfig.EIP155Block.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the EIP155 HF block")
+	}
+
+	// Verify that EIP158Block is greater than or equal to zero
+	if p.ChainConfig.CoreConfig.EIP158Block.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the EIP158 HF block")
+	}
+
+	// Verify that XXXXX is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.ByzantiumBlock != nil && p.ChainConfig.CoreConfig.ByzantiumBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Byzantium switch block, or nil for no fork")
+	}
+
+	// Verify that ConstantinopleBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.ConstantinopleBlock != nil && p.ChainConfig.CoreConfig.ConstantinopleBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Constantinople switch block, or nil for no fork")
+	}
+
+	// Verify that PetersburgBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.PetersburgBlock != nil && p.ChainConfig.CoreConfig.PetersburgBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Petersburg switch block, or nil for same as Constantinople")
+	}
+
+	// Verify that IstanbulBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.IstanbulBlock != nil && p.ChainConfig.CoreConfig.IstanbulBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Istanbul switch block, or nil for no fork")
+	}
+
+	// Verify that MuirGlacierBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.MuirGlacierBlock != nil && p.ChainConfig.CoreConfig.MuirGlacierBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Eip-2384 (bomb delay) switch block, or nil for no fork")
+	}
+
+	// Verify that BerlinBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.BerlinBlock != nil && p.ChainConfig.CoreConfig.BerlinBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Berlin switch block, or nil for no fork")
+	}
+
+	// Verify that LondonBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.LondonBlock != nil && p.ChainConfig.CoreConfig.LondonBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the London switch block, or nil for no fork")
+	}
+
+	// Verify that ArrowGlacierBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.ArrowGlacierBlock != nil && p.ChainConfig.CoreConfig.ArrowGlacierBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Eip-4345 (bomb delay) switch block, or nil for no fork")
+	}
+
+	// Verify that GrayGlacierBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.GrayGlacierBlock != nil && p.ChainConfig.CoreConfig.GrayGlacierBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Eip-5133 (bomb delay) switch block, or nil for no fork")
+	}
+
+	// Verify that MergeNetsplitBlock is greater than or equal to zero
+	if p.ChainConfig.CoreConfig.MergeNetsplitBlock != nil && p.ChainConfig.CoreConfig.MergeNetsplitBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the virtual fork after The Merge to use as a network splitter")
+	}
+
+	// Verify that ShanghaiBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.ShanghaiBlock != nil && p.ChainConfig.CoreConfig.ShanghaiBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Shanghai switch block, or nil for no fork")
+	}
+
+	// Verify that CancunBlock is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.CancunBlock != nil && p.ChainConfig.CoreConfig.CancunBlock.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the Cancun switch block, or nil for no fork")
+	}
+
+	// Verify that TerminalTotalDifficulty is greater than or equal to zero or nil
+	if p.ChainConfig.CoreConfig.TerminalTotalDifficulty != nil && p.ChainConfig.CoreConfig.TerminalTotalDifficulty.Sign() == -1 {
+		return errors.New("chain configuration must specify a number greater than or equal to zero for the TerminalTotalDifficulty " +
+			"(the amount of total difficulty reached by the network that triggers the consensus upgrade), or nil") // nil == disabled?
+	}
+
 	return nil
 }

@@ -3,6 +3,9 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
@@ -17,8 +20,6 @@ import (
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/chain/vendored"
 	"github.com/trailofbits/medusa/utils"
-	"math/big"
-	"sort"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
@@ -70,14 +71,24 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	// testChainConfig represents the medusa's blockchain settings during fuzzing
+	//testChainConfig *TestChainConfig
+}
+
+// TestChainConfig represents medusa's chain configuration. Both the core config (`CoreConfig`) which determines
+// the blockchain settings and other custom chain settings.
+type TestChainConfig struct {
+	CoreConfig *params.ChainConfig `json:"coreConfig"`
+	// TODO: implement cheatcodes, etc.
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
-// This creates a test chain with a default test chain configuration and the provided genesis allocation.
-func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
+// This creates a test chain with a test chain configuration and the provided genesis allocation.
+func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig params.ChainConfig) (*TestChain, error) {
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
-		Config:    params.TestChainConfig,
+		Config:    &testChainConfig, // Get the core chain configuration
 		Nonce:     0,
 		Timestamp: 0,
 		ExtraData: []byte{
