@@ -15,13 +15,13 @@ func getCheatCodeProviders() (*cheatCodeTracer, []*cheatCodeContract, error) {
 	tracer := &cheatCodeTracer{}
 
 	// Obtain our cheat code pre-compiles
-	hevmContract, err := getStandardCheatCodeContract(tracer)
+	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Return the tracer and precompiles
-	return tracer, []*cheatCodeContract{hevmContract}, nil
+	return tracer, []*cheatCodeContract{stdCheatCodeContract}, nil
 }
 
 // getStandardCheatCodeContract obtains a cheatCodeContract which implements common cheat codes.
@@ -32,53 +32,44 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract := newCheatCodeContract(tracer, contractAddress)
 
 	// Define some basic ABI argument types
-	uintType, err := abi.NewType("uint256", "", nil)
+	typeUint256, err := abi.NewType("uint256", "", nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Warp: Sets VM timestamp
-	err = contract.addMethod(
-		"warp", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+	contract.addMethod(
+		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm context's time from the first input argument.
 			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
 			return nil, nil
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Roll: Sets VM block number
-	err = contract.addMethod(
-		"roll", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+	contract.addMethod(
+		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm context's block number from the first input argument.
 			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
 			return nil, nil
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Roll: Sets VM block number
-	err = contract.addMethod(
-		"fee", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+	contract.addMethod(
+		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm context's base fee from the first input argument.
 			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
 			return nil, nil
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Difficulty: Sets VM block number
-	err = contract.addMethod(
-		"difficulty", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+	contract.addMethod(
+		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm context's difficulty from the first input argument.
 			tracer.evm.Context.Difficulty.Set(inputs[0].(*big.Int))
@@ -90,13 +81,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			return nil, nil
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// ChainId: Sets VM chain ID
-	err = contract.addMethod(
-		"chainId", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+	contract.addMethod(
+		"chainId", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm chain config's chain id from the first input argument.
 			tracer.evm.ChainConfig().ChainID.Set(inputs[0].(*big.Int))
@@ -108,9 +96,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			return nil, nil
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Return our precompile contract information.
 	return contract, nil

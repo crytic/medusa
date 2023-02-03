@@ -2,7 +2,6 @@ package chain
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -39,15 +38,15 @@ func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address) *chea
 
 // addMethod adds a new method to the precompiled contract.
 // Returns an errorw if one occurred.
-func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) error {
+func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
-		return fmt.Errorf("could not add method to precompiled cheatcode contract, empty method name provided")
+		panic("could not add method to precompiled cheatcode contract, empty method name provided")
 	}
 
 	// Verify a method handler was provided
 	if handler == nil {
-		return fmt.Errorf("could not add method to precompiled cheatcode contract, nil method handler provided")
+		panic("could not add method to precompiled cheatcode contract, nil method handler provided")
 	}
 
 	// Set the method information in our method lookup
@@ -57,7 +56,6 @@ func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs
 		method:  method,
 		handler: handler,
 	}
-	return nil
 }
 
 // RequiredGas determines the amount of gas necessary to execute the pre-compile with the given input data.
