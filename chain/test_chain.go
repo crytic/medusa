@@ -3,6 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
 
@@ -71,24 +72,14 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
-
-	// testChainConfig represents the medusa's blockchain settings during fuzzing
-	//testChainConfig *TestChainConfig
-}
-
-// TestChainConfig represents medusa's chain configuration. Both the core config (`CoreConfig`) which determines
-// the blockchain settings and other custom chain settings.
-type TestChainConfig struct {
-	CoreConfig *params.ChainConfig `json:"coreConfig"`
-	// TODO: implement cheatcodes, etc.
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation.
-func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig params.ChainConfig) (*TestChain, error) {
+func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
-		Config:    &testChainConfig, // Get the core chain configuration
+		Config:    params.TestChainConfig,
 		Nonce:     0,
 		Timestamp: 0,
 		ExtraData: []byte{
@@ -116,7 +107,37 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 	keyValueStore := memorydb.New()
 	db := rawdb.NewDatabase(keyValueStore)
 
-	// Commit our genesis definition to get a block.
+	// Define our vm extension config
+	vmConfigExtensions := &vm.ConfigExtensions{
+		OverrideCodeSizeCheck: false,
+		AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
+	}
+
+	// Obtain our cheatcode providers
+	cheatTracer, cheatContracts, err := getCheatCodeProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add all cheat code contract addresses to the genesis config. This is done because cheat codes are implemented
+	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
+	// newer solidity versions perform code size checks prior to external calls.
+	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
+	for _, cheatContract := range cheatContracts {
+		// Note: When sharing a genesis definition across multiple threads, access to this map can cause concurrent
+		// access issues. For simplicity/performance, we avoid locking and just edit a copy of the map, then set the
+		// whole map. Any chain sharing this genesis data can access any copy in a race condition, but it should have
+		// the same data.
+		alloc := maps.Clone(genesisDefinition.Alloc)
+		alloc[cheatContract.address] = core.GenesisAccount{
+			Balance: big.NewInt(0),
+			Code:    []byte{0xFF},
+		}
+		genesisDefinition.Alloc = alloc
+		vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
+	}
+
+	// Commit our genesis definition to get a genesis block.
 	genesisBlock := genesisDefinition.MustCommit(db)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
@@ -144,14 +165,12 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		chainConfig:             genesisDefinition.Config,
-		vmConfigExtensions: &vm.ConfigExtensions{
-			OverrideCodeSizeCheck: false,
-			AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
-		},
+		vmConfigExtensions:      vmConfigExtensions,
 	}
 
-	// Add our contract deployment tracer to this chain by default.
+	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
+	chain.AddTracer(cheatTracer, true, true)
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
 	stateDB, err := chain.StateAfterBlockNumber(0)
@@ -234,11 +253,6 @@ func (t *TestChain) AddTracer(tracer vm.EVMLogger, txs bool, calls bool) {
 // GenesisDefinition returns the core.Genesis definition used to initialize the chain.
 func (t *TestChain) GenesisDefinition() *core.Genesis {
 	return t.genesisDefinition
-}
-
-// VmConfigExtensions returns a config used for VM-fork extensions.
-func (t *TestChain) VmConfigExtensions() *vm.ConfigExtensions {
-	return t.vmConfigExtensions
 }
 
 // State returns the current state.StateDB of the chain.

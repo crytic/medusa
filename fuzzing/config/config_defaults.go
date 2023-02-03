@@ -1,8 +1,6 @@
 package config
 
 import (
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/compilation"
 )
 
@@ -58,9 +56,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			},
 		},
 		Compilation: compilationConfig,
-		ChainConfig: &chain.TestChainConfig{
-			CoreConfig: params.TestChainConfig,
-		},
 	}
 
 	// Return the project configuration

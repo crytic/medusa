@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/utils"
@@ -76,7 +75,7 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	}
 
 	// Create a test chain with a default test chain configuration
-	chain, err := NewTestChain(genesisAlloc, *params.TestChainConfig)
+	chain, err := NewTestChain(genesisAlloc)
 
 	assert.NoError(t, err)
 
