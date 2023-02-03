@@ -37,12 +37,74 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 		return nil, err
 	}
 
-	// Add our contract methods
+	// Warp: Sets VM timestamp
 	err = contract.addMethod(
 		"warp", abi.Arguments{{Type: uintType}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Set the vm context's time from the first input argument.
 			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
+			return nil, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Roll: Sets VM block number
+	err = contract.addMethod(
+		"roll", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Set the vm context's block number from the first input argument.
+			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
+			return nil, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Roll: Sets VM block number
+	err = contract.addMethod(
+		"fee", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Set the vm context's base fee from the first input argument.
+			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
+			return nil, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Difficulty: Sets VM block number
+	err = contract.addMethod(
+		"difficulty", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Set the vm context's difficulty from the first input argument.
+			tracer.evm.Context.Difficulty.Set(inputs[0].(*big.Int))
+
+			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
+			// TODO: Check chain config here to see if the EVM version is 'Paris' or the consensus upgrade occurred.
+			hash := common.BigToHash(inputs[0].(*big.Int))
+			tracer.evm.Context.Random = &hash
+			return nil, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// ChainId: Sets VM chain ID
+	err = contract.addMethod(
+		"chainId", abi.Arguments{{Type: uintType}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Set the vm chain config's chain id from the first input argument.
+			tracer.evm.ChainConfig().ChainID.Set(inputs[0].(*big.Int))
+
+			// TODO: Before we enable this, we need to verify this is not the same ChainConfig supplied from the
+			//  TestChain, as this may stick across a chain revert (during the fuzzing loop).
+			//  If so, we will want to store the original value and patch/restore it every tx start/end.
+			panic("not fully implemented")
 			return nil, nil
 		},
 	)
