@@ -1,5 +1,5 @@
 interface CheatCodes {
-    function roll(uint256) external;
+    function deal(address, uint256) external;
 }
 
 contract TestContract {
@@ -8,9 +8,10 @@ contract TestContract {
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Change value and verify.
-        cheats.roll(x);
-        assert(block.number == x);
-        cheats.roll(7);
-        assert(block.number == 7);
+        address acc = address(777);
+        cheats.deal(acc, x);
+        assert(acc.balance == x);
+        cheats.deal(acc, 7 ether);
+        assert(acc.balance == 7 ether);
     }
 }

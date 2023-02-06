@@ -15,15 +15,10 @@ contract TestContract {
         // Obtain our cheat code contract reference.
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-        // Back up the original value.
-        uint original = getChainID();
-
-        // Change to the provided value and verify.
+        // Change value and verify.
         cheats.chainId(x);
         assert(getChainID() == x);
-
-        // Change back to the original value and verify.
-        cheats.chainId(original);
-        assert(getChainID() == original);
+        cheats.chainId(7);
+        assert(getChainID() == 7);
     }
 }

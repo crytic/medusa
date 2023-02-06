@@ -32,6 +32,22 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract := newCheatCodeContract(tracer, contractAddress)
 
 	// Define some basic ABI argument types
+	typeAddress, err := abi.NewType("address", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeBytes, err := abi.NewType("bytes", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeBytes32, err := abi.NewType("bytes32", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeUint64, err := abi.NewType("uint64", "", nil)
+	if err != nil {
+		return nil, err
+	}
 	typeUint256, err := abi.NewType("uint256", "", nil)
 	if err != nil {
 		return nil, err
@@ -117,6 +133,88 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			chainConfig.ChainID.Set(inputs[0].(*big.Int))
 			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
 				chainConfig.ChainID.Set(original)
+			})
+			return nil, nil
+		},
+	)
+
+	// Store: Sets a storage slot value in a given account.
+	contract.addMethod(
+		"store", abi.Arguments{{Type: typeAddress}, {Type: typeBytes32}, {Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			slot := inputs[1].([32]byte)
+			value := inputs[2].([32]byte)
+			tracer.evm.StateDB.SetState(account, slot, value)
+			return nil, nil
+		},
+	)
+
+	// Load: Loads a storage slot value from a given account.
+	contract.addMethod(
+		"load", abi.Arguments{{Type: typeAddress}, {Type: typeBytes32}}, abi.Arguments{{Type: typeBytes32}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			slot := inputs[1].([32]byte)
+			value := tracer.evm.StateDB.GetState(account, slot)
+			return []any{value}, err
+		},
+	)
+
+	// Etch: Sets the code for a given account.
+	contract.addMethod(
+		"etch", abi.Arguments{{Type: typeAddress}, {Type: typeBytes}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			code := inputs[1].([]byte)
+			tracer.evm.StateDB.SetCode(account, code)
+			return nil, err
+		},
+	)
+
+	// Deal: Sets the balance for a given account.
+	contract.addMethod(
+		"deal", abi.Arguments{{Type: typeAddress}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			newBalance := inputs[1].(*big.Int)
+			originalBalance := tracer.evm.StateDB.GetBalance(account)
+			diff := new(big.Int).Sub(newBalance, originalBalance)
+			tracer.evm.StateDB.AddBalance(account, diff)
+			return nil, err
+		},
+	)
+
+	// GetNonce: Gets the nonce for a given account.
+	contract.addMethod(
+		"getNonce", abi.Arguments{{Type: typeAddress}}, abi.Arguments{{Type: typeUint64}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			nonce := tracer.evm.StateDB.GetNonce(account)
+			return []any{nonce}, err
+		},
+	)
+
+	// SetNonce: Sets the nonce for a given account.
+	contract.addMethod(
+		"setNonce", abi.Arguments{{Type: typeAddress}, {Type: typeUint64}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			account := inputs[0].(common.Address)
+			nonce := inputs[1].(uint64)
+			tracer.evm.StateDB.SetNonce(account, nonce)
+			return nil, err
+		},
+	)
+
+	// Coinbase: Sets the block coinbase.
+	contract.addMethod(
+		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Maintain our changes until the transaction exits.
+			original := tracer.evm.Context.Coinbase
+			tracer.evm.Context.Coinbase = inputs[0].(common.Address)
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.Coinbase = original
 			})
 			return nil, nil
 		},

@@ -152,19 +152,23 @@ func TestChainBehaviour(t *testing.T) {
 // TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
 func TestCheatCodes(t *testing.T) {
 	filePaths := []string{
+		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/chain_id.sol",
+		"testdata/contracts/cheat_codes/vm/deal.sol",
 		"testdata/contracts/cheat_codes/vm/difficulty.sol",
+		"testdata/contracts/cheat_codes/vm/etch.sol",
 		"testdata/contracts/cheat_codes/vm/fee.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
-		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.Workers = 1     // for debugging, avoiding breakpoint race conditions
-				config.Fuzzing.TestLimit = 100 // only a few calls are needed to produce a failure
+				config.Fuzzing.Workers = 1
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength)
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 			},
