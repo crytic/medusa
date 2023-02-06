@@ -156,12 +156,14 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/fee.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Workers = 1     // for debugging, avoiding breakpoint race conditions
 				config.Fuzzing.TestLimit = 100 // only a few calls are needed to produce a failure
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true

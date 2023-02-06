@@ -41,8 +41,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
-			// Set the vm context's time from the first input argument.
+			// Maintain our changes until the transaction exits.
+			original := new(big.Int).Set(tracer.evm.Context.Time)
 			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.Time.Set(original)
+			})
 			return nil, nil
 		},
 	)
@@ -51,8 +55,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
-			// Set the vm context's block number from the first input argument.
+			// Maintain our changes until the transaction exits.
+			original := new(big.Int).Set(tracer.evm.Context.BlockNumber)
 			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.BlockNumber.Set(original)
+			})
 			return nil, nil
 		},
 	)
@@ -61,8 +69,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
-			// Set the vm context's base fee from the first input argument.
+			// Maintain our changes until the transaction exits.
+			original := new(big.Int).Set(tracer.evm.Context.BaseFee)
 			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.BaseFee.Set(original)
+			})
 			return nil, nil
 		},
 	)
@@ -71,13 +83,26 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
-			// Set the vm context's difficulty from the first input argument.
-			tracer.evm.Context.Difficulty.Set(inputs[0].(*big.Int))
+			// Maintain our changes until the transaction exits.
+
+			// Obtain our spoofed difficulty
+			spoofedDifficulty := inputs[0].(*big.Int)
+			spoofedDifficultyHash := common.BigToHash(spoofedDifficulty)
+
+			// Change difficulty in block context.
+			originalDifficulty := new(big.Int).Set(tracer.evm.Context.Difficulty)
+			tracer.evm.Context.Difficulty.Set(spoofedDifficulty)
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.Difficulty.Set(originalDifficulty)
+			})
 
 			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
 			// TODO: Check chain config here to see if the EVM version is 'Paris' or the consensus upgrade occurred.
-			hash := common.BigToHash(inputs[0].(*big.Int))
-			tracer.evm.Context.Random = &hash
+			originalRandom := tracer.evm.Context.Random
+			tracer.evm.Context.Random = &spoofedDifficultyHash
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				tracer.evm.Context.Random = originalRandom
+			})
 			return nil, nil
 		},
 	)
@@ -86,13 +111,13 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"chainId", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
-			// Set the vm chain config's chain id from the first input argument.
-			tracer.evm.ChainConfig().ChainID.Set(inputs[0].(*big.Int))
-
-			// TODO: Before we enable this, we need to verify this is not the same ChainConfig supplied from the
-			//  TestChain, as this may stick across a chain revert (during the fuzzing loop).
-			//  If so, we will want to store the original value and patch/restore it every tx start/end.
-			panic("not fully implemented")
+			// Maintain our changes until the transaction exits.
+			chainConfig := tracer.evm.ChainConfig()
+			original := new(big.Int).Set(chainConfig.ChainID)
+			chainConfig.ChainID.Set(inputs[0].(*big.Int))
+			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+				chainConfig.ChainID.Set(original)
+			})
 			return nil, nil
 		},
 	)
