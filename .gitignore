@@ -17,4 +17,9 @@
 # PyCharm project dir
 .idea/
 
-*node_modules/
+# Downloads & testing artifacts
+node_modules
+result
+package-lock.json
+artifacts
+cache

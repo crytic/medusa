@@ -3,12 +3,21 @@ package utils
 import (
 	"golang.org/x/exp/slog"
 	"io"
-	"log"
 	"os"
 )
 
+const (
+	LevelTrace  = slog.Level(-8)
+	LevelDebug  = slog.Level(-4)
+	LevelInfo   = slog.Level(0)
+	LevelNotice = slog.Level(2)
+	LevelWarn   = slog.Level(4)
+	LevelError  = slog.Level(8)
+	LevelFatal  = slog.Level(12)
+)
+
 type Logger struct {
-	level   int
+	level   slog.Level
 	backend *slog.Logger
 }
 
@@ -21,15 +30,19 @@ func NewLogger(
 
 	// set writer according to given logFilePath arg
 	var writer io.Writer
-	var err error
 	if logFilePath == "" {
 		writer = os.Stdout
 	} else {
-		writer, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatal(err)
-			// should we fall back to stdout if error accessing log file?
-			// writer = os.Stdout
+		fileWriter, err := os.OpenFile(
+			logFilePath,
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+			0644,
+		)
+		if err == nil {
+			writer = fileWriter
+		} else {
+			// should we fail more loudly if we failed to access the given logfile?
+			writer = os.Stdout
 		}
 	}
 
@@ -44,24 +57,31 @@ func NewLogger(
 	// create new logger
 	backend := slog.New(handler)
 	return &Logger{
+		level:   slog.Level(level),
 		backend: backend,
 	}
 }
 
-func (l *Logger) Debug(baseMsg string, args ...any) {
-	l.backend.Debug(baseMsg, args...)
+func (l *Logger) Debug(msg string, args ...any) {
+	if l.level <= LevelDebug {
+		l.backend.Debug(msg, args...)
+	}
 }
 
-func (l *Logger) Info(baseMsg string, args ...any) {
-	l.backend.Info(baseMsg, args...)
+func (l *Logger) Info(msg string, args ...any) {
+	if l.level <= LevelInfo {
+		l.backend.Info(msg, args...)
+	}
 }
 
-func (l *Logger) Warn(baseMsg string, args ...any) {
-	l.backend.Warn(baseMsg, args...)
+func (l *Logger) Warn(msg string, args ...any) {
+	if l.level <= LevelWarn {
+		l.backend.Warn(msg, args...)
+	}
 }
 
 /*
-func Error(baseMsg string, args ...any) {
-	slog.Error(fmt.Sprintf(baseMsg, args...), baseMsg, args...)
+func Error(msg string, args ...any) {
+	slog.Error(fmt.Sprintf(msg, args...), msg, args...)
 }
 */
