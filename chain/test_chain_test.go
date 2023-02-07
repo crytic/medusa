@@ -571,7 +571,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChainWithGenesis(chain.genesisDefinition)
+		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

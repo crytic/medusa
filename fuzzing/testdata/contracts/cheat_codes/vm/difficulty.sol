@@ -1,3 +1,4 @@
+// This test ensures that the block difficulty can be set with cheat codes
 interface CheatCodes {
     function difficulty(uint256) external;
 }

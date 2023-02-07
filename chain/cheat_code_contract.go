@@ -15,14 +15,23 @@ type cheatCodeMethodHandler func(tracer *cheatCodeTracer, args []any) ([]any, er
 // cheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
 // meant to act as a contract.
 type cheatCodeContract struct {
-	address    common.Address
-	tracer     *cheatCodeTracer
+	// address defines the address the cheat code contract should be installed at.
+	address common.Address
+
+	// tracer represents the cheat code tracer used to provide execution hooks.
+	tracer *cheatCodeTracer
+
+	// methodInfo describes a table of methodId (function selectors) to cheat code methods. This acts as a switch table
+	// for different methods in the contract.
 	methodInfo map[uint32]*cheatCodeMethod
 }
 
 // cheatCodeMethod defines the method information for a given precompiledContract.
 type cheatCodeMethod struct {
-	method  abi.Method
+	// method is the ABI method definition used to pack and unpack both input and output arguments.
+	method abi.Method
+
+	// handler represents the method handler to call with the unpacked input arguments
 	handler cheatCodeMethodHandler
 }
 

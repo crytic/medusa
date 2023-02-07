@@ -1,3 +1,4 @@
+// This test ensures that the coinbase can be set with cheat codes
 interface CheatCodes {
     function coinbase(address) external;
 }

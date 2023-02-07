@@ -3,6 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
@@ -10,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -77,9 +77,15 @@ type TestChain struct {
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation.
 func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
+	// Copy our chain config, so it is not shared across chains.
+	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
-		Config:    params.TestChainConfig,
+		Config:    chainConfig,
 		Nonce:     0,
 		Timestamp: 0,
 		ExtraData: []byte{
@@ -95,17 +101,6 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 		ParentHash: common.Hash{},
 		BaseFee:    big.NewInt(0),
 	}
-
-	// Create the test chain with this genesis definition.
-	return NewTestChainWithGenesis(genesisDefinition)
-}
-
-// NewTestChainWithGenesis creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
-// The genesis definition provided is used to construct the genesis block and specify the chain configuration.
-func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error) {
-	// Create an in-memory database
-	keyValueStore := memorydb.New()
-	db := rawdb.NewDatabase(keyValueStore)
 
 	// Define our vm extension config
 	vmConfigExtensions := &vm.ConfigExtensions{
@@ -136,6 +131,10 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 		genesisDefinition.Alloc = alloc
 		vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
 	}
+
+	// Create an in-memory database
+	keyValueStore := memorydb.New()
+	db := rawdb.NewDatabase(keyValueStore)
 
 	// Commit our genesis definition to get a genesis block.
 	genesisBlock := genesisDefinition.MustCommit(db)
@@ -188,7 +187,7 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
 	// Create a new chain with the same genesis definition
-	targetChain, err := NewTestChainWithGenesis(t.genesisDefinition)
+	targetChain, err := NewTestChain(t.genesisDefinition.Alloc)
 	if err != nil {
 		return nil, err
 	}

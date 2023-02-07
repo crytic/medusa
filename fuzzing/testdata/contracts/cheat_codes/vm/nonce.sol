@@ -1,3 +1,4 @@
+// This test ensures that account nonces can be get and set with cheat codes
 interface CheatCodes {
     function getNonce(address) external returns (uint64);
     function setNonce(address, uint64) external;

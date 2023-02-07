@@ -12,7 +12,7 @@ import (
 // Returns the tracer and associated pre-compile contracts, or an error, if one occurred.
 func getCheatCodeProviders() (*cheatCodeTracer, []*cheatCodeContract, error) {
 	// Create a cheat code tracer and attach it to the chain.
-	tracer := &cheatCodeTracer{}
+	tracer := newCheatCodeTracer()
 
 	// Obtain our cheat code pre-compiles
 	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
@@ -60,7 +60,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.Time)
 			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.Time.Set(original)
 			})
 			return nil, nil
@@ -74,7 +74,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.BlockNumber)
 			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.BlockNumber.Set(original)
 			})
 			return nil, nil
@@ -88,7 +88,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.BaseFee)
 			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.BaseFee.Set(original)
 			})
 			return nil, nil
@@ -108,7 +108,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Change difficulty in block context.
 			originalDifficulty := new(big.Int).Set(tracer.evm.Context.Difficulty)
 			tracer.evm.Context.Difficulty.Set(spoofedDifficulty)
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.Difficulty.Set(originalDifficulty)
 			})
 
@@ -116,7 +116,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// TODO: Check chain config here to see if the EVM version is 'Paris' or the consensus upgrade occurred.
 			originalRandom := tracer.evm.Context.Random
 			tracer.evm.Context.Random = &spoofedDifficultyHash
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.Random = originalRandom
 			})
 			return nil, nil
@@ -129,10 +129,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			// Maintain our changes until the transaction exits.
 			chainConfig := tracer.evm.ChainConfig()
-			original := new(big.Int).Set(chainConfig.ChainID)
-			chainConfig.ChainID.Set(inputs[0].(*big.Int))
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
-				chainConfig.ChainID.Set(original)
+			original := chainConfig.ChainID
+			chainConfig.ChainID = inputs[0].(*big.Int)
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
+				chainConfig.ChainID = original
 			})
 			return nil, nil
 		},
@@ -157,7 +157,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			account := inputs[0].(common.Address)
 			slot := inputs[1].([32]byte)
 			value := tracer.evm.StateDB.GetState(account, slot)
-			return []any{value}, err
+			return []any{value}, nil
 		},
 	)
 
@@ -168,7 +168,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			account := inputs[0].(common.Address)
 			code := inputs[1].([]byte)
 			tracer.evm.StateDB.SetCode(account, code)
-			return nil, err
+			return nil, nil
 		},
 	)
 
@@ -181,7 +181,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			originalBalance := tracer.evm.StateDB.GetBalance(account)
 			diff := new(big.Int).Sub(newBalance, originalBalance)
 			tracer.evm.StateDB.AddBalance(account, diff)
-			return nil, err
+			return nil, nil
 		},
 	)
 
@@ -191,7 +191,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
 			account := inputs[0].(common.Address)
 			nonce := tracer.evm.StateDB.GetNonce(account)
-			return []any{nonce}, err
+			return []any{nonce}, nil
 		},
 	)
 
@@ -202,7 +202,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			account := inputs[0].(common.Address)
 			nonce := inputs[1].(uint64)
 			tracer.evm.StateDB.SetNonce(account, nonce)
-			return nil, err
+			return nil, nil
 		},
 	)
 
@@ -213,8 +213,47 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Maintain our changes until the transaction exits.
 			original := tracer.evm.Context.Coinbase
 			tracer.evm.Context.Coinbase = inputs[0].(common.Address)
-			tracer.TopCallFrame().onCurrentFrameExitHooks.Push(func() {
+			tracer.TopCallFrame().onFrameExitHooks.Push(func() {
 				tracer.evm.Context.Coinbase = original
+			})
+			return nil, nil
+		},
+	)
+
+	// Prank: Sets the msg.sender within the next EVM call scope created by the caller.
+	contract.addMethod(
+		"prank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// so when it enters the next frame in its scope, we trigger the prank.
+			prankCallerFrame := tracer.PreviousCallFrame()
+			prankCallerFrame.onNextFrameEnterHooks.Push(func() {
+				// We entered the scope we want to prank, store the original value, patch, and add a hook to restore it
+				// when this frame is exited.
+				prankCallFrame := tracer.CurrentCallFrame()
+				original := prankCallFrame.vmScope.Contract.CallerAddress
+				prankCallFrame.vmScope.Contract.CallerAddress = inputs[0].(common.Address)
+				tracer.CurrentCallFrame().onFrameExitHooks.Push(func() {
+					prankCallFrame.vmScope.Contract.CallerAddress = original
+				})
+			})
+			return nil, nil
+		},
+	)
+
+	// PrankHere: Sets the msg.sender within caller EVM scope until it is exited.
+	contract.addMethod(
+		"prankHere", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// so when it enters the next frame in its scope, we trigger the prank.
+			prankCallerFrame := tracer.PreviousCallFrame()
+
+			// Store the original value, patch, and add a hook to restore it when this frame is exited.
+			original := prankCallerFrame.vmScope.Contract.CallerAddress
+			prankCallerFrame.vmScope.Contract.CallerAddress = inputs[0].(common.Address)
+			prankCallerFrame.onFrameExitHooks.Push(func() {
+				prankCallerFrame.vmScope.Contract.CallerAddress = original
 			})
 			return nil, nil
 		},

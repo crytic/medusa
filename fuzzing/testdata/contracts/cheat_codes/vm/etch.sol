@@ -1,3 +1,4 @@
+// This test ensures that account code can be set with cheat codes
 interface CheatCodes {
     function etch(address, bytes calldata) external;
 }

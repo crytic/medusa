@@ -1,3 +1,4 @@
+// This test ensures that the base fee can be set with cheat codes
 interface CheatCodes {
     function fee(uint256) external;
 }

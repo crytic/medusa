@@ -1,3 +1,4 @@
+// This test ensures that account balances can be set with cheat codes
 interface CheatCodes {
     function deal(address, uint256) external;
 }

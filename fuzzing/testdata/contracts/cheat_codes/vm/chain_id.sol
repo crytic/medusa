@@ -1,3 +1,4 @@
+// This test ensures that the chainId can be set with cheat codes
 interface CheatCodes {
     function chainId(uint256) external;
 }

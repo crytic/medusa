@@ -24,9 +24,25 @@ type cheatCodeTracer struct {
 
 // cheatCodeTracerCallFrame represents per-call-frame data traced by a cheatCodeTracer.
 type cheatCodeTracerCallFrame struct {
-	onNextFrameEnterHooks   cheatCodeTracerHooks
-	onNextFrameExitHooks    cheatCodeTracerHooks
-	onCurrentFrameExitHooks cheatCodeTracerHooks
+	// onNextFrameEnterHooks describes hooks which will be executed the next time this call frame executes a call,
+	// creating "the next call frame".
+	onNextFrameEnterHooks cheatCodeTracerHooks
+	// onNextFrameExitHooks describes hooks which will be executed the next time this call frame executes a call,
+	// and exits it, "exiting the next call frame".
+	onNextFrameExitHooks cheatCodeTracerHooks
+	// onFrameExitHooks describes hooks when are executed when this call frame is exited.
+	onFrameExitHooks cheatCodeTracerHooks
+
+	// vmPc describes the current call frame's program counter.
+	vmPc uint64
+	// vmOp describes the current call frame's last instruction executed.
+	vmOp vm.OpCode
+	// vmScope describes the current call frame's scope context.
+	vmScope *vm.ScopeContext
+	// vmReturnData describes the current call frame's return data (set on exit).
+	vmReturnData []byte
+	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
+	vmErr error
 }
 
 // cheatCodeTracerHook defines a function to be called when some tracer event occurs. This is used to trigger "undo"
@@ -38,22 +54,34 @@ type cheatCodeTracerHooks []cheatCodeTracerHook
 
 // Execute pops each hook off the stack and executes it until there are no more hooks left to execute.
 func (t *cheatCodeTracerHooks) Execute() {
+	// If the hooks aren't set yet, do nothing.
+	if t == nil {
+		return
+	}
+
+	// Otherwise execute every hook in reverse order (as this is a stack)
 	for i := len(*t) - 1; i >= 0; i-- {
 		(*t)[i]()
 	}
+
+	// And set the hook to nil.
 	*t = nil
 }
 
+// Push pushes a provided hook onto the stack.
 func (t *cheatCodeTracerHooks) Push(f cheatCodeTracerHook) {
+	// Push the provided hook onto the stack.
 	*t = append(*t, f)
 }
 
-// newCheatCodeTracer creates a cheatCodeTracer
+// newCheatCodeTracer creates a cheatCodeTracer and returns it.
 func newCheatCodeTracer() *cheatCodeTracer {
 	tracer := &cheatCodeTracer{}
 	return tracer
 }
 
+// TopCallFrame returns the top call frame (initial call produced by EOA account) of the current EVM execution,
+// or nil if no frame has been entered.
 func (t *cheatCodeTracer) TopCallFrame() *cheatCodeTracerCallFrame {
 	if len(t.pendingCallFrames) == 0 {
 		return nil
@@ -61,6 +89,15 @@ func (t *cheatCodeTracer) TopCallFrame() *cheatCodeTracerCallFrame {
 	return t.pendingCallFrames[0]
 }
 
+// PreviousCallFrame returns the previous call frame of the current EVM execution, or nil if there is no previous.
+func (t *cheatCodeTracer) PreviousCallFrame() *cheatCodeTracerCallFrame {
+	if len(t.pendingCallFrames) < 2 {
+		return nil
+	}
+	return t.pendingCallFrames[t.callDepth-1]
+}
+
+// CurrentCallFrame returns the current call frame of the EVM execution, or nil if there is none.
 func (t *cheatCodeTracer) CurrentCallFrame() *cheatCodeTracerCallFrame {
 	if len(t.pendingCallFrames) == 0 {
 		return nil
@@ -93,7 +130,7 @@ func (t *cheatCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
 	// Execute all current call frame exit hooks
-	t.pendingCallFrames[t.callDepth].onCurrentFrameExitHooks.Execute()
+	t.pendingCallFrames[t.callDepth].onFrameExitHooks.Execute()
 
 	// We're exiting the current frame, so remove our frame data.
 	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
@@ -110,20 +147,20 @@ func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	// Create our call frame struct to track data for this initial entry call frame.
 	// We forward our "next frame hooks" to this frame, then clear them from the previous frame.
 	callFrameData := &cheatCodeTracerCallFrame{
-		onCurrentFrameExitHooks: previousCallFrame.onNextFrameExitHooks,
+		onFrameExitHooks: previousCallFrame.onNextFrameExitHooks,
 	}
 	previousCallFrame.onNextFrameExitHooks = nil
 	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
 
-	// Execute our hooks for entering this call depth.
-	previousCallFrame.onNextFrameEnterHooks.Execute()
+	// Note: We do not execute events for "next frame enter" here, as we do not yet have scope information.
+	// Those events are executed when the first EVM instruction is executed in the new scope.
 }
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.pendingCallFrames[t.callDepth]
-	exitingCallFrame.onCurrentFrameExitHooks.Execute()
+	exitingCallFrame.onFrameExitHooks.Execute()
 
 	// We're exiting the current frame, so remove our frame data.
 	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
@@ -134,7 +171,18 @@ func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 
 // CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
+	// Set our current frame information.
+	currentCallFrame := t.CurrentCallFrame()
+	currentCallFrame.vmPc = pc
+	currentCallFrame.vmOp = op
+	currentCallFrame.vmScope = scope
+	currentCallFrame.vmReturnData = rData
+	currentCallFrame.vmErr = vmErr
 
+	// We execute our entered next frame hooks here (from our previous call frame), as we now have scope information.
+	if t.callDepth > 0 {
+		t.pendingCallFrames[t.callDepth-1].onNextFrameEnterHooks.Execute()
+	}
 }
 
 // CaptureFault records an execution fault, as defined by vm.EVMLogger.

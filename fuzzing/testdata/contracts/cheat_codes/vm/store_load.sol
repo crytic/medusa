@@ -1,3 +1,4 @@
+// This test ensures that account storage can be get and set with cheat codes
 interface CheatCodes {
     function load(address, bytes32) external returns (bytes32);
     function store(address, bytes32, bytes32) external;
