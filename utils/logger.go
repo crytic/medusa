@@ -1,78 +1,64 @@
 package utils
 
 import (
-  "os"
 	"golang.org/x/exp/slog"
+	"io"
+	"log"
+	"os"
 )
 
-/*
-type LogLevel int64
-const (
-	Unknown LogLevel = iota
-	Error
-	Warn
-	Info
-	Debug
-)
-type LogFormat string
-const (
-	Text LogFormat = "Text" // one line with key=value pairs
-	JSON LogFormat = "JSON" // one line in JSON format
-)
-type LogDestination string
-const (
-	Standard LogDestination = "Standard" // stdout
-	File LogDestination = "File" // write to file on disk
-	Return LogDestination = "Return" // return for further processing
-)
 type Logger struct {
-	// indicates where in the system this log came from
-	Context string "NoContext"
-	// all logs with a severity less than MaxLevel will be silently ignored
-	MaxLevel LogLevel "Info"
-  Format LogFormat "Text"
-  Destination LogDestination "Standard"
+	level   int
+	backend *slog.Logger
 }
-*/
 
+// NewLogger creates a new logger
 func NewLogger(
-  format string,
-  maxlevel int8,
-) *slog.Logger {
-  var handler slog.Handler
-  if format == "JSON" {
-    handler = slog.NewJSONHandler(os.Stdout)
-  } else {
-    handler = slog.NewTextHandler(os.Stdout)
-  }
-  logger := slog.New(handler)
-  return logger
-  /*
-	return &Logger{
-		Context:  context,
-		MaxLevel: maxlevel,
-    Destination: destination,
-    Format: format,
+	level int,
+	useJSON bool,
+	logFilePath string,
+) *Logger {
+
+	// set writer according to given logFilePath arg
+	var writer io.Writer
+	var err error
+	if logFilePath == "" {
+		writer = os.Stdout
+	} else {
+		writer, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatal(err)
+			// should we fall back to stdout if error accessing log file?
+			// writer = os.Stdout
+		}
 	}
-  */
+
+	// set handler according to given format arg
+	var handler slog.Handler
+	if useJSON {
+		handler = slog.NewJSONHandler(writer)
+	} else {
+		handler = slog.NewTextHandler(writer)
+	}
+
+	// create new logger
+	backend := slog.New(handler)
+	return &Logger{
+		backend: backend,
+	}
 }
 
-// using any type for print args because that's what Printf uses, see: https://cs.opensource.google/go/go/+/master:src/fmt/print.go;l=232
-// args should be alternating key names (string) and values (any)
-//   an odd number of args should ignore the dangling key name (TBD?)
-/*
-func (l *slog.Logger) Debug(baseMsg string, args ...any) {
-	slog.Debug(fmt.Sprintf(baseMsg, args...))
+func (l *Logger) Debug(baseMsg string, args ...any) {
+	l.backend.Debug(baseMsg, args...)
 }
 
-func (l *slog.Logger) Info(baseMsg string, args ...any) {
-	slog.Info(fmt.Sprintf(baseMsg, args...))
+func (l *Logger) Info(baseMsg string, args ...any) {
+	l.backend.Info(baseMsg, args...)
 }
 
-func (l *slog.Logger) Warn(baseMsg string, args ...any) {
-	slog.Warn(fmt.Sprintf(baseMsg, args...))
+func (l *Logger) Warn(baseMsg string, args ...any) {
+	l.backend.Warn(baseMsg, args...)
 }
-*/
 
 /*
 func Error(baseMsg string, args ...any) {

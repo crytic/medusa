@@ -2,24 +2,24 @@ package utils
 
 import (
 	// "github.com/stretchr/testify/assert"
+	"encoding/json"
 	"testing"
-  "encoding/json"
 )
 
 // testDirPath := "./testdata/tmp-logging-tests"
 
 func isJSON(str string) bool {
-    var js json.RawMessage
-    return json.Unmarshal([]byte(str), &js) == nil
+	var js json.RawMessage
+	return json.Unmarshal([]byte(str), &js) == nil
 }
 
 // check that the context is being properly set & retrived
 func TestLoggerFormat(t *testing.T) {
-	log := NewLogger("JSON", 0)
-  log.Info("test log in json-mode", "foo", "bar")
-  // does it look good?
-	log = NewLogger("Text", 0)
-  log.Info("test log in text-mode", "foo", "bar")
+	log := NewLogger(0, true, "")
+	log.Info("test log in json-mode", "foo", "bar")
+	// does it look good?
+	log = NewLogger(0, false, "")
+	log.Info("test log in text-mode", "foo", "bar")
 }
 
 /*
@@ -37,7 +37,7 @@ func TestLoggerContext(t *testing.T) {
 
 // TestLogInfo tests whether logs work with informational severity
 func TestLoggerLevel(t *testing.T) {
-	maxLevel := Warn 
+	maxLevel := Warn
 	logger := NewLogger("foobar", maxLevel)
 	gottenLevel := logger.GetMaxLevel()
 	assert.EqualValues(t, gottenLevel, maxLevel)
