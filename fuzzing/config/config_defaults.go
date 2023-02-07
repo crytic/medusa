@@ -54,6 +54,11 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			},
 		},
 		Compilation: compilationConfig,
+		Logging: LoggingConfig{
+			Level:       0,
+			UseJSON:     false,
+			LogFilePath: "",
+		},
 	}
 
 	// Return the project configuration

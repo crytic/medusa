@@ -16,6 +16,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// LoggingConfig describes the configuration options used for logging
+	Logging LoggingConfig `json:"logging"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -109,6 +112,19 @@ type PropertyTestConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
 	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// LoggingConfig describes the configuration options used for logging
+type LoggingConfig struct {
+	// Level describes whether logs of certain severity levesl (eg info, warning, etc) will be emitted or discarded
+	// Increasing level values represent more severe logs
+	Level int `json:"level"`
+
+	// UseJSON describes whether to log in JSON-format (if true) or structured text format (if false)
+	UseJSON bool `json:"useJSON"`
+
+	// FilePath describes the path to a file to write logs to. If empty string, logs will be sent to stdout/stderr
+	LogFilePath string `json:"logFilePath"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
