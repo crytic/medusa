@@ -61,9 +61,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          # Install from github until the following is released: https://github.com/crytic/crytic-compile/pull/309
-          pip3 install https://github.com/crytic/crytic-compile/archive/refs/heads/master.zip
           pip3 install solc-select
+          pip3 install slither-analyzer
 
       - name: Install solc
         run: |
