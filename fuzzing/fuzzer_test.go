@@ -168,7 +168,12 @@ func TestCheatCodes(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength)
+
+				// some tests require full sequence + revert to test fully
+				config.Fuzzing.Workers = 3
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) * 30
+
+				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 			},

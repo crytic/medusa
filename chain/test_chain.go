@@ -448,9 +448,15 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 
 	// Loop backwards through removed blocks to emit reverted contract deployment change events.
 	for i := len(removedBlocks) - 1; i >= 0; i-- {
-		err = t.emitContractChangeEvents(true, removedBlocks[i].MessageResults...)
+		remnovedBlock := removedBlocks[i]
+		err = t.emitContractChangeEvents(true, remnovedBlock.MessageResults...)
 		if err != nil {
 			return err
+		}
+
+		// Execute our revert hooks for each block in reverse order.
+		for x := len(remnovedBlock.MessageResults) - 1; x >= 0; x-- {
+			remnovedBlock.MessageResults[x].OnRevertHookFuncs.Execute(false, true)
 		}
 	}
 
@@ -736,6 +742,11 @@ func (t *TestChain) PendingBlockDiscard() error {
 	err := t.emitContractChangeEvents(true, pendingBlock.MessageResults...)
 	if err != nil {
 		return err
+	}
+
+	// Execute our revert hooks for each block in reverse order.
+	for i := len(pendingBlock.MessageResults) - 1; i >= 0; i-- {
+		pendingBlock.MessageResults[i].OnRevertHookFuncs.Execute(false, true)
 	}
 
 	// Reload our state from our database

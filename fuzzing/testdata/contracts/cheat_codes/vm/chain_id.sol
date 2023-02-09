@@ -4,7 +4,9 @@ interface CheatCodes {
 }
 
 contract TestContract {
-    function getChainID() public view returns (uint256) {
+    uint callCount;
+    uint firstChainId;
+    function getChainID() private view returns (uint256) {
         uint256 id;
         assembly {
             id := chainid()
@@ -16,10 +18,20 @@ contract TestContract {
         // Obtain our cheat code contract reference.
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
+        // Back up our original chain id to ensure its only that way the first time we execute.
+        if (callCount == 0) {
+            firstChainId = getChainID();
+            assert(firstChainId != 777123);
+            assert(firstChainId != 888321);
+        } else {
+            assert(firstChainId != getChainID());
+        }
+
         // Change value and verify.
-        cheats.chainId(x);
-        assert(getChainID() == x);
-        cheats.chainId(7);
-        assert(getChainID() == 7);
+        cheats.chainId(777123);
+        assert(getChainID() == 777123);
+        cheats.chainId(888321);
+        assert(getChainID() == 888321);
+        callCount++;
     }
 }

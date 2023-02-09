@@ -18,20 +18,37 @@ type cheatCodeTracer struct {
 	// evm refers to the EVM instance last captured.
 	evm *vm.EVM
 
-	// pendingCallFrames represents per-call-frame data deployment information being captured by the tracer.
-	pendingCallFrames []*cheatCodeTracerCallFrame
+	// callFrames represents per-call-frame data deployment information being captured by the tracer.
+	callFrames []*cheatCodeTracerCallFrame
+
+	// results stores the tracer output after a transaction has concluded.
+	results *cheatCodeTracerResults
 }
 
 // cheatCodeTracerCallFrame represents per-call-frame data traced by a cheatCodeTracer.
 type cheatCodeTracerCallFrame struct {
 	// onNextFrameEnterHooks describes hooks which will be executed the next time this call frame executes a call,
 	// creating "the next call frame".
-	onNextFrameEnterHooks cheatCodeTracerHooks
-	// onNextFrameExitHooks describes hooks which will be executed the next time this call frame executes a call,
+	// The hooks are executed as a queue on entry.
+	onNextFrameEnterHooks types.GenericHookFuncs
+	// onNextFrameExitRestoreHooks describes hooks which will be executed the next time this call frame executes a call,
 	// and exits it, "exiting the next call frame".
-	onNextFrameExitHooks cheatCodeTracerHooks
-	// onFrameExitHooks describes hooks when are executed when this call frame is exited.
-	onFrameExitHooks cheatCodeTracerHooks
+	// The hooks are executed as a stack on exit (to support revert operations).
+	onNextFrameExitRestoreHooks types.GenericHookFuncs
+	// onFrameExitRestoreHooks describes hooks which are executed when this call frame is exited.
+	// The hooks are executed as a stack on exit (to support revert operations).
+	onFrameExitRestoreHooks types.GenericHookFuncs
+
+	// onTopFrameExitRestoreHooks describes hooks which are executed when this scope, or a parent scope reverts, or the
+	// top call frame is exiting.
+	// The hooks are executed as a stack (to support revert operations).
+	onTopFrameExitRestoreHooks types.GenericHookFuncs
+
+	// onChainRevertRestoreHooks describes hooks which are executed when this scope, a parent scope, or the chain reverts.
+	// This is propagated up the call stack, only triggering if a call frame reverts. If it does not revert,
+	// it is stored in a block and only called when the block is reverted.
+	// The hooks are executed as a stack (to support revert operations).
+	onChainRevertRestoreHooks types.GenericHookFuncs
 
 	// vmPc describes the current call frame's program counter.
 	vmPc uint64
@@ -45,33 +62,9 @@ type cheatCodeTracerCallFrame struct {
 	vmErr error
 }
 
-// cheatCodeTracerHook defines a function to be called when some tracer event occurs. This is used to trigger "undo"
-// operations to ensure some changes only take effect in certain call scopes/depths.
-type cheatCodeTracerHook func()
-
-// cheatCodeTracerHooks wraps a list of cheatCodeTracerHook items. It acts as a stack of undo operations.
-type cheatCodeTracerHooks []cheatCodeTracerHook
-
-// Execute pops each hook off the stack and executes it until there are no more hooks left to execute.
-func (t *cheatCodeTracerHooks) Execute() {
-	// If the hooks aren't set yet, do nothing.
-	if t == nil {
-		return
-	}
-
-	// Otherwise execute every hook in reverse order (as this is a stack)
-	for i := len(*t) - 1; i >= 0; i-- {
-		(*t)[i]()
-	}
-
-	// And set the hook to nil.
-	*t = nil
-}
-
-// Push pushes a provided hook onto the stack.
-func (t *cheatCodeTracerHooks) Push(f cheatCodeTracerHook) {
-	// Push the provided hook onto the stack.
-	*t = append(*t, f)
+type cheatCodeTracerResults struct {
+	// onChainRevertHooks describes hooks which are to be executed when the chain reverts.
+	onChainRevertHooks types.GenericHookFuncs
 }
 
 // newCheatCodeTracer creates a cheatCodeTracer and returns it.
@@ -80,36 +73,30 @@ func newCheatCodeTracer() *cheatCodeTracer {
 	return tracer
 }
 
-// TopCallFrame returns the top call frame (initial call produced by EOA account) of the current EVM execution,
-// or nil if no frame has been entered.
-func (t *cheatCodeTracer) TopCallFrame() *cheatCodeTracerCallFrame {
-	if len(t.pendingCallFrames) == 0 {
-		return nil
-	}
-	return t.pendingCallFrames[0]
-}
-
 // PreviousCallFrame returns the previous call frame of the current EVM execution, or nil if there is no previous.
 func (t *cheatCodeTracer) PreviousCallFrame() *cheatCodeTracerCallFrame {
-	if len(t.pendingCallFrames) < 2 {
+	if len(t.callFrames) < 2 {
 		return nil
 	}
-	return t.pendingCallFrames[t.callDepth-1]
+	return t.callFrames[t.callDepth-1]
 }
 
 // CurrentCallFrame returns the current call frame of the EVM execution, or nil if there is none.
 func (t *cheatCodeTracer) CurrentCallFrame() *cheatCodeTracerCallFrame {
-	if len(t.pendingCallFrames) == 0 {
+	if len(t.callFrames) == 0 {
 		return nil
 	}
-	return t.pendingCallFrames[t.callDepth]
+	return t.callFrames[t.callDepth]
 }
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureTxStart(gasLimit uint64) {
 	// Reset our capture state
 	t.callDepth = 0
-	t.pendingCallFrames = make([]*cheatCodeTracerCallFrame, 0)
+	t.callFrames = make([]*cheatCodeTracerCallFrame, 0)
+	t.results = &cheatCodeTracerResults{
+		onChainRevertHooks: nil,
+	}
 }
 
 // CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
@@ -124,16 +111,27 @@ func (t *cheatCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 
 	// Create our call frame struct to track data for this initial entry call frame.
 	callFrameData := &cheatCodeTracerCallFrame{}
-	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
+	t.callFrames = append(t.callFrames, callFrameData)
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
 	// Execute all current call frame exit hooks
-	t.pendingCallFrames[t.callDepth].onFrameExitHooks.Execute()
+	exitingCallFrame := t.callFrames[t.callDepth]
+	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
+	exitingCallFrame.onTopFrameExitRestoreHooks.Execute(false, true)
+
+	// If we didn't encounter an error in this call frame, we push our upward propagating revert events up one frame.
+	if err == nil {
+		// Store these revert hooks in our results.
+		t.results.onChainRevertHooks = append(t.results.onChainRevertHooks, exitingCallFrame.onChainRevertRestoreHooks...)
+	} else {
+		// We hit an error, so a revert occurred before this tx was committed.
+		exitingCallFrame.onChainRevertRestoreHooks.Execute(false, true)
+	}
 
 	// We're exiting the current frame, so remove our frame data.
-	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
+	t.callFrames = t.callFrames[:t.callDepth]
 }
 
 // CaptureEnter is called upon entering of the call frame, as defined by vm.EVMLogger.
@@ -147,10 +145,10 @@ func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	// Create our call frame struct to track data for this initial entry call frame.
 	// We forward our "next frame hooks" to this frame, then clear them from the previous frame.
 	callFrameData := &cheatCodeTracerCallFrame{
-		onFrameExitHooks: previousCallFrame.onNextFrameExitHooks,
+		onFrameExitRestoreHooks: previousCallFrame.onNextFrameExitRestoreHooks,
 	}
-	previousCallFrame.onNextFrameExitHooks = nil
-	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
+	previousCallFrame.onNextFrameExitRestoreHooks = nil
+	t.callFrames = append(t.callFrames, callFrameData)
 
 	// Note: We do not execute events for "next frame enter" here, as we do not yet have scope information.
 	// Those events are executed when the first EVM instruction is executed in the new scope.
@@ -159,11 +157,21 @@ func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	// Execute all current call frame exit hooks
-	exitingCallFrame := t.pendingCallFrames[t.callDepth]
-	exitingCallFrame.onFrameExitHooks.Execute()
+	exitingCallFrame := t.callFrames[t.callDepth]
+	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
+	parentCallFrame := t.callFrames[t.callDepth-1]
+
+	// If we didn't encounter an error in this call frame, we push our upward propagating revert events up one frame.
+	if err == nil {
+		parentCallFrame.onTopFrameExitRestoreHooks = append(parentCallFrame.onTopFrameExitRestoreHooks, exitingCallFrame.onTopFrameExitRestoreHooks...)
+		parentCallFrame.onChainRevertRestoreHooks = append(parentCallFrame.onChainRevertRestoreHooks, exitingCallFrame.onChainRevertRestoreHooks...)
+	} else {
+		// We hit an error, so a revert occurred before this tx was committed.
+		exitingCallFrame.onChainRevertRestoreHooks.Execute(false, true)
+	}
 
 	// We're exiting the current frame, so remove our frame data.
-	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
+	t.callFrames = t.callFrames[:t.callDepth]
 
 	// Decrease our call depth now that we've exited a call frame.
 	t.callDepth--
@@ -181,7 +189,7 @@ func (t *cheatCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 
 	// We execute our entered next frame hooks here (from our previous call frame), as we now have scope information.
 	if t.callDepth > 0 {
-		t.pendingCallFrames[t.callDepth-1].onNextFrameEnterHooks.Execute()
+		t.callFrames[t.callDepth-1].onNextFrameEnterHooks.Execute(true, true)
 	}
 }
 
@@ -194,5 +202,6 @@ func (t *cheatCodeTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
 func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
-
+	// Add our revert operations we collected for this transaction.
+	results.OnRevertHookFuncs = append(results.OnRevertHookFuncs, t.results.onChainRevertHooks...)
 }
