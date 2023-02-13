@@ -75,6 +75,9 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
+
+	// CheatcodeConfig describes the configuration related to cheatcodes
+	CheatcodeConfig CheatcodeConfig `json:"cheatcodeConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing
@@ -109,6 +112,12 @@ type PropertyTestConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
 	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// CheatcodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheatcodes)
+type CheatcodeConfig struct {
+	// EnableFFI describes whether the FFI cheatcode should be enabled. Enablement allows for arbitrary code execution on the tester's machine
+	EnableFFI bool `json:"enableFFI"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.

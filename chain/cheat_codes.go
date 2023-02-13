@@ -1,9 +1,17 @@
 package chain
 
 import (
+	"crypto/ecdsa"
+	"encoding/hex"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/trailofbits/medusa/utils"
 	"math/big"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 // getCheatCodeProviders obtains a cheatCodeTracer (used to power cheat code analysis) and associated cheatCodeContract
@@ -44,11 +52,31 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	if err != nil {
 		return nil, err
 	}
+	typeUint8, err := abi.NewType("uint8", "", nil)
+	if err != nil {
+		return nil, err
+	}
 	typeUint64, err := abi.NewType("uint64", "", nil)
 	if err != nil {
 		return nil, err
 	}
 	typeUint256, err := abi.NewType("uint256", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeInt256, err := abi.NewType("int256", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeStringSlice, err := abi.NewType("string[]", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeString, err := abi.NewType("string", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeBool, err := abi.NewType("bool", "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +245,216 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 				tracer.evm.Context.Coinbase = original
 			})
 			return nil, nil
+		},
+	)
+
+	// FFI: Run arbitrary command on base OS
+	// TODO: Figure out how to evaluate enableFFI configuration option here
+	contract.addMethod(
+		"ffi", abi.Arguments{{Type: typeStringSlice}}, abi.Arguments{{Type: typeBytes}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// command is cmdAndInputs[0] and args are cmdAndInputs[1:]
+			cmdAndInputs := inputs[0].([]string)
+
+			var command string
+			var args []string
+
+			if len(cmdAndInputs) < 1 {
+				// Make sure there is at least a command to run
+				return []any{"ffi: no command was provided"}, vm.ErrExecutionReverted
+			} else if len(cmdAndInputs) == 1 {
+				// It is possible there are no arguments provided
+				command = cmdAndInputs[0]
+			} else {
+				// Both a command and arguments have been provided
+				command = cmdAndInputs[0]
+				args = cmdAndInputs[1:]
+			}
+
+			// Run command
+			cmd := exec.Command(command, args...)
+
+			// Grab output
+			out, err := cmd.Output()
+			if err != nil {
+				errorMsg := "ffi: cmd failed with the following error: " + err.Error()
+				return []any{[]byte(errorMsg)}, vm.ErrExecutionReverted
+			}
+
+			// Attempt to hex decode the output
+			hexOut, err := hex.DecodeString(strings.TrimPrefix(string(out), "0x"))
+			if err != nil {
+				// Return the byte array as itself if hex decoding does not work
+				return []any{out}, nil
+			}
+
+			// Hex decoding worked, so return that
+			return []any{hexOut}, nil
+		},
+	)
+
+	// addr: Compute the address for a given private key
+	contract.addMethod("addr", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeAddress}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
+			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
+
+			// Get ECDSA public key
+			publicKey := privateKey.Public().(*ecdsa.PublicKey)
+
+			// Get associated address
+			addr := crypto.PubkeyToAddress(*publicKey)
+
+			return []any{addr}, nil
+		},
+	)
+
+	// sign: Sign a digest given some private key
+	contract.addMethod("sign", abi.Arguments{{Type: typeUint256}, {Type: typeBytes32}},
+		abi.Arguments{{Type: typeUint8}, {Type: typeBytes32}, {Type: typeBytes32}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
+			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
+			digest := inputs[1].([32]byte)
+
+			// Sign digest
+			sig, err := crypto.Sign(digest[:], privateKey)
+			if err != nil {
+				return []any{"sign: malformed input to signature algorithm"}, vm.ErrExecutionReverted
+			}
+
+			// `r` and `s` have to be [32]byte arrays
+			var r [32]byte
+			var s [32]byte
+			copy(r[:], sig[:32])
+			copy(s[:], sig[32:64])
+
+			// Need to add 27 to the `v` value for ecrecover to work
+			v := sig[64] + 27
+
+			return []any{v, r, s}, nil
+		},
+	)
+
+	// toString(address): Convert address to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeAddress}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			addr := inputs[0].(common.Address)
+			return []any{addr.String()}, nil
+		},
+	)
+
+	// toString(bool): Convert bool to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeBool}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			b := inputs[0].(bool)
+			return []any{strconv.FormatBool(b)}, nil
+		},
+	)
+
+	// toString(uint256): Convert uint256 to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			n := inputs[0].(*big.Int)
+			return []any{n.String()}, nil
+		},
+	)
+
+	// toString(int256): Convert int256 to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeInt256}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			n := inputs[0].(*big.Int)
+			return []any{n.String()}, nil
+		},
+	)
+
+	// toString(bytes32): Convert bytes32 to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeBytes32}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			b := inputs[0].([32]byte)
+			// Prefix "0x"
+			hexString := "0x" + hex.EncodeToString(b[:])
+
+			return []any{hexString}, nil
+		},
+	)
+
+	// toString(bytes): Convert bytes to string
+	contract.addMethod("toString", abi.Arguments{{Type: typeBytes}}, abi.Arguments{{Type: typeString}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			b := inputs[0].([]byte)
+			// Prefix "0x"
+			hexString := "0x" + hex.EncodeToString(b)
+
+			return []any{hexString}, nil
+		},
+	)
+
+	// parseBytes: Convert string to bytes
+	contract.addMethod("parseBytes", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			return []any{[]byte(inputs[0].(string))}, nil
+		},
+	)
+
+	// parseBytes32: Convert string to bytes32
+	contract.addMethod("parseBytes32", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes32}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			bSlice := []byte(inputs[0].(string))
+
+			// Use a fixed array and copy the data over
+			var bArray [32]byte
+			copy(bArray[:], bSlice[:32])
+
+			return []any{bArray}, nil
+		},
+	)
+
+	// parseAddress: Convert string to address
+	contract.addMethod("parseAddress", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeAddress}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			addr, err := utils.HexStringToAddress(inputs[0].(string))
+			if err != nil {
+				return []any{"parseAddress: malformed string"}, vm.ErrExecutionReverted
+			}
+
+			return []any{addr}, nil
+		},
+	)
+
+	// parseUint: Convert string to uint256
+	contract.addMethod("parseUint", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeUint256}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			n, ok := new(big.Int).SetString(inputs[0].(string), 10)
+			if !ok {
+				return []any{"parseUint: malformed string"}, vm.ErrExecutionReverted
+			}
+
+			return []any{n}, nil
+		},
+	)
+
+	// parseInt: Convert string to int256
+	contract.addMethod("parseInt", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeInt256}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			n, ok := new(big.Int).SetString(inputs[0].(string), 10)
+			if !ok {
+				return []any{"parseInt: malformed string"}, vm.ErrExecutionReverted
+			}
+
+			return []any{n}, nil
+		},
+	)
+
+	// parseBool: Convert string to bool
+	contract.addMethod("parseBool", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBool}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			b, err := strconv.ParseBool(inputs[0].(string))
+			if err != nil {
+				return []any{"parseBool: malformed string"}, vm.ErrExecutionReverted
+			}
+
+			return []any{b}, nil
 		},
 	)
 
