@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: trailofbits/medusa-geth
           ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
+          submodules: true
 
       - name: Update submodule version
         run: |
@@ -60,8 +60,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: trailofbits/medusa-geth
           ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
+          submodules: true
 
       - name: Update submodule version
         run: |
