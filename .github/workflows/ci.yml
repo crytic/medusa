@@ -33,7 +33,7 @@ jobs:
       - name: Prettier
         run: |
           npm install -g prettier
-          prettier --check '**.json' '**/*.md' '**/*.yml'
+          prettier --check '**.json' '**/*.md' '**/*.yml' '!(pkg)'
 
       - name: Markdown link check
         run: |
