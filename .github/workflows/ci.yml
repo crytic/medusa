@@ -12,6 +12,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          repository: trailofbits/medusa-geth
+          ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
       - uses: actions/setup-go@v3
         with:
@@ -51,6 +54,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          repository: trailofbits/medusa-geth
+          ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
       - uses: actions/setup-go@v3
         with:
