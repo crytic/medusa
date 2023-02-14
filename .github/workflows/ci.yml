@@ -12,9 +12,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
+      - uses: webfactory/ssh-agent@0.7.0
         with:
-          ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
-          submodules: 'recursive'
+          ssh-private-key: |
+            ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
+
+      - run: git submodule update --init --recursive --remote
 
       - name: Update submodule version
         run: |
@@ -59,14 +63,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-        with:
-          ssh-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
-          submodules: 'recursive'
 
-      - name: Update submodule version
-        run: |
-          git submodule init
-          git submodule update
+      - uses: webfactory/ssh-agent@0.7.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
+
+      - run: git submodule update --init --recursive --remote
 
       - uses: actions/setup-go@v3
         with:
