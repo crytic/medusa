@@ -17,9 +17,6 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
-      - run: git submodule update --init --recursive --remote
-
-      - name: Update submodule version
         run: |
           git submodule init
           git submodule update
@@ -67,7 +64,9 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
-      - run: git submodule update --init --recursive --remote
+        run: |
+          git submodule init
+          git submodule update
 
       - uses: actions/setup-go@v3
         with:
