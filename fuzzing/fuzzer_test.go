@@ -162,6 +162,11 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/utils/ffi.sol",
+		"testdata/contracts/cheat_codes/utils/addr.sol",
+		"testdata/contracts/cheat_codes/utils/to_string.sol",
+		"testdata/contracts/cheat_codes/utils/sign.sol",
+		"testdata/contracts/cheat_codes/utils/parse.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -176,6 +181,7 @@ func TestCheatCodes(t *testing.T) {
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.CheatcodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer

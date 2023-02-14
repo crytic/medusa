@@ -54,6 +54,9 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
+			CheatcodeConfig: CheatcodeConfig{
+				EnableFFI: false,
+			},
 		},
 		Compilation: compilationConfig,
 	}
