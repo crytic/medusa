@@ -152,6 +152,11 @@ func TestChainBehaviour(t *testing.T) {
 // TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
 func TestCheatCodes(t *testing.T) {
 	filePaths := []string{
+		"testdata/contracts/cheat_codes/utils/ffi.sol",
+		"testdata/contracts/cheat_codes/utils/addr.sol",
+		"testdata/contracts/cheat_codes/utils/to_string.sol",
+		"testdata/contracts/cheat_codes/utils/sign.sol",
+		"testdata/contracts/cheat_codes/utils/parse.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
@@ -162,11 +167,6 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
-		"testdata/contracts/cheat_codes/utils/ffi.sol",
-		"testdata/contracts/cheat_codes/utils/addr.sol",
-		"testdata/contracts/cheat_codes/utils/to_string.sol",
-		"testdata/contracts/cheat_codes/utils/sign.sol",
-		"testdata/contracts/cheat_codes/utils/parse.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -176,12 +176,12 @@ func TestCheatCodes(t *testing.T) {
 
 				// some tests require full sequence + revert to test fully
 				config.Fuzzing.Workers = 3
-				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) * 30
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
 
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.CheatcodeConfig.EnableFFI = true
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer

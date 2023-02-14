@@ -257,7 +257,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	}
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
-	testChain, err := chain.NewTestChain(genesisAlloc)
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit

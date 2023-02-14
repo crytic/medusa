@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/trailofbits/medusa/chain/config"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
@@ -26,9 +27,6 @@ import (
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
 // typical consensus/chain objects to allow for more specialized testing closer to the EVM.
 type TestChain struct {
-	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
-	genesisDefinition *core.Genesis
-
 	// blocks represents the blocks created on the current chain. If blocks are sent to the chain which skip some
 	// block numbers, any block in that gap will not be committed here and its block hash and other parameters
 	// will be spoofed when requested through the API, for efficiency.
@@ -40,6 +38,19 @@ type TestChain struct {
 	// BlockGasLimit defines the maximum amount of gas that can be consumed by transactions in a block.
 	// Transactions which push the block gas usage beyond this limit will not be added to a block without error.
 	BlockGasLimit uint64
+
+	// testChainConfig represents the configuration used by this TestChain.
+	testChainConfig *config.TestChainConfig
+
+	// chainConfig represents the configuration used to instantiate and manage this chain's underlying go-ethereum
+	// components.
+	chainConfig *params.ChainConfig
+
+	// vmConfigExtensions defines EVM extensions to use with each chain call or transaction.
+	vmConfigExtensions *vm.ConfigExtensions
+
+	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
+	genesisDefinition *core.Genesis
 
 	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
 	// and is the subject of state changes when executing new transactions. This does not track the current block
@@ -64,19 +75,14 @@ type TestChain struct {
 	// router is used for transaction execution when constructing blocks.
 	transactionTracerRouter *TestChainTracerRouter
 
-	// chainConfig represents the configuration used to instantiate and manage this chain.
-	chainConfig *params.ChainConfig
-
-	// vmConfigExtensions defines EVM extensions to use with each chain call or transaction.
-	vmConfigExtensions *vm.ConfigExtensions
-
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
-// This creates a test chain with a test chain configuration and the provided genesis allocation.
-func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
+// This creates a test chain with a test chain configuration and the provided genesis allocation and config.
+// If a nil config is provided, a default one is used.
+func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -95,18 +101,23 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
-		Alloc:      genesisAlloc,
+		Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
 		Number:     0,
 		GasUsed:    0,
 		ParentHash: common.Hash{},
 		BaseFee:    big.NewInt(0),
 	}
 
-	// Define our vm extension config
-	vmConfigExtensions := &vm.ConfigExtensions{
-		OverrideCodeSizeCheck: false,
-		AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
+	// Use a default config if we were not provided one
+	if testChainConfig == nil {
+		testChainConfig, err = config.DefaultTestChainConfig()
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	// Obtain our VM extensions from our config
+	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
 
 	// Obtain our cheatcode providers
 	cheatTracer, cheatContracts, err := getCheatCodeProviders()
@@ -118,18 +129,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
 	// newer solidity versions perform code size checks prior to external calls.
 	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
-	for _, cheatContract := range cheatContracts {
-		// Note: When sharing a genesis definition across multiple threads, access to this map can cause concurrent
-		// access issues. For simplicity/performance, we avoid locking and just edit a copy of the map, then set the
-		// whole map. Any chain sharing this genesis data can access any copy in a race condition, but it should have
-		// the same data.
-		alloc := maps.Clone(genesisDefinition.Alloc)
-		alloc[cheatContract.address] = core.GenesisAccount{
-			Balance: big.NewInt(0),
-			Code:    []byte{0xFF},
+	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+		for _, cheatContract := range cheatContracts {
+			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
+				Balance: big.NewInt(0),
+				Code:    []byte{0xFF},
+			}
+			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
 		}
-		genesisDefinition.Alloc = alloc
-		vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
 	}
 
 	// Create an in-memory database
@@ -163,13 +170,17 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 		stateDatabase:           stateDatabase,
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
+		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
 	}
 
 	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
-	chain.AddTracer(cheatTracer, true, true)
+	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+		chain.AddTracer(cheatTracer, true, true)
+		cheatTracer.bindToChain(chain)
+	}
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
 	stateDB, err := chain.StateAfterBlockNumber(0)
@@ -186,8 +197,8 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 // step between chain creation, and copying of all blocks, allowing for tracers to be added.
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
-	// Create a new chain with the same genesis definition
-	targetChain, err := NewTestChain(t.genesisDefinition.Alloc)
+	// Create a new chain with the same genesis definition and config
+	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig)
 	if err != nil {
 		return nil, err
 	}

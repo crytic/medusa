@@ -1,6 +1,7 @@
 package config
 
 import (
+	testChainConfig "github.com/trailofbits/medusa/chain/config"
 	"github.com/trailofbits/medusa/compilation"
 )
 
@@ -9,13 +10,22 @@ import (
 func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	var (
 		compilationConfig *compilation.CompilationConfig
+		chainConfig       *testChainConfig.TestChainConfig
 		err               error
 	)
+
+	// Try to obtain a default compilation config for this platform.
 	if platform != "" {
 		compilationConfig, err = compilation.NewCompilationConfig(platform)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Try to obtain a default chain config.
+	chainConfig, err = testChainConfig.DefaultTestChainConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a project configuration
@@ -54,9 +64,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
-			CheatcodeConfig: CheatcodeConfig{
-				EnableFFI: false,
-			},
+			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
 	}

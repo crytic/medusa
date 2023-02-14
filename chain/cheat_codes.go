@@ -292,6 +292,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	contract.addMethod(
 		"ffi", abi.Arguments{{Type: typeStringSlice}}, abi.Arguments{{Type: typeBytes}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+			// Ensure FFI is enabled (this allows arbitrary code execution, so we expect it to be explicitly enabled).
+			if tracer.chain.testChainConfig.CheatCodeConfig.EnableFFI {
+				// Make sure there is at least a command to run
+				return []any{"ffi is not enabled in the chain configuration"}, vm.ErrExecutionReverted
+			}
+
 			// command is cmdAndInputs[0] and args are cmdAndInputs[1:]
 			cmdAndInputs := inputs[0].([]string)
 

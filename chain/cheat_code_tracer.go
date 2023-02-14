@@ -12,6 +12,10 @@ import (
 // cheatCodeTracer represents an EVM.Logger which tracks and patches EVM execution state to enable extended
 // testing functionality on-chain.
 type cheatCodeTracer struct {
+	// chain refers to the TestChain which this tracer is bound to. This is nil when the tracer is first created,
+	// but is set to TestChain which created it, after it is added.
+	chain *TestChain
+
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth uint64
 
@@ -71,6 +75,13 @@ type cheatCodeTracerResults struct {
 func newCheatCodeTracer() *cheatCodeTracer {
 	tracer := &cheatCodeTracer{}
 	return tracer
+}
+
+// bindToChain is called by the TestChain which created the tracer to set its reference.
+// Note: This is done because of the cheat code system's dependency on the genesis block, as well as chain's dependency
+// on it, which prevents the chain being set in the tracer on initialization.
+func (t *cheatCodeTracer) bindToChain(chain *TestChain) {
+	t.chain = chain
 }
 
 // PreviousCallFrame returns the previous call frame of the current EVM execution, or nil if there is no previous.
