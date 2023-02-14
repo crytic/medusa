@@ -7,11 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// cheatCodeMethodHandler describes a function which handles callback for a given contract method. It takes the
-// cheatCodeTracer for execution context, as well as unpacked input values.
-// Returns unpacked output values, or an error if one occurs.
-type cheatCodeMethodHandler func(tracer *cheatCodeTracer, args []any) ([]any, error)
-
 // cheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
 // meant to act as a contract.
 type cheatCodeContract struct {
@@ -35,6 +30,22 @@ type cheatCodeMethod struct {
 	handler cheatCodeMethodHandler
 }
 
+// cheatCodeMethodHandler describes a function which handles callback for a given contract method. It takes the
+// cheatCodeTracer for execution context, as well as unpacked input values.
+// Returns unpacked output values to be packed and returned, or raw return data values to use instead.
+// Raw return data takes precedence over unpacked values, so only one should be returned.
+type cheatCodeMethodHandler func(tracer *cheatCodeTracer, args []any) ([]any, *cheatCodeRawReturnData)
+
+// cheatCodeRawReturnData represents the return data and/or error which should be returned by a cheatCodeMethodHandler.
+type cheatCodeRawReturnData struct {
+	// ReturnData represents the raw return data bytes to be sent to the caller. This is typically ABI encoded for
+	// solidity, but it may be any data in practice.
+	ReturnData []byte
+
+	// Err represents an optional error which is to be returned to the caller. This may be vm.
+	Err error
+}
+
 // newCheatCodeContract returns a new precompiledContract which uses the attached cheatCodeTracer for execution
 // context.
 func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address) *cheatCodeContract {
@@ -45,8 +56,17 @@ func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address) *chea
 	}
 }
 
+// cheatCodeRevertData creates cheatCodeRawReturnData with the provided return data, and an error indicating the
+// EVM has encountered an execution revert (vm.ErrExecutionReverted).
+func cheatCodeRevertData(returnData []byte) *cheatCodeRawReturnData {
+	return &cheatCodeRawReturnData{
+		ReturnData: returnData,
+		Err:        vm.ErrExecutionReverted,
+	}
+}
+
 // addMethod adds a new method to the precompiled contract.
-// Returns an errorw if one occurred.
+// Returns an error if one occurred.
 func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
@@ -97,9 +117,11 @@ func (p *cheatCodeContract) Run(input []byte) ([]byte, error) {
 	}
 
 	// Call the registered method handler.
-	outputValues, err := methodInfo.handler(p.tracer, inputValues)
-	if err != nil {
-		return nil, err
+	outputValues, rawReturnData := methodInfo.handler(p.tracer, inputValues)
+
+	// If we have raw return data, use that. Otherwise, proceed to unpack the returned output values.
+	if rawReturnData != nil {
+		return rawReturnData.ReturnData, rawReturnData.Err
 	}
 
 	// Return our packed output data.

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/trailofbits/medusa/utils"
 	"math/big"
@@ -84,7 +83,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Warp: Sets VM timestamp
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.Time)
 			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
@@ -98,7 +97,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Roll: Sets VM block number
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.BlockNumber)
 			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
@@ -112,7 +111,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Roll: Sets VM block number
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
 			original := new(big.Int).Set(tracer.evm.Context.BaseFee)
 			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
@@ -126,7 +125,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Difficulty: Sets VM block number
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
 
 			// Obtain our spoofed difficulty
@@ -154,7 +153,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// ChainId: Sets VM chain ID
 	contract.addMethod(
 		"chainId", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes unless this code path reverts or the whole transaction is reverted in the chain.
 			chainConfig := tracer.evm.ChainConfig()
 			original := chainConfig.ChainID
@@ -169,7 +168,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Store: Sets a storage slot value in a given account.
 	contract.addMethod(
 		"store", abi.Arguments{{Type: typeAddress}, {Type: typeBytes32}, {Type: typeBytes32}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			slot := inputs[1].([32]byte)
 			value := inputs[2].([32]byte)
@@ -181,7 +180,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Load: Loads a storage slot value from a given account.
 	contract.addMethod(
 		"load", abi.Arguments{{Type: typeAddress}, {Type: typeBytes32}}, abi.Arguments{{Type: typeBytes32}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			slot := inputs[1].([32]byte)
 			value := tracer.evm.StateDB.GetState(account, slot)
@@ -192,7 +191,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Etch: Sets the code for a given account.
 	contract.addMethod(
 		"etch", abi.Arguments{{Type: typeAddress}, {Type: typeBytes}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			code := inputs[1].([]byte)
 			tracer.evm.StateDB.SetCode(account, code)
@@ -203,7 +202,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Deal: Sets the balance for a given account.
 	contract.addMethod(
 		"deal", abi.Arguments{{Type: typeAddress}, {Type: typeUint256}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			newBalance := inputs[1].(*big.Int)
 			originalBalance := tracer.evm.StateDB.GetBalance(account)
@@ -216,7 +215,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// GetNonce: Gets the nonce for a given account.
 	contract.addMethod(
 		"getNonce", abi.Arguments{{Type: typeAddress}}, abi.Arguments{{Type: typeUint64}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			nonce := tracer.evm.StateDB.GetNonce(account)
 			return []any{nonce}, nil
@@ -226,7 +225,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// SetNonce: Sets the nonce for a given account.
 	contract.addMethod(
 		"setNonce", abi.Arguments{{Type: typeAddress}, {Type: typeUint64}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			nonce := inputs[1].(uint64)
 			tracer.evm.StateDB.SetNonce(account, nonce)
@@ -237,7 +236,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Coinbase: Sets the block coinbase.
 	contract.addMethod(
 		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
 			original := tracer.evm.Context.Coinbase
 			tracer.evm.Context.Coinbase = inputs[0].(common.Address)
@@ -251,7 +250,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Prank: Sets the msg.sender within the next EVM call scope created by the caller.
 	contract.addMethod(
 		"prank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
 			// so when it enters the next frame in its scope, we trigger the prank.
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
@@ -272,7 +271,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// PrankHere: Sets the msg.sender within caller EVM scope until it is exited.
 	contract.addMethod(
 		"prankHere", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
 			// to disable the cheat code on exit
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
@@ -290,11 +289,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// FFI: Run arbitrary command on base OS
 	contract.addMethod(
 		"ffi", abi.Arguments{{Type: typeStringSlice}}, abi.Arguments{{Type: typeBytes}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Ensure FFI is enabled (this allows arbitrary code execution, so we expect it to be explicitly enabled).
 			if !tracer.chain.testChainConfig.CheatCodeConfig.EnableFFI {
 				// Make sure there is at least a command to run
-				return []any{"ffi is not enabled in the chain configuration"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("ffi is not enabled in the chain configuration"))
 			}
 
 			// command is cmdAndInputs[0] and args are cmdAndInputs[1:]
@@ -305,7 +304,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 			if len(cmdAndInputs) < 1 {
 				// Make sure there is at least a command to run
-				return []any{"ffi: no command was provided"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("ffi: no command was provided"))
 			} else if len(cmdAndInputs) == 1 {
 				// It is possible there are no arguments provided
 				command = cmdAndInputs[0]
@@ -322,7 +321,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			out, err := cmd.Output()
 			if err != nil {
 				errorMsg := "ffi: cmd failed with the following error: " + err.Error()
-				return []any{[]byte(errorMsg)}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte(errorMsg))
 			}
 
 			// Attempt to hex decode the output
@@ -339,7 +338,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// addr: Compute the address for a given private key
 	contract.addMethod("addr", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeAddress}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
 			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
 
@@ -356,7 +355,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// sign: Sign a digest given some private key
 	contract.addMethod("sign", abi.Arguments{{Type: typeUint256}, {Type: typeBytes32}},
 		abi.Arguments{{Type: typeUint8}, {Type: typeBytes32}, {Type: typeBytes32}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
 			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
 			digest := inputs[1].([32]byte)
@@ -364,7 +363,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 			// Sign digest
 			sig, err := crypto.Sign(digest[:], privateKey)
 			if err != nil {
-				return []any{"sign: malformed input to signature algorithm"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("sign: malformed input to signature algorithm"))
 			}
 
 			// `r` and `s` have to be [32]byte arrays
@@ -382,7 +381,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(address): Convert address to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeAddress}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			addr := inputs[0].(common.Address)
 			return []any{addr.String()}, nil
 		},
@@ -390,7 +389,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(bool): Convert bool to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeBool}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			b := inputs[0].(bool)
 			return []any{strconv.FormatBool(b)}, nil
 		},
@@ -398,7 +397,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(uint256): Convert uint256 to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			n := inputs[0].(*big.Int)
 			return []any{n.String()}, nil
 		},
@@ -406,7 +405,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(int256): Convert int256 to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeInt256}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			n := inputs[0].(*big.Int)
 			return []any{n.String()}, nil
 		},
@@ -414,7 +413,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(bytes32): Convert bytes32 to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeBytes32}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			b := inputs[0].([32]byte)
 			// Prefix "0x"
 			hexString := "0x" + hex.EncodeToString(b[:])
@@ -425,7 +424,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// toString(bytes): Convert bytes to string
 	contract.addMethod("toString", abi.Arguments{{Type: typeBytes}}, abi.Arguments{{Type: typeString}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			b := inputs[0].([]byte)
 			// Prefix "0x"
 			hexString := "0x" + hex.EncodeToString(b)
@@ -436,14 +435,14 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// parseBytes: Convert string to bytes
 	contract.addMethod("parseBytes", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			return []any{[]byte(inputs[0].(string))}, nil
 		},
 	)
 
 	// parseBytes32: Convert string to bytes32
 	contract.addMethod("parseBytes32", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes32}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			bSlice := []byte(inputs[0].(string))
 
 			// Use a fixed array and copy the data over
@@ -456,10 +455,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// parseAddress: Convert string to address
 	contract.addMethod("parseAddress", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeAddress}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			addr, err := utils.HexStringToAddress(inputs[0].(string))
 			if err != nil {
-				return []any{"parseAddress: malformed string"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("parseAddress: malformed string"))
 			}
 
 			return []any{addr}, nil
@@ -468,10 +467,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// parseUint: Convert string to uint256
 	contract.addMethod("parseUint", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeUint256}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			n, ok := new(big.Int).SetString(inputs[0].(string), 10)
 			if !ok {
-				return []any{"parseUint: malformed string"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("parseUint: malformed string"))
 			}
 
 			return []any{n}, nil
@@ -480,10 +479,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// parseInt: Convert string to int256
 	contract.addMethod("parseInt", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeInt256}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			n, ok := new(big.Int).SetString(inputs[0].(string), 10)
 			if !ok {
-				return []any{"parseInt: malformed string"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("parseInt: malformed string"))
 			}
 
 			return []any{n}, nil
@@ -492,10 +491,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// parseBool: Convert string to bool
 	contract.addMethod("parseBool", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBool}},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, error) {
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			b, err := strconv.ParseBool(inputs[0].(string))
 			if err != nil {
-				return []any{"parseBool: malformed string"}, vm.ErrExecutionReverted
+				return nil, cheatCodeRevertData([]byte("parseBool: malformed string"))
 			}
 
 			return []any{b}, nil
