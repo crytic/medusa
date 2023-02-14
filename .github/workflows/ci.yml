@@ -17,7 +17,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
-        run: |
+      - run: |
           git submodule init
           git submodule update
 
@@ -64,7 +64,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
 
-        run: |
+      - run: |
           git submodule init
           git submodule update
 
