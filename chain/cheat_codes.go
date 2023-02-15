@@ -3,6 +3,7 @@ package chain
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -314,21 +315,21 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 				args = cmdAndInputs[1:]
 			}
 
-			// Run command
+			// Create our command
 			cmd := exec.Command(command, args...)
 
-			// Grab output
-			out, err := cmd.Output()
+			// Execute it and grab the output
+			stdout, _, combined, err := utils.RunCommandWithOutputAndError(cmd)
 			if err != nil {
-				errorMsg := "ffi: cmd failed with the following error: " + err.Error()
+				errorMsg := fmt.Sprintf("ffi: cmd failed with the following error: %v\nOutput: %v", err, string(combined))
 				return nil, cheatCodeRevertData([]byte(errorMsg))
 			}
 
 			// Attempt to hex decode the output
-			hexOut, err := hex.DecodeString(strings.TrimPrefix(string(out), "0x"))
+			hexOut, err := hex.DecodeString(strings.TrimPrefix(string(stdout), "0x"))
 			if err != nil {
 				// Return the byte array as itself if hex decoding does not work
-				return []any{out}, nil
+				return []any{stdout}, nil
 			}
 
 			// Hex decoding worked, so return that
