@@ -31,7 +31,7 @@ contract TestContract {
         string[] memory inputs = new string[](3);
         inputs[0] = "cmd";
         inputs[1] = "/C";
-        inputs[2] = "echo echo|set /p dummyVar=gm";
+        inputs[2] = "echo|set /p dummyVar=gm";
 
         // Call cheats.ffi
         bytes memory res = cheats.ffi(inputs);
