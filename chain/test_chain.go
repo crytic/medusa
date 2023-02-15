@@ -459,15 +459,15 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 
 	// Loop backwards through removed blocks to emit reverted contract deployment change events.
 	for i := len(removedBlocks) - 1; i >= 0; i-- {
-		remnovedBlock := removedBlocks[i]
-		err = t.emitContractChangeEvents(true, remnovedBlock.MessageResults...)
+		removedBlock := removedBlocks[i]
+		err = t.emitContractChangeEvents(true, removedBlock.MessageResults...)
 		if err != nil {
 			return err
 		}
 
 		// Execute our revert hooks for each block in reverse order.
-		for x := len(remnovedBlock.MessageResults) - 1; x >= 0; x-- {
-			remnovedBlock.MessageResults[x].OnRevertHookFuncs.Execute(false, true)
+		for x := len(removedBlock.MessageResults) - 1; x >= 0; x-- {
+			removedBlock.MessageResults[x].OnRevertHookFuncs.Execute(false, true)
 		}
 	}
 

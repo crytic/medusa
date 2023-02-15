@@ -113,7 +113,7 @@ func (p *cheatCodeContract) Run(input []byte) ([]byte, error) {
 	// This call is targeting a valid method, unpack its arguments
 	inputValues, err := methodInfo.method.Inputs.Unpack(input[4:])
 	if err != nil {
-		return nil, err
+		return []byte{}, vm.ErrExecutionReverted
 	}
 
 	// Call the registered method handler.
@@ -124,6 +124,12 @@ func (p *cheatCodeContract) Run(input []byte) ([]byte, error) {
 		return rawReturnData.ReturnData, rawReturnData.Err
 	}
 
-	// Return our packed output data.
-	return methodInfo.method.Outputs.Pack(outputValues...)
+	// Pack our return values
+	packedOutput, err := methodInfo.method.Outputs.Pack(outputValues...)
+	if err != nil {
+		return []byte{}, vm.ErrExecutionReverted
+	}
+
+	// Return our packed values
+	return packedOutput, nil
 }
