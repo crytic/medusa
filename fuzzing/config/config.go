@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trailofbits/medusa/chain/config"
 	"os"
 
 	"github.com/trailofbits/medusa/compilation"
@@ -75,6 +76,9 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
+
+	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
+	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing
