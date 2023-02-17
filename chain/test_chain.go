@@ -3,10 +3,15 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/trailofbits/medusa/chain/config"
+	"golang.org/x/exp/maps"
+	"math/big"
+	"sort"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -17,16 +22,11 @@ import (
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/chain/vendored"
 	"github.com/trailofbits/medusa/utils"
-	"math/big"
-	"sort"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
 // typical consensus/chain objects to allow for more specialized testing closer to the EVM.
 type TestChain struct {
-	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
-	genesisDefinition *core.Genesis
-
 	// blocks represents the blocks created on the current chain. If blocks are sent to the chain which skip some
 	// block numbers, any block in that gap will not be committed here and its block hash and other parameters
 	// will be spoofed when requested through the API, for efficiency.
@@ -38,6 +38,19 @@ type TestChain struct {
 	// BlockGasLimit defines the maximum amount of gas that can be consumed by transactions in a block.
 	// Transactions which push the block gas usage beyond this limit will not be added to a block without error.
 	BlockGasLimit uint64
+
+	// testChainConfig represents the configuration used by this TestChain.
+	testChainConfig *config.TestChainConfig
+
+	// chainConfig represents the configuration used to instantiate and manage this chain's underlying go-ethereum
+	// components.
+	chainConfig *params.ChainConfig
+
+	// vmConfigExtensions defines EVM extensions to use with each chain call or transaction.
+	vmConfigExtensions *vm.ConfigExtensions
+
+	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
+	genesisDefinition *core.Genesis
 
 	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
 	// and is the subject of state changes when executing new transactions. This does not track the current block
@@ -62,19 +75,23 @@ type TestChain struct {
 	// router is used for transaction execution when constructing blocks.
 	transactionTracerRouter *TestChainTracerRouter
 
-	// chainConfig represents the configuration used to instantiate and manage this chain.
-	chainConfig *params.ChainConfig
-
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
-// This creates a test chain with a default test chain configuration and the provided genesis allocation.
-func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
+// This creates a test chain with a test chain configuration and the provided genesis allocation and config.
+// If a nil config is provided, a default one is used.
+func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+	// Copy our chain config, so it is not shared across chains.
+	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
-		Config:    params.TestChainConfig,
+		Config:    chainConfig,
 		Nonce:     0,
 		Timestamp: 0,
 		ExtraData: []byte{
@@ -84,25 +101,49 @@ func NewTestChain(genesisAlloc core.GenesisAlloc) (*TestChain, error) {
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
-		Alloc:      genesisAlloc,
+		Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
 		Number:     0,
 		GasUsed:    0,
 		ParentHash: common.Hash{},
 		BaseFee:    big.NewInt(0),
 	}
 
-	// Create the test chain with this genesis definition.
-	return NewTestChainWithGenesis(genesisDefinition)
-}
+	// Use a default config if we were not provided one
+	if testChainConfig == nil {
+		testChainConfig, err = config.DefaultTestChainConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
 
-// NewTestChainWithGenesis creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
-// The genesis definition provided is used to construct the genesis block and specify the chain configuration.
-func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error) {
+	// Obtain our VM extensions from our config
+	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
+
+	// Obtain our cheatcode providers
+	cheatTracer, cheatContracts, err := getCheatCodeProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add all cheat code contract addresses to the genesis config. This is done because cheat codes are implemented
+	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
+	// newer solidity versions perform code size checks prior to external calls.
+	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
+	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+		for _, cheatContract := range cheatContracts {
+			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
+				Balance: big.NewInt(0),
+				Code:    []byte{0xFF},
+			}
+			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
+		}
+	}
+
 	// Create an in-memory database
 	keyValueStore := memorydb.New()
 	db := rawdb.NewDatabase(keyValueStore)
 
-	// Commit our genesis definition to get a block.
+	// Commit our genesis definition to get a genesis block.
 	genesisBlock := genesisDefinition.MustCommit(db)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
@@ -129,11 +170,17 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 		stateDatabase:           stateDatabase,
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
+		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
+		vmConfigExtensions:      vmConfigExtensions,
 	}
 
-	// Add our contract deployment tracer to this chain by default.
+	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
+	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+		chain.AddTracer(cheatTracer, true, true)
+		cheatTracer.bindToChain(chain)
+	}
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
 	stateDB, err := chain.StateAfterBlockNumber(0)
@@ -150,8 +197,8 @@ func NewTestChainWithGenesis(genesisDefinition *core.Genesis) (*TestChain, error
 // step between chain creation, and copying of all blocks, allowing for tracers to be added.
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
-	// Create a new chain with the same genesis definition
-	targetChain, err := NewTestChainWithGenesis(t.genesisDefinition)
+	// Create a new chain with the same genesis definition and config
+	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -412,9 +459,15 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 
 	// Loop backwards through removed blocks to emit reverted contract deployment change events.
 	for i := len(removedBlocks) - 1; i >= 0; i-- {
-		err = t.emitContractChangeEvents(true, removedBlocks[i].MessageResults...)
+		removedBlock := removedBlocks[i]
+		err = t.emitContractChangeEvents(true, removedBlock.MessageResults...)
 		if err != nil {
 			return err
+		}
+
+		// Execute our revert hooks for each block in reverse order.
+		for x := len(removedBlock.MessageResults) - 1; x >= 0; x-- {
+			removedBlock.MessageResults[x].OnRevertHookFuncs.Execute(false, true)
 		}
 	}
 
@@ -448,7 +501,12 @@ func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error
 	blockContext := newTestChainBlockContext(t, t.Head().Header)
 
 	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{
+		Debug:            true,
+		Tracer:           t.callTracerRouter,
+		NoBaseFee:        true,
+		ConfigExtensions: t.vmConfigExtensions,
+	})
 
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
@@ -581,9 +639,10 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
-		Debug:     true,
-		Tracer:    t.transactionTracerRouter,
-		NoBaseFee: true,
+		Debug:            true,
+		Tracer:           t.transactionTracerRouter,
+		NoBaseFee:        true,
+		ConfigExtensions: t.vmConfigExtensions,
 	})
 
 	// Apply our transaction
@@ -694,6 +753,11 @@ func (t *TestChain) PendingBlockDiscard() error {
 	err := t.emitContractChangeEvents(true, pendingBlock.MessageResults...)
 	if err != nil {
 		return err
+	}
+
+	// Execute our revert hooks for each block in reverse order.
+	for i := len(pendingBlock.MessageResults) - 1; i >= 0; i-- {
+		pendingBlock.MessageResults[i].OnRevertHookFuncs.Execute(false, true)
 	}
 
 	// Reload our state from our database
