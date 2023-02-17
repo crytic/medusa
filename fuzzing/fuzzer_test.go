@@ -5,6 +5,7 @@ import (
 	"github.com/trailofbits/medusa/events"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/utils"
 	"math/rand"
 	"testing"
 
@@ -147,6 +148,64 @@ func TestChainBehaviour(t *testing.T) {
 			assertFailedTestsExpected(f, false)
 		},
 	})
+}
+
+// TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
+func TestCheatCodes(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/cheat_codes/utils/addr.sol",
+		"testdata/contracts/cheat_codes/utils/to_string.sol",
+		"testdata/contracts/cheat_codes/utils/sign.sol",
+		"testdata/contracts/cheat_codes/utils/parse.sol",
+		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/chain_id.sol",
+		"testdata/contracts/cheat_codes/vm/deal.sol",
+		"testdata/contracts/cheat_codes/vm/difficulty.sol",
+		"testdata/contracts/cheat_codes/vm/etch.sol",
+		"testdata/contracts/cheat_codes/vm/fee.sol",
+		"testdata/contracts/cheat_codes/vm/prank.sol",
+		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/store_load.sol",
+		"testdata/contracts/cheat_codes/vm/warp.sol",
+	}
+
+	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
+	// tests.
+	if utils.IsWindowsEnvironment() {
+		filePaths = append(filePaths,
+			"testdata/contracts/cheat_codes/utils/ffi_windows.sol",
+		)
+	} else {
+		filePaths = append(filePaths,
+			"testdata/contracts/cheat_codes/utils/ffi_unix.sol",
+		)
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+
+				// some tests require full sequence + revert to test fully
+				config.Fuzzing.Workers = 3
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
+
+				// enable assertion testing only
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, false)
+			},
+		})
+	}
 }
 
 // TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and

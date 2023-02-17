@@ -3,15 +3,16 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/trailofbits/medusa/utils/randomutils"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -255,8 +256,8 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		Balance: initBalance,
 	}
 
-	// Create our test chain with our basic allocations.
-	testChain, err := chain.NewTestChain(genesisAlloc)
+	// Create our test chain with our basic allocations and passed medusa's chain configuration
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit

@@ -1,6 +1,10 @@
 package chain
 
 import (
+	"math/big"
+	"math/rand"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -9,9 +13,6 @@ import (
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/utils"
 	"github.com/trailofbits/medusa/utils/testutils"
-	"math/big"
-	"math/rand"
-	"testing"
 )
 
 // verifyChain verifies various state properties in a TestChain, such as if previous block hashes are correct,
@@ -73,8 +74,9 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 		}
 	}
 
-	// Create a test chain
-	chain, err := NewTestChain(genesisAlloc)
+	// Create a test chain with a default test chain configuration
+	chain, err := NewTestChain(genesisAlloc, nil)
+
 	assert.NoError(t, err)
 
 	return chain, senders
@@ -569,7 +571,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChainWithGenesis(chain.genesisDefinition)
+		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

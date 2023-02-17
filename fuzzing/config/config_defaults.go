@@ -1,19 +1,31 @@
 package config
 
-import "github.com/trailofbits/medusa/compilation"
+import (
+	testChainConfig "github.com/trailofbits/medusa/chain/config"
+	"github.com/trailofbits/medusa/compilation"
+)
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
 // based on the provided platform, or a nil one if an empty string is provided.
 func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	var (
 		compilationConfig *compilation.CompilationConfig
+		chainConfig       *testChainConfig.TestChainConfig
 		err               error
 	)
+
+	// Try to obtain a default compilation config for this platform.
 	if platform != "" {
 		compilationConfig, err = compilation.NewCompilationConfig(platform)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Try to obtain a default chain config.
+	chainConfig, err = testChainConfig.DefaultTestChainConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a project configuration
@@ -52,6 +64,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
+			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
 	}
