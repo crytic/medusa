@@ -5,23 +5,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// TestChainConfig represents the chain configuration. Both the core config (`CoreConfig`) which determines
-// the blockchain settings and other custom chain settings.
+// TestChainConfig represents the chain configuration.
 type TestChainConfig struct {
 	// CodeSizeCheckDisabled indicates whether code size checks should be disabled in the EVM. This allows for code
 	// size to be disabled without disabling the entire EIP it was introduced.
 	CodeSizeCheckDisabled bool `json:"codeSizeCheckDisabled"`
 
 	// CheatCodeConfig indicates the configuration for EVM cheat codes to use.
-	CheatCodeConfig CheatCodeConfig
+	CheatCodeConfig CheatCodeConfig `json:"cheatCodes"`
 }
 
-// CheatCodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheatcodes)
+// CheatCodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheat codes)
 type CheatCodeConfig struct {
 	// CheatCodesEnabled indicates whether cheat code pre-compiles should be enabled in the chain.
 	CheatCodesEnabled bool `json:"cheatCodesEnabled"`
 
-	// EnableFFI describes whether the FFI cheatcode should be enabled. Enablement allows for arbitrary code execution on the tester's machine
+	// EnableFFI describes whether the FFI cheat code should be enabled. Enablement allows for arbitrary code execution
+	// on the tester's machine
 	EnableFFI bool `json:"enableFFI"`
 }
 

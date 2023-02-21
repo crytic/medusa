@@ -1,12 +1,10 @@
 package chain
 
 import (
-	"github.com/trailofbits/medusa/chain/types"
-	"math/big"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/trailofbits/medusa/chain/types"
+	"math/big"
 )
 
 // cheatCodeTracer represents an EVM.Logger which tracks and patches EVM execution state to enable extended
@@ -126,7 +124,7 @@ func (t *cheatCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
