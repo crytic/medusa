@@ -40,7 +40,7 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
-We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
 
 ### Command-line only
 
