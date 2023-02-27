@@ -1,9 +1,9 @@
 package config
 
 import (
+	"github.com/rs/zerolog"
 	testChainConfig "github.com/trailofbits/medusa/chain/config"
 	"github.com/trailofbits/medusa/compilation"
-	import "github.com/rs/zerolog"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -65,6 +65,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
+			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
 		Logging: LoggingConfig{
