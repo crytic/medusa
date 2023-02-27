@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -64,7 +65,7 @@ type Fuzzer struct {
 	testCasesFinished map[string]TestCase
 
 	// logger provides an interface for generating structured logs
-	log utils.Logger
+	logger zerolog.Logger
 
 	// Events describes the event system for the Fuzzer.
 	Events FuzzerEvents
@@ -94,7 +95,24 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
-	logger := utils.NewLogger(config.Logging.Level, config.Logging.UseJSON, config.Logging.LogFilePath)
+	// Setup logging
+	// First, we need to create a log file, if requested
+	/*
+		var logFile *os.File
+		if config.Fuzzing.LoggingConfig.LogDirectory != "" {
+			// Filename will be the "log-current_unix_timestamp.json"
+			filename := "log-" + strconv.FormatInt(time.Now().Unix(), 10) + ".json"
+			// Concatenate to the log directory path
+			logFilePath := filepath.Join(config.Fuzzing.LoggingConfig.LogDirectory, filename)
+			// Create log file descriptor
+			logFile, err = os.Create(logFilePath)
+			if err != nil {
+				return nil, err
+			}
+		}
+		consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+		multi := zerolog.MultiLevelWriter(consoleWriter, logFile)
+		logger := zerolog.New(multi).With().Timestamp().Logger()*/
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
@@ -105,7 +123,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		log:                 *logger,
+		//logger:              logger,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
 			ChainSetupFunc:                     chainSetupFromCompilations,
@@ -123,13 +141,15 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
 		// Compile the targets specified in the compilation config
-		logger.Info("Compiling targets", "platform", fuzzer.config.Compilation.Platform)
-		compilations, compilationOutput, err := (*fuzzer.config.Compilation).Compile()
+		//logger.Info("Compiling targets", "platform", fuzzer.config.Compilation.Platform)
+		//fuzzer.logger.Info().Msgf("Compiling targets using the %v platform", fuzzer.config.Compilation.Platform)
+		//compilations, compilationOutput, err := (*fuzzer.config.Compilation).Compile()
+		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
 			return nil, err
 		}
-		logger.Info("Compiled targets successfully", "compilationOutput", compilationOutput)
-
+		//logger.Info("Compiled targets successfully", "compilationOutput", compilationOutput)
+		//fuzzer.logger.Info().Msgf("Compiled targets successfully with the following output: %v", compilationOutput)
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
 	}
@@ -214,14 +234,15 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 
 	// We only log here if we're not configured to stop on the first test failure. This is because the fuzzer prints
 	// results on exit, so we avoid duplicate messages.
-	if !f.config.Fuzzing.Testing.StopOnFailedTest {
-		f.log.Info("Test failure",
-			"name", testCase.Name(),
-			"status", testCase.Status(),
-			"message", testCase.Message(),
-		)
-		// fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
-	}
+	/*
+		if !f.config.Fuzzing.Testing.StopOnFailedTest {
+			f.log.Info("Test failure",
+				"name", testCase.Name(),
+				"status", testCase.Status(),
+				"message", testCase.Message(),
+			)
+			// fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
+		}*/
 
 	// If the config specifies, we stop after the first failed test reported.
 	if testCase.Status() == TestCaseStatusFailed && f.config.Fuzzing.Testing.StopOnFailedTest {
@@ -441,7 +462,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 	// Log that we are about to create the workers and start fuzzing
 	// fmt.Printf("Creating %d workers ...\n", f.config.Fuzzing.Workers)
-	f.log.Info("Creating workers", "count", f.config.Fuzzing.Workers)
+	//f.log.Info("Creating workers", "count", f.config.Fuzzing.Workers)
 	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
@@ -539,7 +560,7 @@ func (f *Fuzzer) Start() error {
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
-		f.log.Info("Running with timeout", "duration", f.config.Fuzzing.Timeout)
+		//f.log.Info("Running with timeout", "duration", f.config.Fuzzing.Timeout)
 		// fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
@@ -643,25 +664,24 @@ func (f *Fuzzer) printMetricsLoop() {
 		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
 		// Print a metrics update
-		f.log.Info("Fuzzing campaign complete",
+		/*f.log.Info("Fuzzing campaign complete",
 			"elapsed", time.Since(startTime).Round(time.Second),
 			"callsTested", callsTested,
 			"callsPerSecond", uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
 			"sequencesPerSecond", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
 			"resetsPerSecond", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
 			"coverage", f.corpus.ActiveCallSequenceCount(),
+		)*/
+
+		fmt.Printf(
+			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, cov: %d\n",
+			time.Since(startTime).Round(time.Second),
+			callsTested,
+			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
+			f.corpus.ActiveCallSequenceCount(),
 		)
-		/*
-			fmt.Printf(
-				"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, cov: %d\n",
-				time.Since(startTime).Round(time.Second),
-				callsTested,
-				uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
-				uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
-				uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
-				f.corpus.ActiveCallSequenceCount(),
-			)
-		*/
 
 		// Update our delta tracking metrics
 		lastPrintedTime = time.Now()
@@ -672,7 +692,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		// If we reached our transaction threshold, halt
 		testLimit := f.config.Fuzzing.TestLimit
 		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
-			f.log.Info("transaction test limit reached, halting now ...")
+			//f.log.Info("transaction test limit reached, halting now ...")
 			f.Stop()
 			break
 		}
@@ -712,15 +732,15 @@ func (f *Fuzzer) printExitingResults() {
 	)
 
 	// Print the results of each individual test case.
-	f.log.Info("Fuzzer stopped, test results follow below ...")
+	//f.log.Info("Fuzzer stopped, test results follow below ...")
 	for _, testCase := range f.testCases {
 		// Obtain the test case message. If it is a non-empty string, we format our output for it specially.
 		// Otherwise, we exclude it.
 		msg := strings.TrimSpace(testCase.Message())
 		if msg != "" {
-			f.log.Info(fmt.Sprintf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg))
+			//f.log.Info(fmt.Sprintf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg))
 		} else {
-			f.log.Info(fmt.Sprintf("[%s] %s\n", testCase.Status(), testCase.Name()))
+			//f.log.Info(fmt.Sprintf("[%s] %s\n", testCase.Status(), testCase.Name()))
 		}
 
 		// Tally our pass/fail count.
@@ -732,5 +752,5 @@ func (f *Fuzzer) printExitingResults() {
 	}
 
 	// Print our final tally of test statuses.
-	f.log.Info("Test summary", "passed", testCountPassed, "failed", testCountFailed)
+	//f.log.Info("Test summary", "passed", testCountPassed, "failed", testCountFailed)
 }

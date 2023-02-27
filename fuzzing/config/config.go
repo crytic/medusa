@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/trailofbits/medusa/chain/config"
-	"os"
-
 	"github.com/trailofbits/medusa/compilation"
 	"github.com/trailofbits/medusa/utils"
+	"os"
 )
 
 type ProjectConfig struct {
@@ -80,6 +80,9 @@ type FuzzingConfig struct {
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
 
+	// LoggingConfig describes the configuration used for logging
+	LoggingConfig LoggingConfig `json:"loggingConfig"`
+
 	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
@@ -120,15 +123,20 @@ type PropertyTestConfig struct {
 
 // LoggingConfig describes the configuration options used for logging
 type LoggingConfig struct {
-	// Level describes whether logs of certain severity levesl (eg info, warning, etc) will be emitted or discarded
+	// Enabled describes whether logging is enabled
+	Enabled bool `json:"enabled"`
+
+	// Level describes whether logs of certain severity levels (eg info, warning, etc.) will be emitted or discarded.
 	// Increasing level values represent more severe logs
-	Level int `json:"level"`
+	Level zerolog.Level `json:"level"`
 
-	// UseJSON describes whether to log in JSON-format (if true) or structured text format (if false)
-	UseJSON bool `json:"useJSON"`
+	// EnableStructuredConsoleOutput describes whether output to stdout/stderr should be structured or not.
+	// Structured output to console is faster and more efficient.
+	EnableStructuredConsoleOutput bool `json:"enableStructuredConsoleOutput"`
 
-	// FilePath describes the path to a file to write logs to. If empty string, logs will be sent to stdout/stderr
-	LogFilePath string `json:"logFilePath"`
+	// LogDirectory describes the directory where logs will be outputted. If LogDirectory is the empty string,
+	// logs are only sent to stdout/stderr. Logs in this directory will _always_ be in a structured format
+	LogDirectory string `json:"logDirectory"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
