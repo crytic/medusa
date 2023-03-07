@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"bytes"
 	"github.com/trailofbits/medusa/fuzzing/calls"
+	"golang.org/x/exp/slices"
 	"math/big"
 	"sync"
 
@@ -118,25 +119,33 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
+		// If we're not testing all contracts, verify the current contract is one we specified in our deployment order.
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.DeploymentOrder, contract.Name()) {
+			continue
+		}
+
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isTestableMethod(method) {
-				// Create local variables to avoid pointer types in the loop being overridden.
-				contract := contract
-				method := method
-
-				// Create our test case
-				testCase := &AssertionTestCase{
-					status:         TestCaseStatusNotStarted,
-					targetContract: contract,
-					targetMethod:   method,
-					callSequence:   nil,
-				}
-
-				// Add to our test cases and register them with the fuzzer
-				methodId := contracts.GetContractMethodID(contract, &method)
-				t.testCases[methodId] = testCase
-				t.fuzzer.RegisterTestCase(testCase)
+			// Verify this method is an assertion testable method
+			if !t.isTestableMethod(method) {
+				continue
 			}
+
+			// Create local variables to avoid pointer types in the loop being overridden.
+			contract := contract
+			method := method
+
+			// Create our test case
+			testCase := &AssertionTestCase{
+				status:         TestCaseStatusNotStarted,
+				targetContract: contract,
+				targetMethod:   method,
+				callSequence:   nil,
+			}
+
+			// Add to our test cases and register them with the fuzzer
+			methodId := contracts.GetContractMethodID(contract, &method)
+			t.testCases[methodId] = testCase
+			t.fuzzer.RegisterTestCase(testCase)
 		}
 	}
 	return nil
@@ -206,8 +215,13 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 
 	// Obtain the test case for this method we're targeting for assertion testing.
 	t.testCasesLock.Lock()
-	testCase := t.testCases[*methodId]
+	testCase, testCaseExists := t.testCases[*methodId]
 	t.testCasesLock.Unlock()
+
+	// Verify a test case exists for this method called (if we're not assertion testing this method, stop)
+	if !testCaseExists {
+		return shrinkRequests, nil
+	}
 
 	// If the test case already failed, skip it
 	if testCase.Status() == TestCaseStatusFailed {
