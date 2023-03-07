@@ -61,6 +61,7 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	projectConfig.Fuzzing.TestLimit = 1_500_000
 	projectConfig.Fuzzing.CallSequenceLength = 100
 	projectConfig.Fuzzing.Testing.StopOnFailedContractMatching = true
+	projectConfig.Fuzzing.Testing.TestAllContracts = false
 	return projectConfig
 }
 
@@ -68,10 +69,11 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 // there should be no failed tests
 func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 	// Ensure we captured a failed test, if expected
+	failedTestCount := len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed))
 	if expectFailure {
-		assert.Greater(f.t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 0, "Fuzz test could not be solved before reaching limits")
+		assert.Greater(f.t, failedTestCount, 0, "Fuzz test could not be solved before reaching limits")
 	} else {
-		assert.EqualValues(f.t, 0, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Fuzz test failed when it should not have")
+		assert.EqualValues(f.t, 0, failedTestCount, "Fuzz test failed when it should not have")
 	}
 }
 
