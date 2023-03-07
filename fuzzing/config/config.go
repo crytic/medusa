@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trailofbits/medusa/chain/config"
 	"os"
 
 	"github.com/trailofbits/medusa/compilation"
@@ -48,6 +49,9 @@ type FuzzingConfig struct {
 	// DeploymentOrder determines the order in which the contracts should be deployed
 	DeploymentOrder []string `json:"deploymentOrder"`
 
+	// Constructor arguments for contracts deployment. It is available only in init mode
+	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
+
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
 
@@ -72,6 +76,9 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
+
+	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
+	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing

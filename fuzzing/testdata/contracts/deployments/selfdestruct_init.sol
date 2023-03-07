@@ -2,7 +2,7 @@
 // construction. This is used to test contract existence checks.
 contract InnerDeployment {
     constructor() {
-        selfdestruct(address(0));
+        selfdestruct(payable(address(0)));
     }
 }
 
