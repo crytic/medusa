@@ -6,7 +6,6 @@ import (
 	"github.com/trailofbits/medusa/chain/types"
 	"golang.org/x/exp/slices"
 	"math/big"
-	"time"
 )
 
 // TestChainTracer is an extended vm.EVMLogger which can be used with a TestChain to store any captured
@@ -77,10 +76,10 @@ func (t *TestChainTracerRouter) CaptureStart(env *vm.EVM, from common.Address, t
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *TestChainTracerRouter) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *TestChainTracerRouter) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Call the underlying method for each registered tracer.
 	for _, tracer := range t.tracers {
-		tracer.CaptureEnd(output, gasUsed, d, err)
+		tracer.CaptureEnd(output, gasUsed, err)
 	}
 }
 
