@@ -2,13 +2,11 @@ package coverage
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain/types"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"math/big"
-	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
@@ -97,7 +95,7 @@ func (t *CoverageTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// If we didn't encounter an error in the end, we commit all our coverage maps to the final coverage map.
 	// If we encountered an error, we reverted, so we don't consider them.
 	if err == nil {

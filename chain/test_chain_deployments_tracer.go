@@ -1,12 +1,10 @@
 package chain
 
 import (
-	"github.com/trailofbits/medusa/chain/types"
-	"math/big"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/trailofbits/medusa/chain/types"
+	"math/big"
 )
 
 // testChainDeploymentsTracer implements TestChainTracer, capturing information regarding contract deployments and
@@ -84,7 +82,7 @@ func (t *testChainDeploymentsTracer) CaptureStart(env *vm.EVM, from common.Addre
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *testChainDeploymentsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
 	// We had to fetch it upon exit as it does not exist during creation of course.
 	for _, contractChange := range t.pendingCallFrames[t.callDepth].results {

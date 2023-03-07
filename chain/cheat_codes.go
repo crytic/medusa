@@ -83,13 +83,13 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 
 	// Warp: Sets VM timestamp
 	contract.addMethod(
-		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
+		"warp", abi.Arguments{{Type: typeUint64}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
-			original := new(big.Int).Set(tracer.evm.Context.Time)
-			tracer.evm.Context.Time.Set(inputs[0].(*big.Int))
+			original := tracer.evm.Context.Time
+			tracer.evm.Context.Time = inputs[0].(uint64)
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Time.Set(original)
+				tracer.evm.Context.Time = original
 			})
 			return nil, nil
 		},

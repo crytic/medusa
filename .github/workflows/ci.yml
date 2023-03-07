@@ -48,7 +48,7 @@ jobs:
       - name: Lint
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run
+          golangci-lint run --timeout 5m0s
 
   test:
     strategy:
