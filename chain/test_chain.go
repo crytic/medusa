@@ -647,6 +647,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 
 	// Apply our transaction
 	var usedGas uint64
+	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
