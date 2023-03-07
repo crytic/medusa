@@ -671,7 +671,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	if err != nil {
 		return fmt.Errorf("test chain state write error: %v", err)
 	}
-	if err := t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
+	if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain trie write error: %v", err)

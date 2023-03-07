@@ -21,7 +21,7 @@ func newTestChainBlockContext(testChain *TestChain, header *types.Header) vm.Blo
 		},
 		Coinbase:    header.Coinbase,
 		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
+		Time:        header.Time,
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		BaseFee:     new(big.Int).Set(testChain.Head().Header.BaseFee),
 		GasLimit:    header.GasLimit,
