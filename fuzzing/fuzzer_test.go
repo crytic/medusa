@@ -222,6 +222,8 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.StopOnFailedContractMatching = true
+				config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -241,6 +243,8 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			config.Fuzzing.Testing.StopOnFailedContractMatching = true
+			config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -309,6 +313,40 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 
 				// When it's done, we should've had at least one self-destruction.
 				assert.Greater(t, selfDestructCount, 0, "no SELFDESTRUCT operations were detected, when they should have been.")
+			},
+		})
+	}
+}
+
+// TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
+// config option is specified. It also runs the fuzzer without the option enabled to ensure they are not tested.
+func TestTestingScope(t *testing.T) {
+	for _, testingAllContracts := range []bool{false, true} {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/deployments/testing_scope.sol",
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.TestAllContracts = testingAllContracts
+				config.Fuzzing.Testing.StopOnFailedTest = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.PropertyTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Define our expected failure count
+				var expectedFailureCount int
+				if testingAllContracts {
+					expectedFailureCount = 4
+				} else {
+					expectedFailureCount = 2
+				}
+
+				// Check for any failed tests and verify coverage was captured
+				assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), expectedFailureCount)
 			},
 		})
 	}

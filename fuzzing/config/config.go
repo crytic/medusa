@@ -90,6 +90,10 @@ type TestingConfig struct {
 	// to determine which contract a deployed contract is.
 	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
 
+	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
+	// than just the contracts specified in the project configuration's deployment order.
+	TestAllContracts bool `json:"testAllContracts"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 
