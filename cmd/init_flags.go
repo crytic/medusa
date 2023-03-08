@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/fuzzing/config"
 )
@@ -23,7 +24,7 @@ func updateProjectConfigWithInitFlags(cmd *cobra.Command, projectConfig *config.
 		// Get the new target
 		newTarget, err := cmd.Flags().GetString("target")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		err = projectConfig.Compilation.SetTarget(newTarget)

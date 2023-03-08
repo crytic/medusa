@@ -89,7 +89,7 @@ func TestAssertionsNotRequire(t *testing.T) {
 		filePath: "testdata/contracts/assertions/assert_not_require.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.TestLimit = 10000
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.AssertionTesting.Enabled = true
 		},
@@ -194,7 +194,7 @@ func TestCheatCodes(t *testing.T) {
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+				config.Fuzzing.TestChain.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer

@@ -3,8 +3,8 @@ package types
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/pkg/errors"
 	"golang.org/x/exp/slices"
 	"strings"
 )
@@ -96,17 +96,17 @@ func ParseABIFromInterface(i any) (*abi.ABI, error) {
 	if s, ok := i.(string); ok {
 		result, err = abi.JSON(strings.NewReader(s))
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 	} else {
 		var b []byte
 		b, err = json.Marshal(i)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		result, err = abi.JSON(strings.NewReader(string(b)))
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 	}
 	return &result, nil
@@ -121,7 +121,7 @@ func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) 
 	if len(c.Abi.Constructor.Inputs) > 0 {
 		data, err := c.Abi.Pack("", args...)
 		if err != nil {
-			return nil, fmt.Errorf("could not encode constructor arguments due to error: %v", err)
+			return nil, errors.Wrapf(err, "could not encode constructor arguments")
 		}
 		initBytecodeWithArgs = append(initBytecodeWithArgs, data...)
 	}

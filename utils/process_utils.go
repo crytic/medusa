@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"github.com/pkg/errors"
 	"io"
 	"os/exec"
 	"runtime"
@@ -25,7 +26,7 @@ func RunCommandWithOutputAndError(command *exec.Cmd) ([]byte, []byte, []byte, er
 	err := command.Run()
 
 	// Return our results
-	return bStdout.Bytes(), bStderr.Bytes(), bCombined.Bytes(), err
+	return bStdout.Bytes(), bStderr.Bytes(), bCombined.Bytes(), errors.WithStack(err)
 }
 
 // IsWindowsEnvironment returns a boolean indicating whether the current execution environment is a Windows platform.

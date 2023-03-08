@@ -7,6 +7,11 @@ import (
 // TestCaseStatus defines the status of a TestCase as a string-represented enum.
 type TestCaseStatus string
 
+// String returns the string version of the TestCaseStatus
+func (t TestCaseStatus) String() string {
+	return string(t)
+}
+
 const (
 	// TestCaseStatusNotStarted describes a test status where conditions have not yet been tested.
 	TestCaseStatusNotStarted TestCaseStatus = "NOT STARTED"

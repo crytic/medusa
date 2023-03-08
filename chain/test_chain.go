@@ -206,7 +206,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 	if onCreateFunc != nil {
 		err = onCreateFunc(targetChain)
 		if err != nil {
-			return nil, errors.WithMessage(err, "could not clone chain due to an error during chain creation")
+			return nil, err
 		}
 	}
 
@@ -241,8 +241,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 
 	// Verify our state
 	if targetChain.Head().Hash != t.Head().Hash {
-		err = errors.Errorf("could not copy chain state onto a new chain, resulting chain head hashes did not match")
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to copy chain state onto a new chain, resulting chain head hashes did not match")
 	}
 
 	// Return our new chain
@@ -321,8 +320,7 @@ func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTy
 func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
 	// If the block number is past our current head, return an error.
 	if blockNumber > t.HeadBlockNumber() {
-		err := errors.Errorf("could not obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// We only commit blocks that were created by this chain. If block numbers are skipped, we simulate their existence
@@ -396,8 +394,7 @@ func getSpoofedBlockHashFromNumber(blockNumber uint64) common.Hash {
 func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		err := errors.Errorf("could not obtain block hash for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
-		return common.Hash{}, errors.WithStack(err)
+		return common.Hash{}, errors.Errorf("failed to obtain block hash for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block
@@ -418,8 +415,7 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		err := errors.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block
@@ -428,7 +424,7 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 	// Load our state from the database
 	stateDB, err := state.New(closestBlock.Header.Root, t.stateDatabase, nil)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	return stateDB, nil
 }
@@ -439,16 +435,14 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 	var err error
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		err = errors.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
-		return errors.WithStack(err)
+		return errors.Errorf("failed to revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block, if it's not an exact match, it means we're trying to revert
 	// to a spoofed block, which we disallow for now.
 	closestBlockIndex, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 	if closestBlock.Header.Number.Uint64() != blockNumber {
-		err = errors.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
-		return errors.WithStack(err)
+		return errors.Errorf("failed to revert to block number %d because it does not refer to an internally committed block", blockNumber)
 	}
 
 	// Slice off our blocks to be removed (to produce relevant events)
@@ -489,7 +483,6 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 		Blocks: removedBlocks,
 	})
 	if err != nil {
-		err = errors.WithMessage(err, "error returned by an event handler when emitting a blocks removed event")
 		return err
 	}
 
@@ -556,8 +549,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	var err error
 	// If we already have a pending block, return an error.
 	if t.pendingBlock != nil {
-		err = errors.Errorf("could not create a new pending block for chain, as a block is already pending")
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to create a new pending block as a block is already pending")
 	}
 
 	// If our block gas limit is not specified, use the default defined by this chain.
@@ -568,8 +560,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// Validate our block number exceeds our previous head
 	currentHeadBlockNumber := t.Head().Header.Number.Uint64()
 	if blockNumber <= currentHeadBlockNumber {
-		err = errors.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to create block with a block number of %d because it precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
 	}
 
 	// Obtain our parent block hash to reference in our new block.
@@ -587,8 +578,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// block number for us to spoof the existence of those intermediate blocks, each with their own unique timestamp.
 	currentHeadTimeStamp := t.Head().Header.Time
 	if currentHeadTimeStamp >= blockTime || blockNumberDifference > blockTime-currentHeadTimeStamp {
-		err = errors.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
-		return nil, errors.WithStack(err)
+		return nil, errors.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
 	}
 
 	// Create a block header for this block:
@@ -627,7 +617,6 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		Block: t.pendingBlock,
 	})
 	if err != nil {
-		err = errors.WithMessage(err, "error returned by an event handler when emitting a pending block created event")
 		return nil, err
 	}
 
@@ -642,8 +631,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	var err error
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
-		err = errors.Errorf("could not add tx to the chain's pending block because no pending block was created")
-		return errors.WithStack(err)
+		return errors.Errorf("failed to add tx to the chain's pending block because no pending block was created")
 	}
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
@@ -669,7 +657,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return errors.WithMessage(err, "test chain state write error when adding tx to pending block")
+		return errors.WithStack(err)
 	}
 
 	// Create our message result
@@ -687,12 +675,12 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	// safe to update the block header afterwards.
 	root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
 	if err != nil {
-		return errors.Wrap(err, "test chain state write error")
+		return errors.WithStack(err)
 	}
 	if err = t.state.Database().TrieDB().Commit(root, false, nil); err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return errors.Wrap(err, "test chain state write error")
+		return errors.WithStack(err)
 	}
 
 	// Update our gas used in the block header
@@ -723,7 +711,6 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 		TransactionIndex: len(t.pendingBlock.Messages),
 	})
 	if err != nil {
-		err = errors.WithMessage(err, "error returned by an event handler when emitting a pending block added txn event")
 		return err
 	}
 
@@ -735,8 +722,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 func (t *TestChain) PendingBlockCommit() error {
 	// If we have no pending block, we cannot commit it.
 	if t.pendingBlock == nil {
-		err := errors.Errorf("could not commit chain's pending block, as no pending block was created")
-		return errors.WithStack(err)
+		return errors.Errorf("failed to commit chain's pending block, as no pending block was created")
 	}
 
 	// Append our new block to our chain.
@@ -752,7 +738,6 @@ func (t *TestChain) PendingBlockCommit() error {
 		Block: pendingBlock,
 	})
 	if err != nil {
-		err = errors.WithMessage(err, "error returned by an event handler when emitting a pending block committed event")
 		return err
 	}
 
@@ -793,7 +778,6 @@ func (t *TestChain) PendingBlockDiscard() error {
 		Block: pendingBlock,
 	})
 	if err != nil {
-		err = errors.WithMessage(err, "error returned by an event handler when emitting a pending block discard event")
 		return err
 	}
 	return nil
@@ -823,7 +807,6 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 					})
 				}
 				if err != nil {
-					err = errors.WithMessage(err, "error returned by an event handler when emitting a contract deployment change event")
 					return err
 				}
 			}
@@ -850,7 +833,6 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 					})
 				}
 				if err != nil {
-					err = errors.WithMessage(err, "error returned by an event handler when emitting a contract deployment change event")
 					return err
 				}
 			}

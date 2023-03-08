@@ -65,15 +65,14 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
-			TestChainConfig: *chainConfig,
+			Logging: LoggingConfig{
+				Level:                zerolog.InfoLevel,
+				EnableConsoleLogging: true,
+				LogDirectory:         "logs",
+			},
+			TestChain: *chainConfig,
 		},
 		Compilation: compilationConfig,
-		Logging: LoggingConfig{
-			Enabled:                       true,
-			Level:                         zerolog.DebugLevel,
-			EnableStructuredConsoleOutput: false,
-			LogDirectory:                  "logs",
-		},
 	}
 
 	// Return the project configuration

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
@@ -64,7 +65,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		// Read all call sequences discovered in the relevant corpus directory.
 		matches, err := filepath.Glob(filepath.Join(corpus.CallSequencesDirectory(), "*.json"))
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		for i := 0; i < len(matches); i++ {
 			// Alias our file path.
@@ -73,14 +74,14 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 			// Read the call sequence data.
 			b, err := os.ReadFile(filePath)
 			if err != nil {
-				return nil, err
+				return nil, errors.WithStack(err)
 			}
 
 			// Parse the call sequence data.
 			var seq calls.CallSequence
 			err = json.Unmarshal(b, &seq)
 			if err != nil {
-				return nil, err
+				return nil, errors.WithStack(err)
 			}
 
 			// Add entry to corpus
@@ -168,7 +169,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+		return errors.WithMessage(err, "failed to initialize coverage maps, base test chain cloning encountered error")
 	}
 
 	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. If the sequence
@@ -195,7 +196,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
 			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.MsgTo]
 			if !resolvedContractExists {
-				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.MsgTo.String())
+				sequenceInvalidError = errors.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.MsgTo.String())
 				return true, nil
 			}
 			currentSequenceElement.Contract = resolvedContract
@@ -228,7 +229,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v\n", err)
+			return errors.WithMessage(err, "failed to initialize coverage maps from corpus, encountered an error while executing call sequence")
 		}
 
 		// If the sequence was replayed successfully, we add a weighted choice for it, for future selection. If it was
@@ -236,13 +237,14 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		if sequenceInvalidError == nil {
 			c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
 		} else {
+			// TODO: Add warning
 			fmt.Printf("corpus item '%v' disabled due to error when replaying it: %v\n", sequenceFileData.filePath, sequenceInvalidError)
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
 		err = testChain.RevertToBlockNumber(baseBlockNumber)
 		if err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
+			return errors.WithMessage(err, "failed to reset the chain while seeding coverage")
 		}
 	}
 	return nil
@@ -317,7 +319,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 func (c *Corpus) RandomCallSequence() (calls.CallSequence, error) {
 	// If we didn't initialize a chooser, return an error
 	if c.weightedCallSequenceChooser == nil {
-		return nil, fmt.Errorf("corpus could not return a random call sequence because the corpus was not initialized")
+		return nil, errors.Errorf("corpus could not return a random call sequence because the corpus was not initialized")
 	}
 
 	// Pick a random call sequence, then clone it before returning it, so the original is untainted.
@@ -359,13 +361,13 @@ func (c *Corpus) Flush() error {
 			// Marshal the call sequence
 			jsonEncodedData, err := json.MarshalIndent(sequenceFile.data, "", " ")
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 
 			// Write the JSON encoded data.
 			err = os.WriteFile(sequenceFile.filePath, jsonEncodedData, os.ModePerm)
 			if err != nil {
-				return fmt.Errorf("An error occurred while writing call sequence to disk: %v\n", err)
+				return errors.WithStack(err)
 			}
 		}
 	}

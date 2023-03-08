@@ -2,9 +2,9 @@ package calls
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 )
 
@@ -50,12 +50,12 @@ func (m *CallMessageDataAbiValues) Clone() (*CallMessageDataAbiValues, error) {
 	if m.Method != nil {
 		data, err := m.Method.Inputs.Pack(m.InputValues...)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to pack ABI call data")
 		}
 
 		clone.InputValues, err = m.Method.Inputs.Unpack(data)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to unpack ABI call data")
 		}
 	}
 
@@ -69,7 +69,7 @@ func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
 	if resolvedMethod, ok := contractAbi.Methods[d.methodName]; ok {
 		d.Method = &resolvedMethod
 	} else {
-		return fmt.Errorf("could not resolve method '%v' from the given contract ABI", d.methodName)
+		return errors.Errorf("failed to resolve method '%v' from the given contract ABI", d.methodName)
 	}
 
 	// Now that we've resolved the method, decode our encoded input values.
@@ -89,19 +89,19 @@ func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
 func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
 	// We must have set an ABI method at runtime to serialize this.
 	if d.Method == nil {
-		return nil, fmt.Errorf("ABI call data packing failed, method definition was not set at runtime")
+		return nil, errors.Errorf("failed to pack ABI call data, method definition was not set at runtime")
 	}
 
 	// If our ABI method was not set, we can't serialize our data.
 	// If our method has a different amount of inputs than we have values, return an error.
 	if len(d.Method.Inputs) != len(d.InputValues) {
-		return nil, fmt.Errorf("ABI call data packing failed, method definition describes %d input arguments, but %d were provided", len(d.Method.Inputs), len(d.InputValues))
+		return nil, errors.Errorf("failed to pack ABI call data, method definition describes %d input arguments, but %d were provided", len(d.Method.Inputs), len(d.InputValues))
 	}
 
 	// Pack the input values
 	argData, err := d.Method.Inputs.Pack(d.InputValues...)
 	if err != nil {
-		return nil, fmt.Errorf("ABI call data packing encountered error: %v", err)
+		return nil, errors.Wrap(err, "failed to pack ABI call data")
 	}
 
 	// Prepend the method ID to the data and return it.
@@ -112,15 +112,16 @@ func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
 // MarshalJSON provides custom JSON marshalling for the struct.
 // Returns the JSON marshalled data, or an error if one occurs.
 func (d *CallMessageDataAbiValues) MarshalJSON() ([]byte, error) {
+	var err error
 	// We must have set an ABI method at runtime to serialize this.
 	if d.Method == nil {
-		return nil, fmt.Errorf("ABI call data JSON marshaling failed, method definition was not set at runtime")
+		return nil, errors.Errorf("failed to marshal ABI call data, method definition was not set at runtime")
 	}
 
 	// If our ABI method was not set, we can't serialize our data.
 	// If our method has a different amount of inputs than we have values, return an error.
 	if len(d.Method.Inputs) != len(d.InputValues) {
-		return nil, fmt.Errorf("ABI call data JSON marshaling failed, method definition describes %d input arguments, but %d were provided", len(d.Method.Inputs), len(d.InputValues))
+		return nil, errors.Errorf("failed to marshal ABI call data, method definition describes %d input arguments, but %d were provided", len(d.Method.Inputs), len(d.InputValues))
 	}
 
 	// For every input we have, we serialize it.
@@ -134,7 +135,9 @@ func (d *CallMessageDataAbiValues) MarshalJSON() ([]byte, error) {
 		MethodName:         d.Method.Name,
 		EncodedInputValues: inputValuesEncoded,
 	}
-	return json.Marshal(marshalData)
+
+	b, err := json.Marshal(marshalData)
+	return b, errors.WithStack(err)
 }
 
 // UnmarshalJSON provides custom JSON unmarshalling for the struct.
@@ -144,7 +147,7 @@ func (d *CallMessageDataAbiValues) UnmarshalJSON(b []byte) error {
 	var marshalData callMessageDataAbiValuesMarshal
 	err := json.Unmarshal(b, &marshalData)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Set our data in our actual structure now

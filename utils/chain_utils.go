@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/pkg/errors"
 )
 
 // CopyChainConfig takes a chain configuration and creates a copy.
@@ -13,14 +14,14 @@ func CopyChainConfig(config *params.ChainConfig) (*params.ChainConfig, error) {
 	// Encode the chain config.
 	data, err := json.Marshal(config)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	// Decode a new chain config from the encoded data.
 	var chainConfig *params.ChainConfig
 	err = json.Unmarshal(data, &chainConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	// Return it.

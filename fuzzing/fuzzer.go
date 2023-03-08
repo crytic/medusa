@@ -3,10 +3,12 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog"
+	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 	"math/big"
 	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +26,8 @@ import (
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/log"
 	"github.com/trailofbits/medusa/utils"
-	"golang.org/x/exp/slices"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -64,55 +66,41 @@ type Fuzzer struct {
 	// testCasesFinished describes test cases already reported as having been finalized.
 	testCasesFinished map[string]TestCase
 
-	// logger provides an interface for generating structured logs
-	logger zerolog.Logger
-
 	// Events describes the event system for the Fuzzer.
 	Events FuzzerEvents
 
 	// Hooks describes the replaceable functions used by the Fuzzer.
 	Hooks FuzzerHooks
+
+	// multiLogger is used to log important events both to console (unstructured) and to file (structured)
+	multiLogger *log.MultiLogger
 }
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// Validate our provided config
-	err := config.Validate()
+	// Set up the fuzzer's logger so that all subsequent errors can be handled properly
+	multiLogger, err := log.NewMultiLogger(config.Fuzzing.Logging.Level, config.Fuzzing.Logging.LogDirectory,
+		config.Fuzzing.Logging.EnableConsoleLogging)
 	if err != nil {
+		return nil, errors.WithMessage(err, "unable to create multi logger")
+	}
+
+	// Validate our provided config
+	err = config.Validate()
+	if err != nil {
+		err = errors.WithMessage(err, "invalid configuration")
+		multiLogger.Error("", log.NewFields("service", log.FUZZING_SERVICE, "error", err))
 		return nil, err
 	}
 
 	// Parse the senders addresses from our account config.
-	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
-	if err != nil {
-		return nil, err
-	}
+	// Not handling error here because config.Validate() already did that for us
+	senders, _ := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
 
 	// Parse the deployer address from our account config
-	deployer, err := utils.HexStringToAddress(config.Fuzzing.DeployerAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	// Setup logging
-	// First, we need to create a log file, if requested
-	/*
-		var logFile *os.File
-		if config.Fuzzing.LoggingConfig.LogDirectory != "" {
-			// Filename will be the "log-current_unix_timestamp.json"
-			filename := "log-" + strconv.FormatInt(time.Now().Unix(), 10) + ".json"
-			// Concatenate to the log directory path
-			logFilePath := filepath.Join(config.Fuzzing.LoggingConfig.LogDirectory, filename)
-			// Create log file descriptor
-			logFile, err = os.Create(logFilePath)
-			if err != nil {
-				return nil, err
-			}
-		}
-		consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
-		multi := zerolog.MultiLevelWriter(consoleWriter, logFile)
-		logger := zerolog.New(multi).With().Timestamp().Logger()*/
+	// Not handling error here because config.Validate() already did that for us
+	deployer, _ := utils.HexStringToAddress(config.Fuzzing.DeployerAddress)
 
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
@@ -123,7 +111,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		//logger:              logger,
+		multiLogger:         multiLogger,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
 			ChainSetupFunc:                     chainSetupFromCompilations,
@@ -140,16 +128,17 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
+		fuzzer.multiLogger.Info(fmt.Sprintf("compiling targets with %s...", config.Compilation.Platform), log.NewFields("service", log.COMPILATION_SERVICE))
+
 		// Compile the targets specified in the compilation config
-		//logger.Info("Compiling targets", "platform", fuzzer.config.Compilation.Platform)
-		//fuzzer.logger.Info().Msgf("Compiling targets using the %v platform", fuzzer.config.Compilation.Platform)
-		//compilations, compilationOutput, err := (*fuzzer.config.Compilation).Compile()
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
-			return nil, err
+			// TODO: Add error
+			return nil, errors.WithMessage(err, "failed to compile target")
 		}
-		//logger.Info("Compiled targets successfully", "compilationOutput", compilationOutput)
-		//fuzzer.logger.Info().Msgf("Compiled targets successfully with the following output: %v", compilationOutput)
+
+		fuzzer.multiLogger.Info("compiled target successfully!", log.NewFields("service", log.COMPILATION_SERVICE))
+
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
 	}
@@ -216,6 +205,15 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
+
+	// Log debug message
+	fields := log.NewFields(
+		"service", log.FUZZING_SERVICE,
+		"id", testCase.ID(),
+		"status", testCase.Status().String(),
+		"name", testCase.Name(),
+		"message", testCase.Message())
+	f.multiLogger.Debug(fmt.Sprintf("Registered test case with ID: %s", testCase.ID()), fields)
 }
 
 // ReportTestCaseFinished is used to report a TestCase status as finalized to the Fuzzer.
@@ -234,15 +232,20 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 
 	// We only log here if we're not configured to stop on the first test failure. This is because the fuzzer prints
 	// results on exit, so we avoid duplicate messages.
-	/*
-		if !f.config.Fuzzing.Testing.StopOnFailedTest {
-			f.log.Info("Test failure",
-				"name", testCase.Name(),
-				"status", testCase.Status(),
-				"message", testCase.Message(),
-			)
-			// fmt.Printf("\n[%s] %s\n%s\n\n", testCase.Status(), testCase.Name(), testCase.Message())
-		}*/
+	fields := log.NewFields(
+		"service", log.FUZZING_SERVICE,
+		"format", log.TEST_CASE_RESULT,
+		"id", testCase.ID(),
+		"status", testCase.Status().String(),
+		"name", testCase.Name(),
+		"message", testCase.Message())
+	if !f.config.Fuzzing.Testing.StopOnFailedTest {
+		f.multiLogger.Info(testCase.Message(), fields)
+	}
+
+	// Log debug message and remove the "format" key
+	delete(fields, "format")
+	f.multiLogger.Debug(fmt.Sprintf("Finished test case with ID: %s", testCase.ID()), fields)
 
 	// If the config specifies, we stop after the first failed test reported.
 	if testCase.Status() == TestCaseStatusFailed && f.config.Fuzzing.Testing.StopOnFailedTest {
@@ -267,6 +270,9 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			}
 		}
 	}
+
+	// Log debug message
+	f.multiLogger.Debug("Added contract definitions", log.NewFields("service", log.FUZZING_SERVICE))
 }
 
 // createTestChain creates a test chain with the account balance allocations specified by the config.
@@ -289,11 +295,18 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	}
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
-	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChain)
+	if err != nil {
+		return nil, err
+	}
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
-	return testChain, err
+
+	// Log debug message
+	f.multiLogger.Debug("Created TestChain object", log.NewFields("service", log.FUZZING_SERVICE))
+
+	return testChain, nil
 }
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
@@ -307,7 +320,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+			return errors.Errorf("project configuration is missing deployment order")
 		}
 	}
 
@@ -323,7 +336,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
 					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
 					if !ok {
-						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+						return errors.Errorf("project configuration is missing constructor arguments for '%s'", contractName)
 					}
 					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
@@ -336,7 +349,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				// Construct our deployment message/tx data field
 				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 				if err != nil {
-					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+					return errors.Errorf("failed to pack constructor arguments for '%s'", contractName)
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
@@ -364,7 +377,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 				// Ensure our transaction succeeded
 				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+					return errors.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this
@@ -380,9 +393,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
+			return errors.Errorf("unable to find the %s contract in the deployment order", contractName)
 		}
 	}
+
+	// Log debug message
+	fuzzer.multiLogger.Debug("Deployed all contracts in the DeploymentOrder to the TestChain", log.NewFields("service", log.FUZZING_SERVICE))
+
 	return nil
 }
 
@@ -431,6 +448,7 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 		RandomMutatedInterleaveAtRandomWeight:    10,
 		ValueGenerator:                           valueGenerator,
 	}
+
 	return sequenceGenConfig, nil
 }
 
@@ -560,8 +578,7 @@ func (f *Fuzzer) Start() error {
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
-		//f.log.Info("Running with timeout", "duration", f.config.Fuzzing.Timeout)
-		// fmt.Printf("Running with timeout of %d seconds\n", f.config.Fuzzing.Timeout)
+		f.multiLogger.Info(fmt.Sprintf("Runninng with timeout of %d seconds", f.config.Fuzzing.Timeout), log.NewFields("service", log.FUZZING_SERVICE))
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
@@ -583,19 +600,19 @@ func (f *Fuzzer) Start() error {
 	// Create our test chain
 	baseTestChain, err := f.createTestChain()
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "failed to create a test chain during fuzzer initialization")
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "failed to setup test chain during fuzzer initialization")
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "failed to initialize the corpus")
 	}
 
 	// Start our printing loop now that we're about to begin fuzzing.
@@ -617,7 +634,7 @@ func (f *Fuzzer) Start() error {
 	if f.config.Fuzzing.CoverageEnabled {
 		corpusFlushErr := f.corpus.Flush()
 		if err == nil {
-			err = corpusFlushErr
+			err = errors.WithMessage(corpusFlushErr, "failed to write the corpus to disk")
 		}
 	}
 
@@ -699,6 +716,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// Sleep some time between print iterations
 		time.Sleep(time.Second * 3)
+		fmt.Printf("\033[1A\x1b[2K")
 	}
 }
 
@@ -727,8 +745,8 @@ func (f *Fuzzer) printExitingResults() {
 
 	// Define variables to track our final test count.
 	var (
-		testCountPassed int
-		testCountFailed int
+		testCountPassed int64
+		testCountFailed int64
 	)
 
 	// Print the results of each individual test case.
@@ -737,11 +755,13 @@ func (f *Fuzzer) printExitingResults() {
 		// Obtain the test case message. If it is a non-empty string, we format our output for it specially.
 		// Otherwise, we exclude it.
 		msg := strings.TrimSpace(testCase.Message())
-		if msg != "" {
-			//f.log.Info(fmt.Sprintf("[%s] %s\n%s\n\n", testCase.Status(), strings.TrimSpace(testCase.Name()), msg))
-		} else {
-			//f.log.Info(fmt.Sprintf("[%s] %s\n", testCase.Status(), testCase.Name()))
+		fields := map[string]any{
+			"format":  log.TEST_CASE_RESULT,
+			"status":  testCase.Status().String(),
+			"name":    testCase.Name(),
+			"message": msg,
 		}
+		f.multiLogger.Info(msg, fields)
 
 		// Tally our pass/fail count.
 		if testCase.Status() == TestCaseStatusPassed {
@@ -752,5 +772,10 @@ func (f *Fuzzer) printExitingResults() {
 	}
 
 	// Print our final tally of test statuses.
-	//f.log.Info("Test summary", "passed", testCountPassed, "failed", testCountFailed)
+	fields := map[string]any{
+		"format": log.TESTING_SUMMARY,
+		"passed": strconv.FormatInt(testCountPassed, 10),
+		"failed": strconv.FormatInt(testCountFailed, 10),
+	}
+	f.multiLogger.Info("Test summary", fields)
 }

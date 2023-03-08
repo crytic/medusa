@@ -3,7 +3,7 @@ package platforms
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,7 +59,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 	cmd.Dir = s.Target
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing truffle:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", errors.Wrapf(err, "error while executing truffle:\nOUTPUT:%s\nERROR", string(out))
 	}
 
 	// Create a compilation unit out of this.
@@ -72,7 +72,7 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 	}
 	matches, err := filepath.Glob(filepath.Join(buildDirectory, "*.json"))
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.WithStack(err)
 	}
 
 	// Define our truffle structure to parse
@@ -93,20 +93,21 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 		// Read the compiled JSON file data
 		b, err := os.ReadFile(matches[i])
 		if err != nil {
-			return nil, "", err
+			return nil, "", errors.Wrapf(err, "failed to read truffle's exported solc data at %s", matches[i])
 		}
 
 		// Parse the JSON
 		var compiledJson TruffleCompiledJson
 		err = json.Unmarshal(b, &compiledJson)
 		if err != nil {
-			return nil, "", err
+			return nil, "", errors.Wrap(err, "failed to parse truffle's exported solc data")
+
 		}
 
 		// Convert the abi structure to our parsed abi type
 		contractAbi, err := types.ParseABIFromInterface(compiledJson.Abi)
 		if err != nil {
-			continue
+			return nil, "", errors.Wrapf(err, "failed to parse ABI for contract '%s'\n", compiledJson.ContractName)
 		}
 
 		// If we don't have a source for this file, create it.
@@ -120,11 +121,11 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 		// Decode our init and runtime bytecode
 		initBytecode, err := hex.DecodeString(strings.TrimPrefix(compiledJson.Bytecode, "0x"))
 		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", compiledJson.ContractName)
+			return nil, "", errors.Errorf("failed to parse init bytecode for contract '%s'", compiledJson.ContractName)
 		}
 		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(compiledJson.DeployedBytecode, "0x"))
 		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", compiledJson.ContractName)
+			return nil, "", errors.Errorf("failed to parse runtime bytecode for contract '%s'", compiledJson.ContractName)
 		}
 
 		// Add our contract to the source

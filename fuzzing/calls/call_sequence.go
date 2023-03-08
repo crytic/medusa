@@ -173,7 +173,7 @@ func (cs CallSequence) Clone() (CallSequence, error) {
 	for i := 0; i < len(r); i++ {
 		r[i], err = cs[i].Clone()
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
 	}
 	return r, nil

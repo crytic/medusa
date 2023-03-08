@@ -13,6 +13,7 @@ require (
 	golang.org/x/crypto v0.6.0
 	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9
 	golang.org/x/net v0.6.0
+	golang.org/x/text v0.7.0
 )
 
 require (

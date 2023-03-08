@@ -1,11 +1,37 @@
 package utils
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
 )
+
+// CreateFile will create a file at the given path and file name combination. If the path is the empty string, the
+// file will be created in the current working directory
+func CreateFile(path string, fileName string) (*os.File, error) {
+	// By default, the path will be the name of the file
+	filePath := fileName
+
+	// Check to see if the file needs to be created in another directory or the working directory
+	if path != "" {
+		// Make the directory, if it does not exist already
+		err := MakeDirectory(path)
+		if err != nil {
+			return nil, err
+		}
+		// Since the path is non-empty, concatenate the path with the name of the file
+		filePath = filepath.Join(path, fileName)
+	}
+
+	// Create the file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return file, nil
+}
 
 // CopyFile copies a file from a source path to a destination path. File permissions are retained. Returns an error
 // if one occurs.
@@ -13,43 +39,43 @@ func CopyFile(sourcePath string, targetPath string) error {
 	// Obtain file info for the source file
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// If the path refers to a directory, return an error
 	if sourceInfo.IsDir() {
-		return fmt.Errorf("could not copy file from '%s' to '%s' because the source path refers to a directory", sourcePath, targetPath)
+		return errors.Errorf("could not copy file from '%s' to '%s' because the source path refers to a directory", sourcePath, targetPath)
 	}
 
 	// Ensure the existence of the directory we wish to copy to.
 	targetDirectory := filepath.Dir(targetPath)
 	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Open a handle to the source file
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	defer sourceFile.Close()
 
 	// Get a handle to the created target file
 	targetFile, err := os.Create(targetPath)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	defer targetFile.Close()
 
 	// Copy contents from one file handle to the other
 	_, err = io.Copy(targetFile, sourceFile)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Modify the permissions of the file
-	return os.Chmod(targetPath, sourceInfo.Mode())
+	return errors.WithStack(os.Chmod(targetPath, sourceInfo.Mode()))
 }
 
 // GetFileNameWithoutExtension obtains a filename without the extension. This does not contain any preceding directory
@@ -72,19 +98,19 @@ func MakeDirectory(dirToMake string) error {
 			// TODO: Permissions are way too much but even 666 is not working
 			err = os.Mkdir(dirToMake, 0777)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 
 			// Successfully made the directory
 			return nil
 		}
 		// Some other sort of error, throw it
-		return err
+		return errors.WithStack(err)
 	}
 
 	// dirToMake is a file, throw an error accordingly
 	if !dirInfo.IsDir() {
-		return fmt.Errorf("there is a file with the same name as %s\n", dirInfo)
+		return errors.Errorf("there is a file with the same name as %s\n", dirInfo)
 	}
 
 	// Directory already exists, good to go
@@ -97,24 +123,24 @@ func CopyDirectory(sourcePath string, targetPath string, recursively bool) error
 	// Obtain directory info for the source path
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// If the path does not refer to a directory, return an error
 	if !sourceInfo.IsDir() {
-		return fmt.Errorf("could not copy directory from '%s' to '%s' because the source path does not refer to a valid directory", sourcePath, targetPath)
+		return errors.Errorf("could not copy directory from '%s' to '%s' because the source path does not refer to a valid directory", sourcePath, targetPath)
 	}
 
 	// Create the destination folder with the given permissions
 	err = os.MkdirAll(targetPath, sourceInfo.Mode())
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Read all file descriptors in the source directory
 	dirEntries, err := os.ReadDir(sourcePath)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Loop for each directory entry
@@ -152,15 +178,14 @@ func DeleteDirectory(directoryPath string) error {
 			return nil
 		}
 		// If any other type of error occurred, return it
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Make sure the path is a directory and not a file
 	if !dirInfo.IsDir() {
-		return fmt.Errorf("cannot delete directory as the provided path refers to a file")
+		return errors.Errorf("cannot delete directory as the provided path, %s, refers to a file", directoryPath)
 	}
 
 	// Delete directory and its contents
-	err = os.RemoveAll(directoryPath)
-	return err
+	return errors.WithStack(os.RemoveAll(directoryPath))
 }

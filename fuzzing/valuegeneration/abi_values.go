@@ -3,6 +3,7 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -105,38 +106,38 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 	case abi.AddressTy:
 		addr, ok := value.(common.Address)
 		if !ok {
-			return nil, fmt.Errorf("could not mutate address input as the value provided is not an address type")
+			return nil, errors.Errorf("failed to mutate address input as the value provided is not an address type")
 		}
 		return generator.MutateAddress(addr), nil
 	case abi.UintTy:
 		if inputType.Size == 64 {
 			v, ok := value.(uint64)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return generator.MutateInteger(new(big.Int).SetUint64(v), false, inputType.Size).Uint64(), nil
 		} else if inputType.Size == 32 {
 			v, ok := value.(uint32)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint32(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else if inputType.Size == 16 {
 			v, ok := value.(uint16)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint16(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else if inputType.Size == 8 {
 			v, ok := value.(uint8)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint8(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else {
 			v, ok := value.(*big.Int)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return generator.MutateInteger(new(big.Int).Set(v), false, inputType.Size), nil
 		}
@@ -144,50 +145,50 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		if inputType.Size == 64 {
 			v, ok := value.(int64)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return generator.MutateInteger(new(big.Int).SetInt64(v), true, inputType.Size).Int64(), nil
 		} else if inputType.Size == 32 {
 			v, ok := value.(int32)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int32(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else if inputType.Size == 16 {
 			v, ok := value.(int16)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int16(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else if inputType.Size == 8 {
 			v, ok := value.(int8)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int8(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else {
 			v, ok := value.(*big.Int)
 			if !ok {
-				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return generator.MutateInteger(new(big.Int).Set(v), true, inputType.Size), nil
 		}
 	case abi.BoolTy:
 		v, ok := value.(bool)
 		if !ok {
-			return nil, fmt.Errorf("could not mutate boolean input as the value provided is not a boolean type")
+			return nil, errors.Errorf("failed to mutate boolean input as the value provided is not a boolean type")
 		}
 		return generator.MutateBool(v), nil
 	case abi.StringTy:
 		v, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("could not mutate string input as the value provided is not a string type")
+			return nil, errors.Errorf("failed to mutate string input as the value provided is not a string type")
 		}
 		return generator.MutateString(v), nil
 	case abi.BytesTy:
 		v, ok := value.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("could not mutate dynamic-sized bytes input as the value provided is not a byte slice type")
+			return nil, errors.Errorf("failed to mutate dynamic-sized bytes input as the value provided is not a byte slice type")
 		}
 		return generator.MutateBytes(v), nil
 	case abi.FixedBytesTy:
@@ -198,7 +199,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		mutatedValueAsArray := reflectionutils.SliceToArray(reflect.ValueOf(mutatedValue))
 		mutatedValueAsArrayLen := reflect.ValueOf(mutatedValueAsArray).Len()
 		if mutatedValueAsArrayLen != inputType.Size {
-			return nil, fmt.Errorf("could not mutate fixed-sized bytes input as the mutated value returned was not of the correct length. expected %v, got %v", inputType.Size, mutatedValueAsArrayLen)
+			return nil, errors.Errorf("failed to mutate fixed-sized bytes input as the mutated value returned was not of the correct length. expected %v, got %v", inputType.Size, mutatedValueAsArrayLen)
 		}
 		return mutatedValueAsArray, nil
 	case abi.ArrayTy:
@@ -224,7 +225,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 			} else {
 				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
 				if err != nil {
-					return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
+					return nil, err
 				}
 				reflectedElement.Set(reflect.ValueOf(mutatedElement))
 			}
@@ -254,7 +255,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 			} else {
 				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
 				if err != nil {
-					return nil, fmt.Errorf("could not mutate slice input as the value generator encountered an error: %v", err)
+					return nil, err
 				}
 				reflectedElement.Set(reflect.ValueOf(mutatedElement))
 			}
@@ -269,13 +270,13 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 			fieldValue := reflectionutils.GetField(field)
 			mutatedValue, err := MutateAbiValue(generator, inputType.TupleElems[i], fieldValue)
 			if err != nil {
-				return nil, fmt.Errorf("could not mutate struct/tuple input as the value generator encountered an error: %v", err)
+				return nil, errors.WithMessage(err, "failed to mutate struct/tuple input as the value generator encountered an error")
 			}
 			reflectionutils.SetField(field, mutatedValue)
 		}
 		return tuple.Interface(), nil
 	default:
-		return nil, fmt.Errorf("could not mutate argument, type is unsupported: %v", inputType)
+		return nil, errors.Errorf("failed to mutate argument, type is unsupported: %v", inputType)
 	}
 }
 
@@ -288,9 +289,8 @@ func EncodeJSONArgumentsToMap(inputs abi.Arguments, values []any) (map[string]an
 	for i, input := range inputs {
 		arg, err := encodeJSONArgument(&input.Type, values[i])
 		if err != nil {
-			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
-				"name: %v, abi type: %v, value: %v error: %s",
-				input.Name, input.Type, values[i], err)
+			err = errors.Wrapf(err, "failed to decode ABI value argument from JSON: name: %v, abi type: %v, value: %v, error:",
+				input.Name, input.Type, values[i])
 			return nil, err
 		}
 		encodedArgs[input.Name] = arg
@@ -307,9 +307,8 @@ func EncodeJSONArgumentsToSlice(inputs abi.Arguments, values []any) ([]any, erro
 	for i, input := range inputs {
 		arg, err := encodeJSONArgument(&input.Type, values[i])
 		if err != nil {
-			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
-				"name: %v, abi type: %v, value: %v error: %s",
-				input.Name, input.Type, values[i], err)
+			err = errors.Wrapf(err, "failed to decode ABI value argument from JSON: name: %v, abi type: %v, value: %v, error:",
+				input.Name, input.Type, values[i])
 			return nil, err
 		}
 		encodedArgs[i] = arg
@@ -330,9 +329,8 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, err
 		arg, err := encodeABIArgumentToString(&input.Type, values[i])
 		if err != nil {
 			// If error occurs while encoding the input value, return error message
-			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
-				"name: %v, abi type: %v, value: %v error: %s",
-				input.Name, input.Type, values[i], err)
+			err = errors.Wrapf(err, "failed to decode ABI value argument from JSON: name: %v, abi type: %v, value: %v error:",
+				input.Name, input.Type, values[i])
 			return "", err
 		}
 		// Store the encoded argument at the current index in the encodedArgs slice
@@ -352,7 +350,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Prepare an address type. Return as a lowercase string without "".
 		addr, ok := value.(common.Address)
 		if !ok {
-			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
+			return "", errors.Errorf("failed to encode address input as the value provided is not an address type")
 		}
 		return strings.ToLower(addr.String()), nil
 	case abi.UintTy:
@@ -361,31 +359,31 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		case 64:
 			v, ok := value.(uint64)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(v, 10), nil
 		case 32:
 			v, ok := value.(uint32)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 16:
 			v, ok := value.(uint16)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 8:
 			v, ok := value.(uint8)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return "", fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
@@ -395,31 +393,31 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		case 64:
 			v, ok := value.(int64)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(v, 10), nil
 		case 32:
 			v, ok := value.(int32)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 16:
 			v, ok := value.(int16)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 8:
 			v, ok := value.(int8)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return "", fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return "", errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
@@ -427,7 +425,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Return a bool type. Return as a string without "".
 		b, ok := value.(bool)
 		if !ok {
-			return "", fmt.Errorf("could not encode bool as the value provided is not of the correct type")
+			return "", errors.Errorf("failed to encode bool as the value provided is not of the correct type")
 		}
 		return strconv.FormatBool(b), nil
 	case abi.StringTy:
@@ -435,7 +433,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		str, ok := value.(string)
 		if !ok {
-			return "", fmt.Errorf("could not encode string as the value provided is not of the correct type")
+			return "", errors.Errorf("failed to encode string as the value provided is not of the correct type")
 		}
 		return strconv.QuoteToASCII(str), nil
 	case abi.BytesTy:
@@ -443,7 +441,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		b, ok := value.([]byte)
 		if !ok {
-			return "", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
+			return "", errors.Errorf("failed to encode dynamic-sized bytes as the value provided is not of the correct type")
 		}
 		return strconv.QuoteToASCII(string(b)), nil
 	case abi.FixedBytesTy:
@@ -520,7 +518,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		str := "{" + strings.Join(tupleData, ", ") + "}"
 		return str, nil
 	default:
-		return "", fmt.Errorf("could not encode argument as string, type is unsupported: %v", inputType)
+		return "", errors.Errorf("failed to encode argument as string, type is unsupported: %v", inputType)
 	}
 }
 
@@ -532,7 +530,7 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 	case abi.AddressTy:
 		addr, ok := value.(common.Address)
 		if !ok {
-			return nil, fmt.Errorf("could not encode address input as the value provided is not an address type")
+			return nil, errors.Errorf("failed to encode address input as the value provided is not an address type")
 		}
 		return addr.String(), nil
 	case abi.UintTy:
@@ -540,31 +538,31 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 		case 64:
 			v, ok := value.(uint64)
 			if !ok {
-				return nil, fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(v, 10), nil
 		case 32:
 			v, ok := value.(uint32)
 			if !ok {
-				return nil, fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 16:
 			v, ok := value.(uint16)
 			if !ok {
-				return nil, fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		case 8:
 			v, ok := value.(uint8)
 			if !ok {
-				return nil, fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatUint(uint64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return nil, fmt.Errorf("could not encode uint%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
@@ -573,50 +571,50 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 		case 64:
 			v, ok := value.(int64)
 			if !ok {
-				return nil, fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(v, 10), nil
 		case 32:
 			v, ok := value.(int32)
 			if !ok {
-				return nil, fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 16:
 			v, ok := value.(int16)
 			if !ok {
-				return nil, fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		case 8:
 			v, ok := value.(int8)
 			if !ok {
-				return nil, fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return strconv.FormatInt(int64(v), 10), nil
 		default:
 			v, ok := value.(*big.Int)
 			if !ok {
-				return nil, fmt.Errorf("could not encode int%v input as the value provided is not of the correct type", inputType.Size)
+				return nil, errors.Errorf("failed to encode int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return v.String(), nil
 		}
 	case abi.BoolTy:
 		b, ok := value.(bool)
 		if !ok {
-			return nil, fmt.Errorf("could not encode bool as the value provided is not of the correct type")
+			return nil, errors.Errorf("failed to encode bool as the value provided is not of the correct type")
 		}
 		return b, nil
 	case abi.StringTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("could not encode string as the value provided is not of the correct type")
+			return nil, errors.Errorf("failed to encode string as the value provided is not of the correct type")
 		}
 		return str, nil
 	case abi.BytesTy:
 		b, ok := value.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
+			return nil, errors.Errorf("failed to encode dynamic-sized bytes as the value provided is not of the correct type")
 		}
 		return hex.EncodeToString(b), nil
 	case abi.FixedBytesTy:
@@ -662,7 +660,7 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 		}
 		return tupleData, nil
 	default:
-		return nil, fmt.Errorf("could not encode argument, type is unsupported: %v", inputType)
+		return nil, errors.Errorf("failed to encode argument, type is unsupported: %v", inputType)
 	}
 }
 
@@ -675,14 +673,12 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 	for i, input := range inputs {
 		value, ok := values[input.Name]
 		if !ok {
-			err := fmt.Errorf("constructor argument not provided for: name: %v", input.Name)
-			return nil, err
+			return nil, errors.Errorf("constructor argument not provided for the %s input argument", input.Name)
 		}
 		arg, err := decodeJSONArgument(&input.Type, value, deployedContractAddr)
 		if err != nil {
-			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
-				"name: %v, abi type: %v, value: %v error: %s",
-				input.Name, input.Type, value, err)
+			err = errors.Wrapf(err, "failed to decode ABI value argument from JSON: name: %s, abi type: %v, value: %v, error",
+				input.Name, input.Type, value)
 			return nil, err
 		}
 		decodedArgs[i] = arg
@@ -696,8 +692,7 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 func DecodeJSONArgumentsFromSlice(inputs abi.Arguments, values []any, deployedContractAddr map[string]common.Address) ([]any, error) {
 	// Check our argument value count against our ABI method arguments count.
 	if len(values) != len(inputs) {
-		err := fmt.Errorf("constructor argument count mismatch, expected %v but got %v", len(inputs), len(values))
-		return nil, err
+		return nil, errors.Errorf("constructor argument count mismatch, expected %v but got %v", len(inputs), len(values))
 	}
 
 	// Create a variable to store decoded arguments, fill it with the respective decoded arguments.
@@ -705,9 +700,8 @@ func DecodeJSONArgumentsFromSlice(inputs abi.Arguments, values []any, deployedCo
 	for i, input := range inputs {
 		arg, err := decodeJSONArgument(&input.Type, values[i], deployedContractAddr)
 		if err != nil {
-			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
-				"name: %v, abi type: %v, value: %v error: %s",
-				input.Name, input.Type, values[i], err)
+			err = errors.Wrapf(err, "failed to decode ABI value argument from JSON: name: %v, abi type: %v, value: %v, error",
+				input.Name, input.Type, values[i])
 			return nil, err
 		}
 		decodedArgs[i] = arg
@@ -724,17 +718,17 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.AddressTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("address value should be added as string in JSON")
+			return nil, errors.Errorf("address value should be added as string in JSON")
 		}
 		// Check if this is a Magic value to get deployed contract address
 		if _, contractName, found := strings.Cut(str, addressJSONContractNameOverridePrefix); found {
 			v, ok = deployedContractAddr[contractName]
 			if !ok {
-				return nil, fmt.Errorf("contract %s not found in deployed contracts", contractName)
+				return nil, errors.Errorf("contract %s not found in deployed contracts", contractName)
 			}
 		} else {
 			if !((len(str) == (common.AddressLength*2 + 2)) || (len(str) == common.AddressLength*2)) {
-				err := fmt.Errorf("invalid address length (%v)", len(str))
+				err := errors.Errorf("invalid address length (%v)", len(str))
 				return nil, err
 			}
 			v = common.HexToAddress(str)
@@ -742,12 +736,12 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.UintTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("integer value should be specified as a string in JSON")
+			return nil, errors.Errorf("integer value should be specified as a string in JSON")
 		}
 		val := big.NewInt(0)
 		_, success := val.SetString(str, 0)
 		if !success {
-			return nil, fmt.Errorf("invalid integer value")
+			return nil, errors.Errorf("invalid integer value")
 		}
 		switch inputType.Size {
 		case 64:
@@ -764,12 +758,12 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.IntTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("integer value should be added as a string in JSON")
+			return nil, errors.Errorf("integer value should be added as a string in JSON")
 		}
 		val := big.NewInt(0)
 		_, success := val.SetString(str, 0)
 		if !success {
-			return nil, fmt.Errorf("invalid integer value")
+			return nil, errors.Errorf("invalid integer value")
 		}
 		switch inputType.Size {
 		case 64:
@@ -786,42 +780,42 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.BoolTy:
 		bl, ok := value.(bool)
 		if !ok {
-			return nil, fmt.Errorf("invalid bool value")
+			return nil, errors.Errorf("invalid bool value")
 		}
 		v = bl
 	case abi.StringTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("invalid string value")
+			return nil, errors.Errorf("invalid string value")
 		}
 		v = str
 	case abi.BytesTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("bytes value should be added as string in JSON")
+			return nil, errors.Errorf("bytes value should be added as string in JSON")
 		}
 		if len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X') {
 			str = str[2:]
 		}
 		decodedBytes, err := hex.DecodeString(str)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		v = decodedBytes
 	case abi.FixedBytesTy:
 		str, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("%s value should be added as string in JSON", inputType)
+			return nil, errors.Errorf("%s value should be added as string in JSON", inputType)
 		}
 		if len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X') {
 			str = str[2:]
 		}
 		decodedBytes, err := hex.DecodeString(str)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 		if len(decodedBytes) != inputType.Size {
-			return nil, fmt.Errorf("invalid number of bytes %v", len(decodedBytes))
+			return nil, errors.Errorf("invalid number of bytes %v", len(decodedBytes))
 		}
 
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
@@ -834,7 +828,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.ArrayTy:
 		arr, ok := value.([]any)
 		if !ok {
-			return nil, fmt.Errorf("invalid JSON value, array expected")
+			return nil, errors.Errorf("invalid JSON value, array expected")
 		}
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		array := reflect.Indirect(reflect.New(inputType.GetType()))
@@ -849,7 +843,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.SliceTy:
 		arr, ok := value.([]any)
 		if !ok {
-			return nil, fmt.Errorf("invalid JSON value, array expected")
+			return nil, errors.Errorf("invalid JSON value, array expected")
 		}
 		// Element type of slice is dynamic therefore it needs to be created with reflection.
 		slice := reflect.MakeSlice(inputType.GetType(), len(arr), len(arr))
@@ -864,7 +858,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 	case abi.TupleTy:
 		object, ok := value.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("invalid JSON value, object expected")
+			return nil, errors.Errorf("invalid JSON value, object expected")
 		}
 		// Tuples are used to represent structs. struct fields are dynamic therefore we create them through reflection.
 		st := reflect.Indirect(reflect.New(inputType.GetType()))
@@ -873,17 +867,17 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 			fieldName := inputType.TupleRawNames[i]
 			fieldValue, ok := object[fieldName]
 			if !ok {
-				return nil, fmt.Errorf("value for struct field %s not provided", fieldName)
+				return nil, errors.Errorf("value for struct field %s not provided", fieldName)
 			}
 			eleValue, err := decodeJSONArgument(eleType, fieldValue, deployedContractAddr)
 			if !ok {
-				return nil, fmt.Errorf("can not parse struct field %s, error: %s", fieldName, err)
+				return nil, err
 			}
 			reflectionutils.SetField(field, eleValue)
 		}
 		v = st.Interface()
 	default:
-		err := fmt.Errorf("argument type is not supported: %v", inputType)
+		err := errors.Errorf("argument type is not supported: %v", inputType)
 		return nil, err
 	}
 

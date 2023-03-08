@@ -2,8 +2,7 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/trailofbits/medusa/chain/config"
 	"github.com/trailofbits/medusa/compilation"
@@ -17,9 +16,6 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
-
-	// LoggingConfig describes the configuration options used for logging
-	Logging LoggingConfig `json:"logging"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -78,13 +74,13 @@ type FuzzingConfig struct {
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
 	// Testing describes the configuration used for different testing strategies.
-	Testing TestingConfig `json:"testing"`
+	Testing TestingConfig `json:"testingConfig"`
 
-	// LoggingConfig describes the configuration used for logging
-	LoggingConfig LoggingConfig `json:"loggingConfig"`
+	// Logging describes the configuration used for logging
+	Logging LoggingConfig `json:"loggingConfig"`
 
-	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
-	TestChainConfig config.TestChainConfig `json:"chainConfig"`
+	// TestChain represents the chain.TestChain config to use when initializing a chain.
+	TestChain config.TestChainConfig `json:"chainConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing
@@ -123,19 +119,15 @@ type PropertyTestConfig struct {
 
 // LoggingConfig describes the configuration options used for logging
 type LoggingConfig struct {
-	// Enabled describes whether logging is enabled
-	Enabled bool `json:"enabled"`
-
 	// Level describes whether logs of certain severity levels (eg info, warning, etc.) will be emitted or discarded.
 	// Increasing level values represent more severe logs
 	Level zerolog.Level `json:"level"`
 
-	// EnableStructuredConsoleOutput describes whether output to stdout/stderr should be structured or not.
-	// Structured output to console is faster and more efficient.
-	EnableStructuredConsoleOutput bool `json:"enableStructuredConsoleOutput"`
+	// EnableConsoleLogging describes whether console logging is enabled
+	EnableConsoleLogging bool `json:"enableConsoleLogging"`
 
-	// LogDirectory describes the directory where logs will be outputted. If LogDirectory is the empty string,
-	// logs are only sent to stdout/stderr. Logs in this directory will _always_ be in a structured format
+	// LogDirectory describes the directory where structured log _files_ will be outputted. If the string is empty, then
+	// no log files are kept
 	LogDirectory string `json:"logDirectory"`
 }
 
@@ -143,10 +135,9 @@ type LoggingConfig struct {
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
-	fmt.Printf("Reading configuration file: %s\n", path)
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	// Parse the project configuration
@@ -156,7 +147,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 	err = json.Unmarshal(b, projectConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return projectConfig, nil
@@ -168,13 +159,13 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 	// Serialize the configuration
 	b, err := json.MarshalIndent(p, "", "\t")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Save it to the provided output path and return the result
 	err = os.WriteFile(path, b, 0644)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	return nil
@@ -185,42 +176,42 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 func (p *ProjectConfig) Validate() error {
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
-		return errors.New("project configuration must specify a positive number for the worker count")
+		return errors.Errorf("fuzzer worker count must be positive number")
 	}
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence length")
+		return errors.Errorf("call sequence length must be a positive number")
 	}
 
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
-		return errors.New("project configuration must specify a positive number for the worker reset limit")
+		return errors.Errorf("worker reset limit must be a positive number")
 	}
 
 	// Verify gas limits are appropriate
 	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
-		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
+		return errors.Errorf("block gas limit cannot be less than transaction gas limit")
 	}
 	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
+		return errors.Errorf("block and transaction gas limit cannot be zero")
 	}
 
 	// Verify that senders are well-formed addresses
 	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
-		return errors.New("project configuration must specify only well-formed sender address(es)")
+		return errors.Errorf("malformed sender address(es)")
 	}
 
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
-		return errors.New("project configuration must specify only a well-formed deployer address")
+		return errors.Errorf("malformed deployer address")
 	}
 
 	// Verify property testing fields.
 	if p.Fuzzing.Testing.PropertyTesting.Enabled {
 		// Test prefixes must be supplied if property testing is enabled.
 		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
-			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+			return errors.Errorf("must specify one or more test prefixes while in property mode")
 		}
 	}
 	return nil

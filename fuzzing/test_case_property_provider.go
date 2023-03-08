@@ -1,10 +1,11 @@
 package fuzzing
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
+	"github.com/trailofbits/medusa/log"
 	"math/big"
 	"strings"
 	"sync"
@@ -56,6 +57,10 @@ func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
+
+	// Log debug message
+	fuzzer.multiLogger.Debug("Attached PropertyTestCaseProvider", map[string]any{"service": log.FUZZING_SERVICE})
+
 	return t
 }
 
@@ -80,7 +85,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	// variadic argument list here is empty.
 	data, err := propertyTestMethod.Contract.CompiledContract().Abi.Pack(propertyTestMethod.Method.Name)
 	if err != nil {
-		return false, err
+		return false, errors.WithStack(err)
 	}
 
 	// Call the underlying contract
@@ -89,7 +94,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	msg.FillFromTestChainProperties(worker.chain)
 	res, err := worker.Chain().CallContract(msg)
 	if err != nil {
-		return false, fmt.Errorf("failed to call property test method: %v", err)
+		return false, errors.WithMessage(err, "failed to call property test method")
 	}
 
 	// If our property test method call failed, we flag a failed test.
@@ -100,18 +105,18 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	// Decode our ABI outputs
 	retVals, err := propertyTestMethod.Method.Outputs.Unpack(res.Return())
 	if err != nil {
-		return false, fmt.Errorf("failed to decode property test method return value: %v", err)
+		return false, errors.Wrap(err, "failed to decode property test method return value")
 	}
 
 	// We should have one return value.
 	if len(retVals) != 1 {
-		return false, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
+		return false, errors.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// The one return value should be a bool
 	propertyTestMethodPassed, ok := retVals[0].(bool)
 	if !ok {
-		return false, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
+		return false, errors.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// Return our status from our property test method
