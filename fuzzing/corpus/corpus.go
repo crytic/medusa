@@ -32,6 +32,11 @@ type Corpus struct {
 	// to the fuzzer.
 	callSequences []*corpusFile[calls.CallSequence]
 
+	// unexecutedCallSequences defines the callSequences which have not yet been executed by the fuzzer. As each item
+	// is selected for execution by the fuzzer on startup, it is removed. This way, all call sequences loaded from disk
+	// are executed to check for test failures.
+	unexecutedCallSequences []calls.CallSequence
+
 	// weightedCallSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
 	weightedCallSequenceChooser *randomutils.WeightedRandomChooser[calls.CallSequence]
@@ -54,9 +59,10 @@ type corpusFile[T any] struct {
 // to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
-		storageDirectory: corpusDirectory,
-		coverageMaps:     coverage.NewCoverageMaps(),
-		callSequences:    make([]*corpusFile[calls.CallSequence], 0),
+		storageDirectory:        corpusDirectory,
+		coverageMaps:            coverage.NewCoverageMaps(),
+		callSequences:           make([]*corpusFile[calls.CallSequence], 0),
+		unexecutedCallSequences: make([]calls.CallSequence, 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -235,6 +241,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// not, we simply exclude it from our chooser and print a warning.
 		if sequenceInvalidError == nil {
 			c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
 			fmt.Printf("corpus item '%v' disabled due to error when replaying it: %v\n", sequenceFileData.filePath, sequenceInvalidError)
 		}
@@ -326,6 +333,36 @@ func (c *Corpus) RandomCallSequence() (calls.CallSequence, error) {
 		return nil, err
 	}
 	return seq.Clone()
+}
+
+// UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.
+// It is intended to be used by the fuzzer to run all un-executed call sequences (without mutations) to check for test
+// failures. If a call sequence is returned, it will not be returned by this method again.
+// Returns a call sequence loaded from disk which has not yet been executed, to check for test failures. If all
+// sequences in the corpus have been executed, this will return nil.
+func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
+	// Prior to thread locking, if we have no un-executed call sequences, quit.
+	// This is a speed optimization, as thread locking on a central component affects performance.
+	if len(c.unexecutedCallSequences) == 0 {
+		return nil
+	}
+
+	// Acquire a thread lock for the duration of this method.
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Check that we have an item now that the thread is locked. This must be performed again as an item could've
+	// been removed between time of check (the prior exit condition) and time of use (thread locked operations).
+	if len(c.unexecutedCallSequences) == 0 {
+		return nil
+	}
+
+	// Otherwise obtain the first item and remove it from the slice.
+	firstSequence := c.unexecutedCallSequences[0]
+	c.unexecutedCallSequences = c.unexecutedCallSequences[1:]
+
+	// Return the first sequence
+	return &firstSequence
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.
