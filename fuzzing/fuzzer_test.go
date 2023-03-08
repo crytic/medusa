@@ -81,6 +81,33 @@ func TestAssertionsBasicSolving(t *testing.T) {
 	}
 }
 
+// TestEventEmission runs a test to make sure events are being emitted
+func TestEventEmission(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/events/event_emission.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.TestLimit = 50
+				config.Fuzzing.CallSequenceLength = 1
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
 // TestAssertionsNotRequire runs a test to ensure require and revert statements are not mistaken for assert statements.
 // It runs tests against a contract which immediately makes these statements and expects to find no errors before
 // timing out.

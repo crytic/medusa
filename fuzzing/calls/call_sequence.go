@@ -2,6 +2,7 @@ package calls
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"strconv"
 	"strings"
 
@@ -159,6 +160,7 @@ func (cs CallSequence) String() string {
 	// Construct a list of strings for each CallSequenceElement.
 	elementStrings := make([]string, len(cs))
 	for i := 0; i < len(elementStrings); i++ {
+		cs[i].Events()
 		elementStrings[i] = fmt.Sprintf("%d) %s", i+1, cs[i].String())
 	}
 
@@ -295,6 +297,25 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.Value().String(),
 		cse.Call.From(),
 	)
+}
+
+// Events returns a list of events that occurred during the call
+func (cse *CallSequenceElement) Events() map[string]abi.Event {
+	eventsInContract := cse.Contract.CompiledContract().Abi.Events
+	// eventList := make([]abi.Event, 0)
+
+	logs := cse.ChainReference.Block.MessageResults[cse.ChainReference.TransactionIndex].Receipt.Logs
+
+	for _, log := range logs {
+		logHash := log.Topics[0]
+		for _, event := range eventsInContract {
+			eventHash := crypto.Keccak256Hash([]byte(event.Sig))
+			if eventHash == logHash {
+				// something
+			}
+		}
+	}
+	return eventsInContract
 }
 
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being
