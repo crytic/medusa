@@ -38,10 +38,11 @@ func (t *AssertionTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
 		return fmt.Sprintf(
-			"Test for method \"%s.%s\" failed after the following call sequence resulted in an assertion:\n%s",
+			"Test for method \"%s.%s\" failed after the following call sequence resulted in an assertion:\n%s\nRevert reason:%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),
+			t.CallSequence().RevertReason(),
 		)
 	}
 	return ""
