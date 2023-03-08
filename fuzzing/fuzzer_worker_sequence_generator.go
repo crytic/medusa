@@ -205,7 +205,7 @@ func (g *CallSequenceGenerator) NewSequence(length int) error {
 		return nil
 	}
 
-	// Determine whether we will generate a corpus based mutated sequence, or an entirely new one.
+	// Determine whether we will generate a corpus based mutated sequence.
 	if g.worker.randomProvider.Float32() > g.config.NewSequenceProbability {
 		// Get a random mutator function.
 		corpusMutationFunc, err := g.mutationStrategyChooser.Choose()
@@ -223,6 +223,9 @@ func (g *CallSequenceGenerator) NewSequence(length int) error {
 			g.prefetchModifyCallFunc = corpusMutationFunc.PrefetchModifyCallFunc
 		}
 	}
+
+	// We did not generate a corpus based call sequence, so the sequence will be newly generated as each element is
+	// requested.
 	return nil
 }
 
