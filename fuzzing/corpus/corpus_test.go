@@ -23,7 +23,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	// Add the requested number of entries.
 	numSequences := minSequences + (rand.Int() % (maxSequences - minSequences))
 	for i := 0; i < numSequences; i++ {
-		err := corpus.AddCallSequence(getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), nil)
+		err := corpus.AddCallSequence(getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), nil, false)
 		if err != nil {
 			return nil, err
 		}

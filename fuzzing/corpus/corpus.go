@@ -256,10 +256,11 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 }
 
 // AddCallSequence adds a call sequence to the corpus and returns an error in case of an issue
-func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int) error {
-	// Acquire a thread lock during the duration of this method
+func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int, flushImmediately bool) error {
+	// Acquire a thread lock during modification of call sequence lists.
 	c.callSequencesLock.Lock()
-	defer c.callSequencesLock.Unlock()
+
+	// TODO: Check if call sequence has been added before, if so, exit without any action.
 
 	// Update our sequences with the new entry.
 	c.callSequences = append(c.callSequences, &corpusFile[calls.CallSequence]{
@@ -274,14 +275,23 @@ func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int) error 
 		}
 		c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](seq, weight))
 	}
-	return nil
+
+	// Unlock now, as flushing will lock on its own.
+	c.callSequencesLock.Unlock()
+
+	// Flush changes to disk if requested.
+	if flushImmediately {
+		return c.Flush()
+	} else {
+		return nil
+	}
 }
 
 // AddCallSequenceIfCoverageChanged checks if the most recent call executed in the provided call sequence achieved
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
 // Returns an error if one occurs.
-func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence, weight *big.Int) error {
+func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence, weight *big.Int, flushImmediately bool) error {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
 		return nil
@@ -307,12 +317,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 	}
 	if coverageUpdated {
 		// New coverage has been found with this call sequence, so we add it to the corpus.
-		err = c.AddCallSequence(callSequence, weight)
-		if err != nil {
-			return err
-		}
-
-		err = c.Flush()
+		err = c.AddCallSequence(callSequence, weight, flushImmediately)
 		if err != nil {
 			return err
 		}
