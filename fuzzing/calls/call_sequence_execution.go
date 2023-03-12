@@ -5,23 +5,24 @@ import (
 	"github.com/trailofbits/medusa/chain"
 )
 
-// ExecuteCallSequencePreStepFunc describes a function that is called to obtain the next call sequence element to
+// ExecuteCallSequenceFetchElementFunc describes a function that is called to obtain the next call sequence element to
 // execute. It is given the current call index in the sequence.
 // Returns the call sequence element to execute, or an error if one occurs. If the call sequence element is nil,
 // it indicates the end of the sequence and execution breaks.
-type ExecuteCallSequencePreStepFunc func(index int) (*CallSequenceElement, error)
+type ExecuteCallSequenceFetchElementFunc func(index int) (*CallSequenceElement, error)
 
-// ExecuteCallSequencePostStepFunc describes a function that is called after each call is executed in a
+// ExecuteCallSequenceExecutionCheckFunc describes a function that is called after each call is executed in a
 // sequence. It is given the currently executed call sequence to this point.
 // Returns a boolean indicating if the sequence execution should break, or an error if one occurs.
-type ExecuteCallSequencePostStepFunc func(currentExecutedSequence CallSequence) (bool, error)
+type ExecuteCallSequenceExecutionCheckFunc func(currentExecutedSequence CallSequence) (bool, error)
 
 // ExecuteCallSequenceIteratively executes a CallSequence upon a provided chain iteratively. It ensures calls are
 // included in blocks which adhere to the CallSequence properties (such as delays) as much as possible.
-// A pre-step function is provided to fetch the next element to execute.
-// A post-step function is provided to check whether execution should stop after each element is executed.
+// A "fetch next call" function is provided to fetch the next element to execute.
+// A "post element executed check" function is provided to check whether execution should stop after each element is
+// executed.
 // Returns the call sequence which was executed and an error if one occurs.
-func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequencePreStepFunc, postElementExecutionFunc ExecuteCallSequencePostStepFunc) (CallSequence, error) {
+func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc) (CallSequence, error) {
 	// If there is no fetch element function provided, throw an error
 	if fetchElementFunc == nil {
 		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
@@ -30,12 +31,12 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 	// Create a call sequence to track all elements executed throughout this operation.
 	var callSequenceExecuted CallSequence
 
-	// Create a variable to track if the post-step operation requested we break execution.
-	postStepRequestedBreak := false
+	// Create a variable to track if the post-execution check operation requested we break execution.
+	execCheckFuncRequestedBreak := false
 
 	// Loop through each sequence element in our sequence we'll want to execute.
 	for i := 0; true; i++ {
-		// Call our pre-step function and obtain our next call sequence element.
+		// Call our "fetch next call" function and obtain our next call sequence element.
 		callSequenceElement, err := fetchElementFunc(i)
 		if err != nil {
 			return callSequenceExecuted, err
@@ -115,14 +116,14 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 
 			// We added our call to the block as a transaction. Call our step function with the update and check
 			// if it returned an error.
-			if postElementExecutionFunc != nil {
-				postStepRequestedBreak, err = postElementExecutionFunc(callSequenceExecuted)
+			if executionCheckFunc != nil {
+				execCheckFuncRequestedBreak, err = executionCheckFunc(callSequenceExecuted)
 				if err != nil {
 					return callSequenceExecuted, err
 				}
 
-				// If post-step requested we break execution, break out of our "retry loop"
-				if postStepRequestedBreak {
+				// If post-execution check requested we break execution, break out of our "retry loop"
+				if execCheckFuncRequestedBreak {
 					break
 				}
 			}
@@ -132,8 +133,8 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			break
 		}
 
-		// If post-step requested we break execution, break out of our "execute next call sequence loop"
-		if postStepRequestedBreak {
+		// If post-execution check requested we break execution, break out of our "execute next call sequence loop"
+		if execCheckFuncRequestedBreak {
 			break
 		}
 	}

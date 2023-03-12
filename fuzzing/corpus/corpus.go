@@ -193,7 +193,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
 		// way).
 		sequenceInvalidError := error(nil)
-		preStepFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
 			// If we are at the end of our sequence, return nil indicating we should stop executing.
 			if currentIndex >= len(sequence) {
 				return nil, nil
@@ -226,7 +226,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 
 		// Define actions to perform after executing each call in the sequence.
-		postStepFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
+		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 			// Update our coverage maps for each call executed in our sequence.
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
@@ -238,7 +238,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceIteratively(testChain, preStepFunc, postStepFunc)
+		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
