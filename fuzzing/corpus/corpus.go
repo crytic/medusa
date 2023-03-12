@@ -193,18 +193,23 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
 		// way).
 		sequenceInvalidError := error(nil)
-		preStepFunc := func(index int) (bool, error) {
+		preStepFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+			// If we are at the end of our sequence, return nil indicating we should stop executing.
+			if currentIndex >= len(sequence) {
+				return nil, nil
+			}
+
 			// If we are deploying a contract and not targeting one with this call, there should be no work to do.
-			currentSequenceElement := sequence[index]
+			currentSequenceElement := sequence[currentIndex]
 			if currentSequenceElement.Call.MsgTo == nil {
-				return false, nil
+				return currentSequenceElement, nil
 			}
 
 			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
 			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.MsgTo]
 			if !resolvedContractExists {
 				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.MsgTo.String())
-				return true, nil
+				return nil, nil
 			}
 			currentSequenceElement.Contract = resolvedContract
 
@@ -214,16 +219,17 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			if callAbiValues != nil {
 				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
 				if sequenceInvalidError != nil {
-					return true, nil
+					return nil, nil
 				}
 			}
-			return false, nil
+			return currentSequenceElement, nil
 		}
 
 		// Define actions to perform after executing each call in the sequence.
-		postStepFunc := func(index int) (bool, error) {
+		postStepFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 			// Update our coverage maps for each call executed in our sequence.
-			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
+			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
 			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
@@ -232,7 +238,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = sequence.ExecuteOnChain(testChain, true, preStepFunc, postStepFunc)
+		_, err = calls.ExecuteCallSequenceOnChain(testChain, preStepFunc, postStepFunc)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {

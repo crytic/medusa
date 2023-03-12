@@ -124,6 +124,13 @@ func (fw *FuzzerWorker) ValueGenerator() valuegeneration.ValueGenerator {
 	return fw.sequenceGenerator.config.ValueGenerator
 }
 
+// getNewCorpusCallSequenceWeight returns a big integer representing the weight that a new corpus item being added now
+// should have in the corpus' weighted random chooser.
+func (fw *FuzzerWorker) getNewCorpusCallSequenceWeight() *big.Int {
+	// Return our weight, ensuring it is non-zero.
+	return new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1))
+}
+
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
 // It attempts bytecode matching and updates the list of deployed contracts the worker should use for fuzz testing.
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) error {
@@ -222,49 +229,27 @@ func (fw *FuzzerWorker) testCallSequence() (calls.CallSequence, []ShrinkCallSequ
 		}
 	}()
 
-	// Define a new call sequence to store each call we will make. For any nil element, a new call will be generated.
-	var callSequence calls.CallSequence
-
-	// Check if there are any previously unexecuted corpus call sequences. If there are, the fuzzer executes
-	// those first
-	unexecutedSequence := fw.fuzzer.corpus.UnexecutedCallSequence()
-	if unexecutedSequence != nil {
-		callSequence = *unexecutedSequence
-	} else {
-		// If there are no unexecuted corpus call sequences, we begin generating new ones.
-		callSequence = make(calls.CallSequence, fw.fuzzer.config.Fuzzing.CallSequenceLength)
-
-		// Prepare our sequence generator with a new base sequence of the requested length.
-		err = fw.sequenceGenerator.NewSequence(len(callSequence))
-		if err != nil {
-			return nil, nil, err
-		}
+	// Initialize a new sequence within our sequence generator.
+	var isNewSequence bool
+	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Our pre-step method will generate new calls as needed, if we are generating a new sequence.
-	executePreStepFunc := func(i int) (bool, error) {
-		var err error
-		if callSequence[i] == nil {
-			callSequence[i], err = fw.sequenceGenerator.PopSequenceElement()
-			if err != nil {
-				return true, err
-			}
-		}
-		return false, nil
+	executePreStepFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
 	// Our post-step method will check coverage and call all testing functions. If one returns a request for a shrunk
 	// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
-	executePostStepFunc := func(i int) (bool, error) {
-		// Slice off the currently tested part of our call sequence
-		callSequenceTested := callSequence[:i+1]
-
+	executePostStepFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(callSequenceTested, new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)), true)
+		err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return true, err
 		}
@@ -272,7 +257,7 @@ func (fw *FuzzerWorker) testCallSequence() (calls.CallSequence, []ShrinkCallSequ
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
 		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
-			newShrinkRequests, err := callSequenceTestFunc(fw, callSequenceTested)
+			newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
 			if err != nil {
 				return true, err
 			}
@@ -292,7 +277,7 @@ func (fw *FuzzerWorker) testCallSequence() (calls.CallSequence, []ShrinkCallSequ
 	}
 
 	// Execute our call sequence.
-	executedCount, err := callSequence.ExecuteOnChain(fw.chain, true, executePreStepFunc, executePostStepFunc)
+	testedCallSequence, err := calls.ExecuteCallSequenceOnChain(fw.chain, executePreStepFunc, executePostStepFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
@@ -305,14 +290,14 @@ func (fw *FuzzerWorker) testCallSequence() (calls.CallSequence, []ShrinkCallSequ
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
-	if unexecutedSequence != nil {
+	if !isNewSequence {
 		for _, shrinkRequest := range shrinkCallSequenceRequests {
 			shrinkRequest.RecordResultInCorpus = false
 		}
 	}
 
 	// Return our results accordingly.
-	return callSequence[:executedCount], shrinkCallSequenceRequests, nil
+	return testedCallSequence, shrinkCallSequenceRequests, nil
 }
 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
@@ -341,17 +326,22 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
 
 		// Our pre-step method will simply correct the call message in case any fields are not correct due to shrinking.
-		executePreStepFunc := func(currentIndex int) (bool, error) {
+		executePreStepFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+			// If we are at the end of our sequence, return nil indicating we should stop executing.
+			if currentIndex >= len(possibleShrunkSequence) {
+				return nil, nil
+			}
+
 			possibleShrunkSequence[currentIndex].Call.FillFromTestChainProperties(fw.chain)
-			return false, nil
+			return possibleShrunkSequence[currentIndex], nil
 		}
 
 		// Our post-step method will check coverage and call all testing functions. If one returns a request for a shrunk
 		// call sequence, we exit our call sequence execution immediately to go fulfill the shrink request.
-		executePostStepFunc := func(currentIndex int) (bool, error) {
+		executePostStepFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 			// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
-			// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(possibleShrunkSequence[:currentIndex+1], new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)), true)
+			// If we detect coverage changes, add this sequence.
+			err := fw.fuzzer.corpus.AddCallSequenceIfCoverageChanged(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 			if err != nil {
 				return true, err
 			}
@@ -365,7 +355,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 
 		// Execute our call sequence.
-		executedCount, err := possibleShrunkSequence.ExecuteOnChain(fw.chain, true, executePreStepFunc, executePostStepFunc)
+		testedPossibleShrunkSequence, err := calls.ExecuteCallSequenceOnChain(fw.chain, executePreStepFunc, executePostStepFunc)
 		if err != nil {
 			return nil, err
 		}
@@ -376,7 +366,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 
 		// Check if our verifier signalled that we met our conditions
-		testedPossibleShrunkSequence := possibleShrunkSequence[:executedCount]
 		validShrunkSequence := false
 		if len(testedPossibleShrunkSequence) > 0 {
 			validShrunkSequence, err = shrinkRequest.VerifierFunction(fw, testedPossibleShrunkSequence)
@@ -401,7 +390,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.
 	if shrinkRequest.RecordResultInCorpus {
-		err = fw.fuzzer.corpus.AddCallSequence(optimizedSequence, new(big.Int).Add(fw.workerMetrics().sequencesTested, big.NewInt(1)), true)
+		err = fw.fuzzer.corpus.AddCallSequence(optimizedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return nil, err
 		}
