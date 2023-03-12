@@ -1,6 +1,7 @@
 package corpus
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -143,8 +144,9 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
 
-	// Create a weighted chooser
+	// Initialize our call sequence structures.
 	c.weightedCallSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
 
 	// Create new coverage maps to track total coverage and a coverage tracer to do so.
 	c.coverageMaps = coverage.NewCoverageMaps()
@@ -260,7 +262,26 @@ func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int, flushI
 	// Acquire a thread lock during modification of call sequence lists.
 	c.callSequencesLock.Lock()
 
-	// TODO: Check if call sequence has been added before, if so, exit without any action.
+	// Check if call sequence has been added before, if so, exit without any action.
+	seqHash, err := seq.Hash()
+	if err != nil {
+		return err
+	}
+
+	// Verify no existing corpus item hash this same hash.
+	for _, existingSeq := range c.callSequences {
+		// Calculate the existing sequence hash
+		existingSeqHash, err := existingSeq.data.Hash()
+		if err != nil {
+			return err
+		}
+
+		// Verify it is unique, if it is not, we quit immediately to avoid duplicate sequences being added.
+		if bytes.Equal(existingSeqHash[:], seqHash[:]) {
+			c.callSequencesLock.Unlock()
+			return nil
+		}
+	}
 
 	// Update our sequences with the new entry.
 	c.callSequences = append(c.callSequences, &corpusFile[calls.CallSequence]{

@@ -1,7 +1,11 @@
 package calls
 
 import (
+	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/trailofbits/medusa/utils"
 	"strconv"
 	"strings"
 
@@ -177,6 +181,42 @@ func (cs CallSequence) Clone() (CallSequence, error) {
 		}
 	}
 	return r, nil
+}
+
+// Hash calculates a unique hash which represents the uniqueness of the call sequence and each element in it. It does
+// not hash execution/result data.
+// Returns the calculated hash, or an error if one occurs.
+func (cs CallSequence) Hash() (common.Hash, error) {
+	// Create our hash provider
+	hashProvider := crypto.NewKeccakState()
+	hashProvider.Reset()
+	for _, cse := range cs {
+		var temp [8]byte
+
+		// Hash block number delay
+		binary.LittleEndian.PutUint64(temp[:], cse.BlockNumberDelay)
+		_, err := hashProvider.Write(temp[:])
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// Hash block timestamp delay
+		binary.LittleEndian.PutUint64(temp[:], cse.BlockTimestampDelay)
+		_, err = hashProvider.Write(temp[:])
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// Hash the call message
+		_, err = hashProvider.Write(utils.MessageToTransaction(cse.Call).Hash().Bytes())
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+
+	// Obtain the output hash and return it
+	hash := hashProvider.Sum(nil)
+	return common.BytesToHash(hash), nil
 }
 
 // CallSequenceElement describes a single call in a call sequence (tx sequence) targeting a specific contract.

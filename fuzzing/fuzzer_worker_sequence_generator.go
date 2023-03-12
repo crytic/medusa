@@ -183,28 +183,19 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 // call sequence, as specified by the provided length.
 // Returns a boolean indicating whether the sequence is a newly generated sequence (rather than an unmodified one loaded
 // from the corpus), or an error if one occurred.
-func (g *CallSequenceGenerator) NewSequence(length int) (bool, error) {
+func (g *CallSequenceGenerator) NewSequence(length int) error {
 	// Reset the state of our generator.
 	g.baseSequence = make(calls.CallSequence, length)
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
 
-	// Check if there are any previously unexecuted call sequences (loaded from corpus with coverage measured, but not
-	// tested by the fuzzer). Attempt to fetch the next one. If we obtain one, we use that sequence, unmodified.
-	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
-	if unexecutedSequence != nil {
-		g.baseSequence = *unexecutedSequence
-		return false, nil
-	}
-
-	// All sequences in the corpus have been executed directly to this point. We'll want different sequences.
 	// We'll decide whether to create a new call sequence or mutating existing corpus call sequences. Any entries we
 	// leave as nil will be populated by a newly generated call prior to being fetched from this provider.
 
 	// If this provider has no corpus mutation methods or corpus call sequences, we return a call sequence with
 	// nil elements to signal that we want an entirely new sequence.
 	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.ActiveCallSequenceCount() == 0 {
-		return true, nil
+		return nil
 	}
 
 	// Determine whether we will generate a corpus based mutated sequence.
@@ -212,7 +203,7 @@ func (g *CallSequenceGenerator) NewSequence(length int) (bool, error) {
 		// Get a random mutator function.
 		corpusMutationFunc, err := g.mutationStrategyChooser.Choose()
 		if err != nil {
-			return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error obtaining a mutation method: %v", err)
+			return fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error obtaining a mutation method: %v", err)
 		}
 
 		// If we have a corpus mutation method, call it to generate our base sequence, then set the pre-fetch modify
@@ -220,15 +211,12 @@ func (g *CallSequenceGenerator) NewSequence(length int) (bool, error) {
 		if corpusMutationFunc != nil && corpusMutationFunc.CallSequenceGeneratorFunc != nil {
 			err = corpusMutationFunc.CallSequenceGeneratorFunc(g, g.baseSequence)
 			if err != nil {
-				return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error executing a mutation method: %v", err)
+				return fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error executing a mutation method: %v", err)
 			}
 			g.prefetchModifyCallFunc = corpusMutationFunc.PrefetchModifyCallFunc
 		}
 	}
-
-	// We did not generate a corpus based call sequence, so the sequence will be newly generated as each element is
-	// requested.
-	return true, nil
+	return nil
 }
 
 // PopSequenceElement obtains the next element for our call sequence requested by NewSequence. If there are no elements
