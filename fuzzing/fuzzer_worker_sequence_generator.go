@@ -228,7 +228,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 }
 
 // PopSequenceElement obtains the next element for our call sequence requested by InitializeNextSequence. If there are no elements
-// left to return, this method returns an error.
+// left to return, this method returns nil. If an error occurs, it is returned instead.
 func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement, error) {
 	// If the call sequence length is zero, there is no work to be done.
 	if g.fetchIndex >= len(g.baseSequence) {
