@@ -238,7 +238,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceOnChain(testChain, preStepFunc, postStepFunc)
+		_, err = calls.ExecuteCallSequenceIteratively(testChain, preStepFunc, postStepFunc)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {

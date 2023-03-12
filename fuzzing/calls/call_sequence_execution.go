@@ -5,30 +5,29 @@ import (
 	"github.com/trailofbits/medusa/chain"
 )
 
-// CallSequenceExecutePreStepFunc describes a function that is called to obtain the next call sequence element to
+// ExecuteCallSequencePreStepFunc describes a function that is called to obtain the next call sequence element to
 // execute. It is given the current call index in the sequence.
 // Returns the call sequence element to execute, or an error if one occurs. If the call sequence element is nil,
 // it indicates the end of the sequence and execution breaks.
-type CallSequenceExecutePreStepFunc func(index int) (*CallSequenceElement, error)
+type ExecuteCallSequencePreStepFunc func(index int) (*CallSequenceElement, error)
 
-// CallSequenceExecutePostStepFunc describes a function that is called after each call is executed in a sequence.
-// It is given the executed call sequence element and its index in the sequence.
+// ExecuteCallSequencePostStepFunc describes a function that is called after each call is executed in a
+// sequence. It is given the currently executed call sequence to this point.
 // Returns a boolean indicating if the sequence execution should break, or an error if one occurs.
-type CallSequenceExecutePostStepFunc func(currentExecutedSequence CallSequence) (bool, error)
+type ExecuteCallSequencePostStepFunc func(currentExecutedSequence CallSequence) (bool, error)
 
-// ExecuteCallSequenceOnChain executes the CallSequence upon a provided chain. It ensures calls are included in blocks
-// which adhere to the CallSequence properties (such as delays) as much as possible. If indicated, the last pending
-// block will be committed to the chain. A step function is provided to track the last processed index in the call
-// sequence. The step function returns a boolean which is true if the call sequence processing should stop at this
-// index, or an error if one occurs.
-// Returns the amount of elements executed in the sequence and an error if one occurs.
-func ExecuteCallSequenceOnChain(chain *chain.TestChain, preStepFunc CallSequenceExecutePreStepFunc, postStepFunc CallSequenceExecutePostStepFunc) (CallSequence, error) {
-	// If there is no pre-step function provided, throw an error
-	if preStepFunc == nil {
-		return nil, fmt.Errorf("could not execute call sequence on chain as the pre-stop function provided was nil")
+// ExecuteCallSequenceIteratively executes a CallSequence upon a provided chain iteratively. It ensures calls are
+// included in blocks which adhere to the CallSequence properties (such as delays) as much as possible.
+// A pre-step function is provided to fetch the next element to execute.
+// A post-step function is provided to check whether execution should stop after each element is executed.
+// Returns the call sequence which was executed and an error if one occurs.
+func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequencePreStepFunc, postElementExecutionFunc ExecuteCallSequencePostStepFunc) (CallSequence, error) {
+	// If there is no fetch element function provided, throw an error
+	if fetchElementFunc == nil {
+		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
 	}
 
-	//
+	// Create a call sequence to track all elements executed throughout this operation.
 	var callSequenceExecuted CallSequence
 
 	// Create a variable to track if the post-step operation requested we break execution.
@@ -37,7 +36,7 @@ func ExecuteCallSequenceOnChain(chain *chain.TestChain, preStepFunc CallSequence
 	// Loop through each sequence element in our sequence we'll want to execute.
 	for i := 0; true; i++ {
 		// Call our pre-step function and obtain our next call sequence element.
-		callSequenceElement, err := preStepFunc(i)
+		callSequenceElement, err := fetchElementFunc(i)
 		if err != nil {
 			return callSequenceExecuted, err
 		}
@@ -116,8 +115,8 @@ func ExecuteCallSequenceOnChain(chain *chain.TestChain, preStepFunc CallSequence
 
 			// We added our call to the block as a transaction. Call our step function with the update and check
 			// if it returned an error.
-			if postStepFunc != nil {
-				postStepRequestedBreak, err = postStepFunc(callSequenceExecuted)
+			if postElementExecutionFunc != nil {
+				postStepRequestedBreak, err = postElementExecutionFunc(callSequenceExecuted)
 				if err != nil {
 					return callSequenceExecuted, err
 				}

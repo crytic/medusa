@@ -277,7 +277,7 @@ func (fw *FuzzerWorker) testCallSequence() (calls.CallSequence, []ShrinkCallSequ
 	}
 
 	// Execute our call sequence.
-	testedCallSequence, err := calls.ExecuteCallSequenceOnChain(fw.chain, executePreStepFunc, executePostStepFunc)
+	testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, executePreStepFunc, executePostStepFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
@@ -355,7 +355,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 
 		// Execute our call sequence.
-		testedPossibleShrunkSequence, err := calls.ExecuteCallSequenceOnChain(fw.chain, executePreStepFunc, executePostStepFunc)
+		testedPossibleShrunkSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, executePreStepFunc, executePostStepFunc)
 		if err != nil {
 			return nil, err
 		}
