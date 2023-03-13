@@ -318,6 +318,7 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 					worker.Fuzzer().ReportTestCaseFinished(testCase)
 					return nil
 				},
+				RecordResultInCorpus: true,
 			}
 
 			// Add our shrink request to our list.

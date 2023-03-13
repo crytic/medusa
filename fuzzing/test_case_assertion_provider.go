@@ -226,6 +226,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil
 			},
+			RecordResultInCorpus: true,
 		}
 
 		// Add our shrink request to our list.
