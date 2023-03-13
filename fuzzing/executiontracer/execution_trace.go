@@ -51,7 +51,7 @@ func (t *ExecutionTrace) unpackEventValues(event *abi.Event, eventLog *coreTypes
 
 	// Next, aggregate all topics into a single buffer, so we can treat it like data to unpack from.
 	var indexedInputData []byte
-	for i, _ := range indexedInputArguments {
+	for i := range indexedInputArguments {
 		indexedInputData = append(indexedInputData, eventLog.Topics[i+1].Bytes()...)
 	}
 
