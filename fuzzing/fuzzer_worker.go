@@ -379,6 +379,16 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 	}
 
+	// Shrinking is complete, next we attach execution traces by re-running the sequence via calls at every previous
+	// state before the call, but with an execution tracer attached.
+	// TODO: Only perform this action if the config specified some `--verbose` flag
+	if true {
+		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// After we finished shrinking, report our result and return it.
 	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
 	if err != nil {

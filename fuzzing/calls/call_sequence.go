@@ -3,6 +3,7 @@ package calls
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/trailofbits/medusa/fuzzing/executiontracer"
 	"strconv"
 	"strings"
 
@@ -150,6 +151,36 @@ func (cs CallSequence) ExecuteOnChain(chain *chain.TestChain, commitLastPendingB
 	return executedCount, nil
 }
 
+// AttachExecutionTraces takes a given chain which executed the call sequence, and a list of contract definitions,
+// and it replays each call of the sequence with an execution tracer attached to
+func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
+	for _, cse := range cs {
+		// Verify the element has been executed before.
+		if cse.ChainReference == nil {
+			return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
+		}
+
+		// Obtain the state prior to executing this transaction.
+		state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
+		if err != nil {
+			return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
+		}
+
+		// Create an execution tracer
+		executionTracer := executiontracer.NewExecutionTracer(contractDefinitions)
+
+		// Perform a call with our execution tracer.
+		_, err = chain.CallContract(cse.Call, state, executionTracer)
+		if err != nil {
+			return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
+		}
+
+		// Set the resulting trace
+		cse.ExecutionTrace = executionTracer.Trace()
+	}
+	return nil
+}
+
 // String returns a displayable string representing the CallSequence.
 func (cs CallSequence) String() string {
 	// If we have an empty call sequence, return a special string
@@ -157,10 +188,16 @@ func (cs CallSequence) String() string {
 		return "<none>"
 	}
 
-	// Construct a list of strings for each CallSequenceElement.
-	elementStrings := make([]string, len(cs))
-	for i := 0; i < len(elementStrings); i++ {
-		elementStrings[i] = fmt.Sprintf("%d) %s", i+1, cs[i].String())
+	// Construct a list of strings for each call made in the sequence
+	var elementStrings []string
+	for i := 0; i < len(cs); i++ {
+		// Add the string representing the call
+		elementStrings = append(elementStrings, fmt.Sprintf("%d) %s", i+1, cs[i].String()))
+
+		// If we have an execution trace attached, print information about it.
+		if cs[i].ExecutionTrace != nil {
+			elementStrings = append(elementStrings, cs[i].ExecutionTrace.String())
+		}
 	}
 
 	// Join each element with new lines and return it.
@@ -228,6 +265,9 @@ type CallSequenceElement struct {
 	// committed to its underlying chain if this is a CallSequenceElement was just executed. Additional transactions
 	// may be included before the block is committed. This reference will remain compatible after the block finalizes.
 	ChainReference *CallSequenceElementChainReference `json:"-"`
+
+	// ExecutionTrace represents a verbose execution trace collected. Nil if an execution trace was not collected.
+	ExecutionTrace *executiontracer.ExecutionTrace `json:"-"`
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.
@@ -238,6 +278,7 @@ func NewCallSequenceElement(contract *fuzzingTypes.Contract, call *CallMessage, 
 		BlockNumberDelay:    blockNumberDelay,
 		BlockTimestampDelay: blockTimestampDelay,
 		ChainReference:      nil,
+		ExecutionTrace:      nil,
 	}
 	return callSequenceElement
 }
@@ -257,6 +298,7 @@ func (cse *CallSequenceElement) Clone() (*CallSequenceElement, error) {
 		BlockNumberDelay:    cse.BlockNumberDelay,
 		BlockTimestampDelay: cse.BlockTimestampDelay,
 		ChainReference:      cse.ChainReference,
+		ExecutionTrace:      cse.ExecutionTrace,
 	}
 	return clone, nil
 }

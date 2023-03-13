@@ -411,6 +411,17 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 	}
 }
 
+// StateFromRoot obtains a state from a given state root hash.
+// Returns the state, or an error if one occurred.
+func (t *TestChain) StateFromRoot(root common.Hash) (*state.StateDB, error) {
+	// Load our state from the database
+	stateDB, err := state.New(root, t.stateDatabase, nil)
+	if err != nil {
+		return nil, err
+	}
+	return stateDB, nil
+}
+
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
 // number. Returns the state, or an error if one occurs.
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
@@ -423,11 +434,7 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 
 	// Load our state from the database
-	stateDB, err := state.New(closestBlock.Header.Root, t.stateDatabase, nil)
-	if err != nil {
-		return nil, err
-	}
-	return stateDB, nil
+	return t.StateFromRoot(closestBlock.Header.Root)
 }
 
 // RevertToBlockNumber sets the head of the chain to the block specified by the provided block number and reloads
@@ -486,24 +493,38 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 }
 
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
-// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions.
+// This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions, as it
+// executed a transaction without committing any changes, instead discarding them.
+// It takes an optional state argument, which is the state to execute the message over. If not provided, the
+// current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error) {
-	// Obtain our state snapshot (note: this is different from the test chain snapshot)
-	snapshot := t.state.Snapshot()
+func (t *TestChain) CallContract(msg core.Message, state *state.StateDB, additionalTracers ...vm.EVMLogger) (*core.ExecutionResult, error) {
+	// If our provided state is nil, use our current chain state.
+	if state == nil {
+		state = t.state
+	}
+
+	// Obtain our state snapshot to revert any changes after our call
+	snapshot := state.Snapshot()
 
 	// Set infinite balance to the fake caller account
-	from := t.state.GetOrNewStateObject(msg.From())
+	from := state.GetOrNewStateObject(msg.From())
 	from.SetBalance(math.MaxBig256)
 
 	// Create our transaction and block contexts for the vm
 	txContext := core.NewEVMTxContext(msg)
 	blockContext := newTestChainBlockContext(t, t.Head().Header)
 
+	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
+	// still calling our internal tracers.
+	extendedTracerRouter := NewTestChainTracerRouter()
+	extendedTracerRouter.AddTracer(t.callTracerRouter)
+	extendedTracerRouter.AddTracers(additionalTracers...)
+
 	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, txContext, t.state, t.chainConfig, vm.Config{
+	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
 		Debug:            true,
-		Tracer:           t.callTracerRouter,
+		Tracer:           extendedTracerRouter,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
@@ -515,7 +536,7 @@ func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error
 	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
 
 	// Revert to our state snapshot to undo any changes.
-	t.state.RevertToSnapshot(snapshot)
+	state.RevertToSnapshot(snapshot)
 
 	return res, err
 }
@@ -628,6 +649,9 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
 	}
 
+	// Obtain our state root hash prior to execution.
+	previousStateRoot := t.pendingBlock.Header.Root
+
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
 	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit - t.pendingBlock.Header.GasUsed)
 
@@ -657,6 +681,8 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 
 	// Create our message result
 	messageResult := &chainTypes.MessageResults{
+		PreStateRoot:      previousStateRoot,
+		PostStateRoot:     common.Hash{},
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
 		AdditionalResults: make(map[string]any, 0),
@@ -684,10 +710,11 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	// Update our block's bloom filter
 	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
 
-	// Update the header's state root hash
+	// Update the header's state root hash, as well as our message result's
 	// Note: You could also retrieve the root without committing by using
 	// state.IntermediateRoot(config.IsEIP158(parentBlockNumber)).
 	t.pendingBlock.Header.Root = root
+	messageResult.PostStateRoot = root
 
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
