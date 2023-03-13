@@ -204,27 +204,6 @@ func (cs CallSequence) String() string {
 	return strings.Join(elementStrings, "\n")
 }
 
-// RevertReason returns the revert reason for a call sequence
-func (cs CallSequence) RevertReason() string {
-	if len(cs) == 0 {
-		return ""
-	}
-
-	results := cs[len(cs)-1].ChainReference.MessageResults()
-	revertReason := results.ExecutionResult.ReturnData
-	if len(revertReason) == 0 {
-		return ""
-	}
-
-	result, err := abi.UnpackRevert(revertReason)
-
-	if err != nil {
-		return "N/A"
-	}
-	return result
-
-}
-
 // Clone creates a copy of the underlying CallSequence.
 func (cs CallSequence) Clone() (CallSequence, error) {
 	var err error

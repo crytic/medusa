@@ -84,7 +84,7 @@ func TestAssertionsBasicSolving(t *testing.T) {
 // TestEventEmission runs a test to make sure events are being emitted
 func TestEventEmission(t *testing.T) {
 	filePaths := []string{
-		"testdata/contracts/events/event_emission.sol",
+		"testdata/contracts/execution_tracing/event_emission.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -340,6 +340,46 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 
 				// When it's done, we should've had at least one self-destruction.
 				assert.Greater(t, selfDestructCount, 0, "no SELFDESTRUCT operations were detected, when they should have been.")
+			},
+		})
+	}
+}
+
+// TestFailedAssertionExecutionTraces runs tests to ensure that execution traces capture information
+// regarding assertion failures, revert reasons, etc.
+func TestFailedAssertionExecutionTraces(t *testing.T) {
+	expectedMessagesPerTest := map[string]string{
+		"testdata/contracts/assertions/assert_immediate.sol":      "[assertion failed]",
+		"testdata/contracts/execution_tracing/revert_reasons.sol": "RevertingContract was called and reverted.",
+	}
+	for filePath, expectedTraceMessage := range expectedMessagesPerTest {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Obtain the last call
+				lastCall := failingSequence[len(failingSequence)-1]
+				assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+				// Get the execution trace message
+				executionTraceMsg := lastCall.ExecutionTrace.String()
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
 			},
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"strings"
 )
@@ -78,17 +79,19 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	)
 	if method != nil {
 		// Unpack our input values and obtain a string to represent them
-		inputValues, err := method.Inputs.Unpack(callFrame.InputData)
-		if err == nil {
-			encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
+		if len(callFrame.InputData) >= 4 {
+			inputValues, err := method.Inputs.Unpack(callFrame.InputData[4:])
 			if err == nil {
-				inputArgumentsDisplayText = &encodedInputString
+				encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
+				if err == nil {
+					inputArgumentsDisplayText = &encodedInputString
+				}
 			}
 		}
 
 		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
-		if callFrame.ReturnError == nil {
-			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData)
+		if callFrame.ReturnError == nil && len(callFrame.ReturnData) >= 4 {
+			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData[4:])
 			if err == nil {
 				encodedOutputString, err := valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues)
 				if err == nil {
@@ -112,7 +115,7 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	// Generate the message we wish to output finally, using all these display string components.
 	var currentFrameLine string
 	if callFrame.IsProxyCall() {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v->%v.%v(%v)", prefix, action, callFrame.ToAddress.String(), toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
+		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v -> %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
 	} else {
 		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), codeContractName, methodName, *inputArgumentsDisplayText)
 	}
@@ -128,7 +131,14 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	if callFrame.ReturnError == nil {
 		*outputArgumentsDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
 	} else {
-		*outputArgumentsDisplayText = fmt.Sprintf("%v[error (%v)]", prefix, *outputArgumentsDisplayText)
+		// Try to extract a panic message out of this
+		panicCode := types.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
+		errorMessage := types.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
+		if panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed {
+			*outputArgumentsDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
+		} else if errorMessage != nil {
+			*outputArgumentsDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
+		}
 	}
 	outputLines = append(outputLines, *outputArgumentsDisplayText)
 

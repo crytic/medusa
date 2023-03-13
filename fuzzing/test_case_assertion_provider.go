@@ -1,15 +1,13 @@
 package fuzzing
 
 import (
-	"bytes"
+	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"golang.org/x/exp/slices"
-	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
@@ -56,35 +54,13 @@ func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 // isAssertionVMError indicates whether a provided execution returned from the EVM is due to a failed assert(...)
 // statement.
 func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionResult) bool {
-	// See if the error can be cased to an invalid opcode error. This happens in Solidity <0.8.0
-	_, hitInvalidOpcode := result.Err.(*vm.ErrInvalidOpCode)
-	if hitInvalidOpcode {
+	// Try to unpack our error and return data for a panic code and verify it matches the "assert failed" panic code.
+	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
+	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
+	// have a panic code.
+	panicCode := types.GetSolidityPanicCode(result.Err, result.ReturnData, true)
+	if panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed {
 		return true
-	}
-
-	// Otherwise, in Solidity >0.8.0, we have asserts working as reverts now, but with special return data.
-	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
-
-	// Verify we have a revert, and our return data fits exactly the selector + uint256
-	if result.Err == vm.ErrExecutionReverted && len(result.ReturnData) == 4+32 {
-		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
-		uintType, _ := abi.NewType("uint256", "", nil)
-		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-			{Name: "", Type: uintType, Indexed: false},
-		}, abi.Arguments{})
-
-		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Equal(result.ReturnData[:4], panicReturnDataAbi.ID) {
-			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
-
-			// If they unpacked without issue, read the panic code. We expect a panic code of 1.
-			if err == nil && len(values) > 0 {
-				panicCode := values[0].(*big.Int)
-				if panicCode.Cmp(big.NewInt(1)) == 0 {
-					return true
-				}
-			}
-		}
 	}
 	return false
 }
