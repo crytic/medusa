@@ -152,8 +152,8 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 		}
 
 		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
-		if callFrame.ReturnError == nil && len(callFrame.ReturnData) >= 4 {
-			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData[4:])
+		if callFrame.ReturnError == nil {
+			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData)
 			if err == nil {
 				encodedOutputString, err := valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues)
 				if err == nil {
