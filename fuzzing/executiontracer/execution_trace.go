@@ -188,6 +188,10 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 	outputLines = append(outputLines, currentFrameLine)
 
+	// Now that the header (call) message has been printed, increate our indent level to express everything that
+	// happened under it.
+	prefix = "\t" + prefix
+
 	// Loop for each operation performed in the call frame, to provide a chronological history of operations in the
 	// frame.
 	for _, operation := range callFrame.Operations {
