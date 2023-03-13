@@ -48,4 +48,7 @@ type ShrinkCallSequenceRequest struct {
 	// FinishedCallback is a method called upon when the shrink request has concluded. It provides the finalized
 	// shrunken call sequence.
 	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error
+	// RecordResultInCorpus indicates whether the shrunken call sequence should be recorded in the corpus. If so, when
+	// the shrinking operation is completed, the sequence will be added to the corpus if it doesn't already exist.
+	RecordResultInCorpus bool
 }
