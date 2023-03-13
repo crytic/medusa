@@ -2,6 +2,7 @@ package executiontracer
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
@@ -49,6 +50,12 @@ type ExecutionTracer struct {
 
 	// contractDefinitions represents the contract definitions to match for execution traces.
 	contractDefinitions contracts.Contracts
+
+	// onNextCaptureState refers to methods which should be executed the next time CaptureState executes.
+	// CaptureState is called prior to execution of an instruction. This allows actions to be performed
+	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
+	// using this structure to execute code later once the log is committed).
+	onNextCaptureState []func()
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
@@ -70,6 +77,7 @@ func (t *ExecutionTracer) CaptureTxStart(gasLimit uint64) {
 	t.callDepth = 0
 	t.trace = newExecutionTrace()
 	t.currentCallFrame = nil
+	t.onNextCaptureState = nil
 }
 
 // CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
@@ -101,6 +109,8 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		CodeAddress:         codeAddress,
 		CodeContract:        nil,
 		CodeRuntimeBytecode: nil,
+		Operations:          make([]any, 0),
+		SelfDestructed:      false,
 		InputData:           inputData,
 		ReturnData:          nil,
 		ReturnError:         nil,
@@ -131,6 +141,7 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		t.trace.TopLevelCallFrame = callFrameData
 	} else {
 		t.currentCallFrame.ChildCallFrames = append(t.currentCallFrame.ChildCallFrames, callFrameData)
+		t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, callFrameData)
 	}
 	t.currentCallFrame = callFrameData
 }
@@ -189,16 +200,28 @@ func (t *ExecutionTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 
 // CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
 func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
+	// Execute all "on next capture state" events and clear them.
+	for _, eventHandler := range t.onNextCaptureState {
+		eventHandler()
+	}
+	t.onNextCaptureState = nil
+
 	// Obtain our current call frame.
 	callFrameData := t.currentCallFrame
 
 	// If we encounter a SELFDESTRUCT operation, record the operation.
 	if op == vm.SELFDESTRUCT {
-		destructedAddress := scope.Contract.Address()
-		runtimeBytecode := t.evm.StateDB.GetCode(destructedAddress)
+		callFrameData.SelfDestructed = true
+	}
 
-		// TODO: Implement self-destruct tracking in the call frame.
-		_, _ = callFrameData, runtimeBytecode
+	// If a log operation occurred, add a deferred operation to capture it.
+	if op == vm.LOG0 || op == vm.LOG1 || op == vm.LOG2 || op == vm.LOG3 || op == vm.LOG4 {
+		t.onNextCaptureState = append(t.onNextCaptureState, func() {
+			logs := t.evm.StateDB.(*state.StateDB).Logs()
+			if len(logs) > 0 {
+				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
+			}
+		})
 	}
 }
 

@@ -36,6 +36,13 @@ type CallFrame struct {
 	// CodeRuntimeBytecode refers to the bytecode recorded for the CodeAddress.
 	CodeRuntimeBytecode []byte
 
+	// Operations contains a chronological history of updates in the call frame.
+	// Potential types currently are *types.Log (events) or CallFrame (entering of a new child frame).
+	Operations []any
+
+	// SelfDestructed indicates whether the call frame executed a SELFDESTRUCT operation.
+	SelfDestructed bool
+
 	// InputData refers to the message data the EVM call was made with.
 	InputData []byte
 

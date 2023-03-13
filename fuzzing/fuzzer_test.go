@@ -348,11 +348,12 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 // TestFailedAssertionExecutionTraces runs tests to ensure that execution traces capture information
 // regarding assertion failures, revert reasons, etc.
 func TestFailedAssertionExecutionTraces(t *testing.T) {
-	expectedMessagesPerTest := map[string]string{
-		"testdata/contracts/assertions/assert_immediate.sol":      "[assertion failed]",
-		"testdata/contracts/execution_tracing/revert_reasons.sol": "RevertingContract was called and reverted.",
+	expectedMessagesPerTest := map[string][]string{
+		"testdata/contracts/assertions/assert_immediate.sol":      {"[assertion failed]"},
+		"testdata/contracts/execution_tracing/event_emission.sol": {"[event] TestEvent", "[event] TestIndexedEvent", "[event] TestMixedEvent", "Hello from an event emission!"},
+		"testdata/contracts/execution_tracing/revert_reasons.sol": {"RevertingContract was called and reverted."},
 	}
-	for filePath, expectedTraceMessage := range expectedMessagesPerTest {
+	for filePath, expectedTraceMessages := range expectedMessagesPerTest {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
@@ -379,7 +380,11 @@ func TestFailedAssertionExecutionTraces(t *testing.T) {
 
 				// Get the execution trace message
 				executionTraceMsg := lastCall.ExecutionTrace.String()
-				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+
+				// Verify it contains all expected strings
+				for _, expectedTraceMessage := range expectedTraceMessages {
+					assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+				}
 			},
 		})
 	}

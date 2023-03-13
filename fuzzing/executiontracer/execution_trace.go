@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"strings"
@@ -22,6 +23,67 @@ func newExecutionTrace() *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame: nil,
 	}
+}
+
+// unpackEventValues unpacks the input values of events from an event log. It does so by unpacking indexed arguments
+// from the event log topics, while unpacking un-indexed arguments from the event log data. It then merges the
+// unpacked values, so they retain their original order.
+// Returns the unpacked event input argument values, or an error if one occurred.
+func (t *ExecutionTrace) unpackEventValues(event *abi.Event, eventLog *coreTypes.Log) ([]any, error) {
+	// First, split our indexed and non-indexed arguments.
+	var (
+		unindexedInputArguments abi.Arguments
+		indexedInputArguments   abi.Arguments
+	)
+	for _, arg := range event.Inputs {
+		if arg.Indexed {
+			// We have to re-create indexed items, as go-ethereum's ABI API does not typically support events.
+			// TODO: See if we can upstream something to go-ethereum here before replacing the ABI API in the future.
+			indexedInputArguments = append(indexedInputArguments, abi.Argument{
+				Name:    arg.Name,
+				Type:    arg.Type,
+				Indexed: false,
+			})
+		} else {
+			unindexedInputArguments = append(unindexedInputArguments, arg)
+		}
+	}
+
+	// Next, aggregate all topics into a single buffer, so we can treat it like data to unpack from.
+	var indexedInputData []byte
+	for i, _ := range indexedInputArguments {
+		indexedInputData = append(indexedInputData, eventLog.Topics[i+1].Bytes()...)
+	}
+
+	// Unpacked our un-indexed values.
+	unindexedInputValues, err := unindexedInputArguments.Unpack(eventLog.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unpack our indexed values.
+	indexedInputValues, err := indexedInputArguments.Unpack(indexedInputData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now merge our indexed and non-indexed values according to the original order we had for event input arguments.
+	var (
+		currentIndexed   int
+		currentUnindexed int
+		inputValues      []any
+	)
+	for _, arg := range event.Inputs {
+		if arg.Indexed {
+			inputValues = append(inputValues, indexedInputValues[currentIndexed])
+			currentIndexed++
+		} else {
+			inputValues = append(inputValues, unindexedInputValues[currentUnindexed])
+			currentUnindexed++
+		}
+	}
+
+	return inputValues, nil
 }
 
 // generateStringsForCallFrame generates indented strings for a given call frame and its children.
@@ -104,11 +166,16 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	// If we could not correctly obtain the unpacked arguments in a nice display string (due to not having a resolved
 	// contract or method definition, or failure to unpack), we display as raw data in the worst case.
 	if inputArgumentsDisplayText == nil {
-		temp = fmt.Sprintf("msg_data='%v'", hex.EncodeToString(callFrame.InputData))
+		temp = fmt.Sprintf("msg_data=%v", hex.EncodeToString(callFrame.InputData))
 		inputArgumentsDisplayText = &temp
 	}
 	if outputArgumentsDisplayText == nil {
-		temp = fmt.Sprintf("return_data='%v'", hex.EncodeToString(callFrame.ReturnData))
+		if len(callFrame.ReturnData) > 0 {
+			temp = fmt.Sprintf("return_data=%v", hex.EncodeToString(callFrame.ReturnData))
+		} else {
+			// If there was no return data, we display nothing for output arguments.
+			temp = ""
+		}
 		outputArgumentsDisplayText = &temp
 	}
 
@@ -121,10 +188,54 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 	outputLines = append(outputLines, currentFrameLine)
 
-	// Loop for each call frame under this call frame and print that as well.
-	for _, childCallFrame := range callFrame.ChildCallFrames {
-		childOutputLines := t.generateStringsForCallFrame(currentDepth+1, childCallFrame)
-		outputLines = append(outputLines, childOutputLines...)
+	// Loop for each operation performed in the call frame, to provide a chronological history of operations in the
+	// frame.
+	for _, operation := range callFrame.Operations {
+		// If this is a call frame being entered, generate information recursively.
+		if childCallFrame, ok := operation.(*CallFrame); ok {
+			childOutputLines := t.generateStringsForCallFrame(currentDepth+1, childCallFrame)
+			outputLines = append(outputLines, childOutputLines...)
+		} else if eventLog, ok := operation.(*coreTypes.Log); ok {
+			// If this is an event log, match it in our contract's ABI.
+			var (
+				eventDisplayText *string
+			)
+			if callFrame.CodeContract != nil {
+				event, err := callFrame.CodeContract.CompiledContract().Abi.EventByID(eventLog.Topics[0])
+				if err == nil {
+					// Next, unpack our values
+					eventInputValues, err := t.unpackEventValues(event, eventLog)
+					if err == nil {
+						// Format the values as a comma-separated string
+						encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
+						if err == nil {
+							// Format our event display text finally, with the event name.
+							temp = fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
+							eventDisplayText = &temp
+						}
+					}
+				}
+			}
+
+			// If we could not resolve the event, print the raw event data
+			if eventDisplayText == nil {
+				var topicsStrings []string
+				for _, topic := range eventLog.Topics {
+					topicsStrings = append(topicsStrings, hex.EncodeToString(topic.Bytes()))
+				}
+
+				temp = fmt.Sprintf("<unresolved(topics=[%v], data=%v)>", strings.Join(topicsStrings, ", "), hex.EncodeToString(eventLog.Data))
+				eventDisplayText = &temp
+			}
+
+			// Finally, add our output line with this event data to it.
+			outputLines = append(outputLines, fmt.Sprintf("%v[event] %v", prefix, *eventDisplayText))
+		}
+	}
+
+	// If we self-destructed, add a string for it.
+	if callFrame.SelfDestructed {
+		outputLines = append(outputLines, fmt.Sprintf("%v[selfdestruct]", prefix))
 	}
 
 	// Wrap our return message and output it at the end.

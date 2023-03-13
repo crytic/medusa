@@ -5,6 +5,7 @@ contract TestContract {
 
     event TestEvent(uint value);
     event TestIndexedEvent(uint indexed value);
+    event TestMixedEvent(address indexed sender, uint x, int32 indexed y, string s);
 
     function setX(uint value) public {
         x = value;
@@ -13,6 +14,7 @@ contract TestContract {
 
         emit TestEvent(value);
         emit TestIndexedEvent(value);
+        emit TestMixedEvent(msg.sender, value, 7, "Hello from an event emission!");
         assert(x % 2 == 0);
     }
 }
