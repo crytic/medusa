@@ -245,25 +245,6 @@ func (cse *CallSequenceElement) String() string {
 	)
 }
 
-// Events returns a list of events that occurred during the call
-func (cse *CallSequenceElement) Events() map[string]abi.Event {
-	eventsInContract := cse.Contract.CompiledContract().Abi.Events
-	// eventList := make([]abi.Event, 0)
-
-	logs := cse.ChainReference.Block.MessageResults[cse.ChainReference.TransactionIndex].Receipt.Logs
-
-	for _, log := range logs {
-		logHash := log.Topics[0]
-		for _, event := range eventsInContract {
-			eventHash := crypto.Keccak256Hash([]byte(event.Sig))
-			if eventHash == logHash {
-				// something
-			}
-		}
-	}
-	return eventsInContract
-}
-
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being
 // included in a block as a transaction.
 type CallSequenceElementChainReference struct {
