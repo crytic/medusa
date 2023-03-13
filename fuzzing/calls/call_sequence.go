@@ -1,12 +1,15 @@
 package calls
 
 import (
+	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/trailofbits/medusa/utils"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/chain"
 	chainTypes "github.com/trailofbits/medusa/chain/types"
 	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
@@ -14,140 +17,6 @@ import (
 
 // CallSequence describes a sequence of calls sent to a chain.
 type CallSequence []*CallSequenceElement
-
-// CallSequenceExecuteStepFunc describes a function that should be called at each step of call sequence execution
-// to determine if we should continue. It takes the current index of the element we're processing, and returns a
-// boolean indicating whether the execution should break, or an error if one occurs.
-type CallSequenceExecuteStepFunc func(index int) (bool, error)
-
-// ExecuteOnChain executes the CallSequence upon a provided chain. It ensures calls are included in blocks which
-// adhere to the CallSequence properties (such as delays) as much as possible. If indicated, the last pending block
-// will be committed to the chain. A step function is provided to track the last processed index in the call sequence.
-// The step function returns a boolean which is true if the call sequence processing should stop at this index, or an
-// error if one occurs.
-// ExecuteOnChain returns the amount of elements executed in the sequence and an error if one occurs.
-func (cs CallSequence) ExecuteOnChain(chain *chain.TestChain, commitLastPendingBlock bool, preStepFunc CallSequenceExecuteStepFunc, postStepFunc CallSequenceExecuteStepFunc) (int, error) {
-	// Define a variable to indicate if the step function requested the call sequence processing to exit.
-	stepRequestedExit := false
-
-	// Loop through each sequence element in our sequence we'll want to execute.
-	executedCount := 0
-	for i := 0; i < len(cs); i++ {
-		// We try to add the transaction with our call more than once. If the pending block is too full, we may hit a
-		// block gas limit, which we handle by committing the pending block without this tx, and creating a new pending
-		// block that is empty to try again. If we encounter an error an empty block, we throw the error.
-		for {
-			// We are trying to add a call to a block as a transaction. Call our step function with the update and check
-			// if it returned an error.
-			var err error
-			if preStepFunc != nil {
-				stepRequestedExit, err = preStepFunc(i)
-				if err != nil {
-					return executedCount, err
-				}
-
-				// Stop if the step function indicated we should.
-				if stepRequestedExit {
-					break
-				}
-			}
-
-			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
-			if chain.PendingBlock() != nil && cs[i].BlockNumberDelay > 0 {
-				err := chain.PendingBlockCommit()
-				if err != nil {
-					return executedCount, err
-				}
-			}
-
-			// If we have no pending block to add a tx containing our call to, we must create one.
-			if chain.PendingBlock() == nil {
-				// The minimum step between blocks must be 1 in block number and timestamp, so we ensure this is the
-				// case.
-				numberDelay := cs[i].BlockNumberDelay
-				timeDelay := cs[i].BlockTimestampDelay
-				if numberDelay == 0 {
-					numberDelay = 1
-				}
-				if timeDelay == 0 {
-					timeDelay = 1
-				}
-
-				// Each timestamp/block number must be unique as well, so we cannot jump more block numbers than time.
-				if numberDelay > timeDelay {
-					numberDelay = timeDelay
-				}
-				_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
-				if err != nil {
-					return executedCount, err
-				}
-			}
-
-			// Try to add our transaction to this block.
-			err = chain.PendingBlockAddTx(cs[i].Call)
-			if err != nil {
-				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
-				// If there are other transactions in the block, this makes sense. The block is "full".
-				// In that case, we commit the pending block without this tx, and create a new pending block to add
-				// our tx to, and iterate to try and add it again.
-				// TODO: This should also check the condition that this is a block gas error specifically. For now, we
-				//  simply assume it is and try processing in an empty block (if that fails, that error will be
-				//  returned).
-				if len(chain.PendingBlock().Messages) > 0 {
-					err := chain.PendingBlockCommit()
-					if err != nil {
-						return executedCount, err
-					}
-					continue
-				}
-
-				// If there are no transactions in our block, and we failed to add this one, return the error
-				return executedCount, err
-			}
-
-			// Update our chain reference for this element.
-			cs[i].ChainReference = &CallSequenceElementChainReference{
-				Block:            chain.PendingBlock(),
-				TransactionIndex: len(chain.PendingBlock().Messages) - 1,
-			}
-
-			// Add to our executed count
-			executedCount++
-
-			// We added our call to the block as a transaction. Call our step function with the update and check
-			// if it returned an error.
-			if postStepFunc != nil {
-				stepRequestedExit, err = postStepFunc(i)
-				if err != nil {
-					return executedCount, err
-				}
-
-				// Stop if the step function indicated we should.
-				if stepRequestedExit {
-					break
-				}
-			}
-
-			// Exit this loop attempting to add the current element, as we've been successful.
-			// This moves onto processing the next element.
-			break
-		}
-
-		// Stop if the step function indicated we should.
-		if stepRequestedExit {
-			break
-		}
-	}
-
-	// Commit the last pending block if we're instructed to.
-	if commitLastPendingBlock && chain.PendingBlock() != nil {
-		err := chain.PendingBlockCommit()
-		if err != nil {
-			return executedCount, err
-		}
-	}
-	return executedCount, nil
-}
 
 // String returns a displayable string representing the CallSequence.
 func (cs CallSequence) String() string {
@@ -177,6 +46,42 @@ func (cs CallSequence) Clone() (CallSequence, error) {
 		}
 	}
 	return r, nil
+}
+
+// Hash calculates a unique hash which represents the uniqueness of the call sequence and each element in it. It does
+// not hash execution/result data.
+// Returns the calculated hash, or an error if one occurs.
+func (cs CallSequence) Hash() (common.Hash, error) {
+	// Create our hash provider
+	hashProvider := crypto.NewKeccakState()
+	hashProvider.Reset()
+	for _, cse := range cs {
+		var temp [8]byte
+
+		// Hash block number delay
+		binary.LittleEndian.PutUint64(temp[:], cse.BlockNumberDelay)
+		_, err := hashProvider.Write(temp[:])
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// Hash block timestamp delay
+		binary.LittleEndian.PutUint64(temp[:], cse.BlockTimestampDelay)
+		_, err = hashProvider.Write(temp[:])
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// Hash the call message
+		_, err = hashProvider.Write(utils.MessageToTransaction(cse.Call).Hash().Bytes())
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+
+	// Obtain the output hash and return it
+	hash := hashProvider.Sum(nil)
+	return common.BytesToHash(hash), nil
 }
 
 // CallSequenceElement describes a single call in a call sequence (tx sequence) targeting a specific contract.

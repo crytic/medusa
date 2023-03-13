@@ -1,6 +1,7 @@
 package corpus
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +33,11 @@ type Corpus struct {
 	// to the fuzzer.
 	callSequences []*corpusFile[calls.CallSequence]
 
+	// unexecutedCallSequences defines the callSequences which have not yet been executed by the fuzzer. As each item
+	// is selected for execution by the fuzzer on startup, it is removed. This way, all call sequences loaded from disk
+	// are executed to check for test failures.
+	unexecutedCallSequences []calls.CallSequence
+
 	// weightedCallSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
 	weightedCallSequenceChooser *randomutils.WeightedRandomChooser[calls.CallSequence]
@@ -54,9 +60,10 @@ type corpusFile[T any] struct {
 // to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
-		storageDirectory: corpusDirectory,
-		coverageMaps:     coverage.NewCoverageMaps(),
-		callSequences:    make([]*corpusFile[calls.CallSequence], 0),
+		storageDirectory:        corpusDirectory,
+		coverageMaps:            coverage.NewCoverageMaps(),
+		callSequences:           make([]*corpusFile[calls.CallSequence], 0),
+		unexecutedCallSequences: make([]calls.CallSequence, 0),
 	}
 
 	// If we have a corpus directory set, parse it.
@@ -137,8 +144,9 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
 
-	// Create a weighted chooser
+	// Initialize our call sequence structures.
 	c.weightedCallSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
 
 	// Create new coverage maps to track total coverage and a coverage tracer to do so.
 	c.coverageMaps = coverage.NewCoverageMaps()
@@ -185,18 +193,23 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
 		// way).
 		sequenceInvalidError := error(nil)
-		preStepFunc := func(index int) (bool, error) {
+		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+			// If we are at the end of our sequence, return nil indicating we should stop executing.
+			if currentIndex >= len(sequence) {
+				return nil, nil
+			}
+
 			// If we are deploying a contract and not targeting one with this call, there should be no work to do.
-			currentSequenceElement := sequence[index]
+			currentSequenceElement := sequence[currentIndex]
 			if currentSequenceElement.Call.MsgTo == nil {
-				return false, nil
+				return currentSequenceElement, nil
 			}
 
 			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
 			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.MsgTo]
 			if !resolvedContractExists {
 				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.MsgTo.String())
-				return true, nil
+				return nil, nil
 			}
 			currentSequenceElement.Contract = resolvedContract
 
@@ -206,16 +219,17 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			if callAbiValues != nil {
 				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
 				if sequenceInvalidError != nil {
-					return true, nil
+					return nil, nil
 				}
 			}
-			return false, nil
+			return currentSequenceElement, nil
 		}
 
 		// Define actions to perform after executing each call in the sequence.
-		postStepFunc := func(index int) (bool, error) {
+		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 			// Update our coverage maps for each call executed in our sequence.
-			covMaps := coverage.GetCoverageTracerResults(sequence[index].ChainReference.MessageResults())
+			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
 			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
@@ -224,7 +238,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = sequence.ExecuteOnChain(testChain, true, preStepFunc, postStepFunc)
+		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
@@ -235,6 +249,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// not, we simply exclude it from our chooser and print a warning.
 		if sequenceInvalidError == nil {
 			c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
 			fmt.Printf("corpus item '%v' disabled due to error when replaying it: %v\n", sequenceFileData.filePath, sequenceInvalidError)
 		}
@@ -249,10 +264,30 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 }
 
 // AddCallSequence adds a call sequence to the corpus and returns an error in case of an issue
-func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int) error {
-	// Acquire a thread lock during the duration of this method
+func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int, flushImmediately bool) error {
+	// Acquire a thread lock during modification of call sequence lists.
 	c.callSequencesLock.Lock()
-	defer c.callSequencesLock.Unlock()
+
+	// Check if call sequence has been added before, if so, exit without any action.
+	seqHash, err := seq.Hash()
+	if err != nil {
+		return err
+	}
+
+	// Verify no existing corpus item hash this same hash.
+	for _, existingSeq := range c.callSequences {
+		// Calculate the existing sequence hash
+		existingSeqHash, err := existingSeq.data.Hash()
+		if err != nil {
+			return err
+		}
+
+		// Verify it is unique, if it is not, we quit immediately to avoid duplicate sequences being added.
+		if bytes.Equal(existingSeqHash[:], seqHash[:]) {
+			c.callSequencesLock.Unlock()
+			return nil
+		}
+	}
 
 	// Update our sequences with the new entry.
 	c.callSequences = append(c.callSequences, &corpusFile[calls.CallSequence]{
@@ -267,14 +302,23 @@ func (c *Corpus) AddCallSequence(seq calls.CallSequence, weight *big.Int) error 
 		}
 		c.weightedCallSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](seq, weight))
 	}
-	return nil
+
+	// Unlock now, as flushing will lock on its own.
+	c.callSequencesLock.Unlock()
+
+	// Flush changes to disk if requested.
+	if flushImmediately {
+		return c.Flush()
+	} else {
+		return nil
+	}
 }
 
 // AddCallSequenceIfCoverageChanged checks if the most recent call executed in the provided call sequence achieved
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
 // Returns an error if one occurs.
-func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence, weight *big.Int) error {
+func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequence, weight *big.Int, flushImmediately bool) error {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
 		return nil
@@ -300,12 +344,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 	}
 	if coverageUpdated {
 		// New coverage has been found with this call sequence, so we add it to the corpus.
-		err = c.AddCallSequence(callSequence, weight)
-		if err != nil {
-			return err
-		}
-
-		err = c.Flush()
+		err = c.AddCallSequence(callSequence, weight, flushImmediately)
 		if err != nil {
 			return err
 		}
@@ -326,6 +365,36 @@ func (c *Corpus) RandomCallSequence() (calls.CallSequence, error) {
 		return nil, err
 	}
 	return seq.Clone()
+}
+
+// UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.
+// It is intended to be used by the fuzzer to run all un-executed call sequences (without mutations) to check for test
+// failures. If a call sequence is returned, it will not be returned by this method again.
+// Returns a call sequence loaded from disk which has not yet been executed, to check for test failures. If all
+// sequences in the corpus have been executed, this will return nil.
+func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
+	// Prior to thread locking, if we have no un-executed call sequences, quit.
+	// This is a speed optimization, as thread locking on a central component affects performance.
+	if len(c.unexecutedCallSequences) == 0 {
+		return nil
+	}
+
+	// Acquire a thread lock for the duration of this method.
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Check that we have an item now that the thread is locked. This must be performed again as an item could've
+	// been removed between time of check (the prior exit condition) and time of use (thread locked operations).
+	if len(c.unexecutedCallSequences) == 0 {
+		return nil
+	}
+
+	// Otherwise obtain the first item and remove it from the slice.
+	firstSequence := c.unexecutedCallSequences[0]
+	c.unexecutedCallSequences = c.unexecutedCallSequences[1:]
+
+	// Return the first sequence
+	return &firstSequence
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.
