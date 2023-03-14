@@ -3,7 +3,6 @@ package fuzzing
 import (
 	"bytes"
 	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/log"
 	"math/big"
 	"sync"
 
@@ -43,9 +42,6 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
-
-	// Log debug message
-	fuzzer.multiLogger.Debug("Attached AssertionTestCaseProvider", map[string]any{"service": log.FUZZING_SERVICE})
 
 	return t
 }

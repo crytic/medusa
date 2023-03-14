@@ -5,7 +5,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/log"
 	"math/big"
 	"strings"
 	"sync"
@@ -57,9 +56,6 @@ func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
-
-	// Log debug message
-	fuzzer.multiLogger.Debug("Attached PropertyTestCaseProvider", map[string]any{"service": log.FUZZING_SERVICE})
 
 	return t
 }

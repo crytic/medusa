@@ -16,6 +16,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Logging describes the configuration used for logging across the project
+	Logging LoggingConfig `json:"loggingConfig"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -75,9 +78,6 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testingConfig"`
-
-	// Logging describes the configuration used for logging
-	Logging LoggingConfig `json:"loggingConfig"`
 
 	// TestChain represents the chain.TestChain config to use when initializing a chain.
 	TestChain config.TestChainConfig `json:"chainConfig"`

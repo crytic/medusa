@@ -3,15 +3,18 @@ package fuzzing
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/coverage"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/logging"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"math/rand"
+	"strconv"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -49,6 +52,10 @@ type FuzzerWorker struct {
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
+
+	// logger describes the FuzzerWorker's log object that can be used to log important events to file (structured)
+	// It is recommended that the worker only log to file to prevent pollution of console output
+	logger *logging.MultiLogger
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -64,6 +71,11 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		return nil, err
 	}
 
+	// Create logger where now there is a key to grep for worker logs and can also grep for an individual worker's logs
+	logger := fuzzer.logger.NewSubLogger("worker", strconv.FormatInt(int64(workerIndex), 10))
+	// Disable output to console for a fuzzer worker to prevent too much noise
+	logger.SetConsoleLoggerLevel(zerolog.Disabled)
+	
 	// Create a new worker with the data provided.
 	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
@@ -73,6 +85,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
+		logger:               logger,
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 

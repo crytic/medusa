@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/pkg/errors"
 )
 
 // cheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
@@ -68,14 +69,17 @@ func cheatCodeRevertData(returnData []byte) *cheatCodeRawReturnData {
 // addMethod adds a new method to the precompiled contract.
 // Returns an error if one occurred.
 func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
+	var err error
 	// Verify a method name was provided
 	if name == "" {
-		panic("could not add method to precompiled cheatcode contract, empty method name provided")
+		err = errors.New("could not add method to precompiled cheatcode contract, empty method name provided")
+		p.tracer.chain.logger.Panic("", map[string]any{"error": err})
 	}
 
 	// Verify a method handler was provided
 	if handler == nil {
-		panic("could not add method to precompiled cheatcode contract, nil method handler provided")
+		err = errors.New("could not add method to precompiled cheatcode contract, nil method handler provided")
+		p.tracer.chain.logger.Panic("", map[string]any{"error": err})
 	}
 
 	// Set the method information in our method lookup

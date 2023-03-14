@@ -2,6 +2,7 @@ package reflectionutils
 
 import (
 	"github.com/pkg/errors"
+	"github.com/trailofbits/medusa/logging"
 	"reflect"
 )
 
@@ -36,14 +37,24 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 		elementType := reflectedValue.Type().Elem()
 		newSlice := reflect.MakeSlice(reflect.SliceOf(elementType), reflectedValue.Len(), reflectedValue.Cap())
 		if reflect.Copy(newSlice, reflectedValue) != reflectedValue.Len() {
-			panic("failed to copy reflected value, unexpected resulting slice length")
+			err := errors.New("failed to copy reflected value, unexpected resulting slice length")
+			// Try to log with the global logger, if possible
+			if logging.GlobalLogger != nil {
+				logging.GlobalLogger.Panic("", map[string]any{"error": err})
+			}
+			panic(err)
 		}
 		return newSlice
 	case reflect.Array:
 		arrayType := reflect.ArrayOf(reflectedValue.Len(), reflectedValue.Type().Elem())
 		newArray := reflect.New(arrayType).Elem()
 		if reflect.Copy(newArray, reflectedValue) != reflectedValue.Len() {
-			panic("failed to copy reflected value, unexpected resulting array length")
+			err := errors.New("failed to copy reflected value, unexpected resulting array length")
+			// Try to log with the global logger, if possible
+			if logging.GlobalLogger != nil {
+				logging.GlobalLogger.Panic("", map[string]any{"error": err})
+			}
+			panic(err)
 		}
 		return newArray
 	case reflect.Struct:
@@ -54,7 +65,12 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 		}
 		return newStruct
 	}
-	panic("failed to copy reflected value, type not supported")
+	err := errors.New("failed to copy reflected value, type not supported")
+	// Try to log with the global logger, if possible
+	if logging.GlobalLogger != nil {
+		logging.GlobalLogger.Panic("", map[string]any{"error": err})
+	}
+	panic(err)
 }
 
 // GetReflectedArrayValues obtains the values of each element of a reflected array or slice variable.
@@ -71,7 +87,12 @@ func GetReflectedArrayValues(reflectedArray reflect.Value) []any {
 		}
 		return values
 	}
-	panic("failed to get reflected array values, type not supported")
+	err := errors.New("failed to get reflected array values, type not supported")
+	// Try to log with the global logger, if possible
+	if logging.GlobalLogger != nil {
+		logging.GlobalLogger.Panic("", map[string]any{"error": err})
+	}
+	panic(err)
 }
 
 // SetReflectedArrayValues takes an array or slice of the same length as the values provided, and sets each element
@@ -93,5 +114,10 @@ func SetReflectedArrayValues(reflectedArray reflect.Value, values []any) error {
 		}
 		return nil
 	}
-	panic("failed to set reflected array values, type not supported")
+	err := errors.New("failed to set reflected array values, type not supported")
+	// Try to log with the global logger, if possible
+	if logging.GlobalLogger != nil {
+		logging.GlobalLogger.Panic("", map[string]any{"error": err})
+	}
+	panic(err)
 }

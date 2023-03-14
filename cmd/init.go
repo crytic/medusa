@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/trailofbits/medusa/log"
+	"github.com/trailofbits/medusa/logging"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,8 +39,10 @@ func init() {
 // cmdValidateInitArgs validates CLI arguments
 func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	// Create logger instance
-	// Not handling error because the only way to trigger an error in NewMultiLogger is if you are logging to a file
-	logger, _ := log.NewMultiLogger(zerolog.InfoLevel, "", true)
+	logger, err := logging.NewMultiLogger(zerolog.InfoLevel, "", true)
+	if err != nil {
+		return errors.WithMessage(err, "unable to create multi logger")
+	}
 
 	// Cache supported platforms
 	supportedPlatforms := compilation.GetSupportedCompilationPlatforms()
@@ -49,14 +51,14 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
 		err = errors.Errorf("init accepts at most 1 platform argument (options: %s). "+
 			"default platform is %s", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
-		logger.Error("", log.NewFields("error", err))
+		logger.Error("", map[string]any{"error": err})
 		return err
 	}
 
 	// Ensure the optional provided argument refers to a supported platform
 	if len(args) == 1 && !compilation.IsSupportedCompilationPlatform(args[0]) {
 		err := errors.Errorf("init was provided invalid platform argument '%s' (options: %s)", args[0], strings.Join(supportedPlatforms, ", "))
-		logger.Error("", log.NewFields("error", err))
+		logger.Error("", map[string]any{"error": err})
 		return err
 	}
 
@@ -66,14 +68,15 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 // cmdRunInit executes the init CLI command and updates the project configuration with any flags
 func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// Create logger instance
-	// Not handling error because the only way to trigger an error in NewMultiLogger is if you are logging to a file
-	logger, _ := log.NewMultiLogger(zerolog.InfoLevel, "", true)
-
+	logger, err := logging.NewMultiLogger(zerolog.InfoLevel, "", true)
+	if err != nil {
+		return errors.WithMessage(err, "unable to create multi logger")
+	}
 	// Check to see if --out flag was used and store the value of --out flag
 	outputFlagUsed := cmd.Flags().Changed("out")
 	outputPath, err := cmd.Flags().GetString("out")
 	if err != nil {
-		logger.Error("", log.NewFields("error", errors.WithStack(err)))
+		logger.Error("", map[string]any{"error": errors.WithStack(err)})
 		return errors.WithStack(err)
 	}
 
@@ -81,7 +84,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if !outputFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
-			logger.Error("", log.NewFields("error", errors.WithStack(err)))
+			logger.Error("", map[string]any{"error": errors.WithStack(err)})
 			return errors.WithStack(err)
 		}
 		outputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
@@ -90,7 +93,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// By default, projectConfig will be the default project config for the DefaultCompilationPlatform
 	projectConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
-		logger.Error("", log.NewFields("error", err))
+		logger.Error("", map[string]any{"error": err})
 		return err
 	}
 
@@ -99,7 +102,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 && args[0] != DefaultCompilationPlatform {
 		projectConfig, err = config.GetDefaultProjectConfig(args[0])
 		if err != nil {
-			logger.Error("", log.NewFields("error", err))
+			logger.Error("", map[string]any{"error": err})
 			return err
 		}
 	}
@@ -107,14 +110,14 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// Update the project configuration given whatever flags were set using the CLI
 	err = updateProjectConfigWithInitFlags(cmd, projectConfig)
 	if err != nil {
-		logger.Error("", log.NewFields("error", err))
+		logger.Error("", map[string]any{"error": err})
 		return err
 	}
 
 	// Write our project configuration
 	err = projectConfig.WriteToFile(outputPath)
 	if err != nil {
-		logger.Error("", log.NewFields("error", err))
+		logger.Error("", map[string]any{"error": err})
 		return err
 	}
 
@@ -123,7 +126,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		outputPath = absoluteOutputPath
 	}
 
-	logger.Info(fmt.Sprintf("Project configuration successfully output to: %s", outputPath), log.NewFields("service", log.CLI_SERVICE))
+	logger.Info(fmt.Sprintf("Project configuration successfully output to: %s", outputPath), nil)
 
 	return nil
 }

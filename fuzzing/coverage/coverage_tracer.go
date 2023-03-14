@@ -1,9 +1,10 @@
 package coverage
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain/types"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/logging"
 	"math/big"
 	"time"
 
@@ -103,7 +104,13 @@ func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Durati
 	if err == nil {
 		_, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 		if coverageUpdateErr != nil {
-			panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture end: %v", coverageUpdateErr))
+			coverageUpdateErr = errors.WithMessage(coverageUpdateErr, "coverage tracer failed to update coverage map during capture end")
+			// Try to log with the global logger, if possible
+			if logging.GlobalLogger != nil {
+				logging.GlobalLogger.Panic("", map[string]any{"error": coverageUpdateErr})
+			}
+			panic(coverageUpdateErr)
+
 		}
 	}
 
@@ -130,7 +137,13 @@ func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if err == nil {
 		_, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 		if coverageUpdateErr != nil {
-			panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
+			coverageUpdateErr = errors.WithMessage(coverageUpdateErr, "coverage tracer failed to update coverage map during capture exit")
+			// Try to log with the global logger, if possible
+			if logging.GlobalLogger != nil {
+				logging.GlobalLogger.Panic("", map[string]any{"error": coverageUpdateErr})
+			}
+			panic(coverageUpdateErr)
+
 		}
 	}
 
@@ -168,7 +181,13 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		if t.cachedCodeHashResolved != zeroHash {
 			_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetCoveredAt(scope.Contract.Address(), t.cachedCodeHashResolved, callFrameState.create, len(scope.Contract.Code), pc)
 			if coverageUpdateErr != nil {
-				panic(fmt.Sprintf("coverage tracer failed to update coverage map while tracing state: %v", coverageUpdateErr))
+				coverageUpdateErr = errors.WithMessage(coverageUpdateErr, "coverage tracer failed to update coverage map while tracing state")
+				// Try to log with the global logger, if possible
+				if logging.GlobalLogger != nil {
+					logging.GlobalLogger.Panic("", map[string]any{"error": coverageUpdateErr})
+				}
+				panic(coverageUpdateErr)
+
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/trailofbits/medusa/logging"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -94,7 +95,12 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		// - Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
 		//	 see cases of it unless Solidity was updated in the future.
 		// - FixedPoint types are currently unsupported.
-		panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
+		err := errors.Errorf("attempt to generate function argument of unsupported type: '%s'", inputType.String())
+		// Try to log with the global logger, if possible
+		if logging.GlobalLogger != nil {
+			logging.GlobalLogger.Panic("", map[string]any{"error": err})
+		}
+		panic(err)
 	}
 }
 

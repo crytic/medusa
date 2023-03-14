@@ -3,7 +3,9 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/trailofbits/medusa/chain/config"
+	"github.com/trailofbits/medusa/logging"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
@@ -76,12 +78,27 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	// logger describes the logger that is provided to the TestChain to log any necessary events
+	logger *logging.MultiLogger
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
 // If a nil config is provided, a default one is used.
 func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+	// Create a logging instance where, by default, the logger is fully disabled. We create an instance regardless
+	// to prevent nil pointer dereferences
+	logger, err := logging.NewMultiLogger(zerolog.Disabled, "", false)
+	if err != nil {
+		return nil, errors.WithMessage(err, "unable to create logger for test chain")
+	}
+	// If the global logger has been instantiated, create a sub-logger specific for the chain module
+	// Thus, logging only occurs in this package if the global logger has been instantiated
+	if logging.GlobalLogger != nil {
+		logger = logging.GlobalLogger.NewSubLogger("module", "chain")
+	}
+
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -172,6 +189,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
+		logger:                  logger,
 	}
 
 	// Add our internal tracers to this chain.
