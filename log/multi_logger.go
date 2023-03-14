@@ -8,6 +8,7 @@ import (
 	"github.com/trailofbits/medusa/utils"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -67,9 +68,46 @@ func NewMultiLogger(level zerolog.Level, logDirectory string, consoleEnabled boo
 // setupDefaultFormatting will update the console logger's formatting to the medusa standard
 // TODO: Make this a struct function
 func setupDefaultFormatting(logger zerolog.ConsoleWriter) zerolog.ConsoleWriter {
+	// Get rid of the timestamp for console output
 	logger.FormatTimestamp = func(i interface{}) string {
 		return ""
 	}
+
+	// We will define a custom format for each level
+	logger.FormatLevel = func(i any) string {
+		// Create a level object for better switch logic
+		level, err := zerolog.ParseLevel(i.(string))
+		if err != nil {
+			panic(fmt.Sprintf("unable to parse the log level: %v", err))
+		}
+
+		switch level {
+		case zerolog.TraceLevel:
+			// Return a bold, cyan "trace" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelTraceValue), COLOR_CYAN), COLOR_BOLD)
+		case zerolog.DebugLevel:
+			// Return a bold, blue "debug" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelDebugValue), COLOR_BLUE), COLOR_BOLD)
+		case zerolog.InfoLevel:
+			// Return a bold, green left arrow
+			return colorize(colorize(LEFT_ARROW, COLOR_GREEN), COLOR_BOLD)
+		case zerolog.WarnLevel:
+			// Return a bold, yellow "warn" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelWarnValue), COLOR_YELLOW), COLOR_BOLD)
+		case zerolog.ErrorLevel:
+			// Return a bold, red "err" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelErrorValue), COLOR_RED), COLOR_BOLD)
+		case zerolog.FatalLevel:
+			// Return a bold, red "fatal" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelFatalValue), COLOR_RED), COLOR_BOLD)
+		case zerolog.PanicLevel:
+			// Return a bold, red "panic" string
+			return colorize(colorize(strings.ToUpper(zerolog.LevelPanicValue), COLOR_RED), COLOR_BOLD)
+		default:
+			return i.(string)
+		}
+	}
+
 	return logger
 }
 
@@ -79,7 +117,6 @@ func (l *MultiLogger) Trace(msg string, fields Fields) {
 	l.fileLogger.Trace().Fields(fields).Msg(msg)
 
 	// Log to console
-	// msg = cases.Title(language.English, cases.NoLower).String(msg)
 	l.consoleLogger.Trace().Fields(fields).Msg(msg)
 }
 
