@@ -123,8 +123,8 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		callFrameData.ToRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.ToAddress)
 	}
 
-	// If we are performing a proxy call, we use code from another address, fetch that code, so we can later match the
-	// contract definition. Otherwise, we record the same bytecode.
+	// If we are performing a proxy call, we use code from another address (which we can expect to exist), and fetch
+	// that code, so we can later match the contract definition. Otherwise, we record the same bytecode as "to".
 	if callFrameData.CodeAddress != callFrameData.ToAddress {
 		callFrameData.CodeRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.CodeAddress)
 	} else {
@@ -146,10 +146,21 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
 func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
-	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecode.
+	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecodes.
 	callFrameData := t.currentCallFrame
-	if callFrameData.ToInitBytecode != nil && err == nil {
-		callFrameData.CodeRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.CodeAddress)
+	if err == nil {
+		if callFrameData.ToRuntimeBytecode == nil {
+			callFrameData.ToRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.ToAddress)
+		}
+		if callFrameData.CodeRuntimeBytecode == nil {
+			// Optimization: If the "to" and "code" addresses match, we can simply set our "code" already fetched "to"
+			// runtime bytecode.
+			if callFrameData.CodeAddress == callFrameData.ToAddress {
+				callFrameData.CodeRuntimeBytecode = callFrameData.ToRuntimeBytecode
+			} else {
+				callFrameData.CodeRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.CodeAddress)
+			}
+		}
 	}
 
 	// Resolve our contract definitions on the call frame data, if they have not been.

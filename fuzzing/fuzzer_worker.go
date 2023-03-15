@@ -407,8 +407,9 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
 	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
 	// test providers choose to attach themselves.
-	verbose := false
-	if verbose {
+	// TODO: `traceAll` needs to be an option in the config, with an associated CLI flag to override enabling of it.
+	traceAll := false
+	if traceAll {
 		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
 		if err != nil {
 			return nil, err
