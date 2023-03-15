@@ -96,7 +96,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 }
 
 // captureEnteredCallFrame is a helper method used when a new call frame is entered to record information about it.
-func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, codeAddress common.Address, inputData []byte, isContractCreation bool) {
+func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, codeAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
 	// Create our call frame struct to track data for this call frame we entered.
 	callFrameData := &CallFrame{
 		SenderAddress:       fromAddress,
@@ -111,6 +111,8 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		SelfDestructed:      false,
 		InputData:           inputData,
 		ReturnData:          nil,
+		ExecutedCode:        false,
+		CallValue:           value,
 		ReturnError:         nil,
 		ChildCallFrames:     make(CallFrames, 0),
 		ParentCallFrame:     t.currentCallFrame,
@@ -180,7 +182,7 @@ func (t *ExecutionTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	t.evm = env
 
 	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, to, input, create)
+	t.captureEnteredCallFrame(from, to, to, input, create, value)
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
@@ -195,7 +197,7 @@ func (t *ExecutionTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	t.callDepth++
 
 	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, to, input, typ == vm.CREATE || typ == vm.CREATE2)
+	t.captureEnteredCallFrame(from, to, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
 }
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
@@ -218,6 +220,9 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	// Obtain our current call frame.
 	callFrameData := t.currentCallFrame
 
+	// Since we are executing an opcode, we can mark that we have executed code in this call frame
+	callFrameData.ExecutedCode = true
+	
 	// If we encounter a SELFDESTRUCT operation, record the operation.
 	if op == vm.SELFDESTRUCT {
 		callFrameData.SelfDestructed = true

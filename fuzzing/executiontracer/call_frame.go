@@ -3,6 +3,7 @@ package executiontracer
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
+	"math/big"
 )
 
 // CallFrames represents a list of call frames recorded by the ExecutionTracer.
@@ -49,6 +50,13 @@ type CallFrame struct {
 	// ReturnData refers to the data returned by this current call frame.
 	ReturnData []byte
 
+	// CallValue describes the ETH value attached to a given CallFrame
+	CallValue *big.Int
+
+	// ExecutedCode is a boolean that indicates whether code was executed within a CallFrame. A simple transfer of ETH
+	// would be an example of a CallFrame where ExecutedCode would be false
+	ExecutedCode bool
+	
 	// ReturnError refers to any error returned by the EVM in the current call frame.
 	ReturnError error
 
