@@ -422,19 +422,32 @@ func (t *TestChain) StateFromRoot(root common.Hash) (*state.StateDB, error) {
 	return stateDB, nil
 }
 
-// StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
-// number. Returns the state, or an error if one occurs.
-func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
+// StateRootAfterBlockNumber obtains the Ethereum world state root hash after processing all transactions in the
+// provided block number. Returns the state, or an error if one occurs.
+func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		return nil, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+		return common.Hash{}, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block
 	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 
+	// Return our state root hash
+	return closestBlock.Header.Root, nil
+}
+
+// StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
+// number. Returns the state, or an error if one occurs.
+func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
+	// Obtain our block's post-execution state root hash
+	root, err := t.StateRootAfterBlockNumber(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
 	// Load our state from the database
-	return t.StateFromRoot(closestBlock.Header.Root)
+	return t.StateFromRoot(root)
 }
 
 // RevertToBlockNumber sets the head of the chain to the block specified by the provided block number and reloads

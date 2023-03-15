@@ -398,10 +398,17 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 	}
 
-	// Shrinking is complete, next we attach execution traces by re-running the sequence via calls at every previous
-	// state before the call, but with an execution tracer attached.
-	// TODO: Only perform this action if the config specified some `--verbose` flag
-	if true {
+	// We have a finalized call sequence, re-execute it, so our current chain state is representative of post-execution.
+	_, err = calls.ExecuteCallSequence(fw.chain, optimizedSequence)
+	if err != nil {
+		return nil, err
+	}
+
+	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
+	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
+	// test providers choose to attach themselves.
+	verbose := false
+	if verbose {
 		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
 		if err != nil {
 			return nil, err

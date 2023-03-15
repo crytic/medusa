@@ -21,31 +21,16 @@ import (
 type CallSequence []*CallSequenceElement
 
 // AttachExecutionTraces takes a given chain which executed the call sequence, and a list of contract definitions,
-// and it replays each call of the sequence with an execution tracer attached to
+// and it replays each call of the sequence with an execution tracer attached to it, it then sets each
+// CallSequenceElement.ExecutionTrace to the resulting trace.
+// Returns an error if one occurred.
 func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
+	// For each call sequence element, attach an execution trace.
 	for _, cse := range cs {
-		// Verify the element has been executed before.
-		if cse.ChainReference == nil {
-			return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
-		}
-
-		// Obtain the state prior to executing this transaction.
-		state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
+		err := cse.AttachExecutionTrace(chain, contractDefinitions)
 		if err != nil {
-			return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
+			return nil
 		}
-
-		// Create an execution tracer
-		executionTracer := executiontracer.NewExecutionTracer(contractDefinitions)
-
-		// Perform a call with our execution tracer.
-		_, err = chain.CallContract(cse.Call, state, executionTracer)
-		if err != nil {
-			return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
-		}
-
-		// Set the resulting trace
-		cse.ExecutionTrace = executionTracer.Trace()
 	}
 	return nil
 }
@@ -243,6 +228,30 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.Value().String(),
 		cse.Call.From(),
 	)
+}
+
+// AttachExecutionTrace takes a given chain which executed the call sequence element, and a list of contract definitions,
+// and it replays the call with an execution tracer attached to it, it then sets CallSequenceElement.ExecutionTrace to
+// the resulting trace.
+// Returns an error if one occurred.
+func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
+	// Verify the element has been executed before.
+	if cse.ChainReference == nil {
+		return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
+	}
+
+	// Obtain the state prior to executing this transaction.
+	state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
+	if err != nil {
+		return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
+	}
+
+	// Perform our call with the given trace
+	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call, state)
+	if err != nil {
+		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
+	}
+	return nil
 }
 
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being

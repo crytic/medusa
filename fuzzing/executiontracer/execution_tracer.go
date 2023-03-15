@@ -2,35 +2,33 @@ package executiontracer
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
 	"golang.org/x/exp/slices"
 	"math/big"
 )
 
-// executionTracerResultsKey describes the key to use when storing tracer results in call message results, or when
-// querying them.
-const executionTracerResultsKey = "ExecutionTracerResults"
+// CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
+// provided. If a nil state is provided, the current chain state will be used.
+// Returns the ExecutionTrace for the call or an error if one occurs.
+func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contracts.Contracts, msg core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+	// Create an execution tracer
+	executionTracer := NewExecutionTracer(contractDefinitions)
 
-// GetExecutionTracerResults obtains an ExecutionTrace stored by a ExecutionTracer from message results. This is nil if
-// no ExecutionTrace was recorded by a tracer (e.g. ExecutionTracer was not attached during this message execution).
-func GetExecutionTracerResults(messageResults *types.MessageResults) *ExecutionTrace {
-	// Try to obtain the results the tracer should've stored.
-	if genericResult, ok := messageResults.AdditionalResults[executionTracerResultsKey]; ok {
-		if castedResult, ok := genericResult.(*ExecutionTrace); ok {
-			return castedResult
-		}
+	// Call the contract on our chain with the provided state.
+	executionResult, err := chain.CallContract(msg, state, executionTracer)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// If we could not obtain them, return nil.
-	return nil
-}
+	// Obtain our trace
+	trace := executionTracer.Trace()
 
-// RemoveExecutionTracerResults removes an ExecutionTrace stored by an ExecutionTracer, from message results.
-func RemoveExecutionTracerResults(messageResults *types.MessageResults) {
-	delete(messageResults.AdditionalResults, executionTracerResultsKey)
+	// Return the trace
+	return executionResult, trace, nil
 }
 
 // ExecutionTracer records execution information into an ExecutionTrace, containing information about each call
@@ -228,12 +226,4 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 // CaptureFault records an execution fault, as defined by vm.EVMLogger.
 func (t *ExecutionTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 
-}
-
-// CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
-// tracer is used during transaction execution (block creation), the results can later be queried from the block.
-// This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *ExecutionTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
-	// Store our tracer results.
-	results.AdditionalResults[executionTracerResultsKey] = t.trace
 }
