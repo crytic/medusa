@@ -6,6 +6,7 @@ contract RevertingContract {
         }
     }
 }
+
 contract TestContract {
     RevertingContract rc;
     constructor() {

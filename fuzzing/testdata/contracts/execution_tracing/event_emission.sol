@@ -1,4 +1,4 @@
-// This contract ensures the fuzzer can detect assertions by solving a simple problem.
+// This contract ensures the fuzzer's execution tracing can obtain event emissions.
 contract TestContract {
     uint x;
     uint y;
