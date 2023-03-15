@@ -22,14 +22,13 @@ type CallSequence []*CallSequenceElement
 
 // AttachExecutionTraces takes a given chain which executed the call sequence, and a list of contract definitions,
 // and it replays each call of the sequence with an execution tracer attached to it, it then sets each
-// CallSequenceElement.ExecutionTrace to the resulting trace.
-// Returns an error if one occurred.
+// CallSequenceElement.ExecutionTrace to the resulting trace. Returns an error if one occurred.
 func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
 	// For each call sequence element, attach an execution trace.
 	for _, cse := range cs {
 		err := cse.AttachExecutionTrace(chain, contractDefinitions)
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 	return nil
