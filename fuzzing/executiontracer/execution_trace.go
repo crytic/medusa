@@ -194,7 +194,7 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	} else {
 		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), codeContractName, methodName, *inputArgumentsDisplayText)
 	}
-	// If we did not execute code (we do not care about a zero ETH value here and will show it regardless)
+	// If we did not execute code then just show the address and the ETH value (we do not care about a zero ETH value here and will show it regardless)
 	if !callFrame.ExecutedCode {
 		currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
 	}
