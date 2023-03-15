@@ -63,7 +63,7 @@ func addFuzzFlags() error {
 
 	// Trace all
 	fuzzCmd.Flags().Bool("trace-all", false,
-		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element", defaultConfig.Fuzzing.Testing.TraceAll))
+		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
 	return nil
 }
 

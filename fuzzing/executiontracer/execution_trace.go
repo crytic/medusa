@@ -7,7 +7,6 @@ import (
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/trailofbits/medusa/chain/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"math/big"
 	"strings"
 )
 
@@ -182,18 +181,22 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 
 	// Generate the message we wish to output finally, using all these display string components.
 	var currentFrameLine string
-	// If we made a proxy call, and we have a non-zero ETH value
-	if callFrame.IsProxyCall() && callFrame.CallValue.Cmp(big.NewInt(0)) > 0 {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v -> %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
+	if callFrame.IsProxyCall() {
+		// If we executed code, attach additional context such as the contract name, method, etc.
+		if callFrame.ExecutedCode {
+			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v -> %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
+		} else {
+			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
+		}
 	} else {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v -> %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
+		// If we executed code, attach additional context such as the contract name, method, etc.
+		if callFrame.ExecutedCode {
+			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, codeContractName, methodName, *inputArgumentsDisplayText)
+		} else {
+			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
+		}
 	}
-	// If we made a regular call and we have a non-zero ETH value
-	if !callFrame.IsProxyCall() && callFrame.CallValue.Cmp(big.NewInt(0)) > 0 {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, codeContractName, methodName, *inputArgumentsDisplayText)
-	} else {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), codeContractName, methodName, *inputArgumentsDisplayText)
-	}
+
 	// If we did not execute code then just show the address and the ETH value (we do not care about a zero ETH value here and will show it regardless)
 	if !callFrame.ExecutedCode {
 		currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
