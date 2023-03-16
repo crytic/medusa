@@ -56,7 +56,7 @@ type CallFrame struct {
 	// ExecutedCode is a boolean that indicates whether code was executed within a CallFrame. A simple transfer of ETH
 	// would be an example of a CallFrame where ExecutedCode would be false
 	ExecutedCode bool
-	
+
 	// ReturnError refers to any error returned by the EVM in the current call frame.
 	ReturnError error
 

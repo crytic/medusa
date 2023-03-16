@@ -222,7 +222,7 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 
 	// Since we are executing an opcode, we can mark that we have executed code in this call frame
 	callFrameData.ExecutedCode = true
-	
+
 	// If we encounter a SELFDESTRUCT operation, record the operation.
 	if op == vm.SELFDESTRUCT {
 		callFrameData.SelfDestructed = true
