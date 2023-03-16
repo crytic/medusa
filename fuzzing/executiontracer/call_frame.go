@@ -60,9 +60,6 @@ type CallFrame struct {
 	// ReturnError refers to any error returned by the EVM in the current call frame.
 	ReturnError error
 
-	// ChildCallFrames refers to any call frames entered by this call frame directly.
-	ChildCallFrames CallFrames
-
 	// ParentCallFrame refers to the call frame which entered this call frame directly. It may be nil if the current
 	// call frame is a top level call frame.
 	ParentCallFrame *CallFrame
@@ -80,4 +77,19 @@ func (c *CallFrame) IsContractCreation() bool {
 // Returns true if the code address and to address do not match, implying a delegate call occurred.
 func (c *CallFrame) IsProxyCall() bool {
 	return c.ToAddress != c.CodeAddress
+}
+
+// ChildCallFrames is a getter function that returns all children of the current CallFrame. A child CallFrame is one
+// that is entered by this CallFrame
+func (c *CallFrame) ChildCallFrames() CallFrames {
+	childCallFrames := make(CallFrames, 0)
+
+	// Parse through the Operations array and grab every operation that is of type CallFrame
+	for _, operation := range c.Operations {
+		if childCallFrame, ok := operation.(*CallFrame); ok {
+			childCallFrames = append(childCallFrames, childCallFrame)
+		}
+	}
+
+	return childCallFrames
 }

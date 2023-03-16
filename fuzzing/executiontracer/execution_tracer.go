@@ -114,7 +114,6 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		ExecutedCode:        false,
 		CallValue:           value,
 		ReturnError:         nil,
-		ChildCallFrames:     make(CallFrames, 0),
 		ParentCallFrame:     t.currentCallFrame,
 	}
 
@@ -140,7 +139,6 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 	if t.trace.TopLevelCallFrame == nil {
 		t.trace.TopLevelCallFrame = callFrameData
 	} else {
-		t.currentCallFrame.ChildCallFrames = append(t.currentCallFrame.ChildCallFrames, callFrameData)
 		t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, callFrameData)
 	}
 	t.currentCallFrame = callFrameData
