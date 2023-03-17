@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"os/exec"
@@ -42,43 +43,43 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*cheatCodeContract, 
 	// Define some basic ABI argument types
 	typeAddress, err := abi.NewType("address", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeBytes, err := abi.NewType("bytes", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeBytes32, err := abi.NewType("bytes32", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeUint8, err := abi.NewType("uint8", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeUint64, err := abi.NewType("uint64", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeUint256, err := abi.NewType("uint256", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeInt256, err := abi.NewType("int256", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeStringSlice, err := abi.NewType("string[]", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeString, err := abi.NewType("string", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	typeBool, err := abi.NewType("bool", "", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	// Warp: Sets VM timestamp

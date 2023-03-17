@@ -1,9 +1,8 @@
 package chain
 
 import (
-	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain/config"
 	"golang.org/x/exp/maps"
 	"math/big"
@@ -207,7 +206,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 	if onCreateFunc != nil {
 		err = onCreateFunc(targetChain)
 		if err != nil {
-			return nil, fmt.Errorf("could not clone chain due to error: %v", err)
+			return nil, errors.WithMessage(err, "could not clone chain due to error")
 		}
 	}
 
@@ -321,7 +320,7 @@ func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTy
 func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
 	// If the block number is past our current head, return an error.
 	if blockNumber > t.HeadBlockNumber() {
-		return nil, fmt.Errorf("could not obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+		return nil, errors.Errorf("could not obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// We only commit blocks that were created by this chain. If block numbers are skipped, we simulate their existence
@@ -395,7 +394,7 @@ func getSpoofedBlockHashFromNumber(blockNumber uint64) common.Hash {
 func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+		return common.Hash{}, errors.Errorf("could not obtain block hash for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block
@@ -416,7 +415,7 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		return nil, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+		return nil, errors.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block
@@ -425,7 +424,7 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 	// Load our state from the database
 	stateDB, err := state.New(closestBlock.Header.Root, t.stateDatabase, nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return stateDB, nil
 }
@@ -435,14 +434,14 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
-		return fmt.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+		return errors.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
 	}
 
 	// Obtain our closest internally committed block, if it's not an exact match, it means we're trying to revert
 	// to a spoofed block, which we disallow for now.
 	closestBlockIndex, closestBlock := t.fetchClosestInternalBlock(blockNumber)
 	if closestBlock.Header.Number.Uint64() != blockNumber {
-		return fmt.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
+		return errors.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
 	}
 
 	// Slice off our blocks to be removed (to produce relevant events)
@@ -517,7 +516,7 @@ func (t *TestChain) CallContract(msg core.Message) (*core.ExecutionResult, error
 	// Revert to our state snapshot to undo any changes.
 	t.state.RevertToSnapshot(snapshot)
 
-	return res, err
+	return res, errors.WithStack(err)
 }
 
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
@@ -544,7 +543,7 @@ func (t *TestChain) PendingBlockCreate() (*chainTypes.Block, error) {
 func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*chainTypes.Block, error) {
 	// If we already have a pending block, return an error.
 	if t.pendingBlock != nil {
-		return nil, fmt.Errorf("could not create a new pending block for chain, as a block is already pending")
+		return nil, errors.New("could not create a new pending block for chain, as a block is already pending")
 	}
 
 	// If our block gas limit is not specified, use the default defined by this chain.
@@ -555,7 +554,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// Validate our block number exceeds our previous head
 	currentHeadBlockNumber := t.Head().Header.Number.Uint64()
 	if blockNumber <= currentHeadBlockNumber {
-		return nil, fmt.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
+		return nil, errors.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
 	}
 
 	// Obtain our parent block hash to reference in our new block.
@@ -573,7 +572,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// block number for us to spoof the existence of those intermediate blocks, each with their own unique timestamp.
 	currentHeadTimeStamp := t.Head().Header.Time
 	if currentHeadTimeStamp >= blockTime || blockNumberDifference > blockTime-currentHeadTimeStamp {
-		return nil, fmt.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
+		return nil, errors.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
 	}
 
 	// Create a block header for this block:
@@ -652,7 +651,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
+		return errors.WithMessage(err, "test chain state write error when adding tx to pending block")
 	}
 
 	// Create our message result
@@ -670,12 +669,12 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 	// safe to update the block header afterwards.
 	root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
 	if err != nil {
-		return fmt.Errorf("test chain state write error: %v", err)
+		return errors.Wrap(err, "test chain state write error")
 	}
 	if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return fmt.Errorf("test chain trie write error: %v", err)
+		return errors.Wrap(err, "test chain trie write error")
 	}
 
 	// Update our gas used in the block header
@@ -717,7 +716,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 func (t *TestChain) PendingBlockCommit() error {
 	// If we have no pending block, we cannot commit it.
 	if t.pendingBlock == nil {
-		return fmt.Errorf("could not commit chain's pending block, as no pending block was created")
+		return errors.New("could not commit chain's pending block, as no pending block was created")
 	}
 
 	// Append our new block to our chain.
