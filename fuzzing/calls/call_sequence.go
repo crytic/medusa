@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/utils"
 	"strconv"
 	"strings"
@@ -42,7 +43,8 @@ func (cs CallSequence) Clone() (CallSequence, error) {
 	for i := 0; i < len(r); i++ {
 		r[i], err = cs[i].Clone()
 		if err != nil {
-			return nil, nil
+			// TODO: This might have to be `return nil, nil`
+			return nil, err
 		}
 	}
 	return r, nil
@@ -62,20 +64,20 @@ func (cs CallSequence) Hash() (common.Hash, error) {
 		binary.LittleEndian.PutUint64(temp[:], cse.BlockNumberDelay)
 		_, err := hashProvider.Write(temp[:])
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, errors.WithStack(err)
 		}
 
 		// Hash block timestamp delay
 		binary.LittleEndian.PutUint64(temp[:], cse.BlockTimestampDelay)
 		_, err = hashProvider.Write(temp[:])
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, errors.WithStack(err)
 		}
 
 		// Hash the call message
 		_, err = hashProvider.Write(utils.MessageToTransaction(cse.Call).Hash().Bytes())
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, errors.WithStack(err)
 		}
 	}
 
@@ -151,7 +153,9 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	if cse.Contract == nil {
 		return nil, nil
 	}
-	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data())
+
+	method, err := cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data())
+	return method, errors.WithStack(err)
 }
 
 // String returns a displayable string representing the CallSequenceElement.
