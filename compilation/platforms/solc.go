@@ -3,8 +3,7 @@ package platforms
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -43,7 +42,7 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 	// Run solc --version to obtain our compiler version.
 	out, err := exec.Command("solc", "--version").CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, errors.Wrapf(err, "error while executing solc:\nOUTPUT:%s\nERROR", string(out))
 	}
 
 	// Parse the compiler version out of the output
@@ -92,14 +91,14 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	cmd := exec.Command("solc", s.Target, "--combined-json", outputOptions)
 	cmdStdout, cmdStderr, cmdCombined, err := utils.RunCommandWithOutputAndError(cmd)
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing solc:\n%s\n\nCommand Output:\n%s\n", err.Error(), string(cmdCombined))
+		return nil, "", errors.WithMessagef(err, "error while executing solc:\nOUTPUT:%s\nERROR", string(cmdCombined))
 	}
 
 	// Our compilation succeeded, load the JSON
 	var results map[string]any
 	err = json.Unmarshal(cmdStdout, &results)
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.WithStack(err)
 	}
 
 	// Create a compilation unit out of this.
@@ -112,13 +111,13 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 				// Treat our source as a key-value lookup
 				sourceDict, sourceCorrectType := source.(map[string]any)
 				if !sourceCorrectType {
-					return nil, "", fmt.Errorf("could not parse compiled source artifact because it could not be casted to a dictionary")
+					return nil, "", errors.New("could not parse compiled source artifact because it could not be casted to a dictionary")
 				}
 
 				// Try to obtain our AST key
 				ast, hasAST := sourceDict["AST"]
 				if !hasAST {
-					return nil, "", fmt.Errorf("could not parse AST from sources, AST field could not be found")
+					return nil, "", errors.New("could not parse AST from sources, AST field could not be found")
 				}
 
 				// Construct our compiled source object
@@ -133,7 +132,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Parse our contracts from solc output
 	contracts, err := compiler.ParseCombinedJSON(cmdStdout, "solc", v.String(), v.String(), "")
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.WithStack(err)
 	}
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
@@ -144,17 +143,17 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		// Convert the abi structure to our parsed abi type
 		contractAbi, err := types.ParseABIFromInterface(contract.Info.AbiDefinition)
 		if err != nil {
-			continue
+			return nil, "", errors.Errorf("unable to parse ABI for contract '%s'", contractName)
 		}
 
 		// Decode our init and runtime bytecode
 		initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
 		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+			return nil, "", errors.Errorf("unable to parse init bytecode for contract '%s'", contractName)
 		}
 		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
 		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			return nil, "", errors.Errorf("unable to parse runtime bytecode for contract '%s'", contractName)
 		}
 
 		// Construct our compiled contract

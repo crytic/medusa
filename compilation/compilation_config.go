@@ -2,8 +2,7 @@ package compilation
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 
 	"github.com/trailofbits/medusa/compilation/platforms"
 	"github.com/trailofbits/medusa/compilation/types"
@@ -25,7 +24,7 @@ type CompilationConfig struct {
 func NewCompilationConfig(platform string) (*CompilationConfig, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(platform) {
-		return nil, fmt.Errorf("could not get default compilation configs: platform '%s' is unsupported", platform)
+		return nil, errors.Errorf("could not get default compilation configs: platform '%s' is unsupported", platform)
 	}
 
 	// Switch on our platform to deserialize our platform compilation configs
@@ -40,7 +39,7 @@ func NewCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformCon
 	// Marshal our config to a raw message
 	b, err := json.Marshal(platformConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	platformConfigMsg := (*json.RawMessage)(&b)
 
@@ -54,7 +53,7 @@ func NewCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformCon
 func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Verify the platform is valid
 	if !IsSupportedCompilationPlatform(c.Platform) {
-		return nil, "", fmt.Errorf("could not compile from configs: platform '%s' is unsupported", c.Platform)
+		return nil, "", errors.Errorf("could not compile from configs, platform '%s' is unsupported", c.Platform)
 	}
 
 	// Get the platform config
@@ -74,7 +73,7 @@ func (c *CompilationConfig) GetPlatformConfig() (platforms.PlatformConfig, error
 	platformConfig := GetDefaultPlatformConfig(c.Platform)
 	err := json.Unmarshal(*c.PlatformConfig, &platformConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return platformConfig, nil
 }
@@ -93,7 +92,7 @@ func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformC
 	// Serialize
 	b, err := json.Marshal(platformConfig)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Update the compilation config

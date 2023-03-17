@@ -3,8 +3,7 @@ package platforms
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -97,7 +96,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	}
 	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
-		return nil, "", fmt.Errorf("could not delete crytic-compile's export directory prior to compilation, error: %v", err)
+		return nil, "", errors.WithMessage(err, "could not delete crytic-compile's export directory prior to compilation, error")
 	}
 
 	// Validate args to make sure --export-format and --export-dir are not specified
@@ -119,24 +118,24 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	if c.SolcVersion != "" {
 		out, err := exec.Command("solc-select", "install", c.SolcVersion).CombinedOutput()
 		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+			return nil, "", errors.Wrapf(err, "error while executing `solc-select install`:\nOUTPUT:%s\nERROR", string(out))
 		}
 		out, err = exec.Command("solc-select", "use", c.SolcVersion).CombinedOutput()
 		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select use`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+			return nil, "", errors.Wrapf(err, "error while executing `solc-select use`:\nOUTPUT:%s\nERROR", string(out))
 		}
 	}
 
 	// Run crytic-compile to compile and export our compilation artifacts.
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", errors.Wrapf(err, "error while executing crytic-compile:\nOUTPUT:%s\nERROR", string(out))
 	}
 
 	// Find compilation artifacts in the export directory
 	matches, err := filepath.Glob(filepath.Join(exportDirectory, "*.json"))
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.WithStack(err)
 	}
 
 	// Create a slice to track all our compilations parsed.
@@ -163,14 +162,14 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		// Read the compiled JSON file data
 		b, err := os.ReadFile(matches[i])
 		if err != nil {
-			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data at path '%s', error: %v", matches[i], err)
+			return nil, "", errors.Wrapf(err, "could not parse crytic-compile's exported solc data at path '%s'", matches[i])
 		}
 
 		// Parse the JSON
 		var solcExport solcExportData
 		err = json.Unmarshal(b, &solcExport)
 		if err != nil {
-			return nil, "", fmt.Errorf("could not parse crytic-compile's exported solc data, error: %v", err)
+			return nil, "", errors.Wrap(err, "could not parse crytic-compile's exported solc data")
 		}
 
 		// Create a compilation object that will store the contracts and source information.
@@ -189,7 +188,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			// Split our source and contract path, as it takes the form sourcePath:contractName
 			splitIndex := strings.LastIndex(sourceAndContractPath, ":")
 			if splitIndex == -1 {
-				return nil, "", fmt.Errorf("expected contract path to be of form \"<source path>:<contract_name>\"")
+				return nil, "", errors.New("expected contract path to be of form \"<source path>:<contract_name>\"")
 			}
 			sourcePath := sourceAndContractPath[:splitIndex]
 			contractName := sourceAndContractPath[splitIndex+1:]
@@ -207,17 +206,17 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			// Parse the ABI
 			contractAbi, err := types.ParseABIFromInterface(contract.Abi)
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
+				return nil, "", errors.Errorf("unable to parse ABI for contract '%s'", contractName)
 			}
 
 			// Decode our init and runtime bytecode
 			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+				return nil, "", errors.Errorf("unable to parse init bytecode for contract '%s'", contractName)
 			}
 			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+				return nil, "", errors.Errorf("unable to parse runtime bytecode for contract '%s'", contractName)
 			}
 
 			// Add contract details
