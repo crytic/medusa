@@ -37,7 +37,7 @@ jobs:
 
       - name: Markdown link check
         run: |
-          npm install -g markdown-link-check
+          npm install -g markdown-link-check@3.10.3
           markdown-link-check --config .github/workflows/resources/markdown_link_check.json ./*.md
 
       - name: Format
