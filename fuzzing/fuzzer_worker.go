@@ -1,8 +1,8 @@
 package fuzzing
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
@@ -142,7 +142,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 	// If we didn't match any deployment, report it.
 	if matchedDefinition == nil {
 		if fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
-			return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
+			return errors.New("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
 		} else {
 			return nil
 		}
@@ -161,7 +161,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 		ContractDefinition: matchedDefinition,
 	})
 	if err != nil {
-		return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract added event: %v", err)
+		return errors.WithMessage(err, "error returned by an event handler when a worker emitted a deployed contract added event")
 	}
 	return nil
 }
@@ -192,7 +192,7 @@ func (fw *FuzzerWorker) onChainContractDeploymentRemovedEvent(event chain.Contra
 		ContractDefinition: contractDefinition,
 	})
 	if err != nil {
-		return fmt.Errorf("error returned by an event handler when a worker emitted a deployed contract deleted event: %v", err)
+		return errors.WithMessage(err, "error returned by an event handler when a worker emitted a deployed contract deleted event")
 	}
 	return nil
 }
@@ -426,7 +426,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			Chain:  initializedChain,
 		})
 		if err != nil {
-			return fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
+			return errors.WithMessage(err, "error returned by an event handler when emitting a worker chain created event")
 		}
 
 		// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
@@ -448,7 +448,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		Chain:  fw.chain,
 	})
 	if err != nil {
-		return false, fmt.Errorf("error returned by an event handler when emitting a worker chain setup event: %v", err)
+		return false, errors.WithMessage(err, "error returned by an event handler when emitting a worker chain setup event")
 	}
 
 	// Increase our generation metric as we successfully generated a test node
@@ -473,7 +473,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			Worker: fw,
 		})
 		if err != nil {
-			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence is starting: %v", err)
+			return false, errors.WithMessage(err, "error returned by an event handler when a worker emitted an event indicating testing of a new call sequence is starting")
 		}
 
 		// Test a new sequence
@@ -495,7 +495,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			Worker: fw,
 		})
 		if err != nil {
-			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence has concluded: %v", err)
+			return false, errors.WithMessage(err, "error returned by an event handler when a worker emitted an event indicating testing of a new call sequence has concluded")
 		}
 
 		// Update our sequences tested metrics

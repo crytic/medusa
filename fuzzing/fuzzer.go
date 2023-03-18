@@ -10,20 +10,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/config"
 	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
+	"github.com/trailofbits/medusa/utils/randomutils"
 	"golang.org/x/exp/slices"
 )
 
@@ -275,7 +275,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+			return errors.New("you must specify a contract deployment order within your project configuration")
 		}
 	}
 
@@ -291,7 +291,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
 					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
 					if !ok {
-						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+						return errors.Errorf("constructor arguments for contract %s not provided", contractName)
 					}
 					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
@@ -304,7 +304,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				// Constructor our deployment message/tx data field
 				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 				if err != nil {
-					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+					return errors.WithMessagef(err, "initial contract deployment failed for contract '%v'", contractName)
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
@@ -332,7 +332,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 				// Ensure our transaction succeeded
 				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+					return errors.Wrap(block.MessageResults[0].ExecutionResult.Err, "contract deployment tx returned a failed status")
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this
@@ -348,7 +348,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
+			return errors.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v", contractName)
 		}
 	}
 	return nil
@@ -455,7 +455,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 			if err == nil {
 				// Publish an event indicating we created a worker.
 				workerCreatedErr = f.Events.WorkerCreated.Publish(FuzzerWorkerCreatedEvent{Worker: worker})
-				if err == nil && workerCreatedErr != nil {
+				if workerCreatedErr != nil {
 					err = workerCreatedErr
 				}
 			}
