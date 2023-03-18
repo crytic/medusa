@@ -1,8 +1,8 @@
 package executiontracer
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
 	"math/big"
 )
 
@@ -17,8 +17,11 @@ type CallFrame struct {
 	// ToAddress refers to the address which was called by the sender.
 	ToAddress common.Address
 
-	// ToContract refers to the contract definition which was resolved for the ToAddress.
-	ToContract *contracts.Contract
+	// ToContractName refers to the name of the contract which was resolved for the ToAddress.
+	ToContractName string
+
+	// ToContractAbi refers to the ABI of the contract which was resolved for the ToAddress.
+	ToContractAbi *abi.ABI
 
 	// ToInitBytecode refers to the init bytecode recorded for the ToAddress. This is only set if it was being deployed.
 	ToInitBytecode []byte
@@ -31,8 +34,11 @@ type CallFrame struct {
 	// a delegate call was made.
 	CodeAddress common.Address
 
-	// CodeContract refers to the contract definition which was resolved for the CodeAddress.
-	CodeContract *contracts.Contract
+	// CodeContractName refers to the name of the contract which was resolved for the CodeAddress.
+	CodeContractName string
+
+	// CodeContractAbi refers to the ABI of the contract which was resolved for the CodeAddress.
+	CodeContractAbi *abi.ABI
 
 	// CodeRuntimeBytecode refers to the bytecode recorded for the CodeAddress.
 	CodeRuntimeBytecode []byte

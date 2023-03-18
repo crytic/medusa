@@ -7,9 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// cheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
+// CheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
 // meant to act as a contract.
-type cheatCodeContract struct {
+type CheatCodeContract struct {
+	// The name of the cheat code contract.
+	name string
+
 	// address defines the address the cheat code contract should be installed at.
 	address common.Address
 
@@ -19,6 +22,9 @@ type cheatCodeContract struct {
 	// methodInfo describes a table of methodId (function selectors) to cheat code methods. This acts as a switch table
 	// for different methods in the contract.
 	methodInfo map[uint32]*cheatCodeMethod
+
+	// abi refers to the cheat code contract's ABI definition.
+	abi abi.ABI
 }
 
 // cheatCodeMethod defines the method information for a given precompiledContract.
@@ -48,11 +54,20 @@ type cheatCodeRawReturnData struct {
 
 // newCheatCodeContract returns a new precompiledContract which uses the attached cheatCodeTracer for execution
 // context.
-func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address) *cheatCodeContract {
-	return &cheatCodeContract{
+func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address, name string) *CheatCodeContract {
+	return &CheatCodeContract{
+		name:       name,
 		address:    address,
 		tracer:     tracer,
 		methodInfo: make(map[uint32]*cheatCodeMethod),
+		abi: abi.ABI{
+			Constructor: abi.Method{},
+			Methods:     make(map[string]abi.Method),
+			Events:      make(map[string]abi.Event),
+			Errors:      make(map[string]abi.Error),
+			Fallback:    abi.Method{},
+			Receive:     abi.Method{},
+		},
 	}
 }
 
@@ -65,9 +80,24 @@ func cheatCodeRevertData(returnData []byte) *cheatCodeRawReturnData {
 	}
 }
 
+// Name represents the name of the cheat code contract.
+func (c *CheatCodeContract) Name() string {
+	return c.name
+}
+
+// Address represents the address the cheat code contract is deployed at.
+func (c *CheatCodeContract) Address() common.Address {
+	return c.address
+}
+
+// Abi provides the cheat code contract interface.
+func (c *CheatCodeContract) Abi() *abi.ABI {
+	return &c.abi
+}
+
 // addMethod adds a new method to the precompiled contract.
 // Returns an error if one occurred.
-func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
+func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
 		panic("could not add method to precompiled cheatcode contract, empty method name provided")
@@ -81,31 +111,36 @@ func (p *cheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs
 	// Set the method information in our method lookup
 	method := abi.NewMethod(name, name, abi.Function, "external", false, false, inputs, outputs)
 	methodId := binary.LittleEndian.Uint32(method.ID)
-	p.methodInfo[methodId] = &cheatCodeMethod{
+	c.methodInfo[methodId] = &cheatCodeMethod{
 		method:  method,
 		handler: handler,
 	}
+
+	// Add the method to the ABI.
+	// Note: Normally the key here should be the method name, not sig. But cheat code contracts have duplicate
+	// method names with different parameter types, so we use this so they don't override.
+	c.abi.Methods[method.Sig] = method
 }
 
 // RequiredGas determines the amount of gas necessary to execute the pre-compile with the given input data.
 // Returns the gas cost.
-func (p *cheatCodeContract) RequiredGas(input []byte) uint64 {
+func (c *CheatCodeContract) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
 // Run executes the given pre-compile with the provided input data.
 // Returns the output data from execution, or an error if one occurred.
-func (p *cheatCodeContract) Run(input []byte) ([]byte, error) {
+func (c *CheatCodeContract) Run(input []byte) ([]byte, error) {
 	// Calling any method should require at least a signature
 	if len(input) < 4 {
 		return []byte{}, vm.ErrExecutionReverted
 	}
 
-	// Obtain the method identifier as a uint32
+	// Obtain the method identifier as an uint32
 	methodId := binary.LittleEndian.Uint32(input[:4])
 
 	// Ensure we have a method definition that matches our selector.
-	methodInfo, methodInfoExists := p.methodInfo[methodId]
+	methodInfo, methodInfoExists := c.methodInfo[methodId]
 	if !methodInfoExists || methodId != binary.LittleEndian.Uint32(methodInfo.method.ID) {
 		return []byte{}, vm.ErrExecutionReverted
 	}
@@ -117,7 +152,7 @@ func (p *cheatCodeContract) Run(input []byte) ([]byte, error) {
 	}
 
 	// Call the registered method handler.
-	outputValues, rawReturnData := methodInfo.handler(p.tracer, inputValues)
+	outputValues, rawReturnData := methodInfo.handler(c.tracer, inputValues)
 
 	// If we have raw return data, use that. Otherwise, proceed to unpack the returned output values.
 	if rawReturnData != nil {

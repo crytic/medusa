@@ -270,6 +270,22 @@ func (t *TestChain) State() *state.StateDB {
 	return t.state
 }
 
+// CheatCodeContracts returns all cheat code contracts which are installed in the chain.
+func (t *TestChain) CheatCodeContracts() map[common.Address]*CheatCodeContract {
+	// Create a map of cheat code contracts to store our results
+	contracts := make(map[common.Address]*CheatCodeContract, 0)
+
+	// Loop for each precompile, and try to see any which are of the "cheat code contract" type.
+	for address, precompile := range t.vmConfigExtensions.AdditionalPrecompiles {
+		if cheatCodeContract, ok := precompile.(*CheatCodeContract); ok {
+			contracts[address] = cheatCodeContract
+		}
+	}
+
+	// Return the results
+	return contracts
+}
+
 // CommittedBlocks returns the real blocks which were committed to the chain, where methods such as BlockFromNumber
 // return the simulated chain state with intermediate blocks injected for block number jumps, etc.
 func (t *TestChain) CommittedBlocks() []*chainTypes.Block {

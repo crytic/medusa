@@ -16,7 +16,7 @@ import (
 // Returns the ExecutionTrace for the call or an error if one occurs.
 func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contracts.Contracts, msg core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
-	executionTracer := NewExecutionTracer(contractDefinitions)
+	executionTracer := NewExecutionTracer(contractDefinitions, chain.CheatCodeContracts())
 
 	// Call the contract on our chain with the provided state.
 	executionResult, err := chain.CallContract(msg, state, executionTracer)
@@ -49,6 +49,9 @@ type ExecutionTracer struct {
 	// contractDefinitions represents the contract definitions to match for execution traces.
 	contractDefinitions contracts.Contracts
 
+	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
+	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
+
 	// onNextCaptureState refers to methods which should be executed the next time CaptureState executes.
 	// CaptureState is called prior to execution of an instruction. This allows actions to be performed
 	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
@@ -57,9 +60,10 @@ type ExecutionTracer struct {
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
-func NewExecutionTracer(contractDefinitions contracts.Contracts) *ExecutionTracer {
+func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContracts map[common.Address]*chain.CheatCodeContract) *ExecutionTracer {
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
+		cheatCodeContracts:  cheatCodeContracts,
 	}
 	return tracer
 }
@@ -86,12 +90,38 @@ func (t *ExecutionTracer) CaptureTxEnd(restGas uint64) {
 // resolveCallFrameContractDefinitions resolves previously unresolved contract definitions for the To and Code addresses
 // used within the provided call frame.
 func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFrame) {
-	// If we didn't resolve contract definitions, do so now.
-	if callFrame.ToContract == nil {
-		callFrame.ToContract = t.contractDefinitions.MatchBytecode(callFrame.ToInitBytecode, callFrame.ToRuntimeBytecode)
+	// Try to resolve contract definitions for "to" address
+	if callFrame.ToContractAbi == nil {
+		// Try to resolve definitions from cheat code contracts
+		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.ToAddress]; ok {
+			callFrame.ToContractName = cheatCodeContract.Name()
+			callFrame.ToContractAbi = cheatCodeContract.Abi()
+			callFrame.ExecutedCode = true
+		} else {
+			// Try to resolve definitions from compiled contracts
+			toContract := t.contractDefinitions.MatchBytecode(callFrame.ToInitBytecode, callFrame.ToRuntimeBytecode)
+			if toContract != nil {
+				callFrame.ToContractName = toContract.Name()
+				callFrame.ToContractAbi = &toContract.CompiledContract().Abi
+			}
+		}
 	}
-	if callFrame.CodeContract == nil {
-		callFrame.CodeContract = t.contractDefinitions.MatchBytecode(nil, callFrame.CodeRuntimeBytecode)
+
+	// Try to resolve contract definitions for "code" address
+	if callFrame.CodeContractAbi == nil {
+		// Try to resolve definitions from cheat code contracts
+		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.CodeAddress]; ok {
+			callFrame.CodeContractName = cheatCodeContract.Name()
+			callFrame.CodeContractAbi = cheatCodeContract.Abi()
+			callFrame.ExecutedCode = true
+		} else {
+			// Try to resolve definitions from compiled contracts
+			codeContract := t.contractDefinitions.MatchBytecode(nil, callFrame.CodeRuntimeBytecode)
+			if codeContract != nil {
+				callFrame.CodeContractName = codeContract.Name()
+				callFrame.CodeContractAbi = &codeContract.CompiledContract().Abi
+			}
+		}
 	}
 }
 
@@ -101,15 +131,17 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 	callFrameData := &CallFrame{
 		SenderAddress:       fromAddress,
 		ToAddress:           toAddress,
-		ToContract:          nil,
+		ToContractName:      "",
+		ToContractAbi:       nil,
 		ToInitBytecode:      nil,
 		ToRuntimeBytecode:   nil,
 		CodeAddress:         codeAddress,
-		CodeContract:        nil,
+		CodeContractName:    "",
+		CodeContractAbi:     nil,
 		CodeRuntimeBytecode: nil,
 		Operations:          make([]any, 0),
 		SelfDestructed:      false,
-		InputData:           inputData,
+		InputData:           slices.Clone(inputData),
 		ReturnData:          nil,
 		ExecutedCode:        false,
 		CallValue:           value,

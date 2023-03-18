@@ -107,7 +107,6 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 		methodName       = "<unresolved method>"
 		method           *abi.Method
 		err              error
-		temp             string
 	)
 
 	// If this is a contract creation, use a different prefix
@@ -118,16 +117,16 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 
 	// Resolve our contract names, as well as our method and its name from the code contract.
-	if callFrame.ToContract != nil {
-		toContractName = callFrame.ToContract.Name()
+	if callFrame.ToContractAbi != nil {
+		toContractName = callFrame.ToContractName
 	}
-	if callFrame.CodeContract != nil {
-		codeContractName = callFrame.CodeContract.Name()
+	if callFrame.CodeContractAbi != nil {
+		codeContractName = callFrame.CodeContractName
 		if callFrame.IsContractCreation() {
 			methodName = "constructor"
-			method = &callFrame.CodeContract.CompiledContract().Abi.Constructor
+			method = &callFrame.CodeContractAbi.Constructor
 		} else {
-			method, err = callFrame.CodeContract.CompiledContract().Abi.MethodById(callFrame.InputData)
+			method, err = callFrame.CodeContractAbi.MethodById(callFrame.InputData)
 			if err == nil {
 				methodName = method.Name
 			}
@@ -166,10 +165,11 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	// If we could not correctly obtain the unpacked arguments in a nice display string (due to not having a resolved
 	// contract or method definition, or failure to unpack), we display as raw data in the worst case.
 	if inputArgumentsDisplayText == nil {
-		temp = fmt.Sprintf("msg_data=%v", hex.EncodeToString(callFrame.InputData))
+		temp := fmt.Sprintf("msg_data=%v", hex.EncodeToString(callFrame.InputData))
 		inputArgumentsDisplayText = &temp
 	}
 	if outputArgumentsDisplayText == nil {
+		var temp string
 		if len(callFrame.ReturnData) > 0 {
 			temp = fmt.Sprintf("return_data=%v", hex.EncodeToString(callFrame.ReturnData))
 		} else {
@@ -203,7 +203,7 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 	outputLines = append(outputLines, currentFrameLine)
 
-	// Now that the header (call) message has been printed, increate our indent level to express everything that
+	// Now that the header (call) message has been printed, create our indent level to express everything that
 	// happened under it.
 	prefix = "\t" + prefix
 
@@ -219,8 +219,8 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 			var (
 				eventDisplayText *string
 			)
-			if callFrame.CodeContract != nil {
-				event, err := callFrame.CodeContract.CompiledContract().Abi.EventByID(eventLog.Topics[0])
+			if callFrame.CodeContractAbi != nil {
+				event, err := callFrame.CodeContractAbi.EventByID(eventLog.Topics[0])
 				if err == nil {
 					// Next, unpack our values
 					eventInputValues, err := t.unpackEventValues(event, eventLog)
@@ -229,7 +229,7 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 						encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
 						if err == nil {
 							// Format our event display text finally, with the event name.
-							temp = fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
+							temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
 							eventDisplayText = &temp
 						}
 					}
@@ -243,7 +243,7 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 					topicsStrings = append(topicsStrings, hex.EncodeToString(topic.Bytes()))
 				}
 
-				temp = fmt.Sprintf("<unresolved(topics=[%v], data=%v)>", strings.Join(topicsStrings, ", "), hex.EncodeToString(eventLog.Data))
+				temp := fmt.Sprintf("<unresolved(topics=[%v], data=%v)>", strings.Join(topicsStrings, ", "), hex.EncodeToString(eventLog.Data))
 				eventDisplayText = &temp
 			}
 
@@ -258,19 +258,22 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 
 	// Wrap our return message and output it at the end.
+	var exitScopeDisplayText string
 	if callFrame.ReturnError == nil {
-		*outputArgumentsDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
+		exitScopeDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
 	} else {
 		// Try to extract a panic message out of this
 		panicCode := types.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
 		errorMessage := types.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
 		if panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed {
-			*outputArgumentsDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
+			exitScopeDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
 		} else if errorMessage != nil {
-			*outputArgumentsDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
+			exitScopeDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
+		} else {
+			exitScopeDisplayText = fmt.Sprintf("[vm error: %s]", err.Error())
 		}
 	}
-	outputLines = append(outputLines, *outputArgumentsDisplayText)
+	outputLines = append(outputLines, exitScopeDisplayText)
 
 	// Return our output lines
 	return outputLines

@@ -99,7 +99,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	var executionResult *core.ExecutionResult
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
-		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions)
+		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
 		executionResult, err = worker.Chain().CallContract(msg, nil, executionTracer)
 		executionTrace = executionTracer.Trace()
 	} else {
