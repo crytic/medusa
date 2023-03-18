@@ -503,9 +503,11 @@ func TestVMCorrectness(t *testing.T) {
 	})
 }
 
-// TestInitializeCoverageMaps will test whether the corpus can be "replayed" to seed the fuzzer with coverage from a
-// previous run.
-func TestInitializeCoverageMaps(t *testing.T) {
+// TestCorpusReplayability will test whether the corpus, when replayed, will end up with the same coverage.
+// Additionally, check if the second run is solved with sequences executed being less or equal to the total corpus
+// call sequences. This should occur as the corpus call sequences should be executed unmodified first (including
+// the sequence which previously failed the on-chain test), prior to generating any new fuzzed sequences.
+func TestCorpusReplayability(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/value_generation/match_uints_xy.sol",
 		configUpdates: func(config *config.ProjectConfig) {
@@ -525,16 +527,13 @@ func TestInitializeCoverageMaps(t *testing.T) {
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
+			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceCount()
 
-			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
-				// Simply stop the fuzzer
-				event.Fuzzer.Stop()
-				return nil
-			})
-
-			// Note that the fuzzer won't spin up any workers or fuzz anything. We just want to test that we seeded
-			// the coverage maps properly
+			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
+			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
+			// corpus call sequence items (as the failing test corpus items should be replayed by the call sequence
+			// generator prior to it generating any new sequences).
+			f.fuzzer.config.Fuzzing.Workers = 1
 			err = f.fuzzer.Start()
 			assert.NoError(t, err)
 
@@ -544,6 +543,9 @@ func TestInitializeCoverageMaps(t *testing.T) {
 
 			// Check to see if original and new coverage are the same
 			assert.True(t, originalCoverage.Equals(newCoverage))
+
+			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
+			assert.LessOrEqual(t, f.fuzzer.metrics.SequencesTested().Uint64(), uint64(originalCorpusSequenceCount))
 		},
 	})
 }
