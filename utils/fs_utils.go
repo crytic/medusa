@@ -9,7 +9,7 @@ import (
 
 // CopyFile copies a file from a source path to a destination path. File permissions are retained. Returns an error
 // if one occurs.
-func CopyFile(sourcePath string, targetPath string) error {
+func CopyFile(sourcePath string, targetPath string) (err error) {
 	// Obtain file info for the source file
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
@@ -33,14 +33,18 @@ func CopyFile(sourcePath string, targetPath string) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	defer errors.WithStack(sourceFile.Close())
+	defer func() {
+		err = errors.WithStack(sourceFile.Close())
+	}()
 
 	// Get a handle to the created target file
 	targetFile, err := os.Create(targetPath)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	defer errors.WithStack(targetFile.Close())
+	defer func() {
+		err = errors.WithStack(targetFile.Close())
+	}()
 
 	// Copy contents from one file handle to the other
 	_, err = io.Copy(targetFile, sourceFile)
