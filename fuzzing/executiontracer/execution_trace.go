@@ -1,6 +1,7 @@
 package executiontracer
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -84,6 +85,20 @@ func (t *ExecutionTrace) unpackEventValues(event *abi.Event, eventLog *coreTypes
 	}
 
 	return inputValues, nil
+}
+
+func (t *ExecutionTrace) resolveError(abi *abi.ABI, returnData []byte) *abi.Error {
+	// Loop for each error definition in the ABI.
+	for _, abiError := range abi.Errors {
+		// If the data's leading selector value matches the ID of the error, return it.
+		if len(returnData) >= 4 && bytes.Equal(abiError.ID.Bytes()[:4], returnData[:4]) {
+			// Make a local copy to avoid taking a pointer of a loop variable and having a memory leak
+			abiError := abiError
+			return &abiError
+		}
+	}
+	// If we couldn't find an item, return nil.
+	return nil
 }
 
 // generateStringsForCallFrame generates indented strings for a given call frame and its children.
@@ -262,15 +277,35 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	if callFrame.ReturnError == nil {
 		exitScopeDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
 	} else {
-		// Try to extract a panic message out of this
+		// Try to extract a panic message out of this, as well as a custom revert reason.
 		panicCode := types.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
 		errorMessage := types.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
+
+		// Try to resolve an assertion failed panic code
 		if panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed {
 			exitScopeDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
 		} else if errorMessage != nil {
+			// Try to resolve a generic revert reason
 			exitScopeDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
 		} else {
-			exitScopeDisplayText = fmt.Sprintf("[vm error: %s]", err.Error())
+			// Try to resolve a custom error
+			if callFrame.CodeContractAbi != nil {
+				matchedCustomError := t.resolveError(callFrame.CodeContractAbi, callFrame.ReturnData)
+				if matchedCustomError != nil {
+					unpackedCustomErrorArgs, err := matchedCustomError.Inputs.Unpack(callFrame.ReturnData[4:])
+					if err == nil {
+						customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
+						if err == nil {
+							exitScopeDisplayText = fmt.Sprintf("%v[custom error] %v(%v)", prefix, matchedCustomError.Name, customErrorArgsDisplayText)
+						}
+					}
+				}
+			}
+
+			// If we could not resolve any custom error, we simply print out the generic VM error message.
+			if len(exitScopeDisplayText) == 0 {
+				exitScopeDisplayText = fmt.Sprintf("%v[vm error: %s]", prefix, callFrame.ReturnError.Error())
+			}
 		}
 	}
 	outputLines = append(outputLines, exitScopeDisplayText)
