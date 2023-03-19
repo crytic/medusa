@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/compilation/abiutils"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"strings"
@@ -25,39 +26,30 @@ func newExecutionTrace() *ExecutionTrace {
 	}
 }
 
-// generateStringsForCallFrame generates indented strings for a given call frame and its children.
-// Returns the list of strings, to be joined by new line separators.
-func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame *CallFrame) []string {
-	// Create our resulting strings array
-	var outputLines []string
-
-	// Create our current call line prefix (indented by call depth)
-	prefix := strings.Repeat("\t", currentDepth) + " -> "
-
-	if currentDepth == 0 {
-		outputLines = append(outputLines, prefix+"[Execution Trace]")
-	}
-
+// generateCallFrameEnterString generates a header string to print for the given call frame. It contains
+// information about the invoked call.
+// Returns the header string
+func (t *ExecutionTrace) generateCallFrameEnterString(callFrame *CallFrame) string {
 	// Define some strings that represent our current call frame
 	var (
-		action           = "call"
-		toContractName   = "<unresolved contract>"
-		codeContractName = "<unresolved contract>"
-		methodName       = "<unresolved method>"
-		method           *abi.Method
-		err              error
+		callType          = "call"
+		proxyContractName = "<unresolved proxy>"
+		codeContractName  = "<unresolved contract>"
+		methodName        = "<unresolved method>"
+		method            *abi.Method
+		err               error
 	)
 
 	// If this is a contract creation, use a different prefix
 	if callFrame.IsContractCreation() {
-		action = "creation"
+		callType = "creation"
 	} else if callFrame.IsProxyCall() {
-		action = "proxy call"
+		callType = "proxy call"
 	}
 
 	// Resolve our contract names, as well as our method and its name from the code contract.
 	if callFrame.ToContractAbi != nil {
-		toContractName = callFrame.ToContractName
+		proxyContractName = callFrame.ToContractName
 	}
 	if callFrame.CodeContractAbi != nil {
 		codeContractName = callFrame.CodeContractName
@@ -73,14 +65,18 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	}
 
 	// Next we attempt to obtain a display string for the input and output arguments.
-	var (
-		inputArgumentsDisplayText  *string
-		outputArgumentsDisplayText *string
-	)
+	var inputArgumentsDisplayText *string
 	if method != nil {
 		// Unpack our input values and obtain a string to represent them
-		if len(callFrame.InputData) >= 4 {
-			inputValues, err := method.Inputs.Unpack(callFrame.InputData[4:])
+		// If this is a normal call, our abi data follows the 32-bit function selector.
+		// If this is a contract creation, the input arguments follow the code.
+		abiDataOffset := 4
+		if callFrame.IsContractCreation() {
+			// TODO: Implement detection of code sections vs ABI input data for constructors.
+			abiDataOffset = 0
+		}
+		if len(callFrame.InputData) >= abiDataOffset {
+			inputValues, err := method.Inputs.Unpack(callFrame.InputData[abiDataOffset:])
 			if err == nil {
 				encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
 				if err == nil {
@@ -88,7 +84,51 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 				}
 			}
 		}
+	}
 
+	// If we could not correctly obtain the unpacked arguments in a nice display string (due to not having a resolved
+	// contract or method definition, or failure to unpack), we display as raw data in the worst case.
+	if inputArgumentsDisplayText == nil {
+		temp := fmt.Sprintf("msg_data=%v", hex.EncodeToString(callFrame.InputData))
+		inputArgumentsDisplayText = &temp
+	}
+
+	// Generate the message we wish to output finally, using all these display string components.
+	// If we executed code, attach additional context such as the contract name, method, etc.
+	if callFrame.IsProxyCall() {
+		if callFrame.ExecutedCode {
+			return fmt.Sprintf("[%v] %v -> %v.%v(%v) (to=%v, value=%v, sender=%v)", callType, proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+		} else {
+			return fmt.Sprintf("[%v] (to=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+		}
+	} else {
+		if callFrame.ExecutedCode {
+			return fmt.Sprintf("[%v] %v.%v(%v) (to=%v, value=%v, sender=%v)", callType, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+		} else {
+			return fmt.Sprintf("[%v] (to=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+		}
+	}
+}
+
+// generateCallFrameExitString generates a footer string to print for the given call frame. It contains
+// result information about the call.
+// Returns the footer string.
+func (t *ExecutionTrace) generateCallFrameExitString(callFrame *CallFrame) string {
+	// Define some strings that represent our current call frame
+	var method *abi.Method
+
+	// Resolve our method definition
+	if callFrame.CodeContractAbi != nil {
+		if callFrame.IsContractCreation() {
+			method = &callFrame.CodeContractAbi.Constructor
+		} else {
+			method, _ = callFrame.CodeContractAbi.MethodById(callFrame.InputData)
+		}
+	}
+
+	// Next we attempt to obtain a display string for the input and output arguments.
+	var outputArgumentsDisplayText *string
+	if method != nil {
 		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
 		if callFrame.ReturnError == nil {
 			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData)
@@ -103,127 +143,128 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 
 	// If we could not correctly obtain the unpacked arguments in a nice display string (due to not having a resolved
 	// contract or method definition, or failure to unpack), we display as raw data in the worst case.
-	if inputArgumentsDisplayText == nil {
-		temp := fmt.Sprintf("msg_data=%v", hex.EncodeToString(callFrame.InputData))
-		inputArgumentsDisplayText = &temp
-	}
 	if outputArgumentsDisplayText == nil {
-		var temp string
-		if len(callFrame.ReturnData) > 0 {
-			temp = fmt.Sprintf("return_data=%v", hex.EncodeToString(callFrame.ReturnData))
-		} else {
-			// If there was no return data, we display nothing for output arguments.
-			temp = ""
-		}
+		temp := fmt.Sprintf("return_data=%v", hex.EncodeToString(callFrame.ReturnData))
 		outputArgumentsDisplayText = &temp
 	}
 
-	// Generate the message we wish to output finally, using all these display string components.
-	var currentFrameLine string
-	if callFrame.IsProxyCall() {
-		// If we executed code, attach additional context such as the contract name, method, etc.
-		if callFrame.ExecutedCode {
-			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v -> %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, toContractName, codeContractName, methodName, *inputArgumentsDisplayText)
-		} else {
-			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
-		}
-	} else {
-		// If we executed code, attach additional context such as the contract name, method, etc.
-		if callFrame.ExecutedCode {
-			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v] %v.%v(%v)", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue, codeContractName, methodName, *inputArgumentsDisplayText)
-		} else {
-			currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
+	// Wrap our return message and output it at the end.
+	if callFrame.ReturnError == nil {
+		return fmt.Sprintf("[return (%v)]", *outputArgumentsDisplayText)
+	}
+
+	// Try to resolve a panic message and check if it signals a failed assertion.
+	panicCode := abiutils.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
+	if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
+		return fmt.Sprintf("[assertion failed]")
+	}
+
+	// Try to resolve an assertion failed panic code.
+	errorMessage := abiutils.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
+	if errorMessage != nil {
+		return fmt.Sprintf("[revert ('%v')]", *errorMessage)
+	}
+
+	// Try to unpack a custom Solidity error from the return values.
+	matchedCustomError, unpackedCustomErrorArgs := abiutils.GetSolidityCustomRevertError(callFrame.CodeContractAbi, callFrame.ReturnError, callFrame.ReturnData)
+	if matchedCustomError != nil {
+		customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
+		if err == nil {
+			return fmt.Sprintf("[revert (error: %v(%v))]", matchedCustomError.Name, customErrorArgsDisplayText)
 		}
 	}
 
-	// If we did not execute code then just show the address and the ETH value (we do not care about a zero ETH value here and will show it regardless)
-	if !callFrame.ExecutedCode {
-		currentFrameLine = fmt.Sprintf("%v[%v: %v, %v: %v]", prefix, action, callFrame.ToAddress.String(), "value", callFrame.CallValue)
+	// Check if this is a generic revert.
+	if callFrame.ReturnError == vm.ErrExecutionReverted {
+		return "[revert]"
 	}
-	outputLines = append(outputLines, currentFrameLine)
 
-	// Now that the header (call) message has been printed, create our indent level to express everything that
+	// If we could not resolve any custom error, we simply print out the generic VM error message.
+	return fmt.Sprintf("[vm error ('%v')]", callFrame.ReturnError.Error())
+}
+
+// generateEventEmittedString generates a string used to express an event emission. It contains information about an
+// event log.
+// Returns a string representing an event emission.
+func (t *ExecutionTrace) generateEventEmittedString(callFrame *CallFrame, eventLog *coreTypes.Log) string {
+	// If this is an event log, match it in our contract's ABI.
+	var eventDisplayText *string
+
+	// Try to unpack our event data
+	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
+	if event != nil {
+		// Format the values as a comma-separated string
+		encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
+		if err == nil {
+			// Format our event display text finally, with the event name.
+			temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
+			eventDisplayText = &temp
+		}
+	}
+
+	// If we could not resolve the event, print the raw event data
+	if eventDisplayText == nil {
+		var topicsStrings []string
+		for _, topic := range eventLog.Topics {
+			topicsStrings = append(topicsStrings, hex.EncodeToString(topic.Bytes()))
+		}
+
+		temp := fmt.Sprintf("<unresolved(topics=[%v], data=%v)>", strings.Join(topicsStrings, ", "), hex.EncodeToString(eventLog.Data))
+		eventDisplayText = &temp
+	}
+
+	// Finally, add our output line with this event data to it.
+	return fmt.Sprintf("[event] %v", *eventDisplayText)
+}
+
+// generateStringsForCallFrame generates indented strings for a given call frame and its children.
+// Returns the list of strings, to be joined by new line separators.
+func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame *CallFrame) []string {
+	// Create our resulting strings array
+	var outputLines []string
+
+	// Create our current call line prefix (indented by call depth)
+	prefix := strings.Repeat("\t", currentDepth) + " -> "
+
+	// If we're printing the root frame, add the overall execution trace header.
+	if currentDepth == 0 {
+		outputLines = append(outputLines, prefix+"[Execution Trace]")
+	}
+
+	// Add the call frame enter header
+	header := prefix + t.generateCallFrameEnterString(callFrame)
+	outputLines = append(outputLines, header)
+
+	// Now that the header has been printed, create our indent level to express everything that
 	// happened under it.
 	prefix = "\t" + prefix
 
-	// Loop for each operation performed in the call frame, to provide a chronological history of operations in the
-	// frame.
-	for _, operation := range callFrame.Operations {
-		// If this is a call frame being entered, generate information recursively.
-		if childCallFrame, ok := operation.(*CallFrame); ok {
-			childOutputLines := t.generateStringsForCallFrame(currentDepth+1, childCallFrame)
-			outputLines = append(outputLines, childOutputLines...)
-		} else if eventLog, ok := operation.(*coreTypes.Log); ok {
-			// If this is an event log, match it in our contract's ABI.
-			var (
-				eventDisplayText *string
-			)
-
-			// Try to unpack our event data
-			event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
-			if event != nil {
-				// Format the values as a comma-separated string
-				encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
-				if err == nil {
-					// Format our event display text finally, with the event name.
-					temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
-					eventDisplayText = &temp
-				}
-			}
-
-			// If we could not resolve the event, print the raw event data
-			if eventDisplayText == nil {
-				var topicsStrings []string
-				for _, topic := range eventLog.Topics {
-					topicsStrings = append(topicsStrings, hex.EncodeToString(topic.Bytes()))
-				}
-
-				temp := fmt.Sprintf("<unresolved(topics=[%v], data=%v)>", strings.Join(topicsStrings, ", "), hex.EncodeToString(eventLog.Data))
-				eventDisplayText = &temp
-			}
-
-			// Finally, add our output line with this event data to it.
-			outputLines = append(outputLines, fmt.Sprintf("%v[event] %v", prefix, *eventDisplayText))
-		}
-	}
-
-	// If we self-destructed, add a string for it.
-	if callFrame.SelfDestructed {
-		outputLines = append(outputLines, fmt.Sprintf("%v[selfdestruct]", prefix))
-	}
-
-	// Wrap our return message and output it at the end.
-	var exitScopeDisplayText string
-	if callFrame.ReturnError == nil {
-		exitScopeDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
-	} else {
-		// Try to extract a panic message out of this, as well as a custom revert reason.
-		panicCode := abiutils.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
-		errorMessage := abiutils.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
-
-		// Try to resolve an assertion failed panic code
-		if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
-			exitScopeDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
-		} else if errorMessage != nil {
-			// Try to resolve a generic revert reason
-			exitScopeDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
-		} else {
-			// Try to unpack a custom Solidity error from the return values.
-			matchedCustomError, unpackedCustomErrorArgs := abiutils.GetSolidityCustomRevertError(callFrame.CodeContractAbi, callFrame.ReturnError, callFrame.ReturnData)
-			if matchedCustomError != nil {
-				customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
-				if err == nil {
-					exitScopeDisplayText = fmt.Sprintf("%v[custom error] %v(%v)", prefix, matchedCustomError.Name, customErrorArgsDisplayText)
-				}
-			}
-
-			// If we could not resolve any custom error, we simply print out the generic VM error message.
-			if len(exitScopeDisplayText) == 0 {
-				exitScopeDisplayText = fmt.Sprintf("%v[vm error: %s]", prefix, callFrame.ReturnError.Error())
+	// If we executed some code underneath this frame, we'll output additional information. If we did not,
+	// we shorten our trace by skipping over blank call scope returns, etc.
+	if callFrame.ExecutedCode {
+		// Loop for each operation performed in the call frame, to provide a chronological history of operations in the
+		// frame.
+		for _, operation := range callFrame.Operations {
+			if childCallFrame, ok := operation.(*CallFrame); ok {
+				// If this is a call frame being entered, generate information recursively.
+				childOutputLines := t.generateStringsForCallFrame(currentDepth+1, childCallFrame)
+				outputLines = append(outputLines, childOutputLines...)
+			} else if eventLog, ok := operation.(*coreTypes.Log); ok {
+				// If an event log was emitted, add a message for it.
+				eventMessage := prefix + t.generateEventEmittedString(callFrame, eventLog)
+				outputLines = append(outputLines, eventMessage)
 			}
 		}
+
+		// If we self-destructed, add a message for it before our footer.
+		if callFrame.SelfDestructed {
+			outputLines = append(outputLines, fmt.Sprintf("%v[selfdestruct]", prefix))
+		}
+
+		// Add the call frame exit footer
+		footer := prefix + t.generateCallFrameExitString(callFrame)
+		outputLines = append(outputLines, footer)
 	}
-	outputLines = append(outputLines, exitScopeDisplayText)
 
 	// Return our output lines
 	return outputLines

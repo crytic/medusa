@@ -322,11 +322,12 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 // regarding assertion failures, revert reasons, etc.
 func TestFailedAssertionExecutionTraces(t *testing.T) {
 	expectedMessagesPerTest := map[string][]string{
-		"testdata/contracts/execution_tracing/cheatcodes.sol":     {"StdCheats.toString(true)"},
-		"testdata/contracts/execution_tracing/custom_errors.sol":  {"CustomError", "Hello from a custom error!"},
-		"testdata/contracts/execution_tracing/event_emission.sol": {"[event] TestEvent", "[event] TestIndexedEvent", "[event] TestMixedEvent", "Hello from an event emission!"},
-		"testdata/contracts/execution_tracing/revert_reasons.sol": {"RevertingContract was called and reverted."},
-		"testdata/contracts/execution_tracing/self_destruct.sol":  {"[selfdestruct]", "[assertion failed]"},
+		// "testdata/contracts/execution_tracing/inner_deployment.sol":    {"Hello from deployment args!"}, TODO: Disabled until constructor args can be resolved.
+		"testdata/contracts/execution_tracing/cheatcodes.sol":          {"StdCheats.toString(true)"},
+		"testdata/contracts/execution_tracing/event_emission.sol":      {"[event] TestEvent", "[event] TestIndexedEvent", "[event] TestMixedEvent", "Hello from an event emission!"},
+		"testdata/contracts/execution_tracing/revert_custom_error.sol": {"CustomError", "Hello from a custom error!"},
+		"testdata/contracts/execution_tracing/revert_reasons.sol":      {"RevertingContract was called and reverted."},
+		"testdata/contracts/execution_tracing/self_destruct.sol":       {"[selfdestruct]", "[assertion failed]"},
 	}
 	for filePath, expectedTraceMessages := range expectedMessagesPerTest {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
