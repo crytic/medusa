@@ -158,7 +158,7 @@ func (t *ExecutionTrace) generateCallFrameExitString(callFrame *CallFrame) strin
 	// Try to resolve a panic message and check if it signals a failed assertion.
 	panicCode := abiutils.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
 	if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
-		return fmt.Sprintf("[assertion failed]")
+		return "[assertion failed]"
 	}
 
 	// Try to resolve an assertion failed panic code.
