@@ -1,12 +1,11 @@
 package executiontracer
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/compilation/abiutils"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"strings"
 )
@@ -24,81 +23,6 @@ func newExecutionTrace() *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame: nil,
 	}
-}
-
-// unpackEventValues unpacks the input values of events from an event log. It does so by unpacking indexed arguments
-// from the event log topics, while unpacking un-indexed arguments from the event log data. It then merges the
-// unpacked values, so they retain their original order.
-// Returns the unpacked event input argument values, or an error if one occurred.
-func (t *ExecutionTrace) unpackEventValues(event *abi.Event, eventLog *coreTypes.Log) ([]any, error) {
-	// First, split our indexed and non-indexed arguments.
-	var (
-		unindexedInputArguments abi.Arguments
-		indexedInputArguments   abi.Arguments
-	)
-	for _, arg := range event.Inputs {
-		if arg.Indexed {
-			// We have to re-create indexed items, as go-ethereum's ABI API does not typically support events.
-			// TODO: See if we can upstream something to go-ethereum here before replacing the ABI API in the future.
-			indexedInputArguments = append(indexedInputArguments, abi.Argument{
-				Name:    arg.Name,
-				Type:    arg.Type,
-				Indexed: false,
-			})
-		} else {
-			unindexedInputArguments = append(unindexedInputArguments, arg)
-		}
-	}
-
-	// Next, aggregate all topics into a single buffer, so we can treat it like data to unpack from.
-	var indexedInputData []byte
-	for i := range indexedInputArguments {
-		indexedInputData = append(indexedInputData, eventLog.Topics[i+1].Bytes()...)
-	}
-
-	// Unpacked our un-indexed values.
-	unindexedInputValues, err := unindexedInputArguments.Unpack(eventLog.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unpack our indexed values.
-	indexedInputValues, err := indexedInputArguments.Unpack(indexedInputData)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now merge our indexed and non-indexed values according to the original order we had for event input arguments.
-	var (
-		currentIndexed   int
-		currentUnindexed int
-		inputValues      []any
-	)
-	for _, arg := range event.Inputs {
-		if arg.Indexed {
-			inputValues = append(inputValues, indexedInputValues[currentIndexed])
-			currentIndexed++
-		} else {
-			inputValues = append(inputValues, unindexedInputValues[currentUnindexed])
-			currentUnindexed++
-		}
-	}
-
-	return inputValues, nil
-}
-
-func (t *ExecutionTrace) resolveError(abi *abi.ABI, returnData []byte) *abi.Error {
-	// Loop for each error definition in the ABI.
-	for _, abiError := range abi.Errors {
-		// If the data's leading selector value matches the ID of the error, return it.
-		if len(returnData) >= 4 && bytes.Equal(abiError.ID.Bytes()[:4], returnData[:4]) {
-			// Make a local copy to avoid taking a pointer of a loop variable and having a memory leak
-			abiError := abiError
-			return &abiError
-		}
-	}
-	// If we couldn't find an item, return nil.
-	return nil
 }
 
 // generateStringsForCallFrame generates indented strings for a given call frame and its children.
@@ -234,20 +158,16 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 			var (
 				eventDisplayText *string
 			)
-			if callFrame.CodeContractAbi != nil {
-				event, err := callFrame.CodeContractAbi.EventByID(eventLog.Topics[0])
+
+			// Try to unpack our event data
+			event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
+			if event != nil {
+				// Format the values as a comma-separated string
+				encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
 				if err == nil {
-					// Next, unpack our values
-					eventInputValues, err := t.unpackEventValues(event, eventLog)
-					if err == nil {
-						// Format the values as a comma-separated string
-						encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
-						if err == nil {
-							// Format our event display text finally, with the event name.
-							temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
-							eventDisplayText = &temp
-						}
-					}
+					// Format our event display text finally, with the event name.
+					temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)
+					eventDisplayText = &temp
 				}
 			}
 
@@ -278,27 +198,22 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 		exitScopeDisplayText = fmt.Sprintf("%v[return (%v)]", prefix, *outputArgumentsDisplayText)
 	} else {
 		// Try to extract a panic message out of this, as well as a custom revert reason.
-		panicCode := types.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
-		errorMessage := types.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
+		panicCode := abiutils.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
+		errorMessage := abiutils.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
 
 		// Try to resolve an assertion failed panic code
-		if panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed {
+		if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
 			exitScopeDisplayText = fmt.Sprintf("%v[assertion failed]", prefix)
 		} else if errorMessage != nil {
 			// Try to resolve a generic revert reason
 			exitScopeDisplayText = fmt.Sprintf("%v[revert (reason: '%v')]", prefix, *errorMessage)
 		} else {
-			// Try to resolve a custom error
-			if callFrame.CodeContractAbi != nil {
-				matchedCustomError := t.resolveError(callFrame.CodeContractAbi, callFrame.ReturnData)
-				if matchedCustomError != nil {
-					unpackedCustomErrorArgs, err := matchedCustomError.Inputs.Unpack(callFrame.ReturnData[4:])
-					if err == nil {
-						customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
-						if err == nil {
-							exitScopeDisplayText = fmt.Sprintf("%v[custom error] %v(%v)", prefix, matchedCustomError.Name, customErrorArgsDisplayText)
-						}
-					}
+			// Try to unpack a custom Solidity error from the return values.
+			matchedCustomError, unpackedCustomErrorArgs := abiutils.GetSolidityCustomRevertError(callFrame.CodeContractAbi, callFrame.ReturnError, callFrame.ReturnData)
+			if matchedCustomError != nil {
+				customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
+				if err == nil {
+					exitScopeDisplayText = fmt.Sprintf("%v[custom error] %v(%v)", prefix, matchedCustomError.Name, customErrorArgsDisplayText)
 				}
 			}
 

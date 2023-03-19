@@ -1,7 +1,7 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/chain/types"
+	"github.com/trailofbits/medusa/compilation/abiutils"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"golang.org/x/exp/slices"
 	"sync"
@@ -72,8 +72,8 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
-	panicCode := types.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == types.PanicCodeAssertFailed
+	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
+	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed
 
 	return &methodId, encounteredAssertionFailure, nil
 }

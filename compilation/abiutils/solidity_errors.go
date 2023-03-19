@@ -1,4 +1,4 @@
-package types
+package abiutils
 
 import (
 	"bytes"
@@ -24,6 +24,8 @@ const (
 )
 
 // GetSolidityPanicCode obtains a panic code from a VM error and return data, if possible.
+// A flag is provided indicating whether assertion failures in older Solidity compilations will be also mapped onto
+// newer Solidity panic code.
 // If the error and return data are not representative of a Panic, then nil is returned.
 func GetSolidityPanicCode(returnError error, returnData []byte, backwardsCompatible bool) *big.Int {
 	// If this method is backwards compatible with older solidity, there is no panic code, and we simply look
@@ -77,4 +79,29 @@ func GetSolidityRevertErrorString(returnError error, returnData []byte) *string 
 	}
 
 	return nil
+}
+
+// GetSolidityCustomRevertError obtains a custom Solidity error returned, if one was and could be resolved.
+// Returns the ABI error definition as well as its unpacked values. Or returns nil outputs if a custom error was not
+// emitted, or could not be resolved.
+func GetSolidityCustomRevertError(contractAbi *abi.ABI, returnError error, returnData []byte) (*abi.Error, []any) {
+	// If no ABI was given or a revert was not encountered, no custom error can be extracted, or may exist,
+	// respectively.
+	if returnError != vm.ErrExecutionReverted || contractAbi == nil {
+		return nil, nil
+	}
+
+	// Loop for each error definition in the ABI.
+	for _, abiError := range contractAbi.Errors {
+		// If the data's leading selector value matches the ID of the error, return it.
+		if len(returnData) >= 4 && bytes.Equal(abiError.ID.Bytes()[:4], returnData[:4]) {
+			// Make a local copy to avoid taking a pointer of a loop variable and having a memory leak
+			matchedCustomError := &abiError
+			unpackedCustomErrorArgs, err := matchedCustomError.Inputs.Unpack(returnData[4:])
+			if err == nil {
+				return matchedCustomError, unpackedCustomErrorArgs
+			}
+		}
+	}
+	return nil, nil
 }
