@@ -53,6 +53,10 @@ type CallFrame struct {
 	// InputData refers to the message data the EVM call was made with.
 	InputData []byte
 
+	// ConstructorArgsData refers to the subset of InputData that represents constructor argument ABI data. This
+	// is only set if this call frame is performing a contract creation. Otherwise, this buffer is always nil.
+	ConstructorArgsData []byte
+
 	// ReturnData refers to the data returned by this current call frame.
 	ReturnData []byte
 

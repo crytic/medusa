@@ -67,21 +67,23 @@ func (t *ExecutionTrace) generateCallFrameEnterString(callFrame *CallFrame) stri
 	// Next we attempt to obtain a display string for the input and output arguments.
 	var inputArgumentsDisplayText *string
 	if method != nil {
-		// Unpack our input values and obtain a string to represent them
-		// If this is a normal call, our abi data follows the 32-bit function selector.
-		// If this is a contract creation, the input arguments follow the code.
-		abiDataOffset := 4
+		// Determine what buffer will hold our ABI data.
+		// - If this a contract deployment, constructor argument data follows code, so we use a different buffer the
+		//   tracer provides.
+		// - If this is a normal call, the input data for the call is used, with the 32-bit function selector sliced off.
+		abiDataInputBuffer := make([]byte, 0)
 		if callFrame.IsContractCreation() {
-			// TODO: Implement detection of code sections vs ABI input data for constructors.
-			abiDataOffset = 0
+			abiDataInputBuffer = callFrame.ConstructorArgsData
+		} else if len(callFrame.InputData) >= 4 {
+			abiDataInputBuffer = callFrame.InputData[4:]
 		}
-		if len(callFrame.InputData) >= abiDataOffset {
-			inputValues, err := method.Inputs.Unpack(callFrame.InputData[abiDataOffset:])
+
+		// Unpack our input values and obtain a string to represent them
+		inputValues, err := method.Inputs.Unpack(abiDataInputBuffer)
+		if err == nil {
+			encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
 			if err == nil {
-				encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
-				if err == nil {
-					inputArgumentsDisplayText = &encodedInputString
-				}
+				inputArgumentsDisplayText = &encodedInputString
 			}
 		}
 	}

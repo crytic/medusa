@@ -87,6 +87,20 @@ func (t *ExecutionTracer) CaptureTxEnd(restGas uint64) {
 
 }
 
+// resolveConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
+// the call frame provided represents a contract deployment.
+func (t *ExecutionTracer) resolveCallFrameConstructorArgs(callFrame *CallFrame, contract *contracts.Contract) {
+	// If this is a contract creation and the constructor ABI argument data has not yet been resolved, do so now.
+	if callFrame.ConstructorArgsData == nil && callFrame.IsContractCreation() {
+		// We simply slice the compiled bytecode leading the input data off, and we are left with the constructor
+		// arguments ABI data.
+		compiledInitBytecode := contract.CompiledContract().InitBytecode
+		if len(compiledInitBytecode) <= len(callFrame.InputData) {
+			callFrame.ConstructorArgsData = callFrame.InputData[len(compiledInitBytecode):]
+		}
+	}
+}
+
 // resolveCallFrameContractDefinitions resolves previously unresolved contract definitions for the To and Code addresses
 // used within the provided call frame.
 func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFrame) {
@@ -103,6 +117,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 			if toContract != nil {
 				callFrame.ToContractName = toContract.Name()
 				callFrame.ToContractAbi = &toContract.CompiledContract().Abi
+				t.resolveCallFrameConstructorArgs(callFrame, toContract)
 			}
 		}
 	}
@@ -142,6 +157,7 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		Operations:          make([]any, 0),
 		SelfDestructed:      false,
 		InputData:           slices.Clone(inputData),
+		ConstructorArgsData: nil,
 		ReturnData:          nil,
 		ExecutedCode:        false,
 		CallValue:           value,
