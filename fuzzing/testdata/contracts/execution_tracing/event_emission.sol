@@ -14,7 +14,7 @@ contract TestContract {
 
         emit TestEvent(value);
         emit TestIndexedEvent(value);
-        emit TestMixedEvent(msg.sender, value, 7, "Hello from an event emission!");
+        emit TestMixedEvent(msg.sender, value, 7, "Hello from event args!");
         assert(x % 2 == 0);
     }
 }

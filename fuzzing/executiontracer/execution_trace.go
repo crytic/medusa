@@ -99,15 +99,15 @@ func (t *ExecutionTrace) generateCallFrameEnterString(callFrame *CallFrame) stri
 	// If we executed code, attach additional context such as the contract name, method, etc.
 	if callFrame.IsProxyCall() {
 		if callFrame.ExecutedCode {
-			return fmt.Sprintf("[%v] %v -> %v.%v(%v) (to=%v, value=%v, sender=%v)", callType, proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			return fmt.Sprintf("[%v] %v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", callType, proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CodeAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		} else {
-			return fmt.Sprintf("[%v] (to=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			return fmt.Sprintf("[%v] (addr=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		}
 	} else {
 		if callFrame.ExecutedCode {
-			return fmt.Sprintf("[%v] %v.%v(%v) (to=%v, value=%v, sender=%v)", callType, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			return fmt.Sprintf("[%v] %v.%v(%v) (addr=%v, value=%v, sender=%v)", callType, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		} else {
-			return fmt.Sprintf("[%v] (to=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			return fmt.Sprintf("[%v] (addr=%v, value=%v, sender=%v)", callType, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		}
 	}
 }

@@ -141,7 +141,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 }
 
 // captureEnteredCallFrame is a helper method used when a new call frame is entered to record information about it.
-func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, codeAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
+func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
 	// Create our call frame struct to track data for this call frame we entered.
 	callFrameData := &CallFrame{
 		SenderAddress:       fromAddress,
@@ -150,7 +150,7 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		ToContractAbi:       nil,
 		ToInitBytecode:      nil,
 		ToRuntimeBytecode:   nil,
-		CodeAddress:         codeAddress,
+		CodeAddress:         toAddress, // Note: Set temporarily, overwritten if code executes (in CaptureState).
 		CodeContractName:    "",
 		CodeContractAbi:     nil,
 		CodeRuntimeBytecode: nil,
@@ -165,23 +165,10 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 		ParentCallFrame:     t.currentCallFrame,
 	}
 
-	// Set our known information about the code we're executing.
+	// If this is a contract creation, set the init bytecode for this call frame to the input data.
 	if isContractCreation {
 		callFrameData.ToInitBytecode = inputData
-	} else {
-		callFrameData.ToRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.ToAddress)
 	}
-
-	// If we are performing a proxy call, we use code from another address (which we can expect to exist), and fetch
-	// that code, so we can later match the contract definition. Otherwise, we record the same bytecode as "to".
-	if callFrameData.CodeAddress != callFrameData.ToAddress {
-		callFrameData.CodeRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.CodeAddress)
-	} else {
-		callFrameData.CodeRuntimeBytecode = callFrameData.ToRuntimeBytecode
-	}
-
-	// Resolve our contract definitions on the call frame data, if they have not been.
-	t.resolveCallFrameContractDefinitions(callFrameData)
 
 	// Set our current call frame in our trace
 	if t.trace.TopLevelCallFrame == nil {
@@ -195,28 +182,28 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
 func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecodes.
-	callFrameData := t.currentCallFrame
-	if err == nil {
-		if callFrameData.ToRuntimeBytecode == nil {
-			callFrameData.ToRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.ToAddress)
+	if t.currentCallFrame.ToRuntimeBytecode == nil {
+		// As long as this isn't a failed contract creation, we should be able to fetch "to" byte code on exit.
+		if !t.currentCallFrame.IsContractCreation() || err == nil {
+			t.currentCallFrame.ToRuntimeBytecode = t.evm.StateDB.GetCode(t.currentCallFrame.ToAddress)
 		}
-		if callFrameData.CodeRuntimeBytecode == nil {
-			// Optimization: If the "to" and "code" addresses match, we can simply set our "code" already fetched "to"
-			// runtime bytecode.
-			if callFrameData.CodeAddress == callFrameData.ToAddress {
-				callFrameData.CodeRuntimeBytecode = callFrameData.ToRuntimeBytecode
-			} else {
-				callFrameData.CodeRuntimeBytecode = t.evm.StateDB.GetCode(callFrameData.CodeAddress)
-			}
+	}
+	if t.currentCallFrame.CodeRuntimeBytecode == nil {
+		// Optimization: If the "to" and "code" addresses match, we can simply set our "code" already fetched "to"
+		// runtime bytecode.
+		if t.currentCallFrame.CodeAddress == t.currentCallFrame.ToAddress {
+			t.currentCallFrame.CodeRuntimeBytecode = t.currentCallFrame.ToRuntimeBytecode
+		} else {
+			t.currentCallFrame.CodeRuntimeBytecode = t.evm.StateDB.GetCode(t.currentCallFrame.CodeAddress)
 		}
 	}
 
 	// Resolve our contract definitions on the call frame data, if they have not been.
-	t.resolveCallFrameContractDefinitions(callFrameData)
+	t.resolveCallFrameContractDefinitions(t.currentCallFrame)
 
 	// Set our information for this call frame
-	callFrameData.ReturnData = slices.Clone(output)
-	callFrameData.ReturnError = err
+	t.currentCallFrame.ReturnData = slices.Clone(output)
+	t.currentCallFrame.ReturnError = err
 
 	// We're exiting the current frame, so set our current call frame to the parent
 	t.currentCallFrame = t.currentCallFrame.ParentCallFrame
@@ -228,7 +215,7 @@ func (t *ExecutionTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	t.evm = env
 
 	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, to, input, create, value)
+	t.captureEnteredCallFrame(from, to, input, create, value)
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
@@ -243,7 +230,7 @@ func (t *ExecutionTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	t.callDepth++
 
 	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
+	t.captureEnteredCallFrame(from, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
 }
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
@@ -263,15 +250,25 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	}
 	t.onNextCaptureState = nil
 
-	// Obtain our current call frame.
-	callFrameData := t.currentCallFrame
+	// Now that we have executed some code, we have access to the VM scope. From this, we can populate more
+	// information about our call frame. If this is a delegate or proxy call, the sender/to/code addresses should
+	// be appropriately represented in this structure. The information populated earlier on frame enter represents
+	// the raw call data, before delegate transformations are applied, etc.
+	if !t.currentCallFrame.ExecutedCode {
+		t.currentCallFrame.SenderAddress = scope.Contract.CallerAddress
+		t.currentCallFrame.ToAddress = scope.Contract.Address()
+		if scope.Contract.CodeAddr != nil {
+			t.currentCallFrame.CodeAddress = *scope.Contract.CodeAddr
+		}
 
-	// Since we are executing an opcode, we can mark that we have executed code in this call frame
-	callFrameData.ExecutedCode = true
+		// Mark code as having executed in this scope, so we don't set these values again (as cheat codes may affect it).
+		// We also want to know if a given call scope executed code, or simply represented a value transfer call.
+		t.currentCallFrame.ExecutedCode = true
+	}
 
 	// If we encounter a SELFDESTRUCT operation, record the operation.
 	if op == vm.SELFDESTRUCT {
-		callFrameData.SelfDestructed = true
+		t.currentCallFrame.SelfDestructed = true
 	}
 
 	// If a log operation occurred, add a deferred operation to capture it.
