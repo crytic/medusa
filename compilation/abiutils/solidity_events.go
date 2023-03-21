@@ -5,7 +5,10 @@ import (
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-// UnpackEventAndValues takes a given contract ABI, and VM return values, and
+// UnpackEventAndValues takes a given contract ABI, and an emitted event log from VM, and attempts to find an
+// event definition for the log, and unpack its input values.
+// Returns the event definition and unpacked event input values, or nil for both if an event definition could not
+// be resolved, or values could not be unpacked.
 func UnpackEventAndValues(contractAbi *abi.ABI, eventLog *coreTypes.Log) (*abi.Event, []any) {
 	// If no ABI was given, no event data can be extracted.
 	if contractAbi == nil {

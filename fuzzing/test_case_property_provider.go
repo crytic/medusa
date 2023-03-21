@@ -78,7 +78,6 @@ func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method) bool {
 
 // checkPropertyTestFailed executes a given property test method to see if it returns a failed status. This is used to
 // facilitate testing of property test methods after every call the Fuzzer makes when testing call sequences.
-// The property test is executed over the state indicating by the provided state root hash.
 // A boolean indicating whether an execution trace should be captured and returned is provided to the method.
 // Returns a boolean indicating if the property test failed, an optional execution trace for the property test call,
 // or an error if one occurred.
