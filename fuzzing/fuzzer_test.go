@@ -318,6 +318,55 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 }
 
+// TestExecutionTraces runs tests to ensure that execution traces capture information
+// regarding assertion failures, revert reasons, etc.
+func TestExecutionTraces(t *testing.T) {
+	expectedMessagesPerTest := map[string][]string{
+		"testdata/contracts/execution_tracing/call_and_deployment_args.sol": {"Hello from deployment args!", "Hello from call args!"},
+		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(true)"},
+		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!"},
+		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
+		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},
+		"testdata/contracts/execution_tracing/revert_reasons.sol":           {"RevertingContract was called and reverted."},
+		"testdata/contracts/execution_tracing/self_destruct.sol":            {"[selfdestruct]", "[assertion failed]"},
+	}
+	for filePath, expectedTraceMessages := range expectedMessagesPerTest {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Obtain the last call
+				lastCall := failingSequence[len(failingSequence)-1]
+				assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+				// Get the execution trace message
+				executionTraceMsg := lastCall.ExecutionTrace.String()
+
+				// Verify it contains all expected strings
+				for _, expectedTraceMessage := range expectedTraceMessages {
+					assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+				}
+			},
+		})
+	}
+}
+
 // TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
 // config option is specified. It also runs the fuzzer without the option enabled to ensure they are not tested.
 func TestTestingScope(t *testing.T) {
