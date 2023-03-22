@@ -3,8 +3,10 @@ package fuzzing
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
+	"github.com/trailofbits/medusa/fuzzing/executiontracer"
 	"golang.org/x/exp/slices"
 	"math/big"
 	"strings"
@@ -76,47 +78,60 @@ func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method) bool {
 
 // checkPropertyTestFailed executes a given property test method to see if it returns a failed status. This is used to
 // facilitate testing of property test methods after every call the Fuzzer makes when testing call sequences.
-func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker, propertyTestMethod *contracts.DeployedContractMethod) (bool, error) {
+// A boolean indicating whether an execution trace should be captured and returned is provided to the method.
+// Returns a boolean indicating if the property test failed, an optional execution trace for the property test call,
+// or an error if one occurred.
+func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker, propertyTestMethod *contracts.DeployedContractMethod, trace bool) (bool, *executiontracer.ExecutionTrace, error) {
 	// Generate our ABI input data for the call. In this case, property test methods take no arguments, so the
 	// variadic argument list here is empty.
 	data, err := propertyTestMethod.Contract.CompiledContract().Abi.Pack(propertyTestMethod.Method.Name)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	// Call the underlying contract
+	// Create a call targeting our property test method
 	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the assertions.
 	msg := calls.NewCallMessage(worker.Fuzzer().senders[0], &propertyTestMethod.Address, 0, big.NewInt(0), worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, data)
 	msg.FillFromTestChainProperties(worker.chain)
-	res, err := worker.Chain().CallContract(msg)
+
+	// Execute the call. If we are tracing, we attach an execution tracer and obtain the result.
+	var executionResult *core.ExecutionResult
+	var executionTrace *executiontracer.ExecutionTrace
+	if trace {
+		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
+		executionResult, err = worker.Chain().CallContract(msg, nil, executionTracer)
+		executionTrace = executionTracer.Trace()
+	} else {
+		executionResult, err = worker.Chain().CallContract(msg, nil)
+	}
 	if err != nil {
-		return false, fmt.Errorf("failed to call property test method: %v", err)
+		return false, nil, fmt.Errorf("failed to call property test method: %v", err)
 	}
 
 	// If our property test method call failed, we flag a failed test.
-	if res.Failed() {
-		return true, nil
+	if executionResult.Failed() {
+		return true, nil, nil
 	}
 
 	// Decode our ABI outputs
-	retVals, err := propertyTestMethod.Method.Outputs.Unpack(res.Return())
+	retVals, err := propertyTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
-		return false, fmt.Errorf("failed to decode property test method return value: %v", err)
+		return false, nil, fmt.Errorf("failed to decode property test method return value: %v", err)
 	}
 
 	// We should have one return value.
 	if len(retVals) != 1 {
-		return false, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
+		return false, nil, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// The one return value should be a bool
 	propertyTestMethodPassed, ok := retVals[0].(bool)
 	if !ok {
-		return false, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
+		return false, nil, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
 	}
 
-	// Return our status from our property test method
-	return !propertyTestMethodPassed, nil
+	// Return our property test results
+	return !propertyTestMethodPassed, executionTrace, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
@@ -288,7 +303,7 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 
 		// Test our property test method (create a local copy to avoid loop overwriting the method)
 		workerPropertyTestMethod := workerPropertyTestMethod
-		failedPropertyTest, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
+		failedPropertyTest, _, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, false)
 		if err != nil {
 			return nil, err
 		}
@@ -309,12 +324,31 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 
 					// Then the shrink verifier simply ensures the previously failed property test fails
 					// for the shrunk sequence as well.
-					return t.checkPropertyTestFailed(worker, &workerPropertyTestMethod)
+					shrunkenSequenceFailedTest, _, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, false)
+					return shrunkenSequenceFailedTest, err
 				},
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-					// When we're finished shrinking, update our test state and report it finalized.
+					// When we're finished shrinking, attach an execution trace to the last call
+					if len(shrunkenCallSequence) > 0 {
+						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+						if err != nil {
+							return err
+						}
+					}
+
+					// Execute the property test a final time, this time obtaining an execution trace
+					shrunkenSequenceFailedTest, executionTrace, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, true)
+					if err != nil {
+						return err
+					}
+					if !shrunkenSequenceFailedTest {
+						return fmt.Errorf("property test provider did not fail property test on final shrunken sequence")
+					}
+
+					// Update our test state and report it finalized.
 					testCase.status = TestCaseStatusFailed
 					testCase.callSequence = &shrunkenCallSequence
+					testCase.propertyTestTrace = executionTrace
 					worker.Fuzzer().ReportTestCaseFinished(testCase)
 					return nil
 				},

@@ -398,6 +398,22 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 	}
 
+	// We have a finalized call sequence, re-execute it, so our current chain state is representative of post-execution.
+	_, err = calls.ExecuteCallSequence(fw.chain, optimizedSequence)
+	if err != nil {
+		return nil, err
+	}
+
+	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
+	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
+	// test providers choose to attach themselves.
+	if fw.fuzzer.config.Fuzzing.Testing.TraceAll {
+		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// After we finished shrinking, report our result and return it.
 	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
 	if err != nil {
