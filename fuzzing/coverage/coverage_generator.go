@@ -15,9 +15,7 @@ type ExpandedContractData struct {
 	coverageData codeCoverageData
 }
 
-// TODO document
-// NOTE at the moment this is a clustefuck of a function, we can take care of putting everything at the place it needs to be
-// once we know it works also there is a lot of looping
+// NOTE at the moment this is a clustefuck of a function
 func GenerateCoverageReport(coverageMaps *CoverageMaps, contractDefinitions []fuzzerTypes.Contract) {
 	// initialize map
 	coverageData := make(map[common.Hash]*ExpandedContractData)

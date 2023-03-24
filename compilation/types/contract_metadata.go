@@ -47,6 +47,9 @@ func ExtractContractMetadata(bytecode []byte) *ContractMetadata {
 	return nil
 }
 
+// This utility function takes some bytecode as an input and returns the same bytecode without the metadata
+// it is useful because we do not want to parse bytecode that includes metadata as the amount of elements
+// in the source map is the same as the number of EVM instructions in the bytecode
 func RemoveContractMetadata(bytecode []byte) []byte {
 	for _, metadataHashPrefix := range metadataHashPrefixes {
 		metadataOffset := bytes.LastIndex(bytecode, metadataHashPrefix[:])

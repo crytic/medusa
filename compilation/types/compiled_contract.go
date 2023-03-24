@@ -178,21 +178,13 @@ func ParseSourceMap(sourceMap string) []SrcMapElement {
 				for i, value := range fields {
 					if i == 0 && value != "" {
 						previous.Offset = value
-					}
-
-					if i == 1 && value != "" {
+					} else if i == 1 && value != "" {
 						previous.Length = value
-					}
-
-					if i == 2 && value != "" {
+					} else if i == 2 && value != "" {
 						previous.FileID = value
-					}
-
-					if i == 3 && value != "" {
+					} else if i == 3 && value != "" {
 						previous.JumpType = value
-					}
-
-					if i == 4 && value != "" {
+					} else if i == 4 && value != "" {
 						previous.ModPath = value
 					}
 				}

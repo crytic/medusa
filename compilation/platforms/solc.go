@@ -79,8 +79,6 @@ func (s *SolcCompilationConfig) SetSolcOutputOptions(v *semver.Version) string {
 	}
 }
 func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
-	fmt.Printf("USING SOLC ANYWAY\n")
-
 	// Obtain our solc version string
 	v, err := GetSystemSolcVersion()
 	if err != nil {
@@ -109,7 +107,6 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
-		fmt.Println("sources", sources)
 		if sourcesMap, ok := sources.(map[string]any); ok {
 			for name, source := range sourcesMap {
 				// Treat our source as a key-value lookup
@@ -165,8 +162,10 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		// NOTE: we might be able to skip this step, looks like contract.Info contains the souce file
 		// it contains it as a string though which might not be ideal for coverage generation
 		// as the source map maps to bytes in the source code.
-		sourceCode := utils.ReadSourceFile(sourcePath)
-
+		sourceCode, err := utils.ReadSourceFile(sourcePath)
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to read source file '%s'\n", sourcePath)
+		}
 		// transform source code into lines
 		sourceLines := types.SplitSourceFileIntoLines(sourceCode)
 

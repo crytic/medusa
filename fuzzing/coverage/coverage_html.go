@@ -6,22 +6,12 @@ import (
 	"os"
 )
 
-/*
-<!DOCTYPE html>
-<html>
-
-	<body>
-	    <p> {{.Code}} </p>
-	</body>
-
-</html>
-*/
-
 type Page struct {
 	Code string
 }
 
 // Uses an html template to generate the coverage report for a file
+// NOTE does not work as it is, it is just a placeholder
 func writeCoverageFile(path string, name string, coverageData []byte) {
 	tmpl, err := template.New("layout.html").ParseFiles("layout.html")
 	if err != nil {
