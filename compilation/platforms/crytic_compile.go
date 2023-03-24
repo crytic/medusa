@@ -220,13 +220,34 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
 			}
 
+			// read source code from file
+			// NOTE: we might be able to skip this step, looks like contract.Info contains the souce file
+			// it contains it as a string though which might not be ideal for coverage generation
+			// as the source map maps to bytes in the source code.
+			sourceCode, err := utils.ReadSourceFile(sourcePath)
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to read source file '%s'\n", sourcePath)
+			}
+			// transform source code into lines
+			sourceLines := types.SplitSourceFileIntoLines(sourceCode)
+
+			// parse the runtime bytecode into its EVM instructions
+			parsedRuntimeBytecode := types.ParseBytecode(types.RemoveContractMetadata(runtimeBytecode))
+
+			// tansform runtime source map into easily manageable data
+			parsedRuntimeSrcMap := types.ParseSourceMap(contract.SrcMapRuntime)
+
 			// Add contract details
 			compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
-				Abi:             *contractAbi,
-				InitBytecode:    initBytecode,
-				RuntimeBytecode: runtimeBytecode,
-				SrcMapsInit:     contract.SrcMap,
-				SrcMapsRuntime:  contract.SrcMapRuntime,
+				Abi:                   *contractAbi,
+				InitBytecode:          initBytecode,
+				RuntimeBytecode:       runtimeBytecode,
+				ParsedRuntimeBytecode: parsedRuntimeBytecode,
+				SrcMapsInit:           contract.SrcMap,
+				SrcMapsRuntime:        contract.SrcMapRuntime,
+				ParsedRuntimeSrcMap:   parsedRuntimeSrcMap,
+				SourceCode:            sourceCode,
+				SourceLines:           sourceLines,
 			}
 		}
 
