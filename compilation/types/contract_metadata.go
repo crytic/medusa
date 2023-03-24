@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+
 	"github.com/fxamacker/cbor"
 )
 
@@ -44,6 +45,17 @@ func ExtractContractMetadata(bytecode []byte) *ContractMetadata {
 		}
 	}
 	return nil
+}
+
+func RemoveContractMetadata(bytecode []byte) []byte {
+	for _, metadataHashPrefix := range metadataHashPrefixes {
+		metadataOffset := bytes.LastIndex(bytecode, metadataHashPrefix[:])
+
+		if metadataOffset != -1 {
+			return bytecode[:metadataOffset-1]
+		}
+	}
+	return bytecode
 }
 
 // ExtractBytecodeHash extracts the bytecode hash from given contract metadata and returns the bytes representing the

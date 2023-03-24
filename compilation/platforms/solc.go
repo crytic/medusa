@@ -79,6 +79,8 @@ func (s *SolcCompilationConfig) SetSolcOutputOptions(v *semver.Version) string {
 	}
 }
 func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
+	fmt.Printf("USING SOLC ANYWAY\n")
+
 	// Obtain our solc version string
 	v, err := GetSystemSolcVersion()
 	if err != nil {
@@ -107,6 +109,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
+		fmt.Println("sources", sources)
 		if sourcesMap, ok := sources.(map[string]any); ok {
 			for name, source := range sourcesMap {
 				// Treat our source as a key-value lookup
@@ -135,6 +138,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
 		nameSplit := strings.Split(name, ":")
@@ -157,13 +161,32 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
 		}
 
+		// read source code from file
+		// NOTE: we might be able to skip this step, looks like contract.Info contains the souce file
+		// it contains it as a string though which might not be ideal for coverage generation
+		// as the source map maps to bytes in the source code.
+		sourceCode := utils.ReadSourceFile(sourcePath)
+
+		// transform source code into lines
+		sourceLines := types.SplitSourceFileIntoLines(sourceCode)
+
+		// parse the runtime bytecode into its EVM instructions
+		parsedRuntimeBytecode := types.ParseBytecode(types.RemoveContractMetadata(runtimeBytecode))
+
+		// tansform runtime source map into easily manageable data
+		parsedRuntimeSrcMap := types.ParseSourceMap(contract.Info.SrcMapRuntime)
+
 		// Construct our compiled contract
 		compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
-			Abi:             *contractAbi,
-			InitBytecode:    initBytecode,
-			RuntimeBytecode: runtimeBytecode,
-			SrcMapsInit:     contract.Info.SrcMap.(string),
-			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
+			Abi:                   *contractAbi,
+			InitBytecode:          initBytecode,
+			RuntimeBytecode:       runtimeBytecode,
+			ParsedRuntimeBytecode: parsedRuntimeBytecode,
+			SrcMapsInit:           contract.Info.SrcMap.(string),
+			SrcMapsRuntime:        contract.Info.SrcMapRuntime,
+			ParsedRuntimeSrcMap:   parsedRuntimeSrcMap,
+			SourceCode:            sourceCode,
+			SourceLines:           sourceLines,
 		}
 	}
 

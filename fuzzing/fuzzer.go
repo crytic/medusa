@@ -619,4 +619,7 @@ func (f *Fuzzer) printExitingResults() {
 	// Print our final tally of test statuses.
 	fmt.Printf("\n")
 	fmt.Printf("%d test(s) passed, %d test(s) failed\n", testCountPassed, testCountFailed)
+
+	// TODO - Generate coverage report
+	// coverage.GenerateCoverageReport(f.coverageMaps, f.contractDefinitions)
 }
