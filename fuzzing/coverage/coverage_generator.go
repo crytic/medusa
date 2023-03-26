@@ -3,20 +3,20 @@ package coverage
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trailofbits/medusa/compilation/types"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // NOTE we probably should figure out a way to structure the contracts so that the coverage appears in the definitions themselves
 // that said contract  definitions are probably not the best place as each definition represents "some contract deployment"
 // and we could have multiple definitions of the same contract (I think)
 type ExpandedContractData struct {
-	ContractDefinition fuzzerTypes.Contract
+	ContractDefinition contracts.Contract
 
 	coverageData codeCoverageData
 }
 
 // NOTE at the moment this is a clustefuck of a function
-func GenerateCoverageReport(coverageMaps *CoverageMaps, contractDefinitions []fuzzerTypes.Contract) {
+func GenerateCoverageReport(coverageMaps *CoverageMaps, contractDefinitions []contracts.Contract) {
 	// initialize map
 	coverageData := make(map[common.Hash]*ExpandedContractData)
 

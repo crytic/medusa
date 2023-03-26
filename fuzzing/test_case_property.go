@@ -3,16 +3,19 @@ package fuzzing
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
+	"github.com/trailofbits/medusa/fuzzing/executiontracer"
 	"strings"
 )
 
 // PropertyTestCase describes a test being run by a PropertyTestCaseProvider.
 type PropertyTestCase struct {
-	status         TestCaseStatus
-	targetContract *fuzzerTypes.Contract
-	targetMethod   abi.Method
-	callSequence   *fuzzerTypes.CallSequence
+	status            TestCaseStatus
+	targetContract    *fuzzerTypes.Contract
+	targetMethod      abi.Method
+	callSequence      *calls.CallSequence
+	propertyTestTrace *executiontracer.ExecutionTrace
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
@@ -22,7 +25,7 @@ func (t *PropertyTestCase) Status() TestCaseStatus {
 
 // CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
 // This should be nil if the result is not related to the CallSequence.
-func (t *PropertyTestCase) CallSequence() *fuzzerTypes.CallSequence {
+func (t *PropertyTestCase) CallSequence() *calls.CallSequence {
 	return t.callSequence
 }
 
@@ -36,10 +39,14 @@ func (t *PropertyTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
 		return fmt.Sprintf(
-			"Test \"%s.%s\" failed after the following call sequence:\n%s",
+			"Test \"%s.%s\" failed after the following call sequence:\n%s\n"+
+				"Property test \"%s.%s\" execution:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),
+			t.targetContract.Name(),
+			t.targetMethod.Sig,
+			t.propertyTestTrace.String(),
 		)
 	}
 	return ""

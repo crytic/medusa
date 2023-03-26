@@ -11,7 +11,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 - ✔️**Assertion and property testing**: built-in support for writing basic Solidity property tests and assertion tests
 - ✔️**Mutational value generation**: fed by compilation and runtime values.
 - ✔️**Coverage collecting**: Coverage increasing call sequences are stored in the corpus
-- ❌ **Coverage guided**: Coverage increasing call sequences from the corpus are mutated to further guide the fuzzing campaign
+- ✔️**Coverage guided fuzzing**: Coverage increasing call sequences from the corpus are mutated to further guide the fuzzing campaign
 - ✔️**Extensible low-level testing API** through events and hooks provided throughout the fuzzer, workers, and test chains.
 - ❌ **Extensible high-level testing API** allowing for the addition of per-contract or global post call/event property tests with minimal effort.
 
@@ -40,7 +40,7 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
-We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
 
 ### Command-line only
 
@@ -83,7 +83,7 @@ This will use the `medusa.json` configuration in the current directory and begin
 
 ## Running Unit Tests
 
-First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc`, `truffle`, and `hardhat` available on your system.
+First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc` (version >=0.8.7), `truffle`, and `hardhat` available on your system.
 
 - From the root of the repository, invoke `go test -v ./...` on through command-line to run tests from all packages at or below the root.
   - Or enter each package directory to run `go test -v .` to test the immediate package.

@@ -4,10 +4,15 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/trailofbits/medusa/utils/randomutils"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,9 +20,8 @@ import (
 	"github.com/trailofbits/medusa/chain"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"github.com/trailofbits/medusa/fuzzing/config"
+	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"github.com/trailofbits/medusa/fuzzing/corpus"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
@@ -37,7 +41,7 @@ type Fuzzer struct {
 	// deployer describes an account address used to deploy contracts in fuzzing campaigns.
 	deployer common.Address
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
-	contractDefinitions []fuzzerTypes.Contract
+	contractDefinitions fuzzerTypes.Contracts
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -47,8 +51,10 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
-	// coverageMaps describes the total code coverage known to be achieved across the fuzzing campaign.
-	coverageMaps *coverage.CoverageMaps
+
+	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
+	// used by the Fuzzer's subcomponents are derived from this one.
+	randomProvider *rand.Rand
 
 	// testCases contains every TestCase registered with the Fuzzer.
 	testCases []TestCase
@@ -91,15 +97,14 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		senders:             senders,
 		deployer:            deployer,
 		baseValueSet:        valuegeneration.NewValueSet(),
-		contractDefinitions: make([]fuzzerTypes.Contract, 0),
+		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
-			NewValueGeneratorFunc: defaultNewValueGeneratorFunc,
-			ChainSetupFunc:        chainSetupFromCompilations,
-			CallSequenceTestFuncs: make([]CallSequenceTestFunc, 0),
+			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
+			ChainSetupFunc:                     chainSetupFromCompilations,
+			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 		},
-		coverageMaps: nil,
 	}
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
@@ -134,7 +139,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 }
 
 // ContractDefinitions exposes the contract definitions registered with the Fuzzer.
-func (f *Fuzzer) ContractDefinitions() []fuzzerTypes.Contract {
+func (f *Fuzzer) ContractDefinitions() fuzzerTypes.Contracts {
 	return slices.Clone(f.contractDefinitions)
 }
 
@@ -226,7 +231,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
-				f.contractDefinitions = append(f.contractDefinitions, *contractDefinition)
+				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
 	}
@@ -251,8 +256,8 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		Balance: initBalance,
 	}
 
-	// Create our test chain with our basic allocations.
-	testChain, err := chain.NewTestChain(genesisAlloc)
+	// Create our test chain with our basic allocations and passed medusa's chain configuration
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
@@ -264,29 +269,78 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// Verify contract deployment order is not empty.
+	// Verify contract deployment order is not empty. If it's empty, but we only have one contract definition,
+	// we can infer the deployment order. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
-		return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+		if len(fuzzer.contractDefinitions) == 1 {
+			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
+		} else {
+			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+		}
 	}
 
 	// Loop for all contracts to deploy
+	deployedContractAddr := make(map[string]common.Address)
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				// If the contract has no constructor args, deploy it. Only these contracts are supported for now.
-				// TODO: We can add logic for deploying contracts with constructor arguments here.
-				if len(contract.CompiledContract().Abi.Constructor.Inputs) == 0 {
-					// Deploy the contract using our deployer address.
-					_, _, err := testChain.DeployContract(contract.CompiledContract(), fuzzer.deployer)
+				args := make([]any, 0)
+				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
+					if !ok {
+						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+					}
+					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
+						jsonArgs, deployedContractAddr)
 					if err != nil {
 						return err
 					}
+					args = decoded
 				}
 
-				// Set our found flag to true.
+				// Constructor our deployment message/tx data field
+				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
+				if err != nil {
+					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+				}
+
+				// Create a message to represent our contract deployment (we let deployments consume the whole block
+				// gas limit rather than use tx gas limit)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+				msg.FillFromTestChainProperties(testChain)
+
+				// Create a new pending block we'll commit to chain
+				block, err := testChain.PendingBlockCreate()
+				if err != nil {
+					return err
+				}
+
+				// Add our transaction to the block
+				err = testChain.PendingBlockAddTx(msg)
+				if err != nil {
+					return err
+				}
+
+				// Commit the pending block to the chain, so it becomes the new head.
+				err = testChain.PendingBlockCommit()
+				if err != nil {
+					return err
+				}
+
+				// Ensure our transaction succeeded
+				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+				}
+
+				// Record our deployed contract so the next config-specified constructor args can reference this
+				// contract by name.
+				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
+
+				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
+				// inner loop to process the next contract to deploy in the outer loop.
 				found = true
 				break
 			}
@@ -300,27 +354,52 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultNewValueGeneratorFunc is a NewValueGeneratorFunc which creates a valuegeneration.MutatingValueGenerator with a
-// default configuration. Returns the generator or an error, if one occurs.
-func defaultNewValueGeneratorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+// defaultNewCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
+// CallSequenceGeneratorConfig with a default configuration. Returns the config or an error, if one occurs.
+func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
+	// Create the underlying value generator for the worker and its sequence generator.
 	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
-		MinMutationRounds: 0,
-		MaxMutationRounds: 1,
-		RandomAddressBias: 0.5,
-		RandomIntegerBias: 0.5,
-		RandomStringBias:  0.5,
-		RandomBytesBias:   0.5,
+		MinMutationRounds:               0,
+		MaxMutationRounds:               1,
+		GenerateRandomAddressBias:       0.5,
+		GenerateRandomIntegerBias:       0.5,
+		GenerateRandomStringBias:        0.5,
+		GenerateRandomBytesBias:         0.5,
+		MutateAddressProbability:        0.1,
+		MutateArrayStructureProbability: 0.1,
+		MutateBoolProbability:           0.1,
+		MutateBytesProbability:          0.1,
+		MutateBytesGenerateNewBias:      0.45,
+		MutateFixedBytesProbability:     0.1,
+		MutateStringProbability:         0.1,
+		MutateStringGenerateNewBias:     0.7,
+		MutateIntegerProbability:        0.1,
+		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
-			RandomArrayMinSize:  0,
-			RandomArrayMaxSize:  100,
-			RandomBytesMinSize:  0,
-			RandomBytesMaxSize:  100,
-			RandomStringMinSize: 0,
-			RandomStringMaxSize: 100,
+			GenerateRandomArrayMinSize:  0,
+			GenerateRandomArrayMaxSize:  100,
+			GenerateRandomBytesMinSize:  0,
+			GenerateRandomBytesMaxSize:  100,
+			GenerateRandomStringMinSize: 0,
+			GenerateRandomStringMaxSize: 100,
 		},
 	}
-	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet)
-	return valueGenerator, nil
+	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet, randomProvider)
+
+	// Create a sequence generator config which uses the created value generator.
+	sequenceGenConfig := &CallSequenceGeneratorConfig{
+		NewSequenceProbability:                   0.3,
+		RandomUnmodifiedCorpusHeadWeight:         800,
+		RandomUnmodifiedCorpusTailWeight:         100,
+		RandomUnmodifiedSpliceAtRandomWeight:     200,
+		RandomUnmodifiedInterleaveAtRandomWeight: 100,
+		RandomMutatedCorpusHeadWeight:            80,
+		RandomMutatedCorpusTailWeight:            10,
+		RandomMutatedSpliceAtRandomWeight:        20,
+		RandomMutatedInterleaveAtRandomWeight:    10,
+		ValueGenerator:                           valueGenerator,
+	}
+	return sequenceGenConfig, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.
@@ -333,10 +412,17 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 	// Workers are "reset" when they hit some config-defined limit. They are destroyed and recreated at the same index.
 	// For now, we create our available index queue before initializing some providers and entering our main loop.
-	availableWorkerIndexes := make([]int, f.config.Fuzzing.Workers)
+	type availableWorkerSlot struct {
+		index          int
+		randomProvider *rand.Rand
+	}
+	availableWorkerSlotQueue := make([]availableWorkerSlot, f.config.Fuzzing.Workers)
 	availableWorkerIndexedLock := sync.Mutex{}
-	for i := 0; i < len(availableWorkerIndexes); i++ {
-		availableWorkerIndexes[i] = i
+	for i := 0; i < len(availableWorkerSlotQueue); i++ {
+		availableWorkerSlotQueue[i] = availableWorkerSlot{
+			index:          i,
+			randomProvider: randomutils.ForkRandomProvider(f.randomProvider),
+		}
 	}
 
 	// Define a flag that indicates whether we have not cancelled o
@@ -352,17 +438,17 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 		// Pop a worker index off of our queue
 		availableWorkerIndexedLock.Lock()
-		workerIndex := availableWorkerIndexes[0]
-		availableWorkerIndexes = availableWorkerIndexes[1:]
+		workerSlotInfo := availableWorkerSlotQueue[0]
+		availableWorkerSlotQueue = availableWorkerSlotQueue[1:]
 		availableWorkerIndexedLock.Unlock()
 
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
 		// keeping us at our desired thread capacity. If we encounter an error, we store it and continue
 		// processing the cleanup logic to exit gracefully.
-		go func(workerIndex int) {
+		go func(workerSlotInfo availableWorkerSlot) {
 			// Create a new worker for this fuzzing.
-			worker, workerCreatedErr := newFuzzerWorker(f, workerIndex)
-			f.workers[workerIndex] = worker
+			worker, workerCreatedErr := newFuzzerWorker(f, workerSlotInfo.index, workerSlotInfo.randomProvider)
+			f.workers[workerSlotInfo.index] = worker
 			if err == nil && workerCreatedErr != nil {
 				err = workerCreatedErr
 			}
@@ -389,7 +475,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 			// Free our worker id before unblocking our channel, as a free one will be expected.
 			availableWorkerIndexedLock.Lock()
-			availableWorkerIndexes = append(availableWorkerIndexes, workerIndex)
+			availableWorkerSlotQueue = append(availableWorkerSlotQueue, workerSlotInfo)
 			availableWorkerIndexedLock.Unlock()
 
 			// Publish an event indicating we destroyed a worker.
@@ -400,7 +486,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
 			<-threadReserveChannel
-		}(workerIndex)
+		}(workerSlotInfo)
 	}
 
 	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
@@ -413,7 +499,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	for {
 		// Obtain the count of free workers.
 		availableWorkerIndexedLock.Lock()
-		freeWorkers := len(availableWorkerIndexes)
+		freeWorkers := len(availableWorkerSlotQueue)
 		availableWorkerIndexedLock.Unlock()
 
 		// We keep waiting until every worker is free
@@ -432,6 +518,9 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 func (f *Fuzzer) Start() error {
 	// Define our variable to catch errors
 	var err error
+
+	// While we're fuzzing, we'll want to have an initialized random provider.
+	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Create our running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
@@ -470,7 +559,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	f.coverageMaps, err = corpus.MeasureCorpusCoverage(baseTestChain, f.corpus)
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
 		return err
 	}
@@ -526,7 +615,10 @@ func (f *Fuzzer) printMetricsLoop() {
 	startTime := time.Now()
 
 	// Define cached variables for our metrics to calculate deltas.
-	var lastCallsTested, lastSequencesTested, lastWorkerStartupCount uint64
+	lastCallsTested := big.NewInt(0)
+	lastSequencesTested := big.NewInt(0)
+	lastWorkerStartupCount := big.NewInt(0)
+
 	lastPrintedTime := time.Time{}
 	for !utils.CheckContextDone(f.ctx) {
 		// Obtain our metrics
@@ -539,12 +631,13 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, worker resets: %d/s\n",
+			"fuzz: elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, cov: %d\n",
 			time.Since(startTime).Round(time.Second),
 			callsTested,
-			uint64(float64(callsTested-lastCallsTested)/secondsSinceLastUpdate),
-			uint64(float64(sequencesTested-lastSequencesTested)/secondsSinceLastUpdate),
-			uint64(float64(workerStartupCount-lastWorkerStartupCount)/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
+			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
+			f.corpus.ActiveCallSequenceCount(),
 		)
 
 		// Update our delta tracking metrics
@@ -555,7 +648,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// If we reached our transaction threshold, halt
 		testLimit := f.config.Fuzzing.TestLimit
-		if testLimit > 0 && callsTested >= testLimit {
+		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
 			fmt.Printf("transaction test limit reached, halting now ...\n")
 			f.Stop()
 			break

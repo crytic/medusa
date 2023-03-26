@@ -1,5 +1,7 @@
 package fuzzing
 
+import "math/big"
+
 // FuzzerMetrics represents a struct tracking metrics for a Fuzzer run.
 type FuzzerMetrics struct {
 	// workerMetrics describes the metrics for each individual worker. This expands as needed and some slots may be nil
@@ -10,13 +12,13 @@ type FuzzerMetrics struct {
 // fuzzerWorkerMetrics represents metrics for a single FuzzerWorker instance.
 type fuzzerWorkerMetrics struct {
 	// sequencesTested describes the amount of sequences of transactions which tests were run against.
-	sequencesTested uint64
+	sequencesTested *big.Int
 
 	// callsTested describes the amount of transactions/calls the fuzzer executed and ran tests against.
-	callsTested uint64
+	callsTested *big.Int
 
 	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
-	workerStartupCount uint64
+	workerStartupCount *big.Int
 }
 
 // newFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
@@ -26,33 +28,38 @@ func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	metrics := FuzzerMetrics{
 		workerMetrics: make([]fuzzerWorkerMetrics, workerCount),
 	}
+	for i := 0; i < len(metrics.workerMetrics); i++ {
+		metrics.workerMetrics[i].sequencesTested = big.NewInt(0)
+		metrics.workerMetrics[i].callsTested = big.NewInt(0)
+		metrics.workerMetrics[i].workerStartupCount = big.NewInt(0)
+	}
 	return &metrics
 }
 
 // SequencesTested returns the amount of sequences of transactions the fuzzer executed and ran tests against.
-func (m *FuzzerMetrics) SequencesTested() uint64 {
-	sequencesTested := uint64(0)
+func (m *FuzzerMetrics) SequencesTested() *big.Int {
+	sequencesTested := big.NewInt(0)
 	for _, workerMetrics := range m.workerMetrics {
-		sequencesTested += workerMetrics.sequencesTested
+		sequencesTested.Add(sequencesTested, workerMetrics.sequencesTested)
 	}
 	return sequencesTested
 }
 
 // CallsTested returns the amount of transactions/calls the fuzzer executed and ran tests against.
-func (m *FuzzerMetrics) CallsTested() uint64 {
-	transactionsTested := uint64(0)
+func (m *FuzzerMetrics) CallsTested() *big.Int {
+	transactionsTested := big.NewInt(0)
 	for _, workerMetrics := range m.workerMetrics {
-		transactionsTested += workerMetrics.callsTested
+		transactionsTested.Add(transactionsTested, workerMetrics.callsTested)
 	}
 	return transactionsTested
 }
 
 // WorkerStartupCount describes the amount of times the worker was spawned for this index. Workers are periodically
 // reset.
-func (m *FuzzerMetrics) WorkerStartupCount() uint64 {
-	workerStartupCount := uint64(0)
+func (m *FuzzerMetrics) WorkerStartupCount() *big.Int {
+	workerStartupCount := big.NewInt(0)
 	for _, workerMetrics := range m.workerMetrics {
-		workerStartupCount += workerMetrics.workerStartupCount
+		workerStartupCount.Add(workerStartupCount, workerMetrics.workerStartupCount)
 	}
 	return workerStartupCount
 }

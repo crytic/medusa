@@ -2,13 +2,11 @@ package coverage
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/chain/types"
 	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"math/big"
-	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
@@ -17,7 +15,7 @@ const coverageTracerResultsKey = "CoverageTracerResults"
 
 // GetCoverageTracerResults obtains CoverageMaps stored by a CoverageTracer from message results. This is nil if
 // no CoverageMaps were recorded by a tracer (e.g. CoverageTracer was not attached during this message execution).
-func GetCoverageTracerResults(messageResults *types.CallMessageResults) *CoverageMaps {
+func GetCoverageTracerResults(messageResults *types.MessageResults) *CoverageMaps {
 	// Try to obtain the results the tracer should've stored.
 	if genericResult, ok := messageResults.AdditionalResults[coverageTracerResultsKey]; ok {
 		if castedResult, ok := genericResult.(*CoverageMaps); ok {
@@ -30,7 +28,7 @@ func GetCoverageTracerResults(messageResults *types.CallMessageResults) *Coverag
 }
 
 // RemoveCoverageTracerResults removes CoverageMaps stored by a CoverageTracer from message results.
-func RemoveCoverageTracerResults(messageResults *types.CallMessageResults) {
+func RemoveCoverageTracerResults(messageResults *types.MessageResults) {
 	delete(messageResults.AdditionalResults, coverageTracerResultsKey)
 }
 
@@ -97,7 +95,7 @@ func (t *CoverageTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// If we didn't encounter an error in the end, we commit all our coverage maps to the final coverage map.
 	// If we encountered an error, we reverted, so we don't consider them.
 	if err == nil {
@@ -181,7 +179,7 @@ func (t *CoverageTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Store our tracer results.
 	results.AdditionalResults[coverageTracerResultsKey] = t.coverageMaps
 }
