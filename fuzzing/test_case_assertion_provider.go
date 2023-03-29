@@ -1,15 +1,12 @@
 package fuzzing
 
 import (
-	"bytes"
+	"github.com/trailofbits/medusa/compilation/abiutils"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"golang.org/x/exp/slices"
-	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
@@ -53,45 +50,9 @@ func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
-// isAssertionVMError indicates whether a provided execution returned from the EVM is due to a failed assert(...)
-// statement.
-func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionResult) bool {
-	// See if the error can be cased to an invalid opcode error. This happens in Solidity <0.8.0
-	_, hitInvalidOpcode := result.Err.(*vm.ErrInvalidOpCode)
-	if hitInvalidOpcode {
-		return true
-	}
-
-	// Otherwise, in Solidity >0.8.0, we have asserts working as reverts now, but with special return data.
-	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
-
-	// Verify we have a revert, and our return data fits exactly the selector + uint256
-	if result.Err == vm.ErrExecutionReverted && len(result.ReturnData) == 4+32 {
-		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
-		uintType, _ := abi.NewType("uint256", "", nil)
-		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-			{Name: "", Type: uintType, Indexed: false},
-		}, abi.Arguments{})
-
-		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Equal(result.ReturnData[:4], panicReturnDataAbi.ID) {
-			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
-
-			// If they unpacked without issue, read the panic code. We expect a panic code of 1.
-			if err == nil && len(values) > 0 {
-				panicCode := values[0].(*big.Int)
-				if panicCode.Cmp(big.NewInt(1)) == 0 {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
 // checkAssertionFailures checks the results of the last call for assertion failures.
 // Returns the method ID, a boolean indicating if an assertion test failed, or an error if one occurs.
-func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker, callSequence calls.CallSequence) (*contracts.ContractMethodID, bool, error) {
+func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.CallSequence) (*contracts.ContractMethodID, bool, error) {
 	// If we have an empty call sequence, we cannot have an assertion failure
 	if len(callSequence) == 0 {
 		return nil, false, nil
@@ -106,9 +67,15 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an assertion error.
-	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult)
+	// Try to unpack our error and return data for a panic code and verify it matches the "assert failed" panic code.
+	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
+	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
+	// have a panic code.
+	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
+	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
+	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed
 
-	return &methodId, encounteredAssertionVMError, nil
+	return &methodId, encounteredAssertionFailure, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
@@ -208,7 +175,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Obtain the method ID for the last call and check if it encountered assertion failures.
-	methodId, testFailed, err := t.checkAssertionFailures(worker, callSequence)
+	methodId, testFailed, err := t.checkAssertionFailures(callSequence)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +202,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 		shrinkRequest := ShrinkCallSequenceRequest{
 			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
-				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(worker, shrunkenCallSequence)
+				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(shrunkenCallSequence)
 				if err != nil {
 					return false, err
 				}
@@ -244,7 +211,15 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
 			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-				// When we're finished shrinking, update our test state and report it finalized.
+				// When we're finished shrinking, attach an execution trace to the last call
+				if len(shrunkenCallSequence) > 0 {
+					err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+					if err != nil {
+						return err
+					}
+				}
+
+				// Update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
 				worker.Fuzzer().ReportTestCaseFinished(testCase)

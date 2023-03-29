@@ -94,6 +94,11 @@ type TestingConfig struct {
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
 
+	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
+	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
+	// even if this option is not enabled.
+	TraceAll bool `json:"traceAll"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 

@@ -7,7 +7,6 @@ interface CheatCodes {
     function toString(bytes memory) external returns (string memory);
 }
 
-// Source for test case: https://book.getfoundry.sh/cheatcodes/to-string
 contract TestContract {
     CheatCodes cheats;
 
