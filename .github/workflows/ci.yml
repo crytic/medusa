@@ -32,12 +32,26 @@ jobs:
       - name: "Build medusa"
         run: go build -v ./...
 
-      - name: Upload artifact
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v3
         with:
           name: medusa-${{ runner.os }}
           path: medusa
 
+      - name: Upload artifact (Mac)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v3
+        with:
+          name: medusa-${{ runner.os }}
+          path: medusa
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: medusa-${{ runner.os }}
+          path: medusa.exe
   lint:
     runs-on: ubuntu-latest
 
