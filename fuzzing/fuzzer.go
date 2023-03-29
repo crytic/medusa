@@ -471,7 +471,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	working := !utils.CheckContextDone(f.ctx)
 
 	// Log that we are about to create the workers and start fuzzing
-	f.logger.Info(fmt.Sprintf("Creating %d workers ...\n", f.config.Fuzzing.Workers), nil)
+	f.logger.Info(fmt.Sprintf("Creating %d workers ...", f.config.Fuzzing.Workers), nil)
 	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
@@ -576,7 +576,7 @@ func (f *Fuzzer) Start() error {
 	// Set up the corpus
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
-		f.logger.Info("failed to create the corpus", map[string]any{"error": err})
+		f.logger.Error("failed to create the corpus", map[string]any{"error": err})
 		return err
 	}
 
@@ -592,21 +592,21 @@ func (f *Fuzzer) Start() error {
 	// Create our test chain
 	baseTestChain, err := f.createTestChain()
 	if err != nil {
-		f.logger.Info("failed to create the test chain", map[string]any{"error": err})
+		f.logger.Error("failed to create the test chain", map[string]any{"error": err})
 		return err
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
-		f.logger.Info("failed to initialize the test chain", map[string]any{"error": err})
+		f.logger.Error("failed to initialize the test chain", map[string]any{"error": err})
 		return err
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
-		f.logger.Info("failed to initialize the corpus", map[string]any{"error": err})
+		f.logger.Error("failed to initialize the corpus", map[string]any{"error": err})
 		return err
 	}
 
@@ -616,14 +616,14 @@ func (f *Fuzzer) Start() error {
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
-		f.logger.Info("FuzzerStarting event subscriber returned an error", map[string]any{"error": err})
+		f.logger.Error("FuzzerStarting event subscriber returned an error", map[string]any{"error": err})
 		return err
 	}
 
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 	if err != nil {
-		f.logger.Info("encountered an error in the main fuzzing loop", map[string]any{"error": err})
+		f.logger.Error("encountered an error in the main fuzzing loop", map[string]any{"error": err})
 	}
 
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
@@ -632,7 +632,7 @@ func (f *Fuzzer) Start() error {
 	// previous error, as we don't want to lose corpus entries.
 	if f.config.Fuzzing.CoverageEnabled {
 		corpusFlushErr := f.corpus.Flush()
-		if err == nil {
+		if err == nil && corpusFlushErr != nil {
 			err = corpusFlushErr
 			f.logger.Info("failed to flush the corpus", map[string]any{"error": err})
 		}
@@ -642,7 +642,7 @@ func (f *Fuzzer) Start() error {
 	fuzzerStoppingErr := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: err})
 	if err == nil && fuzzerStoppingErr != nil {
 		err = fuzzerStoppingErr
-		f.logger.Info("FuzzerStopping event subscriber returned an error", map[string]any{"error": err})
+		f.logger.Error("FuzzerStopping event subscriber returned an error", map[string]any{"error": err})
 	}
 
 	// Print our results on exit.
