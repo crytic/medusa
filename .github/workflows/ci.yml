@@ -29,18 +29,16 @@ jobs:
         with:
           go-version: "^1.18.1"
 
-      - name: "Build medusa"
-        run: go build -v ./...
+      - name: Build medusa (Windows)
+        if: runner.os == 'Windows'
+        run: go build -v ./... -o medusa.exe
 
-      - name: Upload artifact (Linux)
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v3
-        with:
-          name: medusa-${{ runner.os }}
-          path: medusa
+      - name: Build medusa (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: go build -v ./... -o medusa
 
-      - name: Upload artifact (Mac)
-        if: runner.os == 'macOS'
+      - name: Upload artifact (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
         uses: actions/upload-artifact@v3
         with:
           name: medusa-${{ runner.os }}
