@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 
 	"github.com/spf13/cobra"
 	"github.com/trailofbits/medusa/fuzzing/config"
@@ -76,7 +77,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		// Get the new target
 		newTarget, err := cmd.Flags().GetString("target")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		err = projectConfig.Compilation.SetTarget(newTarget)
@@ -89,7 +90,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("workers") {
 		projectConfig.Fuzzing.Workers, err = cmd.Flags().GetInt("workers")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -97,7 +98,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("timeout") {
 		projectConfig.Fuzzing.Timeout, err = cmd.Flags().GetInt("timeout")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -105,7 +106,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("test-limit") {
 		projectConfig.Fuzzing.TestLimit, err = cmd.Flags().GetUint64("test-limit")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -113,7 +114,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("seq-len") {
 		projectConfig.Fuzzing.CallSequenceLength, err = cmd.Flags().GetInt("seq-len")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -121,7 +122,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("deployment-order") {
 		projectConfig.Fuzzing.DeploymentOrder, err = cmd.Flags().GetStringSlice("deployment-order")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -129,7 +130,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("corpus-dir") {
 		projectConfig.Fuzzing.CorpusDirectory, err = cmd.Flags().GetString("corpus-dir")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -137,7 +138,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("senders") {
 		projectConfig.Fuzzing.SenderAddresses, err = cmd.Flags().GetStringSlice("senders")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -145,7 +146,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("deployer") {
 		projectConfig.Fuzzing.DeployerAddress, err = cmd.Flags().GetString("deployer")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -153,7 +154,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	if cmd.Flags().Changed("assertion-mode") {
 		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.Flags().GetBool("assertion-mode")
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 

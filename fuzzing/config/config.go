@@ -2,8 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain/config"
 	"os"
 
@@ -131,7 +131,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	fmt.Printf("Reading configuration file: %s\n", path)
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	// Parse the project configuration
@@ -141,7 +141,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 	err = json.Unmarshal(b, projectConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return projectConfig, nil
@@ -153,13 +153,13 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 	// Serialize the configuration
 	b, err := json.MarshalIndent(p, "", "\t")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Save it to the provided output path and return the result
 	err = os.WriteFile(path, b, 0644)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	return nil

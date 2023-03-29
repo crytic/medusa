@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"strings"
 )
 
@@ -20,7 +21,7 @@ func HexStringToAddress(addressHexString string) (common.Address, error) {
 	// Decode the hex string into a byte array
 	b, err := hex.DecodeString(trimmedString)
 	if err != nil {
-		return common.Address{}, err
+		return common.Address{}, errors.WithStack(err)
 	}
 
 	// Parse the bytes as an address and return them.

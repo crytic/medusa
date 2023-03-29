@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -24,7 +25,7 @@ var fuzzCmd = &cobra.Command{
 func cmdValidateFuzzArgs(cmd *cobra.Command, args []string) error {
 	// Make sure we have no positional args
 	if err := cobra.NoArgs(cmd, args); err != nil {
-		return fmt.Errorf("fuzz does not accept any positional arguments, only flags and their associated values")
+		return errors.New("fuzz does not accept any positional arguments, only flags and their associated values")
 	}
 	return nil
 }
@@ -52,14 +53,14 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	configFlagUsed := cmd.Flags().Changed("config")
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// If --config was not used, look for `medusa.json` in the current work directory
 	if !configFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		configPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}
@@ -78,7 +79,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 
 	// Possibility #2: If the --config flag was used, and we couldn't find the file, we'll throw an error
 	if configFlagUsed && existenceError != nil {
-		return existenceError
+		return errors.WithStack(existenceError)
 	}
 
 	// Possibility #3: --config flag was not used and medusa.json was not found, so use the default project config
@@ -104,7 +105,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// be in the config directory when running this.
 	err = os.Chdir(filepath.Dir(configPath))
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	// Create our fuzzing

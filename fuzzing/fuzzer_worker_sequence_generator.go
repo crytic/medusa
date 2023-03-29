@@ -1,7 +1,7 @@
 package fuzzing
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"github.com/trailofbits/medusa/utils"
@@ -211,7 +211,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 		// Get a random mutator function.
 		corpusMutationFunc, err := g.mutationStrategyChooser.Choose()
 		if err != nil {
-			return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error obtaining a mutation method: %v", err)
+			return true, errors.WithMessage(err, "could not generate a corpus mutation derived call sequence due to an error obtaining a mutation method")
 		}
 
 		// If we have a corpus mutation method, call it to generate our base sequence, then set the pre-fetch modify
@@ -219,7 +219,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 		if corpusMutationFunc != nil && corpusMutationFunc.CallSequenceGeneratorFunc != nil {
 			err = corpusMutationFunc.CallSequenceGeneratorFunc(g, g.baseSequence)
 			if err != nil {
-				return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error executing a mutation method: %v", err)
+				return true, errors.WithMessage(err, "could not generate a corpus mutation derived call sequence due to an error executing a mutation method")
 			}
 			g.prefetchModifyCallFunc = corpusMutationFunc.PrefetchModifyCallFunc
 		}
@@ -269,7 +269,7 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
 	// Verify we have state changing methods to call
 	if len(g.worker.stateChangingMethods) == 0 {
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
+		return nil, errors.New("cannot generate fuzzed tx as there are no state changing methods to call")
 	}
 
 	// Select a random method and sender
@@ -331,7 +331,7 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain corpus call sequence for tail mutation")
 	}
 
 	// Determine a random position to slice the call sequence.
@@ -348,7 +348,7 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain corpus call sequence for tail mutation")
 	}
 
 	// Determine a random position to slice the call sequence.
@@ -367,11 +367,11 @@ func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequ
 	// Obtain two corpus call sequence entries
 	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain head corpus call sequence for splice-at-random corpus mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain head corpus call sequence for splice-at-random corpus mutation")
 	}
 	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain tail corpus call sequence for splice-at-random corpus mutation")
 	}
 
 	// Determine a random position to slice off the head of the call sequence.
@@ -399,11 +399,11 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 	// Obtain two corpus call sequence entries
 	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain first corpus call sequence for interleave-at-random corpus mutation")
 	}
 	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
+		return errors.WithMessage(err, "could not obtain second corpus call sequence for interleave-at-random corpus mutation")
 	}
 
 	// Determine how many transactions to take from the first sequence and slice it.
@@ -447,7 +447,7 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
 		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
 		if err != nil {
-			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
+			return errors.WithMessage(err, "error when mutating call sequence input argument")
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}

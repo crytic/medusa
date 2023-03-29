@@ -2,8 +2,8 @@ package coverage
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"sync"
 )
 
@@ -245,5 +245,5 @@ func (cm *codeCoverageData) setCodeCoverageDataAt(init bool, codeSize int, pc ui
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(coverageData))
+	return false, errors.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(coverageData))
 }

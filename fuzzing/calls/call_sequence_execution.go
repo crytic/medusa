@@ -1,7 +1,7 @@
 package calls
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain"
 )
 
@@ -25,7 +25,7 @@ type ExecuteCallSequenceExecutionCheckFunc func(currentExecutedSequence CallSequ
 func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc) (CallSequence, error) {
 	// If there is no fetch element function provided, throw an error
 	if fetchElementFunc == nil {
-		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
+		return nil, errors.New("could not execute call sequence on chain as the 'fetch element function' provided was nil")
 	}
 
 	// Create a call sequence to track all elements executed throughout this operation.

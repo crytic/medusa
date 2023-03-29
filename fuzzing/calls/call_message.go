@@ -1,10 +1,10 @@
 package calls
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
 	"github.com/trailofbits/medusa/chain"
 	"golang.org/x/exp/slices"
 	"math/big"
@@ -138,7 +138,7 @@ func (m *CallMessage) Data() []byte {
 	if m.MsgDataAbiValues != nil {
 		data, err := m.MsgDataAbiValues.Pack()
 		if err != nil {
-			panic(fmt.Errorf("error while packing call message ABI values: %v", err))
+			panic(errors.WithMessage(err, "error while packing call message ABI values"))
 		}
 		return data
 	}

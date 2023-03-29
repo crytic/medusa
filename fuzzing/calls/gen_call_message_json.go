@@ -4,6 +4,7 @@ package calls
 
 import (
 	"encoding/json"
+	"github.com/pkg/errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,7 +38,9 @@ func (c CallMessage) MarshalJSON() ([]byte, error) {
 	enc.MsgGasTipCap = (*hexutil.Big)(c.MsgGasTipCap)
 	enc.MsgData = c.MsgData
 	enc.MsgDataAbiValues = c.MsgDataAbiValues
-	return json.Marshal(&enc)
+
+	b, err := json.Marshal(&enc)
+	return b, errors.WithStack(err)
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -56,7 +59,7 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 	}
 	var dec CallMessage
 	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	if dec.MsgFrom != nil {
 		c.MsgFrom = *dec.MsgFrom

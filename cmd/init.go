@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,13 +39,13 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 
 	// Make sure we have no more than 1 arg
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
-		return fmt.Errorf("init accepts at most 1 platform argument (options: %s). "+
+		return errors.Errorf("init accepts at most 1 platform argument (options: %s). "+
 			"default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
 	}
 
 	// Ensure the optional provided argument refers to a supported platform
 	if len(args) == 1 && !compilation.IsSupportedCompilationPlatform(args[0]) {
-		return fmt.Errorf("init was provided invalid platform argument '%s' (options: %s)", args[0], strings.Join(supportedPlatforms, ", "))
+		return errors.Errorf("init was provided invalid platform argument '%s' (options: %s)", args[0], strings.Join(supportedPlatforms, ", "))
 	}
 
 	return nil
@@ -56,13 +57,13 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	outputFlagUsed := cmd.Flags().Changed("out")
 	outputPath, err := cmd.Flags().GetString("out")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	// If we weren't provided an output path (flag was not used), we use our working directory
 	if !outputFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		outputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
 	}

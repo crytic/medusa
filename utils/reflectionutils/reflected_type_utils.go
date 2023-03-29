@@ -1,7 +1,7 @@
 package reflectionutils
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"reflect"
 )
 
@@ -84,7 +84,7 @@ func SetReflectedArrayValues(reflectedArray reflect.Value, values []any) error {
 	case reflect.Array:
 		// Validate the length of our array is equal to the length of values provided.
 		if reflectedArray.Len() != len(values) {
-			return fmt.Errorf("failed to set reflected array values, a slice/array of length %v was provided, while %v values were provided", reflectedArray.Len(), len(values))
+			return errors.Errorf("failed to set reflected array values, a slice/array of length %v was provided, while %v values were provided", reflectedArray.Len(), len(values))
 		}
 
 		// Set each element in the array to the corresponding element of the values provided.

@@ -1,8 +1,8 @@
 package fuzzing
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/pkg/errors"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/contracts"
@@ -86,7 +86,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	// variadic argument list here is empty.
 	data, err := propertyTestMethod.Contract.CompiledContract().Abi.Pack(propertyTestMethod.Method.Name)
 	if err != nil {
-		return false, nil, err
+		return false, nil, errors.WithStack(err)
 	}
 
 	// Create a call targeting our property test method
@@ -105,7 +105,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 		executionResult, err = worker.Chain().CallContract(msg, nil)
 	}
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to call property test method: %v", err)
+		return false, nil, errors.WithMessage(err, "failed to call property test method")
 	}
 
 	// If our property test method call failed, we flag a failed test.
@@ -116,18 +116,18 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	// Decode our ABI outputs
 	retVals, err := propertyTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to decode property test method return value: %v", err)
+		return false, nil, errors.Wrap(err, "failed to decode property test method return value")
 	}
 
 	// We should have one return value.
 	if len(retVals) != 1 {
-		return false, nil, fmt.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
+		return false, nil, errors.Errorf("detected an unexpected number of return values from property test '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// The one return value should be a bool
 	propertyTestMethodPassed, ok := retVals[0].(bool)
 	if !ok {
-		return false, nil, fmt.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
+		return false, nil, errors.Errorf("failed to parse property test method success status from return value '%s'", propertyTestMethod.Method.Name)
 	}
 
 	// Return our property test results

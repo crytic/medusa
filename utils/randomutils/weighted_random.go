@@ -1,7 +1,7 @@
 package randomutils
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -82,7 +82,7 @@ func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T
 func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	// If we have no choices or 0 total weight, return nil.
 	if len(c.choices) == 0 || c.totalWeight.Cmp(big.NewInt(0)) == 0 {
-		return nil, fmt.Errorf("could not return a weighted random choice because no choices exist with non-zero weights")
+		return nil, errors.New("could not return a weighted random choice because no choices exist with non-zero weights")
 	}
 
 	// Acquire our lock during the duration of this method.
@@ -108,7 +108,7 @@ func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 		randomData := make([]byte, byteLength)
 		_, err := c.randomProvider.Read(randomData)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 
 		// If we have unused bits, we'll want to mask/clear them out (big.Int uses big endian for byte parsing)
@@ -132,5 +132,5 @@ func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 		selectedWeightPosition = new(big.Int).Sub(selectedWeightPosition, choice.weight)
 	}
 
-	return nil, fmt.Errorf("could not obtain a weighted random choice, selected position does not exist")
+	return nil, errors.New("could not obtain a weighted random choice, selected position does not exist")
 }
