@@ -30,17 +30,13 @@ jobs:
           go-version: "^1.18.1"
 
       - name: "Build medusa"
-        run: go build -v ./...
-
-      - name: Compress binary (Linux)
-        if: runner.os == 'Linux'
-        run: tar -czf medusa.tar.gz medusa
+        run: go build -o medusa -v
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: medusa-${{ runner.os }}
-          path: medusa.tar.gz
+          path: medusa
 
   lint:
     runs-on: ubuntu-latest
