@@ -31,11 +31,11 @@ jobs:
 
       - name: Build medusa (Windows)
         if: runner.os == 'Windows'
-        run: go build -v ./... -o medusa.exe
+        run: go build -o medusa.exe -v
 
       - name: Build medusa (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: go build -v ./... -o medusa
+        run: go build -o medusa -v
 
       - name: Upload artifact (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
