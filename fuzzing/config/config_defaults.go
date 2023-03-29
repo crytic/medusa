@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/rs/zerolog"
 	testChainConfig "github.com/trailofbits/medusa/chain/config"
 	"github.com/trailofbits/medusa/compilation"
 )
@@ -69,6 +70,10 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Logging: LoggingConfig{
+			Level:        zerolog.InfoLevel,
+			LogDirectory: "",
+		},
 	}
 
 	// Return the project configuration

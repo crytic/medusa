@@ -226,11 +226,11 @@ func (t *ExecutionTrace) generateStringsForCallFrame(currentDepth int, callFrame
 	var outputLines []string
 
 	// Create our current call line prefix (indented by call depth)
-	prefix := strings.Repeat("\t", currentDepth) + " -> "
+	prefix := strings.Repeat("\t", currentDepth) + " => "
 
 	// If we're printing the root frame, add the overall execution trace header.
 	if currentDepth == 0 {
-		outputLines = append(outputLines, prefix+"[Execution Trace]")
+		outputLines = append(outputLines, "[Execution Trace]")
 	}
 
 	// Add the call frame enter header

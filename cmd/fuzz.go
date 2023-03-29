@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/trailofbits/medusa/logging"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -13,18 +17,24 @@ import (
 
 // fuzzCmd represents the command provider for fuzzing
 var fuzzCmd = &cobra.Command{
-	Use:   "fuzz",
-	Short: "Starts a fuzzing campaign",
-	Long:  `Starts a fuzzing campaign`,
-	Args:  cmdValidateFuzzArgs,
-	RunE:  cmdRunFuzz,
+	Use:           "fuzz",
+	Short:         "Starts a fuzzing campaign",
+	Long:          `Starts a fuzzing campaign`,
+	Args:          cmdValidateFuzzArgs,
+	RunE:          cmdRunFuzz,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // cmdValidateFuzzArgs makes sure that there are no positional arguments provided to the fuzz command
 func cmdValidateFuzzArgs(cmd *cobra.Command, args []string) error {
+	// Create logger instance
+	logger := logging.NewLogger(zerolog.InfoLevel, true, make([]io.Writer, 0)...)
 	// Make sure we have no positional args
 	if err := cobra.NoArgs(cmd, args); err != nil {
-		return fmt.Errorf("fuzz does not accept any positional arguments, only flags and their associated values")
+		err = errors.New("fuzz does not accept any positional arguments, only flags and their associated values")
+		logger.Error("failed to validate args to fuzz", map[string]any{"error": err})
+		return err
 	}
 	return nil
 }
@@ -46,12 +56,16 @@ func init() {
 // #2: If a custom file was provided (--config was used), and we can't find the file, throw an error.
 // #3: If medusa.json can't be found, use the default project configuration.
 func cmdRunFuzz(cmd *cobra.Command, args []string) error {
+	// Create logger instance
+	logger := logging.NewLogger(zerolog.InfoLevel, true, make([]io.Writer, 0)...)
+
 	var projectConfig *config.ProjectConfig
 
 	// Check to see if --config flag was used and store the value of --config flag
 	configFlagUsed := cmd.Flags().Changed("config")
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
+		logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 		return err
 	}
 
@@ -59,6 +73,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	if !configFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
+			logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 			return err
 		}
 		configPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
@@ -70,24 +85,28 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// Possibility #1: File was found
 	if existenceError == nil {
 		// Try to read the configuration file and throw an error if something goes wrong
+		logger.Info(fmt.Sprintf("Reading the configuration file at: %s", configPath), nil)
 		projectConfig, err = config.ReadProjectConfigFromFile(configPath)
 		if err != nil {
+			logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 			return err
 		}
 	}
 
 	// Possibility #2: If the --config flag was used, and we couldn't find the file, we'll throw an error
 	if configFlagUsed && existenceError != nil {
+		logger.Error("failed to run the fuzz command", map[string]any{"error": existenceError})
 		return existenceError
 	}
 
 	// Possibility #3: --config flag was not used and medusa.json was not found, so use the default project config
 	if !configFlagUsed && existenceError != nil {
-		fmt.Printf("unable to find the config file at %v. will use the default project configuration for the "+
-			"%v compilation platform instead\n", configPath, DefaultCompilationPlatform)
+		logger.Warn(fmt.Sprintf("Unable to find the config file at %v. Will use the default project configuration for the "+
+			"%v compilation platform instead", configPath, DefaultCompilationPlatform), nil)
 
 		projectConfig, err = config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 		if err != nil {
+			logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 			return err
 		}
 	}
@@ -95,6 +114,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// Update the project configuration given whatever flags were set using the CLI
 	err = updateProjectConfigWithFuzzFlags(cmd, projectConfig)
 	if err != nil {
+		logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 		return err
 	}
 
@@ -104,6 +124,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// be in the config directory when running this.
 	err = os.Chdir(filepath.Dir(configPath))
 	if err != nil {
+		logger.Error("failed to run the fuzz command", map[string]any{"error": err})
 		return err
 	}
 

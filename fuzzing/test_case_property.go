@@ -39,8 +39,8 @@ func (t *PropertyTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
 		return fmt.Sprintf(
-			"Test \"%s.%s\" failed after the following call sequence:\n%s\n"+
-				"Property test \"%s.%s\" execution:\n%s",
+			"Test \"%s.%s\" failed after the following call sequence:\n[Call Sequence]\n%s\n"+
+				"Property test \"%s.%s\" execution trace:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),

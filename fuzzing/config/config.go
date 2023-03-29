@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/trailofbits/medusa/chain/config"
 	"os"
 
@@ -17,6 +18,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Logging describes the configuration used for logging to file and console
+	Logging LoggingConfig `json:"logging"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -122,6 +126,34 @@ type PropertyTestConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
 	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// LoggingConfig describes the configuration options for logging to console and file
+type LoggingConfig struct {
+	// Level describes whether logs of certain severity levels (eg info, warning, etc.) will be emitted or discarded.
+	// Increasing level values represent more severe logs
+	Level zerolog.Level `json:"level"`
+
+	// LogDirectory describes what directory log files should be outputted in/ LogDirectory being a non-empty string is
+	// equivalent to enabling file logging.
+	LogDirectory string `json:"logDirectory"`
+}
+
+// ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type ConsoleLoggingConfig struct {
+	// Enabled describes whether console logging is enabled.
+	Enabled bool `json:"enabled"`
+}
+
+// FileLoggingConfig describes the configuration options for logging to file. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type FileLoggingConfig struct {
+	// LogDirectory describes what directory log files should be outputted in. LogDirectory being a non-empty string
+	// is equivalent to enabling file logging.
+	LogDirectory bool `json:"logDirectory"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
