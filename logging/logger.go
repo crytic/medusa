@@ -192,6 +192,7 @@ func (l *Logger) Warn(msg string, fields map[string]any) {
 
 // Error is a wrapper function that will log an error event
 // Note that if the error key is not in the fields mapping, this function will panic
+// TODO: Maybe we don't panic and instead just log the msg with an empty err field. Same applies to Fatal and Panic
 func (l *Logger) Error(msg string, fields map[string]any) {
 	// Grab error from fields
 	err, fields := utils.GetAndRemoveKeyFromMapping(fields, "error")
