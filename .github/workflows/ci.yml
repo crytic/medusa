@@ -34,7 +34,7 @@ jobs:
 
       - name: Compress binary (Linux)
         if: runner.os == 'Linux'
-        run: GZIP=-9 tar -czf medusa.tar.gz -C $HOME/.local/bin/ medusa
+        run: gzip tar -czf medusa.tar.gz -C $HOME/.local/bin/ medusa
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
