@@ -32,13 +32,9 @@ jobs:
       - name: Build medusa
         run: go build -v ./...
 
-      - name: Compress (Linux and macOS)
-        if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: tar -czf medusa.tar medusa
-
       - name: Compress (Windows)
         if: runner.os == 'Windows'
-        run: tar -czf medusa.tar medusa.exe
+        run: tar cvf medusa.tar medusa.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
