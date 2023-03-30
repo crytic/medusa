@@ -52,7 +52,8 @@ jobs:
         if: runner.os == 'Windows'
         run: tar -czvf medusa.tar.gz medusa.exe
 
-      - name: Upload artifact
+      - name: Upload artifact on merge to master
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v3
         with:
           name: medusa-${{ runner.os }}
