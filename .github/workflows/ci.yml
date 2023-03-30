@@ -34,17 +34,17 @@ jobs:
 
       - name: Compress (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: tar -cvf medusa.tar.gz medusa
+        run: tar -czf medusa.tar medusa
 
       - name: Compress (Windows)
         if: runner.os == 'Windows'
-        run: tar -cvf medusa.tar.gz medusa.exe
+        run: tar -czf medusa.tar medusa.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: medusa-${{ runner.os }}
-          path: medusa
+          path: medusa.tar.gz
 
   lint:
     runs-on: ubuntu-latest
