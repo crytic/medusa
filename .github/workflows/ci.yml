@@ -1,6 +1,12 @@
 name: CI
 
-on: [pull_request, push, workflow_dispatch]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,15 +36,15 @@ jobs:
           go-version: "^1.18.1"
 
       - name: Build medusa
-        run: go build -v ./...
+        run: go build -o medusa -v ./...
 
       - name: Compress (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: tar -czvf medusa.tar.gz ~/medusa
+        run: tar -czvf medusa.tar.gz medusa
 
       - name: Compress (Windows)
         if: runner.os == 'Windows'
-        run: tar -czvf medusa.tar.gz ~/medusa.exe
+        run: tar -czvf medusa.tar.gz medusa
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
