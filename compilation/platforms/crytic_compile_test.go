@@ -39,7 +39,7 @@ func testCryticGetCompiledSourceByBaseName(sources map[string]types.CompiledSour
 // file path.
 func TestCryticSingleFileAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/SimpleContract.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -67,7 +67,7 @@ func TestCryticSingleFileAbsolutePath(t *testing.T) {
 // file path in the working directory.
 func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/SimpleContract.sol")
 	contractName := filepath.Base(contractPath)
 
 	// Execute our tests in the given test path
@@ -96,7 +96,7 @@ func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 // file path in a child directory of the working directory.
 func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/SimpleContract.sol")
 
 	// Move it to a subdirectory
 	contractDirectory := filepath.Dir(contractPath)
@@ -137,7 +137,7 @@ func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 // a relative path provided.
 func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/SimpleContract.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -172,7 +172,7 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 // (e.g. export-dir, export-format)
 func TestCryticSingleFileBadArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/SimpleContract.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -195,6 +195,34 @@ func TestCryticSingleFileBadArgs(t *testing.T) {
 			_, _, err := config.Compile()
 			assert.Error(t, err)
 		}
+	})
+}
+
+// TestCryticMultipleFiles tests compilation of a single target that inherits from another file.
+func TestCryticMultipleFiles(t *testing.T) {
+	// Copy our testdata over to our testing directory
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/basic/")
+
+	// Execute our tests in the given test path
+	testutils.ExecuteInDirectory(t, contractPath, func() {
+		// Create our platform configuration
+		config := NewCryticCompilationConfig("DerivedContract.sol")
+
+		// Compile the file
+		compilations, _, err := config.Compile()
+		assert.NoError(t, err)
+
+		// Verify there is one compilation object
+		assert.EqualValues(t, 1, len(compilations))
+		// Verify there are two sources
+		assert.EqualValues(t, 2, len(compilations[0].Sources))
+
+		// Verify there are three contracts
+		contractCount := 0
+		for _, source := range compilations[0].Sources {
+			contractCount += len(source.Contracts)
+		}
+		assert.EqualValues(t, 3, contractCount)
 	})
 }
 

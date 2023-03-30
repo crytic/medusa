@@ -32,14 +32,18 @@ type Contract struct {
 
 	// compiledContract describes the compiled contract data.
 	compiledContract *types.CompiledContract
+
+	// compilation describes the compilation which contains the compiledContract.
+	compilation *types.Compilation
 }
 
 // NewContract returns a new Contract instance with the provided information.
-func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract) *Contract {
+func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation) *Contract {
 	return &Contract{
 		name:             name,
 		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
+		compilation:      compilation,
 	}
 }
 
@@ -56,4 +60,9 @@ func (c *Contract) SourcePath() string {
 // CompiledContract returns the compiled contract information including source mappings, byte code, and ABI.
 func (c *Contract) CompiledContract() *types.CompiledContract {
 	return c.compiledContract
+}
+
+// Compilation returns the compilation which contains the CompiledContract.
+func (c *Contract) Compilation() *types.Compilation {
+	return c.compilation
 }

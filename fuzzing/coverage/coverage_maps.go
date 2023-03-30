@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	compilationTypes "github.com/trailofbits/medusa/compilation/types"
 	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
 // across a transaction or multiple transactions.
 type CoverageMaps struct {
-	// maps represents a structure used to track every codeCoverageData by a given deployed address/code hash.
-	maps map[common.Address]map[common.Hash]*codeCoverageData
+	// maps represents a structure used to track every CoverageMapData by a given deployed address/code hash.
+	maps map[common.Hash]map[common.Address]*CoverageMapData
 
 	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
 	// expensive lookup in maps. If cachedCodeHash does not match the current code address for which we are updating
@@ -25,7 +27,7 @@ type CoverageMaps struct {
 
 	// cachedMap represents the last coverage map which was updated. If the coverage to update resides at the
 	// cachedCodeAddress and matches the cachedCodeHash, then this map is used to avoid an expensive lookup into maps.
-	cachedMap *codeCoverageData
+	cachedMap *CoverageMapData
 
 	// updateLock is a lock to offer concurrent thread safety for map accesses.
 	updateLock sync.Mutex
@@ -40,7 +42,49 @@ func NewCoverageMaps() *CoverageMaps {
 
 // Reset clears the coverage state for the CoverageMaps.
 func (cm *CoverageMaps) Reset() {
-	cm.maps = make(map[common.Address]map[common.Hash]*codeCoverageData)
+	cm.maps = make(map[common.Hash]map[common.Address]*CoverageMapData)
+}
+
+// GetCoverageMapData obtains a total coverage map representing coverage for the provided bytecode.
+// The bytecode matching is done first through an embedded metadata hash, then as a fallback option it hashes the
+// byte code data. The former is seen as "safe", while the latter is subject to various failures.
+// If the provided bytecode could not find coverage maps, nil is returned.
+// Returns the total coverage map, or an error if one occurs.
+func (cm *CoverageMaps) GetCoverageMapData(bytecode []byte) (*CoverageMapData, error) {
+	// Try to extract the embedded contract metadata and its underlying bytecode hash.
+	var hash common.Hash
+	hashSet := false
+	metadata := compilationTypes.ExtractContractMetadata(bytecode)
+	if metadata != nil {
+		metadataHash := metadata.ExtractBytecodeHash()
+		if metadataHash != nil {
+			hash = common.BytesToHash(metadataHash)
+			hashSet = true
+		}
+	}
+
+	// Otherwise, obtain a hash of the compiled byte code itself.
+	if !hashSet {
+		hash = crypto.Keccak256Hash(bytecode)
+	}
+
+	// Acquire our thread lock and defer our unlocking for when we exit this method
+	cm.updateLock.Lock()
+	defer cm.updateLock.Unlock()
+
+	// Loop through all coverage maps for this hash and collect our total coverage.
+	if coverageByAddresses, ok := cm.maps[hash]; ok {
+		totalCoverage := &CoverageMapData{}
+		for _, coverage := range coverageByAddresses {
+			_, err := totalCoverage.updateCodeCoverageData(coverage)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return totalCoverage, nil
+	} else {
+		return nil, nil
+	}
 }
 
 // Update updates the current coverage maps with the provided ones. It returns a boolean indicating whether
@@ -59,25 +103,25 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	changed := false
 
 	// Loop for each coverage map provided
-	for codeAddressToMerge, mapsByCodeHashToMerge := range coverageMaps.maps {
-		for codeHashToMerge, coverageMapToMerge := range mapsByCodeHashToMerge {
-			// If a coverage map lookup for this code address doesn't exist, create the mapping.
-			mapsByCodeHash, codeAddressExists := cm.maps[codeAddressToMerge]
-			if !codeAddressExists {
-				mapsByCodeHash = make(map[common.Hash]*codeCoverageData)
-				cm.maps[codeAddressToMerge] = mapsByCodeHash
+	for codeHash, mapsByAddressToMerge := range coverageMaps.maps {
+		for codeAddress, coverageMapToMerge := range mapsByAddressToMerge {
+			// If a coverage map lookup for this code hash doesn't exist, create the mapping.
+			mapsByAddress, codeHashExists := cm.maps[codeHash]
+			if !codeHashExists {
+				mapsByAddress = make(map[common.Address]*CoverageMapData)
+				cm.maps[codeHash] = mapsByAddress
 			}
 
-			// If a coverage map for this code hash already exists in our current mapping, update it with the one
+			// If a coverage map for this address already exists in our current mapping, update it with the one
 			// to merge. If it doesn't exist, set it to the one to merge.
-			if existingCoverageMap, codeHashExists := mapsByCodeHash[codeHashToMerge]; codeHashExists {
+			if existingCoverageMap, codeAddressExists := mapsByAddress[codeAddress]; codeAddressExists {
 				coverageMapChanged, err := existingCoverageMap.updateCodeCoverageData(coverageMapToMerge)
 				changed = changed || coverageMapChanged
 				if err != nil {
 					return changed, err
 				}
 			} else {
-				mapsByCodeHash[codeHashToMerge] = coverageMapToMerge
+				mapsByAddress[codeAddress] = coverageMapToMerge
 				changed = true
 			}
 		}
@@ -87,7 +131,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	return changed, nil
 }
 
-// SetCoveredAt sets the coverage state of a given program counter location within a codeCoverageData.
+// SetCoveredAt sets the coverage state of a given program counter location within code coverage data.
 func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common.Hash, init bool, codeSize int, pc uint64) (bool, error) {
 	// If the code size is zero, do nothing
 	if codeSize == 0 {
@@ -98,30 +142,30 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 	var (
 		addedNewMap  bool
 		changedInMap bool
-		coverageMap  *codeCoverageData
+		coverageMap  *CoverageMapData
 		err          error
 	)
 
-	// Try to obtain a coverage map for the given code hash from our cache
+	// Try to obtain a coverage map from our cache
 	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeHash {
 		coverageMap = cm.cachedMap
 	} else {
-		// If a coverage map lookup for this code address doesn't exist, create the mapping.
-		coverageMapsByCodeHash, codeAddressExists := cm.maps[codeAddress]
-		if !codeAddressExists {
-			coverageMapsByCodeHash = make(map[common.Hash]*codeCoverageData)
-			cm.maps[codeAddress] = coverageMapsByCodeHash
+		// If a coverage map lookup for this code hash doesn't exist, create the mapping.
+		mapsByCodeAddress, codeHashExists := cm.maps[codeHash]
+		if !codeHashExists {
+			mapsByCodeAddress = make(map[common.Address]*CoverageMapData)
+			cm.maps[codeHash] = mapsByCodeAddress
 		}
 
-		// Obtain the coverage map for this code hash if it already exists. If it does not, create a new one.
-		if existingCoverageMap, codeHashExists := coverageMapsByCodeHash[codeHash]; codeHashExists {
+		// Obtain the coverage map for this code address if it already exists. If it does not, create a new one.
+		if existingCoverageMap, codeAddressExists := mapsByCodeAddress[codeAddress]; codeAddressExists {
 			coverageMap = existingCoverageMap
 		} else {
-			coverageMap = &codeCoverageData{
+			coverageMap = &CoverageMapData{
 				initBytecodeCoverageData:     nil,
 				deployedBytecodeCoverageData: nil,
 			}
-			cm.maps[codeAddress][codeHash] = coverageMap
+			cm.maps[codeHash][codeAddress] = coverageMap
 			addedNewMap = true
 		}
 
@@ -137,29 +181,29 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 }
 
 // Equals checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
-func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
+func (cm *CoverageMaps) Equals(b *CoverageMaps) bool {
 	// Note: the `map` field is what is being tested for equality. Not the cached values
 
 	// Iterate through all maps
-	for addr, aHashToCoverage := range a.maps {
-		bHashToCoverage, ok := b.maps[addr]
-		// Address is not in b - we're done
+	for codeHash, mapsByAddressA := range cm.maps {
+		mapsByAddressB, ok := b.maps[codeHash]
+		// Hash is not in b - we're done
 		if !ok {
 			return false
 		}
-		for hash, aCoverage := range aHashToCoverage {
-			bCoverage, ok := bHashToCoverage[hash]
-			// Hash is not in b - we're done
+		for codeAddress, coverageMap := range mapsByAddressA {
+			bCoverage, ok := mapsByAddressB[codeAddress]
+			// Address is not in b - we're done
 			if !ok {
 				return false
 			}
 			// Compare that the deployed bytecode coverages are the same
-			equal := bytes.Compare(aCoverage.deployedBytecodeCoverageData, bCoverage.deployedBytecodeCoverageData)
+			equal := bytes.Compare(coverageMap.deployedBytecodeCoverageData, bCoverage.deployedBytecodeCoverageData)
 			if equal != 0 {
 				return false
 			}
 			// Compare that the init bytecode coverages are the same
-			equal = bytes.Compare(aCoverage.initBytecodeCoverageData, bCoverage.initBytecodeCoverageData)
+			equal = bytes.Compare(coverageMap.initBytecodeCoverageData, bCoverage.initBytecodeCoverageData)
 			if equal != 0 {
 				return false
 			}
@@ -168,8 +212,8 @@ func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
 	return true
 }
 
-// codeCoverageData represents a data structure used to identify instruction execution coverage of contract byte code.
-type codeCoverageData struct {
+// CoverageMapData represents a data structure used to identify instruction execution coverage of contract byte code.
+type CoverageMapData struct {
 	// initBytecodeCoverageData represents a list of bytes for each byte of a contract's init bytecode. Non-zero values
 	// indicate the program counter executed an instruction at that offset.
 	initBytecodeCoverageData []byte
@@ -180,7 +224,7 @@ type codeCoverageData struct {
 
 // updateCodeCoverageData creates updates the current coverage map with the provided one. It returns a boolean indicating whether
 // new coverage was achieved, or an error if one was encountered.
-func (cm *codeCoverageData) updateCodeCoverageData(coverageMap *codeCoverageData) (bool, error) {
+func (cm *CoverageMapData) updateCodeCoverageData(coverageMap *CoverageMapData) (bool, error) {
 	// Define our return variable
 	changed := false
 
@@ -220,8 +264,8 @@ func (cm *codeCoverageData) updateCodeCoverageData(coverageMap *codeCoverageData
 	return changed, nil
 }
 
-// setCodeCoverageDataAt sets the coverage state of a given program counter location within a codeCoverageData.
-func (cm *codeCoverageData) setCodeCoverageDataAt(init bool, codeSize int, pc uint64) (bool, error) {
+// setCodeCoverageDataAt sets the coverage state of a given program counter location within a CoverageMapData.
+func (cm *CoverageMapData) setCodeCoverageDataAt(init bool, codeSize int, pc uint64) (bool, error) {
 	// Obtain our coverage data depending on if we're initializing/deploying a contract now. If coverage data doesn't
 	// exist, we create it.
 	var coverageData []byte

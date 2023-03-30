@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
 )
 
 type TruffleCompilationConfig struct {
@@ -65,6 +64,8 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 
 	// Create a compilation unit out of this.
 	compilation := types.NewCompilation()
+
+	// TODO: Parse a source list!
 
 	// Find all the compiled truffle artifacts
 	buildDirectory := s.BuildDirectory
@@ -128,34 +129,13 @@ func (s *TruffleCompilationConfig) Compile() ([]types.Compilation, string, error
 			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", compiledJson.ContractName)
 		}
 
-		// read source code from file
-		// NOTE: we might be able to skip this step, looks like contract.Info contains the souce file
-		// it contains it as a string though which might not be ideal for coverage generation
-		// as the source map maps to bytes in the source code.
-		sourceCode, err := utils.ReadSourceFile(compiledJson.SourcePath)
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to read source file '%s'\n", compiledJson.SourcePath)
-		}
-		// transform source code into lines
-		sourceLines := types.SplitSourceFileIntoLines(sourceCode)
-
-		// parse the runtime bytecode into its EVM instructions
-		parsedRuntimeBytecode := types.ParseBytecode(types.RemoveContractMetadata(runtimeBytecode))
-
-		// tansform runtime source map into easily manageable data
-		parsedRuntimeSrcMap := types.ParseSourceMap(compiledJson.DeployedSourceMap)
-
 		// Add our contract to the source
 		compilation.Sources[compiledJson.SourcePath].Contracts[compiledJson.ContractName] = types.CompiledContract{
-			Abi:                   *contractAbi,
-			InitBytecode:          initBytecode,
-			RuntimeBytecode:       runtimeBytecode,
-			ParsedRuntimeBytecode: parsedRuntimeBytecode,
-			SrcMapsInit:           compiledJson.SourceMap,
-			SrcMapsRuntime:        compiledJson.DeployedSourceMap,
-			ParsedRuntimeSrcMap:   parsedRuntimeSrcMap,
-			SourceCode:            sourceCode,
-			SourceLines:           sourceLines,
+			Abi:             *contractAbi,
+			InitBytecode:    initBytecode,
+			RuntimeBytecode: runtimeBytecode,
+			SrcMapsInit:     compiledJson.SourceMap,
+			SrcMapsRuntime:  compiledJson.DeployedSourceMap,
 		}
 	}
 

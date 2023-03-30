@@ -164,13 +164,3 @@ func DeleteDirectory(directoryPath string) error {
 	err = os.RemoveAll(directoryPath)
 	return err
 }
-
-// Given the path to a source file it returns its contents as an array of bytes
-func ReadSourceFile(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return []byte{}, fmt.Errorf("Cannot read provider source file")
-	}
-
-	return data, nil
-}
