@@ -1,9 +1,7 @@
 name: Release
 
-on:
-  release
+on: release
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
