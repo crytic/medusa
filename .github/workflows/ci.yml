@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    needs: [lint, test]
     name: Build medusa on ${{ matrix.environment }}
     strategy:
       matrix:
