@@ -142,7 +142,7 @@ jobs:
         run: go test ./...
 
   all-checks:
-    needs: [lint, test]
+    needs: [lint, test, build]
 
     runs-on: ubuntu-latest
 
