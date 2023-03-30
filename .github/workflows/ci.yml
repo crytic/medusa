@@ -36,7 +36,7 @@ jobs:
           go-version: "^1.18.1"
 
       - name: Build medusa
-        run: go build -o medusa -v ./...
+        run: go build -o medusa -v .
 
       - name: Compress (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
