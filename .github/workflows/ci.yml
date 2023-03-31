@@ -1,12 +1,64 @@
 name: CI
 
-on: [pull_request, push, workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  build:
+    needs: [lint, test]
+    strategy:
+      matrix:
+        environment: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
+
+      - run: |
+          git submodule init
+          git submodule update
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "^1.18.1"
+
+      - name: Build (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: go build -o medusa -v .
+
+      - name: Compress (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: tar -czvf medusa.tar.gz medusa
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: go build -o medusa.exe -v .
+
+      - name: Compress (Windows)
+        if: runner.os == 'Windows'
+        run: tar -czvf medusa.tar.gz medusa.exe
+
+      - name: Upload artifact on merge to master
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v3
+        with:
+          name: medusa-${{ runner.os }}
+          path: medusa.tar.gz
+
   lint:
     runs-on: ubuntu-latest
 
@@ -89,7 +141,7 @@ jobs:
         run: go test ./...
 
   all-checks:
-    needs: [lint, test]
+    needs: [lint, test, build]
 
     runs-on: ubuntu-latest
 
