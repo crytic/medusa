@@ -101,7 +101,7 @@ experimenting with a new fuzzer provides us with the following benefits:
 
 - Since `medusa` is written in Go, we believe that this will **lower the barrier of entry for external contributions**.
   We have taken great care in thoroughly commenting our code so that it is easy for new contributors to get up-to-speed and start contributing!
-- The use of Go allows us to build an API to hook into the various parts of the fuzzer to build custom testing methodologies. See the [API Overview (WIP)](<https://github.com/trailofbits/medusa/wiki/API-Overview-(WIP)>) section in the Wiki for more details.
+- The use of Go allows us to build an API to hook into the various parts of the fuzzer to build custom testing methodologies. See the [API Overview (WIP)](<https://github.com/crytic/medusa/wiki/API-Overview-(WIP)>) section in the Wiki for more details.
 - Our forked version of go-ethereum, [`medusa-geth`](https://github.com/crytic/medusa-geth), exhibits behavior that is closer to that of the EVM in production environments.
 - We can take the lessons we learned while developing Echidna to create a fuzzer that is just as feature-rich but with additional capabilities to
   create powerful and unique testing methodologies.
