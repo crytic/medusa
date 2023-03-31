@@ -2,10 +2,10 @@ package corpus
 
 import (
 	"encoding/json"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/utils/testutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
 	"math/rand"
 	"path/filepath"

@@ -1,10 +1,10 @@
-module github.com/trailofbits/medusa
+module github.com/crytic/medusa
 
 go 1.18
 
 require (
 	github.com/Masterminds/semver v1.5.0
-	github.com/ethereum/go-ethereum v1.10.26
+	github.com/ethereum/go-ethereum v1.11.1
 	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.3.0
 	github.com/spf13/cobra v1.6.1
@@ -67,4 +67,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/ethereum/go-ethereum v1.10.26 => ./pkg/medusa-geth
+replace github.com/ethereum/go-ethereum v1.11.1 => github.com/crytic/medusa-geth v0.0.0-20230221190257-777a77b25150

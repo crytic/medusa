@@ -21,7 +21,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 
 To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `truffle`, `hardhat`) installed on your machine.
 
-You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/trailofbits/medusa/releases) page.
+You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/crytic/medusa/releases) page.
 
 ### Building from source
 
@@ -55,7 +55,7 @@ Where:
 - `--target` specifies the path `crytic-compile` should use to compile contracts
 - `--deployment-order` specifies comma-separated names of contracts to be deployed for testing.
 
-**Note:** Check out the [command-line interface](https://github.com/trailofbits/medusa/wiki/Command-Line-Interface) wiki page, or run `medusa --help` for more information.
+**Note:** Check out the [command-line interface](https://github.com/crytic/medusa/wiki/Command-Line-Interface) wiki page, or run `medusa --help` for more information.
 
 ### Configuration file driven
 
@@ -79,7 +79,7 @@ medusa fuzz
 
 This will use the `medusa.json` configuration in the current directory and begin the fuzzing campaign.
 
-**Note:** Check out the [project configuration](https://github.com/trailofbits/medusa/wiki/Project-Configuration) wiki page, or run `medusa --help` for more information.
+**Note:** Check out the [project configuration](https://github.com/crytic/medusa/wiki/Project-Configuration) wiki page, or run `medusa --help` for more information.
 
 ## Running Unit Tests
 

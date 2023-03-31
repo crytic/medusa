@@ -3,18 +3,18 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/executiontracer"
-	"github.com/trailofbits/medusa/utils"
 	"strconv"
 	"strings"
 
+	chainTypes "github.com/crytic/medusa/chain/types"
+	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
-	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.

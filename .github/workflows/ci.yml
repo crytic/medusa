@@ -24,14 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
-
-      - run: |
-          git submodule init
-          git submodule update
-
       - uses: actions/setup-go@v3
         with:
           go-version: "^1.18.1"
@@ -64,14 +56,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
-
-      - run: |
-          git submodule init
-          git submodule update
 
       - uses: actions/setup-go@v3
         with:
@@ -111,14 +95,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.MEDUSA_GETH_SSH_PRIVATE_KEY }}
-
-      - run: |
-          git submodule init
-          git submodule update
 
       - uses: actions/setup-go@v3
         with:
