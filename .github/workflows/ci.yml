@@ -24,10 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - run: |
-          git submodule init
-          git submodule update
-
       - uses: actions/setup-go@v3
         with:
           go-version: "^1.18.1"
@@ -60,10 +56,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - run: |
-          git submodule init
-          git submodule update
 
       - uses: actions/setup-go@v3
         with:
@@ -103,10 +95,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - run: |
-          git submodule init
-          git submodule update
 
       - uses: actions/setup-go@v3
         with:
