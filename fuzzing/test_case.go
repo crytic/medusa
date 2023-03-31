@@ -1,7 +1,7 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/calls"
 )
 
 // TestCaseStatus defines the status of a TestCase as a string-represented enum.

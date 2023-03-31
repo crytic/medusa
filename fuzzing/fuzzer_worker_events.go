@@ -1,10 +1,10 @@
 package fuzzing
 
 import (
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // FuzzerWorkerEvents defines event emitters for a FuzzerWorker.

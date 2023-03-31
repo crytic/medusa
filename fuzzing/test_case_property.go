@@ -2,10 +2,10 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/fuzzing/executiontracer"
 	"strings"
 )
 

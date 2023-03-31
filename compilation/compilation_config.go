@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/trailofbits/medusa/compilation/platforms"
-	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/crytic/medusa/compilation/platforms"
+	"github.com/crytic/medusa/compilation/types"
 )
 
 // CompilationConfig describes the configuration options used to compile a smart contract

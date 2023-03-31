@@ -1,8 +1,8 @@
 package platforms
 
 import (
+	"github.com/crytic/medusa/utils/testutils"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils/testutils"
 	"path/filepath"
 	"testing"
 )
