@@ -2,7 +2,7 @@ package compilation
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/compilation/platforms"
+	"github.com/crytic/medusa/compilation/platforms"
 )
 
 // defaultPlatformConfigGenerator is a mapping of platform identifier to generator functions which can be used to create

@@ -5,14 +5,14 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/crytic/medusa/compilation/platforms"
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/testutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation/platforms"
-	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/testutils"
 )
 
 // verifyChain verifies various state properties in a TestChain, such as if previous block hashes are correct,

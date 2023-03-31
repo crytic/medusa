@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
-	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/randomutils"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/google/uuid"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are

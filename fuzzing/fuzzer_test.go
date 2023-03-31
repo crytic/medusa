@@ -1,16 +1,16 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/utils"
 	"math/rand"
 	"testing"
 
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.
