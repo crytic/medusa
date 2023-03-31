@@ -3,6 +3,8 @@
 `medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna).
 It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
 
+**Disclaimer**: Please note that `medusa` is an **experimental** smart contract fuzzer. Currently, it should _not_ be adopted into production systems. We intend for `medusa` to reach the same capabilities and maturity that Echidna has. Until then, be careful using `medusa` as your primary smart contract fuzz testing solution. Additionally, please be aware that the Go-level testing API is still **under development** and is subject to breaking changes.
+
 ## Features
 
 `medusa` provides support for:
@@ -99,17 +101,9 @@ experimenting with a new fuzzer provides us with the following benefits:
 - Since `medusa` is written in Go, we believe that this will **lower the barrier of entry for external contributions**. 
 We have taken great care in thoroughly commenting our code so that it is easy for new contributors to get up-to-speed and start contributing!
 - The use of Go allows us to build an API to hook into the various parts of the fuzzer to build custom testing methodologies. See the [API Overview (WIP)](https://github.com/trailofbits/medusa/wiki/API-Overview-(WIP)) section in the Wiki for more details.
-- Our forked version of go-ethereum, [`medusa-geth`](link), exhibits behavior that is closer to that of the EVM in production environments.
+- Our forked version of go-ethereum, [`medusa-geth`](https://github.com/crytic/medusa-geth), exhibits behavior that is closer to that of the EVM in production environments.
 - We can take the lessons we learned while developing Echidna to create a fuzzer that is just as feature-rich but with additional capabilities to
 create powerful and unique testing methodologies.
-
-## Disclaimer
-
-Please note that `medusa` is an **experimental** smart contract fuzzer. It should _not_ be treated as a robust, fully-tested application that can be used in
-production systems. We hope that `medusa` will one day reach the same capabilities that Echidna has, but until that day, be careful with using `medusa`
-as your primary smart contract fuzz testing solution. Additionally, please be aware that the go-level testing API is still **under
-development** and is subject to change at any moment. 
-
 
 ## Contributing
 
