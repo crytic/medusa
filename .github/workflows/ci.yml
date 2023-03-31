@@ -16,7 +16,6 @@ concurrency:
 jobs:
   build:
     needs: [lint, test]
-    name: Build (${{ matrix.environment }})
     strategy:
       matrix:
         environment: [ubuntu-latest, macos-latest, windows-latest]
