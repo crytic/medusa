@@ -1,6 +1,6 @@
 # medusa
 
-`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna).
+`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [Echidna](https://github.com/crytic/echidna).
 It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
 
 **Disclaimer**: Please note that `medusa` is an **experimental** smart contract fuzzer. Currently, it should _not_ be adopted into production systems. We intend for `medusa` to reach the same capabilities and maturity that Echidna has. Until then, be careful using `medusa` as your primary smart contract fuzz testing solution. Additionally, please be aware that the Go-level testing API is still **under development** and is subject to breaking changes.
@@ -42,7 +42,7 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
-We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for Echidna. `medusa` supports Echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
 
 ### Command-line only
 
