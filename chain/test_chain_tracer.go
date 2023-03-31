@@ -6,7 +6,6 @@ import (
 	"github.com/trailofbits/medusa/chain/types"
 	"golang.org/x/exp/slices"
 	"math/big"
-	"time"
 )
 
 // TestChainTracer is an extended vm.EVMLogger which can be used with a TestChain to store any captured
@@ -18,7 +17,7 @@ type TestChainTracer interface {
 	// CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 	// tracer is used during transaction execution (block creation), the results can later be queried from the block.
 	// This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-	CaptureTxEndSetAdditionalResults(results *types.CallMessageResults)
+	CaptureTxEndSetAdditionalResults(results *types.MessageResults)
 }
 
 // TestChainTracerRouter acts as a vm.EVMLogger or TestChainTracer splitter, allowing multiple tracers to be used in
@@ -77,10 +76,10 @@ func (t *TestChainTracerRouter) CaptureStart(env *vm.EVM, from common.Address, t
 }
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *TestChainTracerRouter) CaptureEnd(output []byte, gasUsed uint64, d time.Duration, err error) {
+func (t *TestChainTracerRouter) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Call the underlying method for each registered tracer.
 	for _, tracer := range t.tracers {
-		tracer.CaptureEnd(output, gasUsed, d, err)
+		tracer.CaptureEnd(output, gasUsed, err)
 	}
 }
 
@@ -119,7 +118,7 @@ func (t *TestChainTracerRouter) CaptureFault(pc uint64, op vm.OpCode, gas, cost 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
-func (t *TestChainTracerRouter) CaptureTxEndSetAdditionalResults(results *types.CallMessageResults) {
+func (t *TestChainTracerRouter) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Call the underlying method for each registered tracer.
 	for _, tracer := range t.tracers {
 		// Try to cast each tracer to a TestChainTracer and forward the call to it.

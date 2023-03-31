@@ -3,8 +3,10 @@ package fuzzing
 import (
 	"github.com/trailofbits/medusa/chain"
 	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/trailofbits/medusa/fuzzing/calls"
 	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/trailofbits/medusa/utils"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,17 +25,17 @@ func TestFuzzerHooks(t *testing.T) {
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
 			var valueGenOk, chainSetupOk, callSeqTestFuncOk bool
-			existingValueGenFunc := f.fuzzer.Hooks.NewValueGeneratorFunc
-			f.fuzzer.Hooks.NewValueGeneratorFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet) (valuegeneration.ValueGenerator, error) {
+			existingSeqGenConfigFunc := f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc
+			f.fuzzer.Hooks.NewCallSequenceGeneratorConfigFunc = func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
 				valueGenOk = true
-				return existingValueGenFunc(fuzzer, valueSet)
+				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
 			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
-			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+			f.fuzzer.Hooks.CallSequenceTestFuncs = append(f.fuzzer.Hooks.CallSequenceTestFuncs, func(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 				callSeqTestFuncOk = true
 				return make([]ShrinkCallSequenceRequest, 0), nil
 			})
@@ -135,7 +137,7 @@ func TestChainBehaviour(t *testing.T) {
 			config.Fuzzing.Workers = 1
 			config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) // we just need a few oog txs to test
 			config.Fuzzing.Timeout = 10                                          // to be safe, we set a 10s timeout
-			config.Fuzzing.TransactionGasLimit = 100000                          // we set this low, so contract execution runs out of gas earlier.
+			config.Fuzzing.TransactionGasLimit = 500000                          // we set this low, so contract execution runs out of gas earlier.
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -146,6 +148,64 @@ func TestChainBehaviour(t *testing.T) {
 			assertFailedTestsExpected(f, false)
 		},
 	})
+}
+
+// TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
+func TestCheatCodes(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/cheat_codes/utils/addr.sol",
+		"testdata/contracts/cheat_codes/utils/to_string.sol",
+		"testdata/contracts/cheat_codes/utils/sign.sol",
+		"testdata/contracts/cheat_codes/utils/parse.sol",
+		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/chain_id.sol",
+		"testdata/contracts/cheat_codes/vm/deal.sol",
+		"testdata/contracts/cheat_codes/vm/difficulty.sol",
+		"testdata/contracts/cheat_codes/vm/etch.sol",
+		"testdata/contracts/cheat_codes/vm/fee.sol",
+		"testdata/contracts/cheat_codes/vm/prank.sol",
+		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/store_load.sol",
+		"testdata/contracts/cheat_codes/vm/warp.sol",
+	}
+
+	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
+	// tests.
+	if utils.IsWindowsEnvironment() {
+		filePaths = append(filePaths,
+			"testdata/contracts/cheat_codes/utils/ffi_windows.sol",
+		)
+	} else {
+		filePaths = append(filePaths,
+			"testdata/contracts/cheat_codes/utils/ffi_unix.sol",
+		)
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+
+				// some tests require full sequence + revert to test fully
+				config.Fuzzing.Workers = 3
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
+
+				// enable assertion testing only
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, false)
+			},
+		})
+	}
 }
 
 // TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
@@ -162,6 +222,8 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.StopOnFailedContractMatching = true
+				config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -181,6 +243,8 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			config.Fuzzing.Testing.StopOnFailedContractMatching = true
+			config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -249,6 +313,89 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 
 				// When it's done, we should've had at least one self-destruction.
 				assert.Greater(t, selfDestructCount, 0, "no SELFDESTRUCT operations were detected, when they should have been.")
+			},
+		})
+	}
+}
+
+// TestExecutionTraces runs tests to ensure that execution traces capture information
+// regarding assertion failures, revert reasons, etc.
+func TestExecutionTraces(t *testing.T) {
+	expectedMessagesPerTest := map[string][]string{
+		"testdata/contracts/execution_tracing/call_and_deployment_args.sol": {"Hello from deployment args!", "Hello from call args!"},
+		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(true)"},
+		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!"},
+		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
+		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},
+		"testdata/contracts/execution_tracing/revert_reasons.sol":           {"RevertingContract was called and reverted."},
+		"testdata/contracts/execution_tracing/self_destruct.sol":            {"[selfdestruct]", "[assertion failed]"},
+	}
+	for filePath, expectedTraceMessages := range expectedMessagesPerTest {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Obtain the last call
+				lastCall := failingSequence[len(failingSequence)-1]
+				assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+				// Get the execution trace message
+				executionTraceMsg := lastCall.ExecutionTrace.String()
+
+				// Verify it contains all expected strings
+				for _, expectedTraceMessage := range expectedTraceMessages {
+					assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+				}
+			},
+		})
+	}
+}
+
+// TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
+// config option is specified. It also runs the fuzzer without the option enabled to ensure they are not tested.
+func TestTestingScope(t *testing.T) {
+	for _, testingAllContracts := range []bool{false, true} {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/deployments/testing_scope.sol",
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.TestAllContracts = testingAllContracts
+				config.Fuzzing.Testing.StopOnFailedTest = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.PropertyTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Define our expected failure count
+				var expectedFailureCount int
+				if testingAllContracts {
+					expectedFailureCount = 4
+				} else {
+					expectedFailureCount = 2
+				}
+
+				// Check for any failed tests and verify coverage was captured
+				assert.EqualValues(t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), expectedFailureCount)
 			},
 		})
 	}
@@ -405,9 +552,11 @@ func TestVMCorrectness(t *testing.T) {
 	})
 }
 
-// TestInitializeCoverageMaps will test whether the corpus can be "replayed" to seed the fuzzer with coverage from a
-// previous run.
-func TestInitializeCoverageMaps(t *testing.T) {
+// TestCorpusReplayability will test whether the corpus, when replayed, will end up with the same coverage.
+// Additionally, check if the second run is solved with sequences executed being less or equal to the total corpus
+// call sequences. This should occur as the corpus call sequences should be executed unmodified first (including
+// the sequence which previously failed the on-chain test), prior to generating any new fuzzed sequences.
+func TestCorpusReplayability(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/value_generation/match_uints_xy.sol",
 		configUpdates: func(config *config.ProjectConfig) {
@@ -426,26 +575,26 @@ func TestInitializeCoverageMaps(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
+			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceCount()
 
-			// Subscribe to the event and stop the fuzzer
-			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
-				// Simply stop the fuzzer
-				event.Fuzzer.Stop()
-				return nil
-			})
-
-			// Note that the fuzzer won't spin up any workers or fuzz anything. We just want to test that we seeded
-			// the coverage maps properly
+			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
+			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
+			// corpus call sequence items (as the failing test corpus items should be replayed by the call sequence
+			// generator prior to it generating any new sequences).
+			f.fuzzer.config.Fuzzing.Workers = 1
 			err = f.fuzzer.Start()
 			assert.NoError(t, err)
 
 			// Check to see if we have some coverage
 			assertCorpusCallSequencesCollected(f, true)
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same
 			assert.True(t, originalCoverage.Equals(newCoverage))
+
+			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
+			assert.LessOrEqual(t, f.fuzzer.metrics.SequencesTested().Uint64(), uint64(originalCorpusSequenceCount))
 		},
 	})
 }
@@ -471,7 +620,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 
 			// Cache current coverage maps
-			originalCoverage := f.fuzzer.coverageMaps
+			originalCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Subscribe to the event and stop the fuzzer
 			f.fuzzer.Events.FuzzerStarting.Subscribe(func(event FuzzerStartingEvent) error {
@@ -489,7 +638,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Check to see if original and new coverage are the same
-			newCoverage := f.fuzzer.coverageMaps
+			newCoverage := f.fuzzer.corpus.CoverageMaps()
 			assert.False(t, originalCoverage.Equals(newCoverage))
 		},
 	})

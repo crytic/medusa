@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trailofbits/medusa/chain/config"
 	"os"
 
 	"github.com/trailofbits/medusa/compilation"
@@ -75,6 +76,9 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
+
+	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
+	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing
@@ -85,6 +89,15 @@ type TestingConfig struct {
 	// StopOnFailedContractMatching describes whether the fuzzing.Fuzzer should stop after failing to match bytecode
 	// to determine which contract a deployed contract is.
 	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
+
+	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
+	// than just the contracts specified in the project configuration's deployment order.
+	TestAllContracts bool `json:"testAllContracts"`
+
+	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
+	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
+	// even if this option is not enabled.
+	TraceAll bool `json:"traceAll"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
