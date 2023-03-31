@@ -48,7 +48,7 @@ func (c *Compilation) GetSourceFileId(sourcePath string) int {
 func (c *Compilation) CacheSourceCode() error {
 	// Loop through each source file, try to read it, and collect errors in an aggregated string if we encounter any.
 	var errStr string
-	for sourcePath, _ := range c.Sources {
+	for sourcePath := range c.Sources {
 		if _, ok := c.SourceCode[sourcePath]; !ok {
 			sourceCodeBytes, sourceReadErr := os.ReadFile(sourcePath)
 			if sourceReadErr != nil {

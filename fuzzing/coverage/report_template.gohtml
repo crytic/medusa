@@ -1,0 +1,26 @@
+<html lang=en>
+    {{/* Loop through all sources */}}
+    {{range .}}
+        {{/* Output a filename for each source*/}}
+        <h3>{{.Path}}</h3>
+
+        {{/* Output a tables with a row for each source line*/}}
+        <table style="border:1px solid grey; margin: 20px; padding: 15px">
+            {{range .Lines}}
+
+                    {{/* Output each row with a cell for each source line*/}}
+                    <tr>
+                            {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}
+                            {{/* If a source line is "covered", it is green, otherwise it is red. */}}
+                            {{if not .IsActive}}
+                                    <td><pre>{{printf "%s" .Contents}}</pre></td>
+                            {{else if .IsCovered}}
+                                    <td bgcolor="#E8F5E9"><pre>{{printf "%s" .Contents}}</pre></td>
+                            {{else}}
+                                    <td bgcolor="#FFEBEE"><pre>{{printf "%s" .Contents}}</pre></td>
+                            {{end}}
+                    </tr>
+            {{end}}
+        </table>
+    {{end}}
+</html>

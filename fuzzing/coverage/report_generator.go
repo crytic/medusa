@@ -1,9 +1,16 @@
 package coverage
 
 import (
-	"bytes"
+	_ "embed"
 	"fmt"
 	"github.com/trailofbits/medusa/compilation/types"
+	"html/template"
+	"os"
+)
+
+var (
+	//go:embed report_template.gohtml
+	htmlReportTemplate []byte
 )
 
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
@@ -11,7 +18,7 @@ import (
 // Returns an error if one occurred.
 func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation) error {
 	// Create a map of source file paths to coverage lines.
-	sourceLinesByFile := make(map[string][]coverageSourceLine)
+	sourceLinesByFile := make(map[string][]*coverageSourceLine)
 
 	// The fuzzer generates coverage per address and codehash (e.g map[address] -> map[codeHash] -> coverage)
 	// so for each codeHash we have to figure out to which contract definition it belongs to.
@@ -27,16 +34,15 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 			if _, ok := sourceLinesByFile[sourcePath]; !ok {
 				sourceLinesByFile[sourcePath] = splitSourceCode(compilation.SourceCode[sourcePath])
 			}
-			sourceLines := sourceLinesByFile[sourcePath]
 
 			// Loop for each contract in this source
-			for contractName, contract := range source.Contracts {
+			for _, contract := range source.Contracts {
 				// Obtain coverage map data for this contract.
-				initCoverageMapData, err := coverageMaps.GetCoverageMapData(contract.InitBytecode)
+				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
 				}
-				runtimeCoverageMapData, err := coverageMaps.GetCoverageMapData(contract.RuntimeBytecode)
+				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
 				}
@@ -61,45 +67,113 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 					return fmt.Errorf("could not generate coverage report due to error when parsing runtime byte code: %v", err)
 				}
 
-				_, _, _, _, _, _ = sourceLines, contractName, initCoverageMapData, runtimeCoverageMapData, initInstructionOffsetLookup, runtimeInstructionOffsetLookup
+				// Analyze both init and runtime coverage for our source lines.
+				if initCoverageMapData != nil {
+					err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initCoverageMapData.initBytecodeCoverage)
+					if err != nil {
+						return err
+					}
+				}
+				if runtimeCoverageMapData != nil {
+					err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData.deployedBytecodeCoverage)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
+	}
+
+	// Finally, export the report data we analyzed.
+	// TODO: Replace this static path with one that is derived from config
+	outputPath := "report.html"
+	return exportCoverageReport(sourceLinesByFile, outputPath)
+}
+
+func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFile map[string][]*coverageSourceLine, sourceMap types.SourceMap, instructionOffsetLookup []int, coverageMapData *CoverageMapBytecodeData) error {
+	// Loop through each source map element
+	for instructionIndex, sourceMapElement := range sourceMap {
+		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
+		// relevance to the coverage map, so we skip it.
+		if sourceMapElement.FileID == -1 {
+			continue
+		}
+
+		// Verify this file ID is not out of bounds for a source file index
+		if sourceMapElement.FileID < 0 || sourceMapElement.FileID >= len(compilation.SourceList) {
+			// TODO: We may also go out of bounds because this maps to a "generated source" which we do not have.
+			//  For now, we silently skip these cases.
+			continue
+		}
+
+		// Obtain our source for this file ID
+		sourcePath := compilation.SourceList[sourceMapElement.FileID]
+
+		// Check if the source map element was executed.
+		sourceMapElementCovered := coverageMapData.isCovered(instructionOffsetLookup[instructionIndex])
+
+		// Obtain the source file this element maps to.
+		if sourceLines, ok := sourceLinesByFile[sourcePath]; ok {
+			// Mark all lines which fall within this range.
+			matchedSourceLine := false
+			for _, sourceLine := range sourceLines {
+				// Check if the line is within range
+				if sourceLine.Start >= sourceMapElement.Offset && sourceLine.End <= sourceMapElement.Offset+sourceMapElement.Length {
+					// Mark the line active/executable.
+					sourceLine.IsActive = true
+
+					// Set its coverage state
+					sourceLine.IsCovered = sourceMapElementCovered
+
+					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
+					// early.
+					matchedSourceLine = true
+				} else if matchedSourceLine {
+					break
+				}
+			}
+		} else {
+			return fmt.Errorf("could not generate report, failed to resolve source lines by source path")
+		}
+
 	}
 	return nil
 }
 
-// coverageSourceLine indicates whether the
-type coverageSourceLine struct {
-	IsActive bool
-	Start    int
-	End      int
-	Contents []byte
-	Covered  bool
-}
-
-// splitSourceCode splits the provided source code into coverageSourceLine objects.
-// Returns the coverageSourceLine objects.
-func splitSourceCode(sourceCode []byte) []coverageSourceLine {
-	// Create our lines and a variable to track where our current line start offset is.
-	var lines []coverageSourceLine
-	var lineStart int
-
-	// Split the source code on new line characters
-	sourceCodeLinesBytes := bytes.Split(sourceCode, []byte("\n"))
-
-	// For each source code line, initialize a struct that defines its start/end offsets, set its contents.
-	for i := 0; i < len(sourceCodeLinesBytes); i++ {
-		lineEnd := lineStart + len(sourceCodeLinesBytes[i]) + 1
-		lines = append(lines, coverageSourceLine{
-			IsActive: false,
-			Start:    lineStart,
-			End:      lineEnd,
-			Contents: sourceCodeLinesBytes[i],
-			Covered:  false,
-		})
-		lineStart = lineEnd
+func exportCoverageReport(sourceLinesByFile map[string][]*coverageSourceLine, outputPath string) error {
+	// Define template compatible structures.
+	type SourceFile struct {
+		Path  string
+		Lines []*coverageSourceLine
 	}
 
-	// Return the resulting lines
-	return lines
+	// Convert all files to the template friendly format.
+	sourceFiles := make([]SourceFile, 0)
+	for filePath, lines := range sourceLinesByFile {
+		// Add our source file with the lines.
+		sourceFiles = append(sourceFiles, SourceFile{
+			Path:  filePath,
+			Lines: lines,
+		})
+	}
+	// Parse our HTML template
+	tmpl, err := template.New("coverage_report.html").Parse(string(htmlReportTemplate))
+	if err != nil {
+		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
+	}
+
+	// Create our report file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		// TODO error handling
+		return fmt.Errorf("could not export report, failed to open file for writing: %v", err)
+	}
+
+	// Execute the template and write it back to file.
+	err = tmpl.Execute(file, sourceFiles)
+	fileCloseErr := file.Close()
+	if err == nil {
+		err = fileCloseErr
+	}
+	return err
 }
