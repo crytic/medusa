@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common/compiler"
 )
 
 type SolcCompilationConfig struct {

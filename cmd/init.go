@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/spf13/cobra"
 )
 
 // initCmd represents the command provider for init

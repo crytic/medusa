@@ -2,10 +2,10 @@ package coverage
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/crytic/medusa/chain/types"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 )
 

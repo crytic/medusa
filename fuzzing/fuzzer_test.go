@@ -9,8 +9,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.

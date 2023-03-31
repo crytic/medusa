@@ -2,13 +2,13 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"math/rand"

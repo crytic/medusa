@@ -1,10 +1,10 @@
 package platforms
 
 import (
-	"github.com/stretchr/testify/assert"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/testutils"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"path/filepath"

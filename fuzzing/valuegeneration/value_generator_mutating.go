@@ -1,8 +1,8 @@
 package valuegeneration
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
 	"math/big"
 	"math/rand"

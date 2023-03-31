@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/spf13/cobra"
 )
 
 // addFuzzFlags adds the various flags for the fuzz command

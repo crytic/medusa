@@ -6,8 +6,8 @@ import (
 	"golang.org/x/exp/slices"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
