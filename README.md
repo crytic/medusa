@@ -1,7 +1,9 @@
 # medusa
 
-`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [echidna](https://github.com/crytic/echidna).
+`medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [Echidna](https://github.com/crytic/echidna).
 It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
+
+**Disclaimer**: Please note that `medusa` is an **experimental** smart contract fuzzer. Currently, it should _not_ be adopted into production systems. We intend for `medusa` to reach the same capabilities and maturity that Echidna has. Until then, be careful using `medusa` as your primary smart contract fuzz testing solution. Additionally, please be aware that the Go-level testing API is still **under development** and is subject to breaking changes.
 
 ## Features
 
@@ -40,7 +42,7 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
-We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for echidna. `medusa` supports echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for Echidna. `medusa` supports Echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
 
 ### Command-line only
 
@@ -89,6 +91,20 @@ First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc
   - Or enter each package directory to run `go test -v .` to test the immediate package.
   - Note: the `-v` parameter provides verbose output.
 - Otherwise, use an IDE like [GoLand](https://www.jetbrains.com/go/) to visualize the tests and logically separate output.
+
+## FAQs
+
+**Why create `medusa` if Echidna is already working just fine?**
+
+With `medusa`, we are exploring a different EVM implementation and language for our smart contract fuzzer. We believe that
+experimenting with a new fuzzer provides us with the following benefits:
+
+- Since `medusa` is written in Go, we believe that this will **lower the barrier of entry for external contributions**.
+  We have taken great care in thoroughly commenting our code so that it is easy for new contributors to get up-to-speed and start contributing!
+- The use of Go allows us to build an API to hook into the various parts of the fuzzer to build custom testing methodologies. See the [API Overview (WIP)](<https://github.com/crytic/medusa/wiki/API-Overview-(WIP)>) section in the Wiki for more details.
+- Our forked version of go-ethereum, [`medusa-geth`](https://github.com/crytic/medusa-geth), exhibits behavior that is closer to that of the EVM in production environments.
+- We can take the lessons we learned while developing Echidna to create a fuzzer that is just as feature-rich but with additional capabilities to
+  create powerful and unique testing methodologies.
 
 ## Contributing
 
