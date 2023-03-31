@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 )
 
 // CryticCompilationConfig represents the various configuration options that can be provided by the user

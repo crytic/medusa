@@ -11,8 +11,8 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 )
 
 type SolcCompilationConfig struct {

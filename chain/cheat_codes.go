@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/utils"
 	"math/big"
 	"os/exec"
 	"strconv"

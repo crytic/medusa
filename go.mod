@@ -1,4 +1,4 @@
-module github.com/trailofbits/medusa
+module github.com/crytic/medusa
 
 go 1.18
 

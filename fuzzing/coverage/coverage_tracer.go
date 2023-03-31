@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/chain/types"
-	compilationTypes "github.com/trailofbits/medusa/compilation/types"
+	"github.com/crytic/medusa/chain/types"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"math/big"
 )
 

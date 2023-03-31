@@ -2,7 +2,7 @@ package calls
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/chain"
+	"github.com/crytic/medusa/chain"
 )
 
 // ExecuteCallSequenceFetchElementFunc describes a function that is called to obtain the next call sequence element to

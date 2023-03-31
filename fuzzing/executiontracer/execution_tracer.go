@@ -5,8 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"golang.org/x/exp/slices"
 	"math/big"
 )

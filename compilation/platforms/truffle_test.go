@@ -2,7 +2,7 @@ package platforms
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils/testutils"
+	"github.com/crytic/medusa/utils/testutils"
 	"testing"
 )
 

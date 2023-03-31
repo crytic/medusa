@@ -3,7 +3,7 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/chain/types"
+	"github.com/crytic/medusa/chain/types"
 	"math/big"
 )
 

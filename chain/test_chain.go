@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/trailofbits/medusa/chain/config"
+	"github.com/crytic/medusa/chain/config"
 	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
@@ -19,9 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
-	"github.com/trailofbits/medusa/chain/vendored"
-	"github.com/trailofbits/medusa/utils"
+	chainTypes "github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/chain/vendored"
+	"github.com/crytic/medusa/utils"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away

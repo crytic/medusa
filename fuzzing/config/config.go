@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/trailofbits/medusa/chain/config"
+	"github.com/crytic/medusa/chain/config"
 	"os"
 
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/utils"
 )
 
 type ProjectConfig struct {

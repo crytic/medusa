@@ -1,8 +1,8 @@
 package testutils
 
 import (
+	"github.com/crytic/medusa/utils"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/utils"
 	"os"
 	"path/filepath"
 	"testing"

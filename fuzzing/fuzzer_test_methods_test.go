@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/config"
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/config"
 )
 
 // fuzzerTestContext holds the current Fuzzer test context and can be used for post-execution checks

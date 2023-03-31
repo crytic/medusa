@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/config"
 )
 
 // addFuzzFlags adds the various flags for the fuzz command
