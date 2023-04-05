@@ -168,6 +168,18 @@ func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
 	return true
 }
 
+// Size computes the number of bytes in the bytecodes that were executed.
+func (a *CoverageMaps) Size() int {
+	size := 0;
+	// Loop for each coverage map provided
+	for _, mapsByCodeHashToMerge := range a.maps {
+		for _, coverage := range mapsByCodeHashToMerge {
+			size = size + len(coverage.initBytecodeCoverageData) + len(coverage.deployedBytecodeCoverageData)
+		}
+	}
+	return size
+}
+
 // codeCoverageData represents a data structure used to identify instruction execution coverage of contract byte code.
 type codeCoverageData struct {
 	// initBytecodeCoverageData represents a list of bytes for each byte of a contract's init bytecode. Non-zero values

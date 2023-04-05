@@ -631,7 +631,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// Print a metrics update
 		fmt.Printf(
-			"[%s] [status] elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, corpus: %d\n",
+			"[%s] [status] elapsed: %s, call: %d (%d/sec), seq/s: %d, resets/s: %d, corpus: %d, coverage: %d\n",
 			time.Now().Format("2006-01-02 15:04:05.00"),
 			time.Since(startTime).Round(time.Second),
 			callsTested,
@@ -639,6 +639,7 @@ func (f *Fuzzer) printMetricsLoop() {
 			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
 			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
 			f.corpus.ActiveCallSequenceCount(),
+			f.corpus.CoverageMaps().Size(),
 		)
 
 		// Update our delta tracking metrics
