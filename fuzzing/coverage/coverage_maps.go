@@ -170,7 +170,7 @@ func (a *CoverageMaps) Equals(b *CoverageMaps) bool {
 
 // Size computes the number of bytes in the bytecodes that were executed.
 func (a *CoverageMaps) Size() int {
-	size := 0;
+	size := 0
 	// Loop for each coverage map provided
 	for _, mapsByCodeHashToMerge := range a.maps {
 		for _, coverage := range mapsByCodeHashToMerge {
