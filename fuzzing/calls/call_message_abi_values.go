@@ -8,6 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// UNRESOLVED_METHOD describes the constant that is returned when we are unable to resolve an abi.Method at runtime.
+// This primarily may occur when replaying a corpus and the ABI of a contract has changed between runs.
+const UNRESOLVED_METHOD = "UNRESOLVED_METHOD"
+
 // CallMessageDataAbiValues describes a CallMessage Data field which is represented by ABI input argument values.
 // This is represented at runtime by an abi.Method and its input values.
 // Note: The data may be serialized. When deserializing, the Resolve method must be called to resolve the abi.Method
@@ -87,9 +91,10 @@ func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
 // Pack packs all the ABI argument InputValues into call data for the relevant Method it targets. If this was
 // deserialized, Resolve must be called first to resolve necessary runtime data (such as the Method).
 func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
-	// We must have set an ABI method at runtime to serialize this.
+	// If we do not have an ABI method at runtime to serialize this, we will return a []byte of UNRESOLVED_METHOD
+	// This should only happen when the corpus is being replayed and the ABI of a contract has changed between runs
 	if d.Method == nil {
-		return nil, fmt.Errorf("ABI call data packing failed, method definition was not set at runtime")
+		return []byte(UNRESOLVED_METHOD), nil
 	}
 
 	// If our ABI method was not set, we can't serialize our data.
