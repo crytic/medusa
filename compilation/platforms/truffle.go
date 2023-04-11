@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/crytic/medusa/compilation/types"
 )
 
 type TruffleCompilationConfig struct {

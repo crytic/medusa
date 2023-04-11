@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/crytic/medusa/utils/reflectionutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/utils/reflectionutils"
 )
 
 // addressJSONContractNameOverridePrefix defines a string prefix which is to be followed by a contract name. The

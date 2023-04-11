@@ -2,10 +2,10 @@ package calls
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/chain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/chain"
 	"golang.org/x/exp/slices"
 	"math/big"
 )

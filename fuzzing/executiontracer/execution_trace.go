@@ -3,11 +3,11 @@ package executiontracer
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/compilation/abiutils"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 	"strings"
 )
 
