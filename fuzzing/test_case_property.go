@@ -47,7 +47,7 @@ func (t *PropertyTestCase) Message() string {
 		// If an execution trace is attached then add it to the message
 		if t.propertyTestTrace != nil {
 			// TODO: Improve formatting in logging PR
-			msg = fmt.Sprintf("%s\n Property test execution trace:\n%s", msg, t.propertyTestTrace.String())
+			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
 		}
 		return msg
 	}
