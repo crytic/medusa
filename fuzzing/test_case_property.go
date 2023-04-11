@@ -38,16 +38,18 @@ func (t *PropertyTestCase) Name() string {
 func (t *PropertyTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
-		return fmt.Sprintf(
-			"Test \"%s.%s\" failed after the following call sequence:\n%s\n"+
-				"Property test \"%s.%s\" execution:\n%s",
+		msg := fmt.Sprintf(
+			"Property test \"%s.%s\" failed after the following call sequence:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.propertyTestTrace.String(),
 		)
+		// If an execution trace is attached then add it to the message
+		if t.propertyTestTrace != nil {
+			// TODO: Improve formatting in logging PR
+			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
+		}
+		return msg
 	}
 	return ""
 }

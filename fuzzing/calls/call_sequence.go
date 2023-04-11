@@ -94,8 +94,26 @@ func (cs CallSequence) Hash() (common.Hash, error) {
 			return common.Hash{}, err
 		}
 
-		// Hash the call message
-		_, err = hashProvider.Write(utils.MessageToTransaction(cse.Call).Hash().Bytes())
+		// Try to pack the call message and obtain a hash for it.
+		// This may panic if the ABI changed and the ABI method/function targeted does not resolve or the call
+		// could otherwise not be packed/serialized. If it does, we use fixed hash data instead.
+		var messageHashData []byte
+		func() {
+			// If the below operations to obtain a message/call hash fail, we instead substitute it with hardcoded
+			// hash data.
+			defer func() {
+				if r := recover(); r != nil {
+					messageHashData = common.Hash{}.Bytes()
+				}
+			}()
+
+			// Try to obtain a hash for the message/call. If this fails, we will replace it in the deferred panic
+			// recovery.
+			messageHashData = utils.MessageToTransaction(cse.Call).Hash().Bytes()
+		}()
+
+		// Hash the message hash data.
+		_, err = hashProvider.Write(messageHashData)
 		if err != nil {
 			return common.Hash{}, err
 		}
