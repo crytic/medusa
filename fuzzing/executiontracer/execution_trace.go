@@ -19,16 +19,16 @@ type ExecutionTrace struct {
 	// address calls upon a contract.
 	TopLevelCallFrame *CallFrame
 
-	// ContractDefinitions represents the known contract definitions at the time of tracing. This is used to help
+	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
 	// obtain any additional information regarding execution.
-	ContractDefinitions contracts.Contracts
+	contractDefinitions contracts.Contracts
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
 func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
-		ContractDefinitions: contracts,
+		contractDefinitions: contracts,
 	}
 }
 
@@ -203,7 +203,7 @@ func (t *ExecutionTrace) generateEventEmittedString(callFrame *CallFrame, eventL
 	if event == nil {
 		// TODO: If we couldn't resolve the event, it comes from a library. Temporarily, we just try to resolve the
 		//  event from all contracts, until we can associate which contracts actually represent relevant libraries.
-		for _, contract := range t.ContractDefinitions {
+		for _, contract := range t.contractDefinitions {
 			event, eventInputValues = abiutils.UnpackEventAndValues(&contract.CompiledContract().Abi, eventLog)
 			if event != nil {
 				break
