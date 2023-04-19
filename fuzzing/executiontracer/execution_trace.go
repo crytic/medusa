@@ -201,8 +201,9 @@ func (t *ExecutionTrace) generateEventEmittedString(callFrame *CallFrame, eventL
 	// Try to unpack our event data
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 	if event == nil {
-		// TODO: If we couldn't resolve the event, it comes from a library. Temporarily, we just try to resolve the
-		//  event from all contracts, until we can associate which contracts actually represent relevant libraries.
+		// If we couldn't resolve the event from our immediate contract ABI, it may come from a library.
+		// TODO: Temporarily, we fix this by trying to resolve the event from any contracts definition. A future
+		//  fix should include only checking relevant libraries associated with the contract.
 		for _, contract := range t.contractDefinitions {
 			event, eventInputValues = abiutils.UnpackEventAndValues(&contract.CompiledContract().Abi, eventLog)
 			if event != nil {
