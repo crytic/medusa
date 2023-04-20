@@ -3,7 +3,7 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/trailofbits/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/fuzzing/coverage"
 	"math/big"
 	"math/rand"
 	"sort"

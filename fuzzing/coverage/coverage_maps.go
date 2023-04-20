@@ -3,10 +3,10 @@ package coverage
 import (
 	"bytes"
 	"fmt"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	compilationTypes "github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
 	"sync"
 )
 
