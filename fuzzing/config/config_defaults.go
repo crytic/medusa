@@ -1,8 +1,8 @@
 package config
 
 import (
-	testChainConfig "github.com/trailofbits/medusa/chain/config"
-	"github.com/trailofbits/medusa/compilation"
+	testChainConfig "github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/compilation"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config

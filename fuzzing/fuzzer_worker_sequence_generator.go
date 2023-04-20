@@ -2,10 +2,10 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/randomutils"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/randomutils"
 	"math/big"
 )
 

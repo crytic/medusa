@@ -1,9 +1,9 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"math/rand"
 )
 

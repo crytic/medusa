@@ -1,13 +1,13 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/compilation/abiutils"
-	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/calls"
 	"golang.org/x/exp/slices"
 	"sync"
 
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and

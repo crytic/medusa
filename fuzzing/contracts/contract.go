@@ -1,7 +1,7 @@
 package contracts
 
 import (
-	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/crytic/medusa/compilation/types"
 )
 
 // Contracts describes an array of contracts
