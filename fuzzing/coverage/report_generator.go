@@ -3,7 +3,7 @@ package coverage
 import (
 	_ "embed"
 	"fmt"
-	"github.com/trailofbits/medusa/compilation/types"
+	"github.com/crytic/medusa/compilation/types"
 	"html/template"
 	"os"
 )
