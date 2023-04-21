@@ -77,7 +77,7 @@ func (t *ExecutionTracer) Trace() *ExecutionTrace {
 func (t *ExecutionTracer) CaptureTxStart(gasLimit uint64) {
 	// Reset our capture state
 	t.callDepth = 0
-	t.trace = newExecutionTrace()
+	t.trace = newExecutionTrace(t.contractDefinitions)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
 }

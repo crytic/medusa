@@ -1,4 +1,12 @@
-// This contract ensures the fuzzer's execution tracing can obtain event emissions.
+// This test ensures the fuzzer's execution tracing can obtain event emissions.
+library Logger {
+    event TestLibraryEvent(string s);
+
+    function log(string memory s) internal {
+        emit TestLibraryEvent(s);
+    }
+}
+
 contract TestContract {
     uint x;
     uint y;
@@ -15,6 +23,7 @@ contract TestContract {
         emit TestEvent(value);
         emit TestIndexedEvent(value);
         emit TestMixedEvent(msg.sender, value, 7, "Hello from event args!");
+        Logger.log("Hello from library event args!");
         assert(x % 2 == 0);
     }
 }
