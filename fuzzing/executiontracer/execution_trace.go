@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
@@ -17,12 +18,17 @@ type ExecutionTrace struct {
 	// TopLevelCallFrame refers to the root call frame, the first EVM call scope entered when an externally-owned
 	// address calls upon a contract.
 	TopLevelCallFrame *CallFrame
+
+	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
+	// obtain any additional information regarding execution.
+	contractDefinitions contracts.Contracts
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace() *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
 	return &ExecutionTrace{
-		TopLevelCallFrame: nil,
+		TopLevelCallFrame:   nil,
+		contractDefinitions: contracts,
 	}
 }
 
@@ -194,6 +200,19 @@ func (t *ExecutionTrace) generateEventEmittedString(callFrame *CallFrame, eventL
 
 	// Try to unpack our event data
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
+	if event == nil {
+		// If we couldn't resolve the event from our immediate contract ABI, it may come from a library.
+		// TODO: Temporarily, we fix this by trying to resolve the event from any contracts definition. A future
+		//  fix should include only checking relevant libraries associated with the contract.
+		for _, contract := range t.contractDefinitions {
+			event, eventInputValues = abiutils.UnpackEventAndValues(&contract.CompiledContract().Abi, eventLog)
+			if event != nil {
+				break
+			}
+		}
+	}
+
+	// If we resolved an event definition and unpacked data.
 	if event != nil {
 		// Format the values as a comma-separated string
 		encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
