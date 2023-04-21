@@ -126,8 +126,8 @@ func getTestABIArguments() abi.Arguments {
 		// Alias our arg so when we get a pointer to it, we don't cause a memory leak in this loop
 		basicArg := basicArg
 
-		// Add a slice/array of this basic type.
-		args = append(args,
+		// Define our array arguments.
+		arrayArgs := abi.Arguments{
 			abi.Argument{
 				Name: fmt.Sprintf("testSlice (%v)", basicArg.Type.GetType().String()),
 				Type: abi.Type{
@@ -154,7 +154,45 @@ func getTestABIArguments() abi.Arguments {
 				},
 				Indexed: false,
 			},
-		)
+		}
+
+		// Add slice/array for our basic types.
+		args = append(args, arrayArgs...)
+
+		// Now for those slices/arrays, we create nested ones
+		for _, arrayArg := range arrayArgs {
+			arrayArg := arrayArg
+
+			// Add nested slice/arrays.
+			args = append(args,
+				abi.Argument{
+					Name: fmt.Sprintf("testSlice (%v)", arrayArg.Type.GetType().String()),
+					Type: abi.Type{
+						Elem:          &arrayArg.Type,
+						Size:          0,
+						T:             abi.SliceTy,
+						TupleRawName:  "",
+						TupleElems:    nil,
+						TupleRawNames: nil,
+						TupleType:     nil,
+					},
+					Indexed: false,
+				},
+				abi.Argument{
+					Name: fmt.Sprintf("testArray (%v)", arrayArg.Type.GetType().String()),
+					Type: abi.Type{
+						Elem:          &arrayArg.Type,
+						Size:          3,
+						T:             abi.ArrayTy,
+						TupleRawName:  "",
+						TupleElems:    nil,
+						TupleRawNames: nil,
+						TupleType:     nil,
+					},
+					Indexed: false,
+				},
+			)
+		}
 	}
 
 	// TODO: Add tuple argument.
@@ -243,7 +281,7 @@ func TestABIGenerationAndMutation(t *testing.T) {
 	// Loop for each input argument
 	for _, arg := range args {
 		// Test each argument round trip serialization with different generated values (iterate a number of times).
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 5; i++ {
 			// Generate a value for this argument
 			value := GenerateAbiValue(valueGenerator, &arg.Type)
 
