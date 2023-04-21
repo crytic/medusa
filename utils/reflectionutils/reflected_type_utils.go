@@ -35,15 +35,15 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 	case reflect.Slice:
 		elementType := reflectedValue.Type().Elem()
 		newSlice := reflect.MakeSlice(reflect.SliceOf(elementType), reflectedValue.Len(), reflectedValue.Cap())
-		if reflect.Copy(newSlice, reflectedValue) != reflectedValue.Len() {
-			panic("failed to copy reflected value, unexpected resulting slice length")
+		for i := 0; i < reflectedValue.Len(); i++ {
+			newSlice.Index(i).Set(reflect.ValueOf(reflectedValue.Index(i).Interface()))
 		}
 		return newSlice
 	case reflect.Array:
 		arrayType := reflect.ArrayOf(reflectedValue.Len(), reflectedValue.Type().Elem())
 		newArray := reflect.New(arrayType).Elem()
-		if reflect.Copy(newArray, reflectedValue) != reflectedValue.Len() {
-			panic("failed to copy reflected value, unexpected resulting array length")
+		for i := 0; i < reflectedValue.Len(); i++ {
+			newArray.Index(i).Set(reflect.ValueOf(reflectedValue.Index(i).Interface()))
 		}
 		return newArray
 	case reflect.Struct:
