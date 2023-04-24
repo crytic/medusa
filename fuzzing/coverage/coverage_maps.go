@@ -280,6 +280,11 @@ type CoverageMapBytecodeData struct {
 // isCovered checks if a given program counter location is covered by the map.
 // Returns a boolean indicating if the program counter was executed on this map.
 func (cm *CoverageMapBytecodeData) isCovered(pc int) bool {
+	// If the coverage map bytecode data is nil, this is not covered.
+	if cm == nil {
+		return false
+	}
+
 	// If this map has no execution data or is out of bounds, it is not covered.
 	if cm.executedFlags == nil || len(cm.executedFlags) <= pc {
 		return false

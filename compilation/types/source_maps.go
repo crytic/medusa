@@ -36,6 +36,11 @@ type SourceMap []SourceMapElement
 // The index of each element in a source map corresponds to an instruction index (not to be mistaken with offset).
 // It describes portion of a source file the instruction references.
 type SourceMapElement struct {
+	// Index refers to the index of the SourceMapElement within its parent SourceMap. This is not actually a field
+	// saved in the SourceMap, but is provided for convenience so the user may remove SourceMapElement objects during
+	// analysis.
+	Index int
+
 	// Offset refers to the byte offset which marks the start of the source range the instruction maps to.
 	Offset int
 
@@ -74,7 +79,8 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 	// We use this variable to store "the previous element" because the way
 	// the source mapping works when an element or field is "empty"
 	// the value of the previous element is used.
-	previous := SourceMapElement{
+	current := SourceMapElement{
+		Index:         -1,
 		Offset:        -1,
 		Length:        -1,
 		FileID:        -1,
@@ -84,9 +90,12 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 	// Iterate over all elements split from the source mapping
 	for _, element := range elements {
+		// Set the current index
+		current.Index = len(sourceMap)
+
 		// If the element is empty, we use the previous one
 		if len(element) == 0 {
-			sourceMap = append(sourceMap, previous)
+			sourceMap = append(sourceMap, current)
 			continue
 		}
 
@@ -95,7 +104,7 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 		// If the source range start offset exists, update our current element data.
 		if len(fields) > 0 && fields[0] != "" {
-			previous.Offset, err = strconv.Atoi(fields[0])
+			current.Offset, err = strconv.Atoi(fields[0])
 			if err != nil {
 				return nil, err
 			}
@@ -103,7 +112,7 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 		// If the source range length exists, update our current element data.
 		if len(fields) > 1 && fields[1] != "" {
-			previous.Length, err = strconv.Atoi(fields[1])
+			current.Length, err = strconv.Atoi(fields[1])
 			if err != nil {
 				return nil, err
 			}
@@ -111,7 +120,7 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 		// If the source file identifier exists, update our current element data.
 		if len(fields) > 2 && fields[2] != "" {
-			previous.FileID, err = strconv.Atoi(fields[2])
+			current.FileID, err = strconv.Atoi(fields[2])
 			if err != nil {
 				return nil, err
 			}
@@ -119,19 +128,19 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 		// If the jump type information exists, update our current element data.
 		if len(fields) > 3 && fields[3] != "" {
-			previous.JumpType = SourceMapJumpType(fields[3])
+			current.JumpType = SourceMapJumpType(fields[3])
 		}
 
 		// If the modifier call depth exists, update our current element data.
 		if len(fields) > 4 && fields[4] != "" {
-			previous.ModifierDepth, err = strconv.Atoi(fields[4])
+			current.ModifierDepth, err = strconv.Atoi(fields[4])
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		// Append our element to the map
-		sourceMap = append(sourceMap, previous)
+		sourceMap = append(sourceMap, current)
 	}
 
 	// Return the resulting map

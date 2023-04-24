@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/compilation/types"
 	"html/template"
 	"os"
+	"time"
 )
 
 var (
@@ -38,13 +39,23 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 			// Loop for each contract in this source
 			for _, contract := range source.Contracts {
 				// Obtain coverage map data for this contract.
+				var (
+					initCoverageMapBytecodeData    *CoverageMapBytecodeData
+					runtimeCoverageBytecodeMapData *CoverageMapBytecodeData
+				)
 				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
 				}
+				if initCoverageMapData != nil {
+					initCoverageMapBytecodeData = initCoverageMapData.initBytecodeCoverage
+				}
 				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
+				}
+				if runtimeCoverageMapData != nil {
+					runtimeCoverageBytecodeMapData = runtimeCoverageMapData.deployedBytecodeCoverage
 				}
 
 				// Parse the source map for this contract.
@@ -67,18 +78,18 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 					return fmt.Errorf("could not generate coverage report due to error when parsing runtime byte code: %v", err)
 				}
 
+				// Filter our source maps
+				initSourceMap = filterSourceMaps(compilation, initSourceMap)
+				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
+
 				// Analyze both init and runtime coverage for our source lines.
-				if initCoverageMapData != nil {
-					err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initCoverageMapData.initBytecodeCoverage)
-					if err != nil {
-						return err
-					}
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initCoverageMapBytecodeData)
+				if err != nil {
+					return err
 				}
-				if runtimeCoverageMapData != nil {
-					err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData.deployedBytecodeCoverage)
-					if err != nil {
-						return err
-					}
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageBytecodeMapData)
+				if err != nil {
+					return err
 				}
 			}
 		}
@@ -86,13 +97,50 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 
 	// Finally, export the report data we analyzed.
 	// TODO: Replace this static path with one that is derived from config
-	outputPath := "report.html"
+	outputPath := fmt.Sprintf("C:\\Users\\X\\Documents\\___\\report_%v.html", time.Now().UnixNano())
 	return exportCoverageReport(sourceLinesByFile, outputPath)
+}
+
+// filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are filtered
+// out, in addition to any which do not map to any source code. This is necessary as some source map entries select
+// an entire method definition.
+// Returns the filtered source map.
+func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) types.SourceMap {
+	// Create our resulting source map
+	filteredMap := make(types.SourceMap, 0)
+
+	// Loop for each source map entry and determine if it should be included.
+	for i, sourceMapElement := range sourceMap {
+		// Verify this file ID is not out of bounds for a source file index
+		if sourceMapElement.FileID < 0 || sourceMapElement.FileID >= len(compilation.SourceList) {
+			// TODO: We may also go out of bounds because this maps to a "generated source" which we do not have.
+			//  For now, we silently skip these cases.
+			continue
+		}
+
+		// Verify this source map does not overlap another
+		encapsulatesOtherMapping := false
+		for x, sourceMapElement2 := range sourceMap {
+			if i != x && sourceMapElement.FileID == sourceMapElement2.FileID &&
+				!(sourceMapElement.Offset == sourceMapElement2.Offset && sourceMapElement.Length == sourceMapElement2.Length) {
+				if sourceMapElement2.Offset >= sourceMapElement.Offset &&
+					sourceMapElement2.Offset+sourceMapElement2.Length <= sourceMapElement.Offset+sourceMapElement.Length {
+					encapsulatesOtherMapping = true
+					break
+				}
+			}
+		}
+
+		if !encapsulatesOtherMapping {
+			filteredMap = append(filteredMap, sourceMapElement)
+		}
+	}
+	return filteredMap
 }
 
 func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFile map[string][]*coverageSourceLine, sourceMap types.SourceMap, instructionOffsetLookup []int, coverageMapData *CoverageMapBytecodeData) error {
 	// Loop through each source map element
-	for instructionIndex, sourceMapElement := range sourceMap {
+	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
 		// relevance to the coverage map, so we skip it.
 		if sourceMapElement.FileID == -1 {
@@ -110,7 +158,7 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 		sourcePath := compilation.SourceList[sourceMapElement.FileID]
 
 		// Check if the source map element was executed.
-		sourceMapElementCovered := coverageMapData.isCovered(instructionOffsetLookup[instructionIndex])
+		sourceMapElementCovered := coverageMapData.isCovered(instructionOffsetLookup[sourceMapElement.Index])
 
 		// Obtain the source file this element maps to.
 		if sourceLines, ok := sourceLinesByFile[sourcePath]; ok {
@@ -118,7 +166,7 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 			matchedSourceLine := false
 			for _, sourceLine := range sourceLines {
 				// Check if the line is within range
-				if sourceLine.Start >= sourceMapElement.Offset && sourceLine.End <= sourceMapElement.Offset+sourceMapElement.Length {
+				if sourceMapElement.Offset >= sourceLine.Start && sourceMapElement.Offset < sourceLine.End {
 					// Mark the line active/executable.
 					sourceLine.IsActive = true
 
