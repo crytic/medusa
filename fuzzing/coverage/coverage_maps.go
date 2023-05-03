@@ -46,28 +46,34 @@ func (cm *CoverageMaps) Reset() {
 	cm.maps = make(map[common.Hash]map[common.Address]*ContractCoverageMap)
 }
 
-// GetContractCoverageMap obtains a total coverage map representing coverage for the provided bytecode.
-// The bytecode matching is done first through an embedded metadata hash, then as a fallback option it hashes the
-// byte code data. The former is seen as "safe", while the latter is subject to various failures.
-// If the provided bytecode could not find coverage maps, nil is returned.
-// Returns the total coverage map, or an error if one occurs.
-func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte) (*ContractCoverageMap, error) {
-	// Try to extract the embedded contract metadata and its underlying bytecode hash.
-	var hash common.Hash
-	hashSet := false
-	metadata := compilationTypes.ExtractContractMetadata(bytecode)
-	if metadata != nil {
-		metadataHash := metadata.ExtractBytecodeHash()
-		if metadataHash != nil {
-			hash = common.BytesToHash(metadataHash)
-			hashSet = true
+// getContractCoverageMapHash obtain the hash used to look up a given contract's ContractCoverageMap.
+// If this is init bytecode, metadata and abi arguments will attempt to be stripped, then a hash is computed.
+// If this is runtime bytecode, the metadata ipfs/swarm hash will be used if available, otherwise the bytecode
+// is hashed.
+// Returns the resulting lookup hash.
+func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
+	// If available, the metadata code hash should be unique and reliable to use above all (for runtime bytecode).
+	if !init {
+		metadata := compilationTypes.ExtractContractMetadata(bytecode)
+		if metadata != nil {
+			metadataHash := metadata.ExtractBytecodeHash()
+			if metadataHash != nil {
+				return common.BytesToHash(metadataHash)
+			}
 		}
 	}
 
-	// Otherwise, obtain a hash of the compiled byte code itself.
-	if !hashSet {
-		hash = crypto.Keccak256Hash(bytecode)
-	}
+	// Otherwise, we use the hash of the bytecode after attempting to strip metadata (and constructor args).
+	strippedBytecode := compilationTypes.RemoveContractMetadata(bytecode)
+	return crypto.Keccak256Hash(strippedBytecode)
+}
+
+// GetContractCoverageMap obtains a total coverage map representing coverage for the provided bytecode.
+// If the provided bytecode could not find coverage maps, nil is returned.
+// Returns the total coverage map, or an error if one occurs.
+func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte, init bool) (*ContractCoverageMap, error) {
+	// Obtain the lookup hash
+	hash := getContractCoverageMapHash(bytecode, init)
 
 	// Acquire our thread lock and defer our unlocking for when we exit this method
 	cm.updateLock.Lock()

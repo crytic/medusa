@@ -148,7 +148,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.weightedCallSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
 	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
 
-	// Create new coverage maps to track total coverage and a coverage tracer to do so.
+	// Create a coverage tracer to track coverage across all blocks.
 	c.coverageMaps = coverage.NewCoverageMaps()
 	coverageTracer := coverage.NewCoverageTracer()
 
@@ -177,6 +177,18 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+	}
+
+	// Set our coverage maps to those collected when replaying all blocks when cloning.
+	c.coverageMaps = coverage.NewCoverageMaps()
+	for _, block := range testChain.CommittedBlocks() {
+		for _, messageResults := range block.MessageResults {
+			covMaps := coverage.GetCoverageTracerResults(messageResults)
+			_, covErr := c.coverageMaps.Update(covMaps)
+			if covErr != nil {
+				return err
+			}
+		}
 	}
 
 	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. If the sequence

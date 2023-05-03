@@ -43,14 +43,14 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 					initCoverageMapBytecodeData    *CoverageMapBytecodeData
 					runtimeCoverageBytecodeMapData *CoverageMapBytecodeData
 				)
-				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode)
+				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
 				}
 				if initCoverageMapData != nil {
 					initCoverageMapBytecodeData = initCoverageMapData.initBytecodeCoverage
 				}
-				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode)
+				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
 				}
