@@ -40,22 +40,28 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 			for _, contract := range source.Contracts {
 				// Obtain coverage map data for this contract.
 				var (
-					initCoverageMapBytecodeData    *CoverageMapBytecodeData
-					runtimeCoverageBytecodeMapData *CoverageMapBytecodeData
+					initBytecodeCoverage            *CoverageMapBytecodeData
+					initBytecodeCoverageReverted    *CoverageMapBytecodeData
+					runtimeBytecodeCoverage         *CoverageMapBytecodeData
+					runtimeBytecodeCoverageReverted *CoverageMapBytecodeData
 				)
+
 				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
 				}
 				if initCoverageMapData != nil {
-					initCoverageMapBytecodeData = initCoverageMapData.initBytecodeCoverage
+					initBytecodeCoverage = initCoverageMapData.successfulCoverage
+					initBytecodeCoverageReverted = initCoverageMapData.revertedCoverage
 				}
+
 				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
 				}
 				if runtimeCoverageMapData != nil {
-					runtimeCoverageBytecodeMapData = runtimeCoverageMapData.deployedBytecodeCoverage
+					runtimeBytecodeCoverage = runtimeCoverageMapData.successfulCoverage
+					runtimeBytecodeCoverageReverted = runtimeCoverageMapData.revertedCoverage
 				}
 
 				// Parse the source map for this contract.
@@ -83,11 +89,19 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initCoverageMapBytecodeData)
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initBytecodeCoverage)
 				if err != nil {
 					return err
 				}
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageBytecodeMapData)
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initBytecodeCoverageReverted)
+				if err != nil {
+					return err
+				}
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeBytecodeCoverage)
+				if err != nil {
+					return err
+				}
+				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeBytecodeCoverageReverted)
 				if err != nil {
 					return err
 				}
@@ -158,7 +172,7 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 		sourcePath := compilation.SourceList[sourceMapElement.FileID]
 
 		// Check if the source map element was executed.
-		sourceMapElementCovered := coverageMapData.isCovered(instructionOffsetLookup[sourceMapElement.Index])
+		sourceMapElementCovered := coverageMapData.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
 
 		// Obtain the source file this element maps to.
 		if sourceLines, ok := sourceLinesByFile[sourcePath]; ok {
@@ -171,7 +185,7 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 					sourceLine.IsActive = true
 
 					// Set its coverage state
-					sourceLine.IsCovered = sourceMapElementCovered
+					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.

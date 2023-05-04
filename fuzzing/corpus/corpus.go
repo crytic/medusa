@@ -184,7 +184,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	for _, block := range testChain.CommittedBlocks() {
 		for _, messageResults := range block.MessageResults {
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
-			_, covErr := c.coverageMaps.Update(covMaps)
+			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return err
 			}
@@ -242,7 +242,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			// Update our coverage maps for each call executed in our sequence.
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
-			_, covErr := c.coverageMaps.Update(covMaps)
+			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
 			}
@@ -350,7 +350,7 @@ func (c *Corpus) AddCallSequenceIfCoverageChanged(callSequence calls.CallSequenc
 	coverage.RemoveCoverageTracerResults(lastMessageResult)
 
 	// Merge the coverage maps into our total coverage maps and check if we had an update.
-	coverageUpdated, err := c.coverageMaps.Update(lastMessageCoverageMaps)
+	coverageUpdated, _, err := c.coverageMaps.Update(lastMessageCoverageMaps)
 	if err != nil {
 		return err
 	}

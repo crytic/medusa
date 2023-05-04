@@ -83,7 +83,7 @@ func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte, init bool) (*Con
 	if coverageByAddresses, ok := cm.maps[hash]; ok {
 		totalCoverage := newContractCoverageMap()
 		for _, coverage := range coverageByAddresses {
-			_, err := totalCoverage.update(coverage)
+			_, _, err := totalCoverage.update(coverage)
 			if err != nil {
 				return nil, err
 			}
@@ -94,12 +94,12 @@ func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte, init bool) (*Con
 	}
 }
 
-// Update updates the current coverage maps with the provided ones. It returns a boolean indicating whether
-// new coverage was achieved, or an error if one was encountered.
-func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
+// Update updates the current coverage maps with the provided ones.
+// Returns two booleans indicating whether successful or reverted coverage changed, or an error if one occurred.
+func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 	// If our maps provided are nil, do nothing
 	if coverageMaps == nil {
-		return false, nil
+		return false, false, nil
 	}
 
 	// Acquire our thread lock and defer our unlocking for when we exit this method
@@ -107,7 +107,8 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	defer cm.updateLock.Unlock()
 
 	// Create a boolean indicating whether we achieved new coverage
-	changed := false
+	successCoverageChanged := false
+	revertedCoverageChanged := false
 
 	// Loop for each coverage map provided
 	for codeHash, mapsByAddressToMerge := range coverageMaps.maps {
@@ -122,24 +123,26 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 			// If a coverage map for this address already exists in our current mapping, update it with the one
 			// to merge. If it doesn't exist, set it to the one to merge.
 			if existingCoverageMap, codeAddressExists := mapsByAddress[codeAddress]; codeAddressExists {
-				coverageMapChanged, err := existingCoverageMap.update(coverageMapToMerge)
-				changed = changed || coverageMapChanged
+				sChanged, rChanged, err := existingCoverageMap.update(coverageMapToMerge)
+				successCoverageChanged = successCoverageChanged || sChanged
+				revertedCoverageChanged = revertedCoverageChanged || rChanged
 				if err != nil {
-					return changed, err
+					return successCoverageChanged, revertedCoverageChanged, err
 				}
 			} else {
 				mapsByAddress[codeAddress] = coverageMapToMerge
-				changed = true
+				successCoverageChanged = coverageMapToMerge.successfulCoverage != nil
+				revertedCoverageChanged = coverageMapToMerge.revertedCoverage != nil
 			}
 		}
 	}
 
 	// Return our results
-	return changed, nil
+	return successCoverageChanged, revertedCoverageChanged, nil
 }
 
-// SetCoveredAt sets the coverage state of a given program counter location within code coverage data.
-func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common.Hash, init bool, codeSize int, pc uint64) (bool, error) {
+// SetAt sets the coverage state of a given program counter location within code coverage data.
+func (cm *CoverageMaps) SetAt(codeAddress common.Address, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
 	// If the code size is zero, do nothing
 	if codeSize == 0 {
 		return false, nil
@@ -154,14 +157,14 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 	)
 
 	// Try to obtain a coverage map from our cache
-	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeHash {
+	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeLookupHash {
 		coverageMap = cm.cachedMap
 	} else {
 		// If a coverage map lookup for this code hash doesn't exist, create the mapping.
-		mapsByCodeAddress, codeHashExists := cm.maps[codeHash]
+		mapsByCodeAddress, codeHashExists := cm.maps[codeLookupHash]
 		if !codeHashExists {
 			mapsByCodeAddress = make(map[common.Address]*ContractCoverageMap)
-			cm.maps[codeHash] = mapsByCodeAddress
+			cm.maps[codeLookupHash] = mapsByCodeAddress
 		}
 
 		// Obtain the coverage map for this code address if it already exists. If it does not, create a new one.
@@ -169,19 +172,47 @@ func (cm *CoverageMaps) SetCoveredAt(codeAddress common.Address, codeHash common
 			coverageMap = existingCoverageMap
 		} else {
 			coverageMap = newContractCoverageMap()
-			cm.maps[codeHash][codeAddress] = coverageMap
+			cm.maps[codeLookupHash][codeAddress] = coverageMap
 			addedNewMap = true
 		}
 
 		// Set our cached variables for faster coverage setting next time this method is called.
 		cm.cachedMap = coverageMap
-		cm.cachedCodeHash = codeHash
+		cm.cachedCodeHash = codeLookupHash
 		cm.cachedCodeAddress = codeAddress
 	}
 
 	// Set our coverage in the map and return our change state
-	changedInMap, err = coverageMap.setCoveredAt(init, codeSize, pc)
+	changedInMap, err = coverageMap.setCoveredAt(codeSize, pc)
 	return addedNewMap || changedInMap, err
+}
+
+// RevertAll sets all coverage in the coverage map as reverted coverage. Reverted coverage is updated with successful
+// coverage, the successful coverage is cleared.
+// Returns a boolean indicating whether reverted coverage increased, and an error if one occurred.
+func (cm *CoverageMaps) RevertAll() (bool, error) {
+	// Acquire our thread lock and defer our unlocking for when we exit this method
+	cm.updateLock.Lock()
+	defer cm.updateLock.Unlock()
+
+	// Define a variable to track if our reverted coverage changed.
+	revertedCoverageChanged := false
+
+	// Loop for each coverage map provided
+	for _, mapsByAddressToMerge := range cm.maps {
+		for _, contractCoverageMap := range mapsByAddressToMerge {
+			// Update our reverted coverage with the (previously thought to be) successful coverage.
+			changed, err := contractCoverageMap.revertedCoverage.update(contractCoverageMap.successfulCoverage)
+			revertedCoverageChanged = revertedCoverageChanged || changed
+			if err != nil {
+				return revertedCoverageChanged, err
+			}
+
+			// Clear our successful coverage, as these maps were marked as reverted.
+			contractCoverageMap.successfulCoverage.Reset()
+		}
+	}
+	return revertedCoverageChanged, nil
 }
 
 // Equal checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
@@ -213,68 +244,53 @@ func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
 type ContractCoverageMap struct {
-	// initBytecodeCoverage represents a list of bytes for each byte of a contract's init bytecode. Non-zero values
-	// indicate the program counter executed an instruction at that offset.
-	initBytecodeCoverage *CoverageMapBytecodeData
-	// deployedBytecodeCoverage represents a list of bytes for each byte of a contract's deployed bytecode. Non-zero
-	// values indicate the program counter executed an instruction at that offset.
-	deployedBytecodeCoverage *CoverageMapBytecodeData
+	// successfulCoverage represents coverage for the contract bytecode, which did not encounter a revert and was
+	// deemed successful.
+	successfulCoverage *CoverageMapBytecodeData
+
+	// revertedCoverage represents coverage for the contract bytecode, which encountered a revert.
+	revertedCoverage *CoverageMapBytecodeData
 }
 
 // newContractCoverageMap creates and returns a new ContractCoverageMap.
 func newContractCoverageMap() *ContractCoverageMap {
 	return &ContractCoverageMap{
-		initBytecodeCoverage:     &CoverageMapBytecodeData{},
-		deployedBytecodeCoverage: &CoverageMapBytecodeData{},
+		successfulCoverage: &CoverageMapBytecodeData{},
+		revertedCoverage:   &CoverageMapBytecodeData{},
 	}
 }
 
 // update creates updates the current ContractCoverageMap with the provided one.
-// Returns a boolean indicating whether new coverage was achieved, or an error if one was encountered.
-func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
-	// Define our return variable
-	changed := false
-
-	// Update our init bytecode coverage data
-	c, err := cm.initBytecodeCoverage.update(coverageMap.initBytecodeCoverage)
+// Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
+func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, bool, error) {
+	// Update our success coverage data
+	successfulCoverageChanged, err := cm.successfulCoverage.update(coverageMap.successfulCoverage)
 	if err != nil {
-		return c, err
+		return false, false, err
 	}
-	changed = changed || c
 
-	// Update our deployed bytecode coverage data
-	c, err = cm.deployedBytecodeCoverage.update(coverageMap.deployedBytecodeCoverage)
+	// Update our reverted coverage data
+	revertedCoverageChanged, err := cm.revertedCoverage.update(coverageMap.revertedCoverage)
 	if err != nil {
-		return c, err
+		return successfulCoverageChanged, false, err
 	}
-	changed = changed || c
 
-	return changed, nil
+	return successfulCoverageChanged, revertedCoverageChanged, nil
 }
 
-// setCoveredAt sets the coverage state at a given program counter location within a ContractCoverageMap.
+// setCoveredAt sets the coverage state at a given program counter location within a ContractCoverageMap used for
+// "successful" coverage (non-reverted).
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *ContractCoverageMap) setCoveredAt(init bool, codeSize int, pc uint64) (bool, error) {
-	// Set our coverage data for the appropriate map.
-	if init {
-		return cm.initBytecodeCoverage.setCoveredAt(codeSize, pc)
-	} else {
-		return cm.deployedBytecodeCoverage.setCoveredAt(codeSize, pc)
-	}
+func (cm *ContractCoverageMap) setCoveredAt(codeSize int, pc uint64) (bool, error) {
+	// Set our coverage data for the successful path.
+	return cm.successfulCoverage.setCoveredAt(codeSize, pc)
 }
 
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
-	// Compare that the deployed bytecode coverages are the same
-	if !cm.deployedBytecodeCoverage.Equal(b.deployedBytecodeCoverage) {
-		return false
-	}
-	// Compare that the init bytecode coverages are the same
-	if !cm.initBytecodeCoverage.Equal(b.initBytecodeCoverage) {
-		return false
-	}
-	return true
+	// Compare both our underlying bytecode coverage maps.
+	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
 }
 
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
@@ -283,9 +299,14 @@ type CoverageMapBytecodeData struct {
 	executedFlags []byte
 }
 
-// isCovered checks if a given program counter location is covered by the map.
+// Reset resets the bytecode coverage map data to be empty.
+func (cm *CoverageMapBytecodeData) Reset() {
+	cm.executedFlags = nil
+}
+
+// IsCovered checks if a given program counter location is covered by the map.
 // Returns a boolean indicating if the program counter was executed on this map.
-func (cm *CoverageMapBytecodeData) isCovered(pc int) bool {
+func (cm *CoverageMapBytecodeData) IsCovered(pc int) bool {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return false
