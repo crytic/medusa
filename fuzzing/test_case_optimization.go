@@ -41,23 +41,14 @@ func (t *OptimizationTestCase) Name() string {
 
 // Message obtains a text-based printable message which describes the test result.
 func (t *OptimizationTestCase) Message() string {
-	// If the test failed, return a failure message.
-	if t.Status() == TestCaseStatusFailed {
-		return fmt.Sprintf(
-			"Test for method \"%s.%s\" failed after the following call sequence:\n%s",
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.CallSequence().String(),
-		)
-	}
-
 	// We print final value in case the test case passed for optimization test
-	if t.Status() == TestCaseStatusPassed {
+	if t.Status() == TestCaseStatusPassed || t.Status() == TestCaseStatusFailed {
 		return fmt.Sprintf(
-			"Optimization test for method \"%s.%s\" resulted in the maximum value: %s",
+			"Optimization test for method \"%s.%s\" resulted in the maximum value: %s with the following sequence:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.value,
+			t.CallSequence().String(),
 		)
 	}
 	return ""
@@ -74,11 +65,13 @@ func (t *OptimizationTestCase) Value() *big.Int {
 }
 
 // UpdateValue updates test case value if the new value is larger than the existing value
-func (t *OptimizationTestCase) UpdateValue(newValue *big.Int) {
+func (t *OptimizationTestCase) UpdateValue(newValue *big.Int) bool {
 	t.valueLock.Lock()
 	defer t.valueLock.Unlock()
 
 	if newValue.Cmp(t.value) == 1 {
 		t.value = new(big.Int).Set(newValue)
+		return true
 	}
+	return false
 }

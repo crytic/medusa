@@ -72,7 +72,7 @@ func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) boo
 
 // updateOptimizationTest executes a given optimization test method to get the computed value. This is used to
 // facilitate updating of optimization test value after every call the Fuzzer makes when testing call sequences.
-func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, testCase *OptimizationTestCase) error {
+func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, testCase *OptimizationTestCase, callSequence calls.CallSequence) error {
 	// Generate our ABI input data for the call. In this case, optimization test methods take no arguments, so the
 	// variadic argument list here is empty.
 	data, err := optimizationTestMethod.Contract.CompiledContract().Abi.Pack(optimizationTestMethod.Method.Name)
@@ -134,7 +134,10 @@ func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWork
 	}
 
 	// update the value stored in test case
-	testCase.UpdateValue(newValue)
+	updated := testCase.UpdateValue(newValue)
+	if updated {
+		testCase.callSequence = &callSequence
+	}
 
 	// Return our status from our optimization test method
 	return nil
@@ -293,14 +296,9 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		testCase := t.testCases[optimizationTestMethodId]
 		t.testCasesLock.Unlock()
 
-		// If the test case already failed, skip it
-		if testCase.Status() == TestCaseStatusFailed {
-			continue
-		}
-
 		// Test our optimization test method (create a local copy to avoid loop overwriting the method)
 		workerOptimizationTestMethod := workerOptimizationTestMethod
-		err := t.updateOptimizationTest(worker, &workerOptimizationTestMethod, testCase)
+		err := t.updateOptimizationTest(worker, &workerOptimizationTestMethod, testCase, callSequence)
 		if err != nil {
 			return nil, err
 		}
