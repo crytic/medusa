@@ -1,11 +1,12 @@
 package fuzzing
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/config"
 	"testing"
+
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/stretchr/testify/assert"
 )
 
 // fuzzerTestContext holds the current Fuzzer test context and can be used for post-execution checks
@@ -60,6 +61,7 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	projectConfig.Fuzzing.TestLimit = 1_500_000
 	projectConfig.Fuzzing.CallSequenceLength = 100
 	projectConfig.Fuzzing.Testing.StopOnFailedContractMatching = true
+	projectConfig.Fuzzing.Testing.TestAllContracts = false
 	return projectConfig
 }
 
@@ -67,10 +69,11 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 // there should be no failed tests
 func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 	// Ensure we captured a failed test, if expected
+	failedTestCount := len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed))
 	if expectFailure {
-		assert.Greater(f.t, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), 0, "Fuzz test could not be solved before reaching limits")
+		assert.Greater(f.t, failedTestCount, 0, "Fuzz test could not be solved before reaching limits")
 	} else {
-		assert.EqualValues(f.t, 0, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Fuzz test failed when it should not have")
+		assert.EqualValues(f.t, 0, failedTestCount, "Fuzz test failed when it should not have")
 	}
 }
 

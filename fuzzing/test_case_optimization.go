@@ -3,7 +3,8 @@ package fuzzing
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/calls"
 	"math/big"
 	"strings"
 	"sync"
@@ -12,9 +13,9 @@ import (
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
 type OptimizationTestCase struct {
 	status         TestCaseStatus
-	targetContract *fuzzerTypes.Contract
+	targetContract *contracts.Contract
 	targetMethod   abi.Method
-	callSequence   *fuzzerTypes.CallSequence
+	callSequence   *calls.CallSequence
 
 	// value is used to store the maximum value returned by the test method
 	value *big.Int
@@ -29,7 +30,7 @@ func (t *OptimizationTestCase) Status() TestCaseStatus {
 
 // CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
 // This should be nil if the result is not related to the CallSequence.
-func (t *OptimizationTestCase) CallSequence() *fuzzerTypes.CallSequence {
+func (t *OptimizationTestCase) CallSequence() *calls.CallSequence {
 	return t.callSequence
 }
 

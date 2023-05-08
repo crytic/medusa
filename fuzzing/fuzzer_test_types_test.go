@@ -2,11 +2,11 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/compilation/platforms"
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/utils/testutils"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/compilation/platforms"
-	"github.com/trailofbits/medusa/fuzzing/config"
-	"github.com/trailofbits/medusa/utils/testutils"
 	"testing"
 )
 

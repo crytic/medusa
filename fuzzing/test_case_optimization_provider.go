@@ -3,7 +3,8 @@ package fuzzing
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/types"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"math/big"
 	"strings"
 	"sync"
@@ -17,7 +18,7 @@ type OptimizationTestCaseProvider struct {
 	fuzzer *Fuzzer
 
 	// testCases is a map of contract-method IDs to optimization test cases.GetContractMethodID
-	testCases map[types.ContractMethodID]*OptimizationTestCase
+	testCases map[contracts.ContractMethodID]*OptimizationTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
@@ -32,7 +33,7 @@ type optimizationTestCaseProviderWorkerState struct {
 	// optimizationTestMethods a mapping from contract-method ID to deployed contract-method descriptors.
 	// Each deployed contract-method represents a optimization test method to call for evaluation. Optimization tests
 	// should be read-only (pure/view) functions which take no input parameters and return an integer variable.
-	optimizationTestMethods map[types.ContractMethodID]types.DeployedContractMethod
+	optimizationTestMethods map[contracts.ContractMethodID]contracts.DeployedContractMethod
 
 	// optimizationTestMethodsLock is used for thread-synchronization when updating optimizationTestMethods
 	optimizationTestMethodsLock sync.Mutex
@@ -71,7 +72,7 @@ func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) boo
 
 // updateOptimizationTest executes a given optimization test method to get the computed value. This is used to
 // facilitate updating of optimization test value after every call the Fuzzer makes when testing call sequences.
-func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *types.DeployedContractMethod, testCase *OptimizationTestCase) error {
+func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, testCase *OptimizationTestCase) error {
 	// Generate our ABI input data for the call. In this case, optimization test methods take no arguments, so the
 	// variadic argument list here is empty.
 	data, err := optimizationTestMethod.Contract.CompiledContract().Abi.Pack(optimizationTestMethod.Method.Name)
@@ -82,8 +83,10 @@ func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWork
 	// Call the underlying contract
 	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the optimizations.
 	value := big.NewInt(0)
-	msg := worker.Chain().CreateMessage(worker.Fuzzer().senders[0], &optimizationTestMethod.Address, value, nil, nil, data)
-	res, err := worker.Chain().CallContract(msg)
+	msg := calls.NewCallMessage(worker.Fuzzer().senders[0], &optimizationTestMethod.Address, 0, value, worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, data)
+	msg.FillFromTestChainProperties(worker.chain)
+
+	res, err := worker.Chain().CallContract(msg, nil)
 	if err != nil {
 		return fmt.Errorf("failed to call optimization test method: %v", err)
 	}
@@ -141,7 +144,7 @@ func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWork
 // in a "not started" state for every optimization test method discovered in the contract definitions known to the Fuzzer.
 func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
-	t.testCases = make(map[types.ContractMethodID]*OptimizationTestCase)
+	t.testCases = make(map[contracts.ContractMethodID]*OptimizationTestCase)
 	t.workerStates = make([]optimizationTestCaseProviderWorkerState, t.fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every optimization test method.
@@ -157,14 +160,14 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 				// Create our optimization test case
 				optimizationTestCase := &OptimizationTestCase{
 					status:         TestCaseStatusNotStarted,
-					targetContract: &contract,
+					targetContract: contract,
 					targetMethod:   method,
 					callSequence:   nil,
 					value:          minInt256,
 				}
 
 				// Add to our test cases and register them with the fuzzer
-				methodId := types.GetContractMethodID(&contract, &method)
+				methodId := contracts.GetContractMethodID(contract, &method)
 				t.testCases[methodId] = optimizationTestCase
 				t.fuzzer.RegisterTestCase(optimizationTestCase)
 			}
@@ -194,7 +197,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEven
 func (t *OptimizationTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreatedEvent) error {
 	// Create a new state for this worker.
 	t.workerStates[event.Worker.WorkerIndex()] = optimizationTestCaseProviderWorkerState{
-		optimizationTestMethods:     make(map[types.ContractMethodID]types.DeployedContractMethod),
+		optimizationTestMethods:     make(map[contracts.ContractMethodID]contracts.DeployedContractMethod),
 		optimizationTestMethodsLock: sync.Mutex{},
 	}
 
@@ -217,7 +220,7 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractAdded(event Fuzze
 	// Loop through all methods and find ones for which we have tests
 	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
 		// Obtain an identifier for this pair
-		methodId := types.GetContractMethodID(event.ContractDefinition, &method)
+		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
 
 		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
 		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
@@ -233,7 +236,7 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractAdded(event Fuzze
 				// Create our optimization test method reference.
 				workerState := &t.workerStates[event.Worker.WorkerIndex()]
 				workerState.optimizationTestMethodsLock.Lock()
-				workerState.optimizationTestMethods[methodId] = types.DeployedContractMethod{
+				workerState.optimizationTestMethods[methodId] = contracts.DeployedContractMethod{
 					Address:  event.ContractAddress,
 					Contract: event.ContractDefinition,
 					Method:   method,
@@ -257,7 +260,7 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractDeleted(event Fuz
 	// Loop through all methods and find ones for which we have tests
 	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
 		// Obtain an identifier for this pair
-		methodId := types.GetContractMethodID(event.ContractDefinition, &method)
+		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
 
 		// If this identifier is in our test cases map, then we remove it from our optimization test method lookup for
 		// this worker index.
@@ -279,7 +282,7 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractDeleted(event Fuz
 // callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether optimization
 // test invariants are upheld after each call the Fuzzer makes when testing a call sequence.
-func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 	// Obtain the test provider state for this worker
 	workerState := &t.workerStates[worker.WorkerIndex()]
 

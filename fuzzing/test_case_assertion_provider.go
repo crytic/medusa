@@ -1,14 +1,13 @@
 package fuzzing
 
 import (
-	"bytes"
-	"math/big"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"golang.org/x/exp/slices"
 	"sync"
 
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/trailofbits/medusa/fuzzing/types"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -19,7 +18,7 @@ type AssertionTestCaseProvider struct {
 	fuzzer *Fuzzer
 
 	// testCases is a map of contract-method IDs to assertion test cases.GetContractMethodID
-	testCases map[types.ContractMethodID]*AssertionTestCase
+	testCases map[contracts.ContractMethodID]*AssertionTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
@@ -51,45 +50,9 @@ func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
-// isAssertionVMError indicates whether a provided execution returned from the EVM is due to a failed assert(...)
-// statement.
-func (t *AssertionTestCaseProvider) isAssertionVMError(result *core.ExecutionResult) bool {
-	// See if the error can be cased to an invalid opcode error. This happens in Solidity <0.8.0
-	_, hitInvalidOpcode := result.Err.(*vm.ErrInvalidOpCode)
-	if hitInvalidOpcode {
-		return true
-	}
-
-	// Otherwise, in Solidity >0.8.0, we have asserts working as reverts now, but with special return data.
-	// Reference: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
-
-	// Verify we have a revert, and our return data fits exactly the selector + uint256
-	if result.Err == vm.ErrExecutionReverted && len(result.ReturnData) == 4+32 {
-		// TODO: We should move this somewhere neater, and maybe not use abi.NewMethod for this.
-		uintType, _ := abi.NewType("uint256", "", nil)
-		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-			{Name: "", Type: uintType, Indexed: false},
-		}, abi.Arguments{})
-
-		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Equal(result.ReturnData[:4], panicReturnDataAbi.ID) {
-			values, err := panicReturnDataAbi.Inputs.Unpack(result.ReturnData[4:])
-
-			// If they unpacked without issue, read the panic code. We expect a panic code of 1.
-			if err == nil && len(values) > 0 {
-				panicCode := values[0].(*big.Int)
-				if panicCode.Cmp(big.NewInt(1)) == 0 {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
 // checkAssertionFailures checks the results of the last call for assertion failures.
 // Returns the method ID, a boolean indicating if an assertion test failed, or an error if one occurs.
-func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker, callSequence types.CallSequence) (*types.ContractMethodID, bool, error) {
+func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.CallSequence) (*contracts.ContractMethodID, bool, error) {
 	// If we have an empty call sequence, we cannot have an assertion failure
 	if len(callSequence) == 0 {
 		return nil, false, nil
@@ -101,41 +64,55 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(worker *FuzzerWorker,
 	if err != nil {
 		return nil, false, err
 	}
-	methodId := types.GetContractMethodID(lastCall.Contract, lastCallMethod)
+	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an assertion error.
-	encounteredAssertionVMError := t.isAssertionVMError(lastCall.ChainReference.MessageResults().ExecutionResult)
+	// Try to unpack our error and return data for a panic code and verify it matches the "assert failed" panic code.
+	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
+	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
+	// have a panic code.
+	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
+	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
+	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed
 
-	return &methodId, encounteredAssertionVMError, nil
+	return &methodId, encounteredAssertionFailure, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
 // in a "not started" state for every method to test discovered in the contract definitions known to the Fuzzer.
 func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
-	t.testCases = make(map[types.ContractMethodID]*AssertionTestCase)
+	t.testCases = make(map[contracts.ContractMethodID]*AssertionTestCase)
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
+		// If we're not testing all contracts, verify the current contract is one we specified in our deployment order.
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.DeploymentOrder, contract.Name()) {
+			continue
+		}
+
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isTestableMethod(method) {
-				// Create local variables to avoid pointer types in the loop being overridden.
-				contract := contract
-				method := method
-
-				// Create our test case
-				testCase := &AssertionTestCase{
-					status:         TestCaseStatusNotStarted,
-					targetContract: &contract,
-					targetMethod:   method,
-					callSequence:   nil,
-				}
-
-				// Add to our test cases and register them with the fuzzer
-				methodId := types.GetContractMethodID(&contract, &method)
-				t.testCases[methodId] = testCase
-				t.fuzzer.RegisterTestCase(testCase)
+			// Verify this method is an assertion testable method
+			if !t.isTestableMethod(method) {
+				continue
 			}
+
+			// Create local variables to avoid pointer types in the loop being overridden.
+			contract := contract
+			method := method
+
+			// Create our test case
+			testCase := &AssertionTestCase{
+				status:         TestCaseStatusNotStarted,
+				targetContract: contract,
+				targetMethod:   method,
+				callSequence:   nil,
+			}
+
+			// Add to our test cases and register them with the fuzzer
+			methodId := contracts.GetContractMethodID(contract, &method)
+			t.testCases[methodId] = testCase
+			t.fuzzer.RegisterTestCase(testCase)
 		}
 	}
 	return nil
@@ -175,7 +152,7 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 	// Loop through all methods and find ones for which we have tests
 	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
 		// Obtain an identifier for this pair
-		methodId := types.GetContractMethodID(event.ContractDefinition, &method)
+		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
 
 		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
 		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
@@ -192,21 +169,26 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 // callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether invariants
 // in methods to test are upheld after each call the Fuzzer makes when testing a call sequence.
-func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence types.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
 	// Create a list of shrink call sequence verifiers, which we populate for each failed test we want a call sequence
 	// shrunk for.
 	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Obtain the method ID for the last call and check if it encountered assertion failures.
-	methodId, testFailed, err := t.checkAssertionFailures(worker, callSequence)
+	methodId, testFailed, err := t.checkAssertionFailures(callSequence)
 	if err != nil {
 		return nil, err
 	}
 
 	// Obtain the test case for this method we're targeting for assertion testing.
 	t.testCasesLock.Lock()
-	testCase := t.testCases[*methodId]
+	testCase, testCaseExists := t.testCases[*methodId]
 	t.testCasesLock.Unlock()
+
+	// Verify a test case exists for this method called (if we're not assertion testing this method, stop)
+	if !testCaseExists {
+		return shrinkRequests, nil
+	}
 
 	// If the test case already failed, skip it
 	if testCase.Status() == TestCaseStatusFailed {
@@ -218,9 +200,9 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
-			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) (bool, error) {
+			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
-				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(worker, shrunkenCallSequence)
+				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(shrunkenCallSequence)
 				if err != nil {
 					return false, err
 				}
@@ -228,13 +210,22 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence types.CallSequence) error {
-				// When we're finished shrinking, update our test state and report it finalized.
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
+				// When we're finished shrinking, attach an execution trace to the last call
+				if len(shrunkenCallSequence) > 0 {
+					err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+					if err != nil {
+						return err
+					}
+				}
+
+				// Update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil
 			},
+			RecordResultInCorpus: true,
 		}
 
 		// Add our shrink request to our list.
