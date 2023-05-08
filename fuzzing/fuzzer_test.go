@@ -6,8 +6,8 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"math/rand"
 	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/crytic/medusa/fuzzing/config"

@@ -2,9 +2,9 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"math/big"
 	"strings"
 	"sync"
