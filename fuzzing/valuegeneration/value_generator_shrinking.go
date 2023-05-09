@@ -1,8 +1,8 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"	
-	"github.com/ethereum/go-ethereum/common"	
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
 
@@ -13,13 +13,13 @@ var integerShrinkingMethods = []func(*MutatingValueGenerator, *big.Int, ...*big.
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Subtract a random input
 		var r *big.Int
-		if x.Cmp(big.NewInt(0)) > 0 { 
+		if x.Cmp(big.NewInt(0)) > 0 {
 			r = big.NewInt(0).Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
-		} else if x.Cmp(big.NewInt(0)) < 0 { 
+		} else if x.Cmp(big.NewInt(0)) < 0 {
 			r = big.NewInt(0).Add(x, inputs[g.randomProvider.Intn(len(inputs))])
 		}
 		return r
-	
+
 	},
 	func(g *MutatingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide by two
@@ -62,7 +62,6 @@ func (g *MutatingValueGenerator) shrinkIntegerInternal(i *big.Int, signed bool, 
 	return input
 }
 
-
 // bytesMutationMethods define methods which take an initial bytes and a set of inputs to transform the input. The
 // transformed input is returned. This is used in a loop to mutate byte slices.
 var bytesShrinkingMethods = []func(*MutatingValueGenerator, []byte) []byte{
@@ -71,7 +70,7 @@ var bytesShrinkingMethods = []func(*MutatingValueGenerator, []byte) []byte{
 		// Replace an existing byte in our array with zero.
 		if len(b) > 0 {
 			b[g.randomProvider.Intn(len(b))] = 0
-		} 
+		}
 		return b
 	},
 	// Remove a random byte
@@ -125,7 +124,6 @@ var shrinkMutationMethods = []func(*MutatingValueGenerator, string) string{
 	},
 }
 
-
 // shrinkString takes a string input and returns a mutated value based off the input.
 func (g *MutatingValueGenerator) ShrinkString(s string) string {
 	return g.shrinkStringInternal(&s)
@@ -144,4 +142,3 @@ func (g *MutatingValueGenerator) ShrinkAddress(addr common.Address) common.Addre
 	addressBytes := make([]byte, common.AddressLength)
 	return common.BytesToAddress(addressBytes)
 }
-
