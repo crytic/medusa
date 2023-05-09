@@ -137,5 +137,11 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 			// Check equality
 			testCorpusCallSequencesEqual(t, entryFile.data, sameEntry)
 		}
+
+		// Remove all items
+		for i := 0; i < len(corpus.mutationTargetSequenceFiles.files); {
+			corpus.mutationTargetSequenceFiles.removeFile(corpus.mutationTargetSequenceFiles.files[i].fileName)
+		}
+		assert.Empty(t, corpus.mutationTargetSequenceFiles.files)
 	})
 }
