@@ -13,7 +13,7 @@ import (
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
 // across a transaction or multiple transactions.
 type CoverageMaps struct {
-	// maps represents a structure used to track every ContractCoverageMap by a given deployed address/code hash.
+	// maps represents a structure used to track every ContractCoverageMap by a given deployed address/lookup hash.
 	maps map[common.Hash]map[common.Address]*ContractCoverageMap
 
 	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
@@ -21,9 +21,9 @@ type CoverageMaps struct {
 	// coverage for, it, along with other cache variables are updated.
 	cachedCodeAddress common.Address
 
-	// cachedCodeHash represents the last code hash which coverage was updated for. This is used to prevent an expensive
-	// lookup in maps. If cachedCodeHash does not match the current code hash for which we are updating coverage for,
-	// it, along with other cache variables are updated.
+	// cachedCodeHash represents the last lookup hash which coverage was updated for. This is used to prevent an
+	// expensive lookup in maps. If cachedCodeHash does not match the current code hash which we are updating
+	// coverage for, it, along with other cache variables are updated.
 	cachedCodeHash common.Hash
 
 	// cachedMap represents the last coverage map which was updated. If the coverage to update resides at the
@@ -44,6 +44,34 @@ func NewCoverageMaps() *CoverageMaps {
 // Reset clears the coverage state for the CoverageMaps.
 func (cm *CoverageMaps) Reset() {
 	cm.maps = make(map[common.Hash]map[common.Address]*ContractCoverageMap)
+	cm.cachedCodeAddress = common.Address{}
+	cm.cachedCodeHash = common.Hash{}
+	cm.cachedMap = nil
+}
+
+// Equal checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
+func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
+	// Iterate through all maps
+	for codeHash, mapsByAddressA := range cm.maps {
+		mapsByAddressB, ok := b.maps[codeHash]
+		// Hash is not in b - we're done
+		if !ok {
+			return false
+		}
+		for codeAddress, coverageMapA := range mapsByAddressA {
+			coverageMapB, ok := mapsByAddressB[codeAddress]
+			// Address is not in b - we're done
+			if !ok {
+				return false
+			}
+
+			// Verify the equality of the map data.
+			if !coverageMapA.Equal(coverageMapB) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // getContractCoverageMapHash obtain the hash used to look up a given contract's ContractCoverageMap.
@@ -215,33 +243,6 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 	return revertedCoverageChanged, nil
 }
 
-// Equal checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
-func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
-	// Note: the `map` field is what is being tested for equality. Not the cached values
-
-	// Iterate through all maps
-	for codeHash, mapsByAddressA := range cm.maps {
-		mapsByAddressB, ok := b.maps[codeHash]
-		// Hash is not in b - we're done
-		if !ok {
-			return false
-		}
-		for codeAddress, coverageMapA := range mapsByAddressA {
-			coverageMapB, ok := mapsByAddressB[codeAddress]
-			// Address is not in b - we're done
-			if !ok {
-				return false
-			}
-
-			// Verify the equality of the map data.
-			if !coverageMapA.Equal(coverageMapB) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
 type ContractCoverageMap struct {
 	// successfulCoverage represents coverage for the contract bytecode, which did not encounter a revert and was
@@ -258,6 +259,13 @@ func newContractCoverageMap() *ContractCoverageMap {
 		successfulCoverage: &CoverageMapBytecodeData{},
 		revertedCoverage:   &CoverageMapBytecodeData{},
 	}
+}
+
+// Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
+// Returns a boolean indicating whether the two maps match.
+func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
+	// Compare both our underlying bytecode coverage maps.
+	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
 }
 
 // update creates updates the current ContractCoverageMap with the provided one.
@@ -286,13 +294,6 @@ func (cm *ContractCoverageMap) setCoveredAt(codeSize int, pc uint64) (bool, erro
 	return cm.successfulCoverage.setCoveredAt(codeSize, pc)
 }
 
-// Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
-// Returns a boolean indicating whether the two maps match.
-func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
-	// Compare both our underlying bytecode coverage maps.
-	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
-}
-
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
 // or runtime bytecode.
 type CoverageMapBytecodeData struct {
@@ -302,6 +303,15 @@ type CoverageMapBytecodeData struct {
 // Reset resets the bytecode coverage map data to be empty.
 func (cm *CoverageMapBytecodeData) Reset() {
 	cm.executedFlags = nil
+}
+
+// Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
+// Returns a boolean indicating whether the two maps match.
+func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
+	// Return an equality comparison on the data, ignoring size checks by stopping at the end of the shortest slice.
+	// We do this to avoid comparing arbitrary length constructor arguments appended to init bytecode.
+	smallestSize := utils.Min(len(cm.executedFlags), len(b.executedFlags))
+	return bytes.Equal(cm.executedFlags[:smallestSize], b.executedFlags[:smallestSize])
 }
 
 // IsCovered checks if a given program counter location is covered by the map.
@@ -364,13 +374,4 @@ func (cm *CoverageMapBytecodeData) setCoveredAt(codeSize int, pc uint64) (bool, 
 		return false, nil
 	}
 	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.executedFlags))
-}
-
-// Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
-// Returns a boolean indicating whether the two maps match.
-func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
-	// Return an equality comparison on the data, ignoring size checks by stopping at the end of the shortest slice.
-	// We do this to avoid comparing arbitrary length constructor arguments appended to init bytecode.
-	smallestSize := utils.Min(len(cm.executedFlags), len(b.executedFlags))
-	return bytes.Equal(cm.executedFlags[:smallestSize], b.executedFlags[:smallestSize])
 }
