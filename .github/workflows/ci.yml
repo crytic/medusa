@@ -100,6 +100,10 @@ jobs:
         with:
           go-version: "^1.18.1"
 
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.15
+
       - name: Install Node dependencies
         run: npm install -g hardhat truffle
 
