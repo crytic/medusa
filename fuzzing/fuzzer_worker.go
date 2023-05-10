@@ -2,6 +2,9 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -10,8 +13,6 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -43,6 +44,8 @@ type FuzzerWorker struct {
 	// sequenceGenerator creates entirely new or mutated call sequences based on corpus call sequences, for use in
 	// fuzzing campaigns.
 	sequenceGenerator *CallSequenceGenerator
+
+	valueShrinker *valuegeneration.ShrinkingValueGenerator
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
@@ -64,6 +67,11 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		return nil, err
 	}
 
+	valueShrinker, err := fuzzer.Hooks.NewValueShrinkingFunc(fuzzer, valueSet, randomProvider)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create a new worker with the data provided.
 	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
@@ -75,6 +83,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		valueSet:             valueSet,
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
+	worker.valueShrinker = valueShrinker
 
 	return worker, nil
 }
@@ -324,6 +333,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		if err != nil {
 			return nil, err
 		}
+		selectedTransaction := possibleShrunkSequence[i]
 		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
 
 		// Our "fetch next call method" method will simply fetch and fix the call message in case any fields are not correct due to shrinking.
@@ -385,6 +395,16 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		if validShrunkSequence {
 			optimizedSequence = testedPossibleShrunkSequence
 		} else {
+
+			abiValuesMsgData := selectedTransaction.Call.MsgDataAbiValues
+			for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+				mutatedInput, err := valuegeneration.MutateAbiValue(fw.valueShrinker, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+				if err != nil {
+					print(fmt.Errorf("error when mutating call sequence input argument: %v", err))
+					continue
+				}
+				abiValuesMsgData.InputValues[j] = mutatedInput
+			}
 			// We didn't remove an item at this index, so we'll iterate to the next one.
 			i++
 		}

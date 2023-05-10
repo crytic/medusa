@@ -1,10 +1,11 @@
 package fuzzing
 
 import (
+	"math/rand"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"math/rand"
 )
 
 // FuzzerHooks defines the hooks that can be used for the Fuzzer on an API level.
@@ -15,6 +16,8 @@ type FuzzerHooks struct {
 	// provided per call to avoid concurrent access issues between workers.
 	NewCallSequenceGeneratorConfigFunc NewCallSequenceGeneratorConfigFunc
 
+	NewValueShrinkingFunc NewValueShrinkingFunc
+
 	// ChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
 	ChainSetupFunc TestChainSetupFunc
 
@@ -22,6 +25,11 @@ type FuzzerHooks struct {
 	// in a call sequence.
 	CallSequenceTestFuncs []CallSequenceTestFunc
 }
+
+// NewCallSequenceGeneratorConfigFunc defines a method is called to create a new CallSequenceGeneratorConfig, defining
+// the parameters for the new FuzzerWorker to use when creating its CallSequenceGenerator used to power fuzzing.
+// Returns a new CallSequenceGeneratorConfig, or an error if one is encountered.
+type NewValueShrinkingFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*valuegeneration.ShrinkingValueGenerator, error)
 
 // NewCallSequenceGeneratorConfigFunc defines a method is called to create a new CallSequenceGeneratorConfig, defining
 // the parameters for the new FuzzerWorker to use when creating its CallSequenceGenerator used to power fuzzing.

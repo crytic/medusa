@@ -102,6 +102,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
+			NewValueShrinkingFunc:              defaultValueShrinkingFunc,
 			ChainSetupFunc:                     chainSetupFromCompilations,
 			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 		},
@@ -400,6 +401,13 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 		ValueGenerator:                           valueGenerator,
 	}
 	return sequenceGenConfig, nil
+}
+
+// defaultNewCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
+// CallSequenceGeneratorConfig with a default configuration. Returns the config or an error, if one occurs.
+func defaultValueShrinkingFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*valuegeneration.ShrinkingValueGenerator, error) {
+	valueShrinker := valuegeneration.NewShrinkingValueGenerator(valueSet, randomProvider)
+	return valueShrinker, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.
