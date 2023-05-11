@@ -333,7 +333,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		if err != nil {
 			return nil, err
 		}
-		selectedTransaction := possibleShrunkSequence[i]
 		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
 
 		// Our "fetch next call method" method will simply fetch and fix the call message in case any fields are not correct due to shrinking.
@@ -396,15 +395,63 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			optimizedSequence = testedPossibleShrunkSequence
 		} else {
 
-			abiValuesMsgData := selectedTransaction.Call.MsgDataAbiValues
-			for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-				mutatedInput, err := valuegeneration.MutateAbiValue(fw.valueShrinker, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
-				if err != nil {
-					print(fmt.Errorf("error when mutating call sequence input argument: %v", err))
-					continue
+			tries := 0
+			optimizedTransaction, _ := optimizedSequence[i].Clone()
+			for ; tries < 200; tries++ {
+				possibleShrunkTransaction, _ := optimizedTransaction.Clone()
+				abiValuesMsgData := possibleShrunkTransaction.Call.MsgDataAbiValues
+				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+					mutatedInput, err := valuegeneration.MutateAbiValue(fw.valueShrinker, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+					if err != nil {
+						print(fmt.Errorf("error when mutating call sequence input argument: %v", err))
+						continue
+					}
+					abiValuesMsgData.InputValues[j] = mutatedInput
 				}
-				abiValuesMsgData.InputValues[j] = mutatedInput
+
+				possibleShrunkSequence = append(optimizedSequence[:i], possibleShrunkTransaction)
+				possibleShrunkSequence = append(possibleShrunkSequence, optimizedSequence[i+1:]...)
+
+				fetchElementFunc = func(currentIndex int) (*calls.CallSequenceElement, error) {
+					// If we are at the end of our sequence, return nil indicating we should stop executing.
+					if currentIndex >= len(possibleShrunkSequence) {
+						return nil, nil
+					}
+
+					possibleShrunkSequence[currentIndex].Call.FillFromTestChainProperties(fw.chain)
+					return possibleShrunkSequence[currentIndex], nil
+				}
+
+				// We should re-run the test
+				testedPossibleShrunkSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+				if err != nil {
+					return nil, err
+				}
+
+				// If our fuzzer context is done, exit out immediately without results.
+				if utils.CheckContextDone(fw.fuzzer.ctx) {
+					return nil, nil
+				}
+
+				// Check if our verifier signalled that we met our conditions
+				validShrunkSequence = false
+				if len(testedPossibleShrunkSequence) > 0 {
+					validShrunkSequence, err = shrinkRequest.VerifierFunction(fw, testedPossibleShrunkSequence)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				// After testing the sequence, we'll want to rollback changes to reset our testing state.
+				if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+					return nil, err
+				}
+				if validShrunkSequence {
+					optimizedTransaction, _ = possibleShrunkTransaction.Clone()
+				}
 			}
+
+			optimizedSequence[i] = optimizedTransaction
 			// We didn't remove an item at this index, so we'll iterate to the next one.
 			i++
 		}

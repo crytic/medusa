@@ -45,6 +45,8 @@ var integerShrinkingMethods = []func(*ShrinkingValueGenerator, *big.Int, ...*big
 			r = big.NewInt(0).Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
 		} else if x.Cmp(big.NewInt(0)) < 0 {
 			r = big.NewInt(0).Add(x, inputs[g.randomProvider.Intn(len(inputs))])
+		} else {
+			r = big.NewInt(0)
 		}
 		return r
 
