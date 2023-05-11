@@ -131,6 +131,12 @@ func (g *ShrinkingValueGenerator) shrinkBytesInternal(b []byte) []byte {
 	return input
 }
 
+// MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
+func (g *ShrinkingValueGenerator) MutateBytes(b []byte) []byte {
+	// Determine whether to perform mutations against this input or just return it as-is.
+	return g.shrinkBytesInternal(b)
+}
+
 // stringMutationMethods define methods which take an initial string and a set of inputs to transform the input. The
 // transformed input is returned. This is used in a loop to mutate strings.
 var shrinkMutationMethods = []func(*ShrinkingValueGenerator, string) string{
