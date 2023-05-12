@@ -13,7 +13,8 @@ import (
 type ShrinkingValueGenerator struct {
 	// ValueSet contains a set of values which the ValueGenerator may use to aid in value generation and mutation
 	// operations.
-	valueSet *ValueSet
+	valueSet               *ValueSet
+	ShrinkValueProbability float32
 
 	// RandomValueGenerator is included to inherit from the random generator
 	*RandomValueGenerator
@@ -23,8 +24,9 @@ type ShrinkingValueGenerator struct {
 func NewShrinkingValueGenerator(valueSet *ValueSet, randomProvider *rand.Rand) *ShrinkingValueGenerator {
 	// Create and return our generator
 	generator := &ShrinkingValueGenerator{
-		valueSet:             valueSet,
-		RandomValueGenerator: NewRandomValueGenerator(nil, randomProvider),
+		valueSet:               valueSet,
+		ShrinkValueProbability: 0.1,
+		RandomValueGenerator:   NewRandomValueGenerator(nil, randomProvider),
 	}
 
 	// Ensure some initial values this mutator will depend on for basic mutations to the set.
@@ -54,6 +56,9 @@ var integerShrinkingMethods = []func(*ShrinkingValueGenerator, *big.Int, ...*big
 	func(g *ShrinkingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide by two
 		return big.NewInt(0).Div(x, big.NewInt(2))
+	},
+	func(g *ShrinkingValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
+		return big.NewInt(0)
 	},
 }
 
@@ -95,7 +100,11 @@ func (g *ShrinkingValueGenerator) shrinkIntegerInternal(i *big.Int, signed bool,
 // MutateInteger takes an integer input and applies optional mutations to the provided value.
 // Returns an optionally mutated copy of the input.
 func (g *ShrinkingValueGenerator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
-	return g.shrinkIntegerInternal(i, signed, bitLength)
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.ShrinkValueProbability {
+		return g.shrinkIntegerInternal(i, signed, bitLength)
+	}
+	return i
 }
 
 // bytesMutationMethods define methods which take an initial bytes and a set of inputs to transform the input. The
@@ -133,8 +142,11 @@ func (g *ShrinkingValueGenerator) shrinkBytesInternal(b []byte) []byte {
 
 // MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
 func (g *ShrinkingValueGenerator) MutateBytes(b []byte) []byte {
-	// Determine whether to perform mutations against this input or just return it as-is.
-	return g.shrinkBytesInternal(b)
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.ShrinkValueProbability {
+		return g.shrinkBytesInternal(b)
+	}
+	return b
 }
 
 // stringMutationMethods define methods which take an initial string and a set of inputs to transform the input. The
@@ -168,7 +180,11 @@ var shrinkMutationMethods = []func(*ShrinkingValueGenerator, string) string{
 
 // shrinkString takes a string input and returns a mutated value based off the input.
 func (g *ShrinkingValueGenerator) MutateString(s string) string {
-	return g.shrinkStringInternal(&s)
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.ShrinkValueProbability {
+		return g.shrinkStringInternal(&s)
+	}
+	return s
 }
 
 // mutateStringInternal takes a string and returns either a random new string, or a mutated value based off the input.
