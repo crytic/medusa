@@ -202,7 +202,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 
 	// If this provider has no corpus mutation methods or corpus call sequences, we return a call sequence with
 	// nil elements to signal that we want an entirely new sequence.
-	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.MutationTargetSequenceCount() == 0 {
+	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.ActiveMutableSequenceCount() == 0 {
 		return true, nil
 	}
 

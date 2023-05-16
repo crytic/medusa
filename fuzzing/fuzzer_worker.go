@@ -392,7 +392,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.
 	if shrinkRequest.RecordResultInCorpus {
-		err = fw.fuzzer.corpus.AddTestCaseCallSequence(optimizedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		err = fw.fuzzer.corpus.AddTestResultCallSequence(optimizedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return nil, err
 		}

@@ -659,7 +659,7 @@ func (f *Fuzzer) printMetricsLoop() {
 			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
 			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
 			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
-			f.corpus.MutationTargetSequenceCount(),
+			f.corpus.ActiveMutableSequenceCount(),
 		)
 
 		// Update our delta tracking metrics
