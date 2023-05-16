@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"math/big"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -612,10 +613,11 @@ func (f *Fuzzer) Start() error {
 	// Print our results on exit.
 	f.printExitingResults()
 
-	// Finally, generate our coverage report
-	// TODO: Add a config option for output path, if empty, do not generate a report.]
-	if err == nil {
-		err = coverage.GenerateReport(f.corpus.CoverageMaps(), f.compilations)
+	// Finally, generate our coverage report if we have set a valid corpus directory.
+	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
+		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
+		err = coverage.GenerateReport(coverageReportPath, f.corpus.CoverageMaps(), f.compilations)
+		fmt.Printf("coverage report saved to file: %v\n", coverageReportPath)
 	}
 
 	// Return any encountered error.

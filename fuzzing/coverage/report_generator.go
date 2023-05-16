@@ -4,9 +4,10 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 	"html/template"
 	"os"
-	"time"
+	"path/filepath"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
 // all source mapped ranges of the source files which were covered or not.
 // Returns an error if one occurred.
-func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation) error {
+func GenerateReport(htmlReportPath string, coverageMaps *CoverageMaps, compilations []types.Compilation) error {
 	// Create a map of source file paths to coverage lines.
 	sourceLinesByFile := make(map[string][]*coverageSourceLine)
 
@@ -110,9 +111,11 @@ func GenerateReport(coverageMaps *CoverageMaps, compilations []types.Compilation
 	}
 
 	// Finally, export the report data we analyzed.
-	// TODO: Replace this static path with one that is derived from config
-	outputPath := fmt.Sprintf("C:\\Users\\X\\Documents\\___\\report_%v.html", time.Now().UnixNano())
-	return exportCoverageReport(sourceLinesByFile, outputPath)
+	var err error
+	if htmlReportPath != "" {
+		err = exportCoverageReport(sourceLinesByFile, htmlReportPath)
+	}
+	return err
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are filtered
@@ -152,6 +155,11 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 	return filteredMap
 }
 
+// analyzeReportCoverageMapData takes a compilation, a mapping of source file path -> coverage source lines,
+// the source map they were derived from, a lookup of instruction index->offset, and coverage map data.
+// It updates the coverage source line mapping with coverage data, after analyzing the coverage data for the given file
+// in the given compilation.
+// It returns an error if one occurs.
 func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFile map[string][]*coverageSourceLine, sourceMap types.SourceMap, instructionOffsetLookup []int, coverageMapData *CoverageMapBytecodeData) error {
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
@@ -202,6 +210,9 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 	return nil
 }
 
+// exportCoverageReport takes a map of source file paths -> coverage source lines, and generates a report with it,
+// saved to the output path.
+// Returns an error if one occurs.
 func exportCoverageReport(sourceLinesByFile map[string][]*coverageSourceLine, outputPath string) error {
 	// Define template compatible structures.
 	type SourceFile struct {
@@ -224,10 +235,17 @@ func exportCoverageReport(sourceLinesByFile map[string][]*coverageSourceLine, ou
 		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
 	}
 
+	// If the parent directory doesn't exist, create it.
+	parentDirectory := filepath.Dir(outputPath)
+	err = utils.MakeDirectory(parentDirectory)
+	if err != nil {
+		return err
+	}
+
 	// Create our report file
 	file, err := os.Create(outputPath)
 	if err != nil {
-		// TODO error handling
+		_ = file.Close()
 		return fmt.Errorf("could not export report, failed to open file for writing: %v", err)
 	}
 
