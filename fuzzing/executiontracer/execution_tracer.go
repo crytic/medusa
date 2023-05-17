@@ -37,6 +37,9 @@ type ExecutionTracer struct {
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth uint64
 
+	// logDepth refers to how many events have been "emitted" during transaction execution
+	logDepth int
+
 	// evm refers to the EVM instance last captured.
 	evm *vm.EVM
 
@@ -77,9 +80,10 @@ func (t *ExecutionTracer) Trace() *ExecutionTrace {
 func (t *ExecutionTracer) CaptureTxStart(gasLimit uint64) {
 	// Reset our capture state
 	t.callDepth = 0
-	t.trace = newExecutionTrace(t.contractDefinitions)
+	t.trace = newExecutionTrace(t.contractDefinitions, t.cheatCodeContracts)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
+	t.logDepth = 0
 }
 
 // CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
@@ -201,6 +205,19 @@ func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 	// Resolve our contract definitions on the call frame data, if they have not been.
 	t.resolveCallFrameContractDefinitions(t.currentCallFrame)
 
+	// We also check for log events here because the console.log cheatcodes will create a log event without the use of
+	// a LOG opcode. Thus, to ensure that we capture the logs in the current call frame, we will check one more time
+	// before we leave this call frame.
+	// If the number of logs in the stateDB is more than the logDepth, console.log added a log event.
+	if len(t.evm.StateDB.(*state.StateDB).Logs()) > t.logDepth {
+		// Update logDepth
+		t.logDepth = len(t.evm.StateDB.(*state.StateDB).Logs())
+
+		// Append the log to the operations array
+		logs := t.evm.StateDB.(*state.StateDB).Logs()
+		t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
+	}
+
 	// Set our information for this call frame
 	t.currentCallFrame.ReturnData = slices.Clone(output)
 	t.currentCallFrame.ReturnError = err
@@ -271,12 +288,13 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 		t.currentCallFrame.SelfDestructed = true
 	}
 
-	// If a log operation occurred, add a deferred operation to capture it.
+	// If a log operation occurred, add a deferred operation to capture it. Update the log depth as well.
 	if op == vm.LOG0 || op == vm.LOG1 || op == vm.LOG2 || op == vm.LOG3 || op == vm.LOG4 {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
 			logs := t.evm.StateDB.(*state.StateDB).Logs()
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
+				t.logDepth = len(logs)
 			}
 		})
 	}

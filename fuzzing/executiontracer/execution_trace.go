@@ -3,10 +3,12 @@ package executiontracer
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"strings"
@@ -22,13 +24,17 @@ type ExecutionTrace struct {
 	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
 	// obtain any additional information regarding execution.
 	contractDefinitions contracts.Contracts
+
+	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
+	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, cheatcodeContracts map[common.Address]*chain.CheatCodeContract) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
+		cheatCodeContracts:  cheatcodeContracts,
 	}
 }
 
@@ -206,6 +212,16 @@ func (t *ExecutionTrace) generateEventEmittedString(callFrame *CallFrame, eventL
 		//  fix should include only checking relevant libraries associated with the contract.
 		for _, contract := range t.contractDefinitions {
 			event, eventInputValues = abiutils.UnpackEventAndValues(&contract.CompiledContract().Abi, eventLog)
+			if event != nil {
+				break
+			}
+		}
+	}
+
+	// Look at cheatcode contracts now
+	if event == nil {
+		for _, cheatCodeContract := range t.cheatCodeContracts {
+			event, eventInputValues = abiutils.UnpackEventAndValues(cheatCodeContract.Abi(), eventLog)
 			if event != nil {
 				break
 			}

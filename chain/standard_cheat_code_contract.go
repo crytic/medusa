@@ -14,24 +14,6 @@ import (
 	"strings"
 )
 
-// getCheatCodeProviders obtains a cheatCodeTracer (used to power cheat code analysis) and associated CheatCodeContract
-// objects linked to the tracer (providing on-chain callable methods as an entry point). These objects are attached to
-// the TestChain to enable cheat code functionality.
-// Returns the tracer and associated pre-compile contracts, or an error, if one occurred.
-func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
-	// Create a cheat code tracer and attach it to the chain.
-	tracer := newCheatCodeTracer()
-
-	// Obtain our cheat code pre-compiles
-	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Return the tracer and precompiles
-	return tracer, []*CheatCodeContract{stdCheatCodeContract}, nil
-}
-
 // getStandardCheatCodeContract obtains a CheatCodeContract which implements common cheat codes.
 // Returns the precompiled contract, or an error if one occurs.
 func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, error) {

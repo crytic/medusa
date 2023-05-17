@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/pkg/errors"
 )
 
 // CheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
@@ -52,6 +53,30 @@ type cheatCodeRawReturnData struct {
 	Err error
 }
 
+// getCheatCodeProviders obtains a cheatCodeTracer (used to power cheat code analysis) and associated CheatCodeContract
+// objects linked to the tracer (providing on-chain callable methods as an entry point). These objects are attached to
+// the TestChain to enable cheat code functionality.
+// Returns the tracer and associated pre-compile contracts, or an error, if one occurred.
+func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
+	// Create a cheat code tracer and attach it to the chain.
+	tracer := newCheatCodeTracer()
+
+	// Obtain our standard cheat code pre-compile
+	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Obtain the console.log pre-compile
+	consoleCheatCodeContract, err := getConsoleCheatCodeContract(tracer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Return the tracer and precompiles
+	return tracer, []*CheatCodeContract{stdCheatCodeContract, consoleCheatCodeContract}, nil
+}
+
 // newCheatCodeContract returns a new precompiledContract which uses the attached cheatCodeTracer for execution
 // context.
 func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address, name string) *CheatCodeContract {
@@ -96,7 +121,7 @@ func (c *CheatCodeContract) Abi() *abi.ABI {
 }
 
 // addMethod adds a new method to the precompiled contract.
-// Returns an error if one occurred.
+// Throws a panic if either the name is the empty string or the handler is nil.
 func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
@@ -115,11 +140,29 @@ func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs
 		method:  method,
 		handler: handler,
 	}
-
 	// Add the method to the ABI.
 	// Note: Normally the key here should be the method name, not sig. But cheat code contracts have duplicate
 	// method names with different parameter types, so we use this so they don't override.
 	c.abi.Methods[method.Sig] = method
+}
+
+// addEvent adds a new event to the precompiled contract ABI and returns the event signature
+func (c *CheatCodeContract) addEvent(name string, inputs abi.Arguments) (common.Hash, error) {
+	// Verify an event name was provided
+	if name == "" {
+		return common.Hash{}, errors.New("could not add event to precompiled cheatcode contract, empty event name provided")
+	}
+
+	// Verify that there is at least one input argument
+	if len(inputs) == 0 {
+		return common.Hash{}, errors.New("could not add event to precompiled cheatcode contract, no input arguments provided")
+	}
+
+	// Create the event and add it to the cheatcode contract's ABI
+	event := abi.NewEvent(name, name, false, inputs)
+	c.abi.Events[event.Sig] = event
+
+	return event.ID, nil
 }
 
 // RequiredGas determines the amount of gas necessary to execute the pre-compile with the given input data.

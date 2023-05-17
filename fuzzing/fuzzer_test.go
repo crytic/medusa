@@ -208,6 +208,34 @@ func TestCheatCodes(t *testing.T) {
 	}
 }
 
+// TestConsoleLog tests console log
+func TestConsoleLog(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/cheat_codes/console_log/console_log.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 10000
+				// enable assertion testing only
+				config.Fuzzing.Testing.PropertyTesting.Enabled = true
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
 // TestDeploymentsInnerDeployments runs tests to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsInnerDeployments(t *testing.T) {
