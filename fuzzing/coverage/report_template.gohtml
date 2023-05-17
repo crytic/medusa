@@ -82,8 +82,16 @@
 {{/* Loop through all sources */}}
 {{range $sourceFile := .}}
     {{/* Output a filename for each source*/}}
-    <h3>{{$sourceFile.Path}}</h3>
-
+    <p>{{$sourceFile.Path}}</p>
+    <hr />
+    {{/* Output the total line coverage statistics*/}}
+    <div>
+        {{$linesCovered := sourceLinesCovered $sourceFile}}
+        {{$linesActive := sourceLinesActive $sourceFile}}
+        {{$linesCoveredPercentStr := percentageStr $linesCovered $linesActive}}
+        {{$linesCoveredPercentStr}}% Lines {{$linesCovered}}/{{$linesActive}}
+    </div>
+    <hr />
     {{/* Output a tables with a row for each source line*/}}
     <table class="coverage-table">
         {{range $lineIndex, $line := $sourceFile.Lines}}

@@ -48,7 +48,30 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 	// Define mappings onto some useful variables/functions.
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
-		"add":     func(x int, y int) int { return x + y },
+		"add": func(x int, y int) int {
+			return x + y
+		},
+		"percentageStr": func(x int, y int) string {
+			return fmt.Sprintf("%.1f", (float64(x)/float64(y))*100)
+		},
+		"sourceLinesCovered": func(sourceFile *SourceFileAnalysis) int {
+			coveredCount := 0
+			for _, sourceLine := range sourceFile.Lines {
+				if sourceLine.IsCovered || sourceLine.IsCoveredReverted {
+					coveredCount++
+				}
+			}
+			return coveredCount
+		},
+		"sourceLinesActive": func(sourceFile *SourceFileAnalysis) int {
+			activeCount := 0
+			for _, sourceLine := range sourceFile.Lines {
+				if sourceLine.IsActive {
+					activeCount++
+				}
+			}
+			return activeCount
+		},
 	}
 
 	// Parse our HTML template

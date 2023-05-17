@@ -51,14 +51,12 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 		Files: make(map[string]*SourceFileAnalysis),
 	}
 
-	// The fuzzer generates coverage per address and codehash (e.g map[address] -> map[codeHash] -> coverage)
-	// so for each codeHash we have to figure out to which contract definition it belongs to.
-	// first we iterate over all the contract definitions and calculate the codeHashes then store them in a mapping
+	// Loop through all sources in all compilations to add them to our source file analysis container.
 	for _, compilation := range compilations {
-		for sourcePath, source := range compilation.Sources {
+		for sourcePath := range compilation.Sources {
 			// If we have no source code loaded for this source, skip it.
 			if _, ok := compilation.SourceCode[sourcePath]; !ok {
-				return nil, fmt.Errorf("could not generate coverage report as source code was not cached for source '%v'", sourcePath)
+				return nil, fmt.Errorf("could not perform source code analysis, code was not cached for '%v'", sourcePath)
 			}
 
 			// Obtain the parsed source code lines for this source.
@@ -69,36 +67,42 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				}
 			}
 
+		}
+	}
+
+	// Loop through all sources in all compilations to process coverage information.
+	for _, compilation := range compilations {
+		for _, source := range compilation.Sources {
 			// Loop for each contract in this source
 			for _, contract := range source.Contracts {
 				// Obtain coverage map data for this contract.
 				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error fetching init coverage map data: %v", err)
 				}
 				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime coverage map data: %v", err)
 				}
 
 				// Parse the source map for this contract.
 				initSourceMap, err := types.ParseSourceMap(contract.SrcMapsInit)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when obtaining init source map: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error fetching init source map: %v", err)
 				}
 				runtimeSourceMap, err := types.ParseSourceMap(contract.SrcMapsRuntime)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when obtaining runtime source map: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime source map: %v", err)
 				}
 
 				// Parse our instruction index to offset lookups
 				initInstructionOffsetLookup, err := initSourceMap.GetInstructionIndexToOffsetLookup(contract.InitBytecode)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when parsing init byte code: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
 				}
 				runtimeInstructionOffsetLookup, err := runtimeSourceMap.GetInstructionIndexToOffsetLookup(contract.RuntimeBytecode)
 				if err != nil {
-					return nil, fmt.Errorf("could not generate coverage report due to error when parsing runtime byte code: %v", err)
+					return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
 				}
 
 				// Filter our source maps
@@ -173,7 +177,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				}
 			}
 		} else {
-			return fmt.Errorf("could not generate report, failed to resolve source lines by source path")
+			return fmt.Errorf("could not perform source code analysis, missing source '%v'", sourcePath)
 		}
 
 	}
