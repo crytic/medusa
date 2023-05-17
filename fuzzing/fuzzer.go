@@ -616,7 +616,7 @@ func (f *Fuzzer) Start() error {
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
-		err = coverage.GenerateReport(coverageReportPath, f.corpus.CoverageMaps(), f.compilations)
+		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
 		fmt.Printf("coverage report saved to file: %v\n", coverageReportPath)
 	}
 

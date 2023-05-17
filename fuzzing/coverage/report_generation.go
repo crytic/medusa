@@ -19,7 +19,7 @@ var (
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
 // all source mapped ranges of the source files which were covered or not.
 // Returns an error if one occurred.
-func GenerateReport(htmlReportPath string, coverageMaps *CoverageMaps, compilations []types.Compilation) error {
+func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps, htmlReportPath string) error {
 	// Perform source analysis.
 	sourceAnalysis, err := AnalyzeSourceCoverage(compilations, coverageMaps)
 	if err != nil {
