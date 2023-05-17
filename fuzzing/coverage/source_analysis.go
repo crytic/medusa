@@ -66,7 +66,6 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 					Lines: parseSourceLines(compilation.SourceCode[sourcePath]),
 				}
 			}
-
 		}
 	}
 
