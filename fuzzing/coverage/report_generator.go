@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var (
@@ -40,29 +41,13 @@ func GenerateReport(htmlReportPath string, coverageMaps *CoverageMaps, compilati
 			// Loop for each contract in this source
 			for _, contract := range source.Contracts {
 				// Obtain coverage map data for this contract.
-				var (
-					initBytecodeCoverage            *CoverageMapBytecodeData
-					initBytecodeCoverageReverted    *CoverageMapBytecodeData
-					runtimeBytecodeCoverage         *CoverageMapBytecodeData
-					runtimeBytecodeCoverageReverted *CoverageMapBytecodeData
-				)
-
 				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining init coverage map data: %v", err)
 				}
-				if initCoverageMapData != nil {
-					initBytecodeCoverage = initCoverageMapData.successfulCoverage
-					initBytecodeCoverageReverted = initCoverageMapData.revertedCoverage
-				}
-
 				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
 				if err != nil {
 					return fmt.Errorf("could not generate coverage report due to error when obtaining runtime coverage map data: %v", err)
-				}
-				if runtimeCoverageMapData != nil {
-					runtimeBytecodeCoverage = runtimeCoverageMapData.successfulCoverage
-					runtimeBytecodeCoverageReverted = runtimeCoverageMapData.revertedCoverage
 				}
 
 				// Parse the source map for this contract.
@@ -90,19 +75,11 @@ func GenerateReport(htmlReportPath string, coverageMaps *CoverageMaps, compilati
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initBytecodeCoverage)
+				err = analyzeContractSourceCoverage(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initCoverageMapData)
 				if err != nil {
 					return err
 				}
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, initSourceMap, initInstructionOffsetLookup, initBytecodeCoverageReverted)
-				if err != nil {
-					return err
-				}
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeBytecodeCoverage)
-				if err != nil {
-					return err
-				}
-				err = analyzeReportCoverageMapData(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeBytecodeCoverageReverted)
+				err = analyzeContractSourceCoverage(compilation, sourceLinesByFile, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData)
 				if err != nil {
 					return err
 				}
@@ -155,12 +132,12 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 	return filteredMap
 }
 
-// analyzeReportCoverageMapData takes a compilation, a mapping of source file path -> coverage source lines,
+// analyzeContractSourceCoverage takes a compilation, a mapping of source file path -> coverage source lines,
 // the source map they were derived from, a lookup of instruction index->offset, and coverage map data.
 // It updates the coverage source line mapping with coverage data, after analyzing the coverage data for the given file
 // in the given compilation.
 // It returns an error if one occurs.
-func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFile map[string][]*coverageSourceLine, sourceMap types.SourceMap, instructionOffsetLookup []int, coverageMapData *CoverageMapBytecodeData) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceLinesByFile map[string][]*coverageSourceLine, sourceMap types.SourceMap, instructionOffsetLookup []int, contractCoverageData *ContractCoverageMap) error {
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
@@ -180,7 +157,12 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 		sourcePath := compilation.SourceList[sourceMapElement.FileID]
 
 		// Check if the source map element was executed.
-		sourceMapElementCovered := coverageMapData.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+		sourceMapElementCovered := false
+		sourceMapElementCoveredReverted := false
+		if contractCoverageData != nil {
+			sourceMapElementCovered = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			sourceMapElementCoveredReverted = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+		}
 
 		// Obtain the source file this element maps to.
 		if sourceLines, ok := sourceLinesByFile[sourcePath]; ok {
@@ -194,6 +176,7 @@ func analyzeReportCoverageMapData(compilation types.Compilation, sourceLinesByFi
 
 					// Set its coverage state
 					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
+					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceMapElementCoveredReverted
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.
@@ -229,8 +212,15 @@ func exportCoverageReport(sourceLinesByFile map[string][]*coverageSourceLine, ou
 			Lines: lines,
 		})
 	}
+
+	// Define mappings onto some useful variables/functions.
+	functionMap := template.FuncMap{
+		"timeNow": time.Now,
+		"add":     func(x int, y int) int { return x + y },
+	}
+
 	// Parse our HTML template
-	tmpl, err := template.New("coverage_report.html").Parse(string(htmlReportTemplate))
+	tmpl, err := template.New("coverage_report.html").Funcs(functionMap).Parse(string(htmlReportTemplate))
 	if err != nil {
 		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
 	}

@@ -7,11 +7,12 @@ import (
 
 // coverageSourceLine indicates whether the
 type coverageSourceLine struct {
-	IsActive  bool
-	Start     int
-	End       int
-	Contents  []byte
-	IsCovered bool
+	IsActive          bool
+	Start             int
+	End               int
+	Contents          []byte
+	IsCovered         bool
+	IsCoveredReverted bool
 }
 
 func (sl *coverageSourceLine) ContentsHTML() string {
@@ -32,11 +33,12 @@ func splitSourceCode(sourceCode []byte) []*coverageSourceLine {
 	for i := 0; i < len(sourceCodeLinesBytes); i++ {
 		lineEnd := lineStart + len(sourceCodeLinesBytes[i]) + 1
 		lines = append(lines, &coverageSourceLine{
-			IsActive:  false,
-			Start:     lineStart,
-			End:       lineEnd,
-			Contents:  sourceCodeLinesBytes[i],
-			IsCovered: false,
+			IsActive:          false,
+			Start:             lineStart,
+			End:               lineEnd,
+			Contents:          sourceCodeLinesBytes[i],
+			IsCovered:         false,
+			IsCoveredReverted: false,
 		})
 		lineStart = lineEnd
 	}
