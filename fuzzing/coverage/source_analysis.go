@@ -169,7 +169,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 					// early.
 					matchedSourceLine = true
 				} else if matchedSourceLine {
-					//break
+					break
 				}
 			}
 		} else {
