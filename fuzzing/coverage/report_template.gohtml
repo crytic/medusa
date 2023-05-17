@@ -96,12 +96,12 @@
                 {{/* Output two cells for the reverted/non-reverted execution status */}}
                 <td class="row-reverted-status unselectable">
                     {{if $line.IsCovered}}
-                        <div title="The source line was executed without reverting at least once.">√</div>
+                        <div title="The source line executed without reverting.">√</div>
                     {{end}}
                 </td>
                 <td class="row-reverted-status unselectable">
                     {{if $line.IsCoveredReverted}}
-                        <div title="The source line was executed, but reverted at least once.">⟳</div>
+                        <div title="The source line executed, but was reverted.">⟳</div>
                     {{end}}
                 </td>
 
