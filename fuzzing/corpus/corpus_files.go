@@ -167,7 +167,7 @@ func (cd *corpusDirectory[T]) writeFiles() error {
 			// Determine the file path to write this to.
 			filePath := filepath.Join(cd.path, file.fileName)
 
-			// Marshal the call sequence
+			// Marshal the data
 			jsonEncodedData, err := json.MarshalIndent(file.data, "", " ")
 			if err != nil {
 				return err

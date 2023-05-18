@@ -52,6 +52,10 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 			return x + y
 		},
 		"percentageStr": func(x int, y int) string {
+			// If no lines are active and none are covered, show 100% coverage
+			if x == 0 && y == 0 {
+				return fmt.Sprintf("%.1f", float64(100))
+			}
 			return fmt.Sprintf("%.1f", (float64(x)/float64(y))*100)
 		},
 		"sourceLinesCovered": func(sourceFile *SourceFileAnalysis) int {

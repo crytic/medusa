@@ -90,7 +90,6 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		}
 	}
 
-	// Initialize our weighted random chooser
 	return corpus, nil
 }
 
