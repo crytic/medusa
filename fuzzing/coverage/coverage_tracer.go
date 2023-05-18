@@ -67,12 +67,9 @@ func NewCoverageTracer() *CoverageTracer {
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureTxStart(gasLimit uint64) {
-	// Reset our capture state
+	// Reset our call frame states
 	t.callDepth = 0
 	t.coverageMaps = NewCoverageMaps()
-	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
-
-	// Reset our call frame states.
 	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
 }
 
