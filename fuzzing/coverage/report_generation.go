@@ -6,8 +6,10 @@ import (
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"html/template"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -36,45 +38,41 @@ func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps
 // exportCoverageReport takes a previously performed source analysis and generates an HTML coverage report from it.
 // Returns an error if one occurs.
 func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) error {
-	// Copy all source files from our analysis into a list.
-	sourceFiles := make([]*SourceFileAnalysis, 0)
-	for filePath, sourceFile := range sourceAnalysis.Files {
-		sourceFiles = append(sourceFiles, &SourceFileAnalysis{
-			Path:  filePath,
-			Lines: sourceFile.Lines,
-		})
-	}
-
 	// Define mappings onto some useful variables/functions.
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
 		"add": func(x int, y int) int {
 			return x + y
 		},
-		"percentageStr": func(x int, y int) string {
+		"relativePath": func(path string) string {
+			// Obtain a path relative to our current working directory.
+			// If we encounter an error, return the original path.
+			cwd, err := os.Getwd()
+			if err != nil {
+				return path
+			}
+			relativePath, err := filepath.Rel(cwd, path)
+			if err != nil {
+				return path
+			}
+
+			return relativePath
+		},
+		"percentageStr": func(x int, y int, decimals int) string {
+			// Determine our precision string
+			formatStr := "%." + strconv.Itoa(decimals) + "f"
+
 			// If no lines are active and none are covered, show 100% coverage
 			if x == 0 && y == 0 {
-				return fmt.Sprintf("%.1f", float64(100))
+				return fmt.Sprintf(formatStr, float64(100))
 			}
-			return fmt.Sprintf("%.1f", (float64(x)/float64(y))*100)
+			return fmt.Sprintf(formatStr, (float64(x)/float64(y))*100)
 		},
-		"sourceLinesCovered": func(sourceFile *SourceFileAnalysis) int {
-			coveredCount := 0
-			for _, sourceLine := range sourceFile.Lines {
-				if sourceLine.IsCovered || sourceLine.IsCoveredReverted {
-					coveredCount++
-				}
+		"percentageInt": func(x int, y int) int {
+			if y == 0 {
+				return 100
 			}
-			return coveredCount
-		},
-		"sourceLinesActive": func(sourceFile *SourceFileAnalysis) int {
-			activeCount := 0
-			for _, sourceLine := range sourceFile.Lines {
-				if sourceLine.IsActive {
-					activeCount++
-				}
-			}
-			return activeCount
+			return int(math.Round(float64(x) / float64(y) * 100))
 		},
 	}
 
@@ -99,7 +97,7 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 	}
 
 	// Execute the template and write it back to file.
-	err = tmpl.Execute(file, sourceFiles)
+	err = tmpl.Execute(file, sourceAnalysis)
 	fileCloseErr := file.Close()
 	if err == nil {
 		err = fileCloseErr

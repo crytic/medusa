@@ -4,12 +4,54 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/crytic/medusa/compilation/types"
+	"golang.org/x/exp/maps"
+	"sort"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
 type SourceAnalysis struct {
 	// Files describes the analysis results for a given source file path.
 	Files map[string]*SourceFileAnalysis
+}
+
+// SortedFiles returns a list of Files within the SourceAnalysis, sorted by source file path in alphabetical order.
+func (s *SourceAnalysis) SortedFiles() []*SourceFileAnalysis {
+	// Copy all source files from our analysis into a list.
+	sourceFiles := maps.Values(s.Files)
+
+	// Sort source files by path
+	sort.Slice(sourceFiles, func(x, y int) bool {
+		return sourceFiles[x].Path < sourceFiles[y].Path
+	})
+
+	return sourceFiles
+}
+
+// LineCount returns the count of lines across all source files.
+func (s *SourceAnalysis) LineCount() int {
+	count := 0
+	for _, file := range s.Files {
+		count += len(file.Lines)
+	}
+	return count
+}
+
+// ActiveLineCount returns the count of lines that are marked executable/active across all source files.
+func (s *SourceAnalysis) ActiveLineCount() int {
+	count := 0
+	for _, file := range s.Files {
+		count += file.ActiveLineCount()
+	}
+	return count
+}
+
+// CoveredLineCount returns the count of lines that were covered across all source files.
+func (s *SourceAnalysis) CoveredLineCount() int {
+	count := 0
+	for _, file := range s.Files {
+		count += file.CoveredLineCount()
+	}
+	return count
 }
 
 // SourceFileAnalysis describes coverage information for a given source file.
@@ -19,6 +61,28 @@ type SourceFileAnalysis struct {
 
 	// Lines describes information about a given source line and its coverage.
 	Lines []*SourceLineAnalysis
+}
+
+// ActiveLineCount returns the count of lines that are marked executable/active within the source file.
+func (s *SourceFileAnalysis) ActiveLineCount() int {
+	count := 0
+	for _, line := range s.Lines {
+		if line.IsActive {
+			count++
+		}
+	}
+	return count
+}
+
+// CoveredLineCount returns the count of lines that were covered within the source file.
+func (s *SourceFileAnalysis) CoveredLineCount() int {
+	count := 0
+	for _, line := range s.Lines {
+		if line.IsCovered || line.IsCoveredReverted {
+			count++
+		}
+	}
+	return count
 }
 
 // SourceLineAnalysis describes coverage information for a specific source file line.
