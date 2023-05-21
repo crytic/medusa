@@ -43,7 +43,7 @@
             -ms-user-select: none;
             user-select: none;
         }
-        .coverage-table {
+        .code-coverage-table {
             border-collapse: collapse;
             font-family: "Lucida Console", Monaco, monospace;
             font-size: 12px;
@@ -121,14 +121,22 @@
 <body>
     <header>
         <h1>Coverage Report</h1>
+        <hr />
         <table>
             <tr><th>Files: </th><td>{{len .Files}}</td></tr>
             <tr><th>Lines: </th><td>{{.LineCount}}</td></tr>
             <tr>
                 <th>Covered: </th>
                 <td>
-                    {{.CoveredLineCount}} / {{.ActiveLineCount}} ({{percentageStr .CoveredLineCount .ActiveLineCount 1}}%)
-                    <progress class="progress-coverage" value="{{percentageStr .CoveredLineCount .ActiveLineCount 0}}" max="100" style="accent-color: hsl({{percentageInt .CoveredLineCount .ActiveLineCount}}, 100%, 60%)"></progress>
+                    {{/* Analyze some initial coverage metrics */}}
+                    {{$totalLinesCovered := .CoveredLineCount}}
+                    {{$totalLinesActive := .ActiveLineCount}}
+                    {{$totalPercentCoverageInt := percentageInt $totalLinesCovered $totalLinesActive}}
+
+                    {{/* Output our coverage info with a progress bar alongside it.*/}}
+                    {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+                    {{$totalLinesCovered}} / {{$totalLinesActive}} ({{percentageStr $totalLinesCovered $totalLinesActive 1}}%)
+                    <progress class="progress-coverage" value="{{percentageStr $totalLinesCovered $totalLinesActive 0}}" max="100" style="accent-color: hsl({{$totalPercentCoverageInt}}, 100%, 60%)"></progress>
                 </td>
             </tr>
         </table>
@@ -140,13 +148,12 @@
         {{/* Analyze some initial coverage metrics */}}
         {{$linesCovered := $sourceFile.CoveredLineCount}}
         {{$linesActive := $sourceFile.ActiveLineCount}}
-        {{$linesCoveredPercentageInt := percentageInt $linesCovered $linesActive}}
+        {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
 
         {{/* Output a collapsible header/container for each source*/}}
         <button class="collapsible">
-            {{/*The progress bar's color is set from HSL values (hue 0-120 is red->orange->yellow->green), so we use the
-            coverage percentage as the hue value.*/}}
-            <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentageInt}}, 100%, 60%)"></progress></span>
+            {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+            <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
             <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
             <span>{{relativePath $sourceFile.Path}}</span>
         </button>
@@ -154,12 +161,15 @@
             <div class="collapsible-container-content">
             <hr />
             {{/* Output the total line coverage statistics*/}}
-            <div>
-                {{percentageStr $linesCovered $linesActive 1}}% Lines Covered {{$linesCovered}}/{{$linesActive}}
-            </div>
+            <table>
+                <tr>
+                    <th>Lines covered: </th>
+                    <td>{{$linesCovered}} / {{$linesActive}} ({{percentageStr $linesCovered $linesActive 1}}%)</td>
+                </tr>
+            </table>
             <hr />
             {{/* Output a tables with a row for each source line*/}}
-            <table class="coverage-table">
+            <table class="code-coverage-table">
                 {{range $lineIndex, $line := $sourceFile.Lines}}
                     {{/* Create a row for this source line */}}
                     <tr>
