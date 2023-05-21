@@ -591,8 +591,6 @@ func TestCorpusReplayability(t *testing.T) {
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same.
-			// TODO: Fix this, as coverage now tracks reverted too, and if this test solved too quickly on first run,
-			//  this can fail.
 			assert.True(t, originalCoverage.Equal(newCoverage))
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
