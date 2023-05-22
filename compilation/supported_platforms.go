@@ -16,7 +16,6 @@ func init() {
 	// Define a list of default platform config generators
 	generators := []func() platforms.PlatformConfig{
 		func() platforms.PlatformConfig { return platforms.NewSolcCompilationConfig("contract.sol") },
-		func() platforms.PlatformConfig { return platforms.NewTruffleCompilationConfig(".") },
 		func() platforms.PlatformConfig { return platforms.NewCryticCompilationConfig(".") },
 	}
 

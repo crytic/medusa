@@ -19,12 +19,12 @@ func TestSolcVersion(t *testing.T) {
 // with an absolute target path in our platform config.
 func TestSimpleSolcCompilationAbsolutePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
+	contractDirectory := testutils.CopyToTestDirectory(t, "testdata/solc/basic/")
 
 	// Execute our tests in the given test path
-	testutils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Create a solc provider
-		solc := NewSolcCompilationConfig(contractPath)
+		solc := NewSolcCompilationConfig(filepath.Join(contractDirectory, "DerivedContract.sol"))
 
 		// Obtain our compilations and ensure we didn't encounter an error
 		compilations, _, err := solc.Compile()
@@ -37,13 +37,12 @@ func TestSimpleSolcCompilationAbsolutePath(t *testing.T) {
 // with a relative target path in our platform config.
 func TestSimpleSolcCompilationRelativePath(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/SimpleContract.sol")
-	contractName := filepath.Base(contractPath)
+	contractDirectory := testutils.CopyToTestDirectory(t, "testdata/solc/basic/")
 
 	// Execute our tests in the given test path
-	testutils.ExecuteInDirectory(t, contractPath, func() {
+	testutils.ExecuteInDirectory(t, contractDirectory, func() {
 		// Create a solc provider
-		solc := NewSolcCompilationConfig(contractName)
+		solc := NewSolcCompilationConfig("DerivedContract.sol")
 
 		// Obtain our solc version and ensure we didn't encounter an error
 		compilations, _, err := solc.Compile()
@@ -55,7 +54,7 @@ func TestSimpleSolcCompilationRelativePath(t *testing.T) {
 // TestFailedSolcCompilation tests that a single contract of invalid form should fail compilation.
 func TestFailedSolcCompilation(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/FailedCompilationContract.sol")
+	contractPath := testutils.CopyToTestDirectory(t, "testdata/solc/bad/FailedCompilationContract.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
