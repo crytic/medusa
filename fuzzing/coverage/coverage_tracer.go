@@ -3,7 +3,6 @@ package coverage
 import (
 	"fmt"
 	"github.com/crytic/medusa/chain/types"
-	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
@@ -43,12 +42,6 @@ type CoverageTracer struct {
 
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth uint64
-
-	// cachedCodeHashOriginal describes the code hash used to last store coverage.
-	cachedCodeHashOriginal common.Hash
-	// cachedCodeHashResolved describes the code hash used to store the last coverage map. If the contract metadata
-	// code hash is embedded, then it is used. Otherwise, this refers to cachedCodeHashOriginal.
-	cachedCodeHashResolved common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -58,6 +51,9 @@ type coverageTracerCallFrameState struct {
 
 	// pendingCoverageMap describes the coverage maps recorded for this call frame.
 	pendingCoverageMap *CoverageMaps
+
+	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
+	lookupHash *common.Hash
 }
 
 // NewCoverageTracer returns a new CoverageTracer.
@@ -71,13 +67,9 @@ func NewCoverageTracer() *CoverageTracer {
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureTxStart(gasLimit uint64) {
-	// Reset our capture state
+	// Reset our call frame states
 	t.callDepth = 0
 	t.coverageMaps = NewCoverageMaps()
-	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
-	t.cachedCodeHashOriginal = common.Hash{}
-
-	// Reset our call frame states.
 	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
 }
 
@@ -96,13 +88,18 @@ func (t *CoverageTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	// If we didn't encounter an error in the end, we commit all our coverage maps to the final coverage map.
-	// If we encountered an error, we reverted, so we don't consider them.
-	if err == nil {
-		_, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
-		if coverageUpdateErr != nil {
-			panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture end: %v", coverageUpdateErr))
+	// If we encountered an error in this call frame, mark all coverage as reverted.
+	if err != nil {
+		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
+		if revertCoverageErr != nil {
+			panic(revertCoverageErr)
 		}
+	}
+
+	// Commit all our coverage maps up one call frame.
+	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+	if coverageUpdateErr != nil {
+		panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -123,13 +120,18 @@ func (t *CoverageTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// If we didn't encounter an error in the end, we commit all our coverage maps up one call frame.
-	// If we encountered an error, we reverted, so we don't consider them.
-	if err == nil {
-		_, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
-		if coverageUpdateErr != nil {
-			panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
+	// If we encountered an error in this call frame, mark all coverage as reverted.
+	if err != nil {
+		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
+		if revertCoverageErr != nil {
+			panic(revertCoverageErr)
 		}
+	}
+
+	// Commit all our coverage maps up one call frame.
+	_, _, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+	if coverageUpdateErr != nil {
+		panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -146,28 +148,16 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 
 	// If there is code we're executing, collect coverage.
 	if len(scope.Contract.Code) > 0 {
-		// We record coverage maps under a code hash to merge coverage across different deployments of a contract.
-		// We rely on the embedded contract metadata code hash if it is available, otherwise the immediate hash
-		// for this code. Because this method is called for every instruction executed, we cache the resolved
-		// code hash for performance reasons.
-		if t.cachedCodeHashOriginal != scope.Contract.CodeHash {
-			t.cachedCodeHashOriginal = scope.Contract.CodeHash
-			t.cachedCodeHashResolved = t.cachedCodeHashOriginal
-			if metadata := compilationTypes.ExtractContractMetadata(scope.Contract.Code); metadata != nil {
-				if metadataHash := metadata.ExtractBytecodeHash(); metadataHash != nil {
-					t.cachedCodeHashResolved = common.BytesToHash(metadataHash)
-				}
-			}
+		// Obtain our contract coverage map lookup hash.
+		if callFrameState.lookupHash == nil {
+			lookupHash := getContractCoverageMapHash(scope.Contract.Code, callFrameState.create)
+			callFrameState.lookupHash = &lookupHash
 		}
 
-		// If the resolved code hash is not zero (indicating a contract deployment from which we could not extract
-		// a metadata code hash), then we record coverage for this location in our map.
-		zeroHash := common.BigToHash(big.NewInt(0))
-		if t.cachedCodeHashResolved != zeroHash {
-			_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetCoveredAt(scope.Contract.Address(), t.cachedCodeHashResolved, callFrameState.create, len(scope.Contract.Code), pc)
-			if coverageUpdateErr != nil {
-				panic(fmt.Sprintf("coverage tracer failed to update coverage map while tracing state: %v", coverageUpdateErr))
-			}
+		// Record coverage for this location in our map.
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), pc)
+		if coverageUpdateErr != nil {
+			panic(fmt.Sprintf("coverage tracer failed to update coverage map while tracing state: %v", coverageUpdateErr))
 		}
 	}
 }

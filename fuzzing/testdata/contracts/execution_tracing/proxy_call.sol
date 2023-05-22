@@ -17,7 +17,7 @@ contract TestContract {
         i = new InnerDeploymentContract();
     }
 
-    function testDelegateCall() public returns (address) {
+    function testDelegateCall() public {
         // Perform a delegate call to set our variables in this contract.
         (bool success, bytes memory data) = address(i).delegatecall(abi.encodeWithSignature("setXY(uint256,uint256,string)", 123, 321, "Hello from proxy call args!"));
 
