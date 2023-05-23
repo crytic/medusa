@@ -1,7 +1,7 @@
 package formatters
 
 import (
-	"github.com/trailofbits/medusa/logging/colors"
+	"github.com/crytic/medusa/logging/colors"
 	"regexp"
 )
 

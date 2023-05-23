@@ -1,3 +1,0 @@
-[submodule "pkg/medusa-geth"]
-	path = pkg/medusa-geth
-	url = git@github.com:trailofbits/medusa-geth.git

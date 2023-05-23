@@ -3,10 +3,10 @@ package fuzzing
 import (
 	"testing"
 
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // fuzzerTestContext holds the current Fuzzer test context and can be used for post-execution checks
@@ -80,14 +80,17 @@ func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 // assertCorpusCallSequencesCollected will check to see whether we captured coverage-increasing call sequences in the
 // corpus. It asserts that the actual result matches the provided expected result.
 func assertCorpusCallSequencesCollected(f *fuzzerTestContext, expectCallSequences bool) {
+	// Obtain our count of mutable (often representing just non-reverted coverage increasing) sequences.
+	callSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, false, false)
+
 	// Ensure we captured some coverage-increasing call sequences.
 	if expectCallSequences {
-		assert.Greater(f.t, f.fuzzer.corpus.CallSequenceCount(), 0, "No coverage was captured")
+		assert.Greater(f.t, callSequenceCount, 0, "No coverage was captured")
 	}
 
 	// If we don't expect coverage-increasing call sequences, or it is not enabled, we should not get any coverage
 	if !expectCallSequences || !f.fuzzer.config.Fuzzing.CoverageEnabled {
-		assert.EqualValues(f.t, 0, f.fuzzer.corpus.CallSequenceCount(), "Coverage was captured")
+		assert.EqualValues(f.t, 0, callSequenceCount, "Coverage was captured")
 	}
 }
 

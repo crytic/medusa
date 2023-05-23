@@ -2,17 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/trailofbits/medusa/logging"
 	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 
+	"github.com/crytic/medusa/fuzzing"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/fuzzing"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // fuzzCmd represents the command provider for fuzzing

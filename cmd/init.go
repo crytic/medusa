@@ -2,17 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/trailofbits/medusa/logging"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // initCmd represents the command provider for init

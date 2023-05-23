@@ -2,7 +2,7 @@ package compilation
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/compilation/platforms"
+	"github.com/crytic/medusa/compilation/platforms"
 )
 
 // defaultPlatformConfigGenerator is a mapping of platform identifier to generator functions which can be used to create
@@ -16,7 +16,6 @@ func init() {
 	// Define a list of default platform config generators
 	generators := []func() platforms.PlatformConfig{
 		func() platforms.PlatformConfig { return platforms.NewSolcCompilationConfig("contract.sol") },
-		func() platforms.PlatformConfig { return platforms.NewTruffleCompilationConfig(".") },
 		func() platforms.PlatformConfig { return platforms.NewCryticCompilationConfig(".") },
 	}
 

@@ -1,6 +1,6 @@
 package formatters
 
-import "github.com/trailofbits/medusa/logging/colors"
+import "github.com/crytic/medusa/logging/colors"
 
 // The list of constants below are used to search and replace various elements of a call sequence, test case, execution trace,
 // or test summary with a colorized, formatted version for console output

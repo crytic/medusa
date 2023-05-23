@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 )
 
 // CryticCompilationConfig represents the various configuration options that can be provided by the user
@@ -154,8 +154,9 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		BinRuntime    string `json:"bin-runtime"`
 	}
 	type solcExportData struct {
-		Sources   map[string]solcExportSource   `json:"sources"`
-		Contracts map[string]solcExportContract `json:"contracts"`
+		Sources    map[string]solcExportSource   `json:"sources"`
+		Contracts  map[string]solcExportContract `json:"contracts"`
+		SourceList []string                      `json:"sourceList"`
 	}
 
 	// Loop through each .json file for compilation units.
@@ -175,6 +176,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 		// Create a compilation object that will store the contracts and source information.
 		compilation := types.NewCompilation()
+		compilation.SourceList = solcExport.SourceList
 
 		// Loop through all sources and parse them into our types.
 		for sourcePath, source := range solcExport.Sources {

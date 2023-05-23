@@ -1,8 +1,8 @@
 package valuegeneration
 
 import (
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/utils"
 	"math/big"
 	"math/rand"
 )

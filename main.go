@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/trailofbits/medusa/cmd"
+	"github.com/crytic/medusa/cmd"
 	"os"
 )
 

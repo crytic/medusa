@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/crytic/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // AssertionTestCase describes a test being run by a AssertionTestCaseProvider.

@@ -1,7 +1,7 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/events"
+	"github.com/crytic/medusa/events"
 )
 
 // FuzzerEvents defines event emitters for a Fuzzer.

@@ -2,9 +2,9 @@ package logging
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 	"github.com/rs/zerolog"
-	"github.com/trailofbits/medusa/logging/colors"
-	"github.com/trailofbits/medusa/utils"
 	"io"
 	"os"
 	"strings"

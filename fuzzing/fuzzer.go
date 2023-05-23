@@ -3,34 +3,36 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/logging/formatters"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
-	"github.com/trailofbits/medusa/logging"
-	"github.com/trailofbits/medusa/logging/colors"
-	"github.com/trailofbits/medusa/logging/formatters"
 	"io"
 	"math/big"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/utils/randomutils"
 
+	"github.com/crytic/medusa/chain"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/fuzzing/config"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/corpus"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/trailofbits/medusa/chain"
-	compilationTypes "github.com/trailofbits/medusa/compilation/types"
-	"github.com/trailofbits/medusa/fuzzing/config"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/fuzzing/corpus"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"github.com/trailofbits/medusa/utils"
 	"golang.org/x/exp/slices"
 )
 
@@ -47,7 +49,11 @@ type Fuzzer struct {
 	senders []common.Address
 	// deployer describes an account address used to deploy contracts in fuzzing campaigns.
 	deployer common.Address
-	// contractDefinitions defines targets to be fuzzed once their deployment is detected.
+
+	// compilations describes all compilations added as targets.
+	compilations []compilationTypes.Compilation
+	// contractDefinitions defines targets to be fuzzed once their deployment is detected. They are derived from
+	// compilations.
 	contractDefinitions fuzzerTypes.Contracts
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
@@ -264,17 +270,28 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
 	// Loop for each contract in each compilation and deploy it to the test node.
-	for _, comp := range compilations {
-		for sourcePath, source := range comp.Sources {
+	for i := 0; i < len(compilations); i++ {
+		// Add our compilation to the list and get a reference to it.
+		f.compilations = append(f.compilations, compilations[i])
+		compilation := &f.compilations[len(f.compilations)-1]
+
+		// Loop for each source
+		for sourcePath, source := range compilation.Sources {
 			// Seed our base value set from every source's AST
 			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
-				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract)
+				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
+		}
+
+		// Cache all of our source code if it hasn't been already.
+		err := compilation.CacheSourceCode()
+		if err != nil {
+			fmt.Printf("Warning: could not cache compilation source file data due to error: %v", err)
 		}
 	}
 }
@@ -648,6 +665,13 @@ func (f *Fuzzer) Start() error {
 	// Print our results on exit.
 	f.printExitingResults()
 
+	// Finally, generate our coverage report if we have set a valid corpus directory.
+	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
+		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
+		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+		fmt.Printf("coverage report saved to file: %v\n", coverageReportPath)
+	}
+
 	// Return any encountered error.
 	return err
 }
@@ -689,7 +713,7 @@ func (f *Fuzzer) printMetricsLoop() {
 			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
 			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
 			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
-			f.corpus.ActiveCallSequenceCount(),
+			f.corpus.ActiveMutableSequenceCount(),
 		), nil)
 
 		// Update our delta tracking metrics
