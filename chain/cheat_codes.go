@@ -340,7 +340,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	// addr: Compute the address for a given private key
 	contract.addMethod("addr", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeAddress}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
 			privateKey, err := crypto.ToECDSA(inputs[0].(*big.Int).Bytes())
 			if err != nil {
 				return nil, cheatCodeRevertData([]byte("addr: invalid private key"))
