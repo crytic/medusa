@@ -103,6 +103,7 @@ jobs:
 
     steps:
       - run: |
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name 'ForceDefenderPassiveMode' -Value '1' -Type 'DWORD'
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
           Add-MpPreference -ExclusionPath 'D:\a'
           Get-MpComputerStatus
