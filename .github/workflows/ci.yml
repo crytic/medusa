@@ -109,14 +109,12 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $true
           Set-MpPreference -DisableDnsOverTcpParsing $true
           Set-MpPreference -DisableDnsParsing $true
-          Set-MpPreference -DisableFtpParsing $true
           Set-MpPreference -DisableHttpParsing $true
           Set-MpPreference -DisableNetworkProtectionPerfTelemetry $true
           Set-MpPreference -DisableRdpParsing $true
           Set-MpPreference -DisableSmtpParsing $true
           Set-MpPreference -DisableSshParsing $true
           Set-MpPreference -DisableTlsParsing $true
-          Set-MpPreference -DisableFtpParsing $true
           Add-MpPreference -ExclusionPath 'D:\a'
           Get-MpComputerStatus
           $Preferences = Get-MpPreference
