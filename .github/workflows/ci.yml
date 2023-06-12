@@ -103,6 +103,7 @@ jobs:
 
     steps:
       - run: |
+          format d: /u /fs:refs /i:disable /v:code /q
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name 'ForceDefenderPassiveMode' -Value '1' -Type 'DWORD'
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
           Set-MpPreference -DisableCacheMaintenance $true
