@@ -105,12 +105,22 @@ jobs:
       - run: |
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name 'ForceDefenderPassiveMode' -Value '1' -Type 'DWORD'
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
+          Set-MpPreference -DisableCacheMaintenance $true
+          Set-MpPreference -DisableDatagramProcessing $true
+          Set-MpPreference -DisableDnsOverTcpParsing $true
+          Set-MpPreference -DisableDnsParsing $true
+          Set-MpPreference -DisableFtpParsing $true
+          Set-MpPreference -DisableHttpParsing $true
+          Set-MpPreference -DisableNetworkProtectionPerfTelemetry $true
+          Set-MpPreference -DisableRdpParsing $true
+          Set-MpPreference -DisableSmtpParsing $true
+          Set-MpPreference -DisableSshParsing $true
+          Set-MpPreference -DisableTlsParsing $true
+          Set-MpPreference -DisableFtpParsing $true
           Add-MpPreference -ExclusionPath 'D:\a'
           Get-MpComputerStatus
           $Preferences = Get-MpPreference
           Write-Host ($Preferences | Format-List | Out-String)
-          Set-MpPreference -DisableRealtimeMonitoring $false
-          Set-MpPreference -DisableRealtimeMonitoring $true
         if: runner.os == 'Windows'
         shell: powershell
       - uses: actions/checkout@v3
