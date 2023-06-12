@@ -13,16 +13,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   build:
     needs: [lint, test]
     strategy:
       matrix:
         environment: [ubuntu-latest, macos-latest, windows-2019]
+
+    defaults:
+      run:
+        shell: ${{ (matrix.environment == 'windows-2019' && 'powershell') || 'bash' }}
 
     runs-on: ${{ matrix.environment }}
     steps:
@@ -94,6 +94,10 @@ jobs:
     strategy:
       matrix:
         environment: [ubuntu-latest, macos-latest, windows-2019]
+
+    defaults:
+      run:
+        shell: ${{ (matrix.environment == 'windows-2019' && 'powershell') || 'bash' }}
 
     runs-on: ${{ matrix.environment }}
 
