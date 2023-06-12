@@ -18,11 +18,11 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-2019]
+        environment: [ubuntu-latest, macos-latest, windows-latest]
 
     defaults:
       run:
-        shell: ${{ (matrix.environment == 'windows-2019' && 'powershell') || 'bash' }}
+        shell: bash
 
     runs-on: ${{ matrix.environment }}
     steps:
@@ -93,7 +93,7 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-2019]
+        environment: [ubuntu-latest, macos-latest, windows-latest]
 
     defaults:
       run:
@@ -118,6 +118,11 @@ jobs:
           DISKPART /S "C:\TEMP\diskpartVHD.txt"
           Remove-Item "C:\TEMP\diskpartVHD.txt"
           New-Item -Path "wd" -ItemType SymbolicLink -Value "Q:\\"
+
+          go env -w GOCACHE='Q:\go-build'
+          go env -w GOTMPDIR='Q\go-tmp'
+          go env -w GOMODCACHE='Q:\go\pkg\mod'
+          go env -w GOPATH='Q:\go'
 
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name 'ForceDefenderPassiveMode' -Value '1' -Type 'DWORD'
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
