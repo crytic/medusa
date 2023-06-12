@@ -100,6 +100,7 @@ jobs:
     steps:
       - run: |
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
+          Get-MpComputerStatus
           $Preferences = Get-MpPreference
           Write-Host ($Preferences | Format-List | Out-String)
           Set-MpPreference -DisableRealtimeMonitoring $true
