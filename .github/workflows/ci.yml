@@ -97,13 +97,28 @@ jobs:
 
     defaults:
       run:
-        shell: ${{ (matrix.environment == 'windows-2019' && 'powershell') || 'bash' }}
+        shell: bash
+        working-directory: wd
 
     runs-on: ${{ matrix.environment }}
 
     steps:
-      - run: |
-          format d: /u /fs:refs /i:disable /v:code /q
+      - working-directory: .
+        run: |
+          $vhdxPath = Join-Path $Env:GITHUB_WORKSPACE Workspace.vhdx
+          NEW-ITEM -Force -path "C:\TEMP" -name diskpartVHD.txt -itemtype "file"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "create vdisk file=$vhdxPath type=expandable maximum=13312"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "select vdisk file=$vhdxPath"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "attach vdisk"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "convert gpt"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "create partition primary"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "format FS=ReFS LABEL=""code"" QUICK"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "assign letter=Q"
+          ADD-CONTENT -Path "C:\TEMP\diskpartVHD.txt" "exit"
+          DISKPART /S "C:\TEMP\diskpartVHD.txt"
+          Remove-Item "C:\TEMP\diskpartVHD.txt"
+          New-Item -Path "wd" -ItemType SymbolicLink -Value "Q:\\"
+
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name 'ForceDefenderPassiveMode' -Value '1' -Type 'DWORD'
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
           Set-MpPreference -DisableCacheMaintenance $true
@@ -123,6 +138,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
       - uses: actions/checkout@v3
+        with:
+          path: wd
 
       - uses: actions/setup-go@v3
         with:
