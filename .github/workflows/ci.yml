@@ -98,6 +98,13 @@ jobs:
     runs-on: ${{ matrix.environment }}
 
     steps:
+      - run: |
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Type DWord -Value 0
+          $Preferences = Get-MpPreference
+          Write-Host ($Preferences | Format-List | Out-String)
+          Set-MpPreference -DisableRealtimeMonitoring $true
+        if: runner.os == 'Windows'
+        shell: powershell
       - uses: actions/checkout@v3
 
       - uses: actions/setup-go@v3
