@@ -36,10 +36,13 @@ jobs:
           # vroom vroom
           DIR='D:\a\local'
           mkdir -p "$DIR" && cd "$DIR"
-          mkdir go go-cache
+          mkdir go go-cache go-tmp tmpdir
           go env -w GOPATH="$DIR\\go"
           go env -w GOCACHE="$DIR\\go-cache"
-          echo "$DIR\\go\\bin" | tee -a "$GITHUB_PATH"
+          go env -w GOTMPDIR="$DIR\\go-tmp"
+          printf '%s\\go\\bin\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'TMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
 
       - uses: actions/setup-go@v4
@@ -123,16 +126,19 @@ jobs:
           DIR='D:\a\local'
           mkdir -p "$DIR" && cd "$DIR"
           echo "::group::Go"
-          mkdir -p go go-cache
+          mkdir -p go go-cache go-tmp tmpdir
           go env -w GOPATH="$DIR\\go"
           go env -w GOCACHE="$DIR\\go-cache"
-          echo "$DIR\\go\\bin" | tee -a "$GITHUB_PATH"
+          go env -w GOTMPDIR="$DIR\\go-tmp"
+          printf '%s\\go\\bin\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'TMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
           echo "::endgroup::"
           echo "::group::Python"
           python3 -m venv venv
-          echo "$DIR\\venv\\Scripts" | tee -a "$GITHUB_PATH"
-          echo "VIRTUAL_ENV=$DIR\\venv" | tee -a "$GITHUB_ENV"
+          printf '%s\\venv\\Scripts\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'VIRTUAL_ENV=%s\\venv\n' "$DIR" | tee -a "$GITHUB_ENV"
           echo "::endgroup::"
           echo "::group::Node"
           npm config set cache "$DIR\\npm-cache" --global
