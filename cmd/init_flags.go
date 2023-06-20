@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // addInitFlags adds the various flags for the init command

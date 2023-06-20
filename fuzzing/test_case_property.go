@@ -2,18 +2,20 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
 	"strings"
 )
 
 // PropertyTestCase describes a test being run by a PropertyTestCaseProvider.
 type PropertyTestCase struct {
-	status         TestCaseStatus
-	targetContract *fuzzerTypes.Contract
-	targetMethod   abi.Method
-	callSequence   *calls.CallSequence
+	status            TestCaseStatus
+	targetContract    *fuzzerTypes.Contract
+	targetMethod      abi.Method
+	callSequence      *calls.CallSequence
+	propertyTestTrace *executiontracer.ExecutionTrace
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
@@ -36,12 +38,18 @@ func (t *PropertyTestCase) Name() string {
 func (t *PropertyTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
-		return fmt.Sprintf(
-			"Test \"%s.%s\" failed after the following call sequence:\n%s",
+		msg := fmt.Sprintf(
+			"Property test \"%s.%s\" failed after the following call sequence:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),
 		)
+		// If an execution trace is attached then add it to the message
+		if t.propertyTestTrace != nil {
+			// TODO: Improve formatting in logging PR
+			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
+		}
+		return msg
 	}
 	return ""
 }

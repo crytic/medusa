@@ -1,12 +1,56 @@
 name: CI
 
-on: [pull_request, push, workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  build:
+    needs: [lint, test]
+    strategy:
+      matrix:
+        environment: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "^1.18.1"
+
+      - name: Build (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: go build -o medusa -v .
+
+      - name: Compress (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: tar -czvf medusa.tar.gz medusa
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: go build -o medusa.exe -v .
+
+      - name: Compress (Windows)
+        if: runner.os == 'Windows'
+        run: tar -czvf medusa.tar.gz medusa.exe
+
+      - name: Upload artifact on merge to master
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v3
+        with:
+          name: medusa-${{ runner.os }}
+          path: medusa.tar.gz
+
   lint:
     runs-on: ubuntu-latest
 
@@ -25,11 +69,11 @@ jobs:
       - name: Prettier
         run: |
           npm install -g prettier
-          prettier --check '**.json' '**/*.md' '**/*.yml'
+          prettier --check '**.json' '**/*.md' '**/*.yml' '!(pkg)'
 
       - name: Markdown link check
         run: |
-          npm install -g markdown-link-check
+          npm install -g markdown-link-check@3.10.3
           markdown-link-check --config .github/workflows/resources/markdown_link_check.json ./*.md
 
       - name: Format
@@ -40,7 +84,7 @@ jobs:
       - name: Lint
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run
+          golangci-lint run --timeout 5m0s
 
   test:
     strategy:
@@ -56,14 +100,17 @@ jobs:
         with:
           go-version: "^1.18.1"
 
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.15
+
       - name: Install Node dependencies
-        run: npm install -g hardhat truffle
+        run: npm install -g hardhat
 
       - name: Install Python dependencies
         run: |
-          # Install from github until the following is released: https://github.com/crytic/crytic-compile/pull/309
-          pip3 install https://github.com/crytic/crytic-compile/archive/refs/heads/master.zip
           pip3 install solc-select
+          pip3 install slither-analyzer
 
       - name: Install solc
         run: |
@@ -74,7 +121,7 @@ jobs:
         run: go test ./...
 
   all-checks:
-    needs: [lint, test]
+    needs: [lint, test, build]
 
     runs-on: ubuntu-latest
 

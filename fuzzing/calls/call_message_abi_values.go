@@ -3,10 +3,9 @@ package calls
 import (
 	"encoding/json"
 	"fmt"
-
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 )
 
 // CallMessageDataAbiValues describes a CallMessage Data field which is represented by ABI input argument values.
@@ -88,7 +87,8 @@ func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
 // Pack packs all the ABI argument InputValues into call data for the relevant Method it targets. If this was
 // deserialized, Resolve must be called first to resolve necessary runtime data (such as the Method).
 func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
-	// We must have set an ABI method at runtime to serialize this.
+	// If we do not have an ABI method at runtime to serialize this, we will return an error.
+	// This may happen when the corpus is being replayed and the ABI of a contract has changed between runs.
 	if d.Method == nil {
 		return nil, fmt.Errorf("ABI call data packing failed, method definition was not set at runtime")
 	}

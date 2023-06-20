@@ -1,19 +1,31 @@
 package config
 
-import "github.com/trailofbits/medusa/compilation"
+import (
+	testChainConfig "github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/compilation"
+)
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
 // based on the provided platform, or a nil one if an empty string is provided.
 func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	var (
 		compilationConfig *compilation.CompilationConfig
+		chainConfig       *testChainConfig.TestChainConfig
 		err               error
 	)
+
+	// Try to obtain a default compilation config for this platform.
 	if platform != "" {
 		compilationConfig, err = compilation.NewCompilationConfig(platform)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Try to obtain a default chain config.
+	chainConfig, err = testChainConfig.DefaultTestChainConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a project configuration
@@ -29,11 +41,11 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CorpusDirectory:    "",
 			CoverageEnabled:    true,
 			SenderAddresses: []string{
-				"0x1111111111111111111111111111111111111111",
-				"0x2222222222222222222222222222222222222222",
-				"0x3333333333333333333333333333333333333333",
+				"0x10000",
+				"0x20000",
+				"0x30000",
 			},
-			DeployerAddress:        "0x1111111111111111111111111111111111111111",
+			DeployerAddress:        "0x30000",
 			MaxBlockNumberDelay:    60480,
 			MaxBlockTimestampDelay: 604800,
 			BlockGasLimit:          125_000_000,
@@ -41,6 +53,8 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: true,
+				TestAllContracts:             false,
+				TraceAll:                     false,
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         false,
 					TestViewMethods: false,
@@ -52,6 +66,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 			},
+			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
 	}
