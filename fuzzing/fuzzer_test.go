@@ -128,7 +128,7 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
-// TestOptimizationsSolving runs a test to ensure that optimizations testing works as expected
+// TestOptimizationsSolving runs a test to ensure that optimization mode works as expected
 func TestOptimizationsSolving(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/optimizations/optimize.sol",

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core"
 	"math/big"
 	"strings"
 	"sync"
@@ -31,7 +33,7 @@ type OptimizationTestCaseProvider struct {
 // OptimizationTestCaseProvider.
 type optimizationTestCaseProviderWorkerState struct {
 	// optimizationTestMethods a mapping from contract-method ID to deployed contract-method descriptors.
-	// Each deployed contract-method represents a optimization test method to call for evaluation. Optimization tests
+	// Each deployed contract-method represents an optimization test method to call for evaluation. Optimization tests
 	// should be read-only (pure/view) functions which take no input parameters and return an integer variable.
 	optimizationTestMethods map[contracts.ContractMethodID]contracts.DeployedContractMethod
 
@@ -56,13 +58,14 @@ func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCasePro
 	return t
 }
 
-// isOptimizationTest check whether the method is a optimization test given potential naming prefixes it must conform to
+// isOptimizationTest check whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.TestPrefixes {
 		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.IntTy {
+			// An optimization test must take no inputs, return an int256, and be read-only
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.IntTy && method.Outputs[0].Type.Size == 256 && method.IsConstant() {
 				return true
 			}
 		}
@@ -70,77 +73,54 @@ func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) boo
 	return false
 }
 
-// updateOptimizationTest executes a given optimization test method to get the computed value. This is used to
-// facilitate updating of optimization test value after every call the Fuzzer makes when testing call sequences.
-func (t *OptimizationTestCaseProvider) updateOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, testCase *OptimizationTestCase, callSequence calls.CallSequence) error {
+// runOptimizationTest executes a given optimization test method (w/ an optional execution trace) and returns the return value
+// from the optimization test method. This is called after every call the Fuzzer makes when testing call sequences for each test case.
+func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, trace bool) (*big.Int, *executiontracer.ExecutionTrace, error) {
 	// Generate our ABI input data for the call. In this case, optimization test methods take no arguments, so the
 	// variadic argument list here is empty.
 	data, err := optimizationTestMethod.Contract.CompiledContract().Abi.Pack(optimizationTestMethod.Method.Name)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// Call the underlying contract
-	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the optimizations.
 	value := big.NewInt(0)
+	// TODO: Determine if we should use `Senders[0]` or have a separate funded account for the optimizations.
 	msg := calls.NewCallMessage(worker.Fuzzer().senders[0], &optimizationTestMethod.Address, 0, value, worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, data)
 	msg.FillFromTestChainProperties(worker.chain)
 
-	res, err := worker.Chain().CallContract(msg, nil)
-	if err != nil {
-		return fmt.Errorf("failed to call optimization test method: %v", err)
+	// Execute the call. If we are tracing, we attach an execution tracer and obtain the result.
+	var executionResult *core.ExecutionResult
+	var executionTrace *executiontracer.ExecutionTrace
+	if trace {
+		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
+		executionResult, err = worker.Chain().CallContract(msg, nil, executionTracer)
+		executionTrace = executionTracer.Trace()
+	} else {
+		executionResult, err = worker.Chain().CallContract(msg, nil)
 	}
-
-	// If our optimization test method call failed, we flag a failed test.
-	// TODO check it during code review, for property tests they mark test failed here
-	if res.Failed() {
-		return fmt.Errorf("failed to call optimization test method: %v", err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to call optimization test method: %v", err)
 	}
 
 	// Decode our ABI outputs
-	retVals, err := optimizationTestMethod.Method.Outputs.Unpack(res.Return())
+	retVals, err := optimizationTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
-		return fmt.Errorf("failed to decode optimization test method return value: %v", err)
+		return nil, nil, fmt.Errorf("failed to decode optimization test method return value: %v", err)
 	}
 
 	// We should have one return value.
 	if len(retVals) != 1 {
-		return fmt.Errorf("detected an unexpected number of return values from optimization test '%s'", optimizationTestMethod.Method.Name)
+		return nil, nil, fmt.Errorf("detected an unexpected number of return values from optimization test '%s'", optimizationTestMethod.Method.Name)
 	}
 
-	// The one return value should be an integer
-	newValue := new(big.Int)
-	switch v := retVals[0].(type) {
-	case int8:
-		newValue.SetInt64(int64(v))
-	case int16:
-		newValue.SetInt64(int64(v))
-	case int32:
-		newValue.SetInt64(int64(v))
-	case int64:
-		newValue.SetInt64(v)
-	case uint8:
-		newValue.SetUint64(uint64(v))
-	case uint16:
-		newValue.SetUint64(uint64(v))
-	case uint32:
-		newValue.SetUint64(uint64(v))
-	case uint64:
-		newValue.SetUint64(v)
-	case *big.Int:
-		newValue.Set(v)
-	default:
-		return fmt.Errorf("failed to parse optimization test method success status from return value '%s'", optimizationTestMethod.Method.Name)
+	// Parse the return value
+	newValue, ok := retVals[0].(*big.Int)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to parse optimization test's: %s return value: %v", optimizationTestMethod.Method.Name, retVals[0])
 	}
 
-	// update the value stored in test case
-	updated := testCase.UpdateValue(newValue)
-	if updated {
-		testCase.callSequence = &callSequence
-	}
-
-	// Return our status from our optimization test method
-	return nil
+	return newValue, executionTrace, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
@@ -153,33 +133,35 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 	// Create a test case for every optimization test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
-			if t.isOptimizationTest(method) {
-				// Create local variables to avoid pointer types in the loop being overridden.
-				contract := contract
-				method := method
-				minInt256, _ := new(big.Int).SetString(
-					"-8000000000000000000000000000000000000000000000000000000000000000", 16)
-
-				// Create our optimization test case
-				optimizationTestCase := &OptimizationTestCase{
-					status:         TestCaseStatusNotStarted,
-					targetContract: contract,
-					targetMethod:   method,
-					callSequence:   nil,
-					value:          minInt256,
-				}
-
-				// Add to our test cases and register them with the fuzzer
-				methodId := contracts.GetContractMethodID(contract, &method)
-				t.testCases[methodId] = optimizationTestCase
-				t.fuzzer.RegisterTestCase(optimizationTestCase)
+			// Verify this method is an optimization test method
+			if !t.isOptimizationTest(method) {
+				continue
 			}
+			// Create local variables to avoid pointer types in the loop being overridden.
+			contract := contract
+			method := method
+			minInt256, _ := new(big.Int).SetString(
+				"-8000000000000000000000000000000000000000000000000000000000000000", 16)
+
+			// Create our optimization test case
+			optimizationTestCase := &OptimizationTestCase{
+				status:         TestCaseStatusNotStarted,
+				targetContract: contract,
+				targetMethod:   method,
+				callSequence:   nil,
+				value:          minInt256,
+			}
+
+			// Add to our test cases and register them with the fuzzer
+			methodId := contracts.GetContractMethodID(contract, &method)
+			t.testCases[methodId] = optimizationTestCase
+			t.fuzzer.RegisterTestCase(optimizationTestCase)
 		}
 	}
 	return nil
 }
 
-// onFuzzerStarting is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
+// onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
@@ -190,6 +172,11 @@ func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEven
 	for _, testCase := range t.testCases {
 		if testCase.status == TestCaseStatusRunning {
 			testCase.status = TestCaseStatusPassed
+			// Since optimization tests do not really "finish", we will report that they are finished when the fuzzer
+			// stops.
+			if event.Fuzzer != nil {
+				event.Fuzzer.ReportTestCaseFinished(testCase)
+			}
 		}
 	}
 	return nil
@@ -251,7 +238,7 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractAdded(event Fuzze
 	return nil
 }
 
-// onWorkerDeployedContractAdded is the event handler triggered when a FuzzerWorker detects that a previously deployed
+// onWorkerDeployedContractDeleted is the event handler triggered when a FuzzerWorker detects that a previously deployed
 // contract no longer exists on its underlying chain. It ensures any optimization test methods which the deployed contract
 // contained are no longer tracked by the provider for testing.
 func (t *OptimizationTestCaseProvider) onWorkerDeployedContractDeleted(event FuzzerWorkerContractDeletedEvent) error {
@@ -283,9 +270,13 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractDeleted(event Fuz
 }
 
 // callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
-// and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether optimization
-// test invariants are upheld after each call the Fuzzer makes when testing a call sequence.
+// and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether any
+// optimization test's value has increased.
 func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
+	// Create a list of shrink call sequence verifiers, which we populate for each maximized optimization test we want a call
+	// sequence shrunk for.
+	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
+
 	// Obtain the test provider state for this worker
 	workerState := &t.workerStates[worker.WorkerIndex()]
 
@@ -296,13 +287,75 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		testCase := t.testCases[optimizationTestMethodId]
 		t.testCasesLock.Unlock()
 
-		// Test our optimization test method (create a local copy to avoid loop overwriting the method)
+		// Run our optimization test (create a local copy to avoid loop overwriting the method)
 		workerOptimizationTestMethod := workerOptimizationTestMethod
-		err := t.updateOptimizationTest(worker, &workerOptimizationTestMethod, testCase, callSequence)
+		newValue, _, err := t.runOptimizationTest(worker, &workerOptimizationTestMethod, false)
 		if err != nil {
 			return nil, err
 		}
+
+		// If we updated the test case's maximum value, we update our state immediately. We provide a shrink verifier which will update
+		// the call sequence for each shrunken sequence provided that still it maintains the maximum value.
+		if newValue.Cmp(testCase.value) == 1 {
+			// Update the new maximum
+			testCase.value = new(big.Int).Set(newValue)
+
+			// Create a request to shrink this call sequence.
+			shrinkRequest := ShrinkCallSequenceRequest{
+				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
+					// First verify the contract to the optimization test is still deployed to call upon.
+					_, optimizationTestContractDeployed := worker.deployedContracts[workerOptimizationTestMethod.Address]
+					if !optimizationTestContractDeployed {
+						// If the contract isn't available, this shrunk sequence likely messed up deployment, so we
+						// report it as an invalid solution.
+						return false, nil
+					}
+
+					// Then the shrink verifier ensures that the maximum value has either stayed the same or, hopefully,
+					// increased.
+					shrunkenSequenceNewValue, _, err := t.runOptimizationTest(worker, &workerOptimizationTestMethod, false)
+					// Update the test case's max-cached value if necessary
+					if err == nil && shrunkenSequenceNewValue.Cmp(testCase.value) == 1 {
+						testCase.value = new(big.Int).Set(shrunkenSequenceNewValue)
+					}
+					// Return true even if the new value is the same as the test case value
+					return shrunkenSequenceNewValue.Cmp(testCase.value) >= 0, err
+				},
+				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
+					// When we're finished shrinking, attach an execution trace to the last call
+					if len(shrunkenCallSequence) > 0 {
+						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+						if err != nil {
+							return err
+						}
+					}
+
+					// Execute the property test a final time, this time obtaining an execution trace
+					shrunkenSequenceNewValue, executionTrace, err := t.runOptimizationTest(worker, &workerOptimizationTestMethod, true)
+					if err != nil {
+						return err
+					}
+
+					// If, for some reason, the shrunken sequence lowers the max value, do not save anything and exit
+					if shrunkenSequenceNewValue.Cmp(testCase.value) < 0 {
+						return nil
+					}
+
+					// Update our test state and report it finalized.
+					if shrunkenSequenceNewValue.Cmp(testCase.value) == 1 {
+						testCase.value = new(big.Int).Set(shrunkenSequenceNewValue)
+					}
+					testCase.callSequence = &shrunkenCallSequence
+					testCase.optimizationTestTrace = executionTrace
+					return nil
+				},
+				RecordResultInCorpus: true,
+			}
+
+			// Add our shrink request to our list.
+			shrinkRequests = append(shrinkRequests, shrinkRequest)
+		}
 	}
 
-	return nil, nil
+	return shrinkRequests, nil
 }
