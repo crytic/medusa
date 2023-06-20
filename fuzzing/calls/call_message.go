@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
+	"math/big"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
