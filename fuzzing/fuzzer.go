@@ -595,6 +595,11 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
+	// If StopOnNoTests is true and there are no test cases, then throw an error
+	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
+		return fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
+	}
+
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 
