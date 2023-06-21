@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
+	"math/big"
 	"math/rand"
 	"testing"
 
@@ -125,6 +126,39 @@ func TestAssertionsAndProperties(t *testing.T) {
 			assert.EqualValues(f.t, 2, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Expected one failure from a property test, and one failure from an assertion test.")
 		},
 	})
+}
+
+// TestOptimizationsSolving runs a test to ensure that optimization mode works as expected
+func TestOptimizationsSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/optimizations/optimize.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = true
+				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check the value found for optimization test
+				var testCases = f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
+				switch v := testCases[0].(type) {
+				case *OptimizationTestCase:
+					assert.EqualValues(t, v.Value().Cmp(big.NewInt(4241)), 0)
+				default:
+					t.Errorf("invalid test case found %T", v)
+				}
+			},
+		})
+	}
 }
 
 // TestChainBehaviour runs tests to ensure the chain behaves as expected.
