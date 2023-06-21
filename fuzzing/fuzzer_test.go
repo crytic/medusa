@@ -325,6 +325,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.StopOnNoTests = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Subscribe to any mined block events globally. When receiving them, check contract changes for a
