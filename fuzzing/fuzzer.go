@@ -141,6 +141,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
+	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
+		// TODO: Make this is a warning in the logging PR
+		fmt.Printf("warning: currently optimization mode's call sequence shrinking is inefficient. this may lead to minor performance issues")
+		attachOptimizationTestCaseProvider(fuzzer)
+	}
 	return fuzzer, nil
 }
 

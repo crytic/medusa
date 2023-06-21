@@ -66,6 +66,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 						"fuzz_",
 					},
 				},
+				OptimizationTesting: OptimizationTestingConfig{
+					Enabled: false,
+					TestPrefixes: []string{
+						"optimize_",
+					},
+				},
 			},
 			TestChainConfig: *chainConfig,
 		},
