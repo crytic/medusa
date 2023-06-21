@@ -33,7 +33,6 @@ jobs:
       - name: Speed up Go (Windows)
         if: runner.os == 'Windows'
         run: |
-          # vroom vroom
           DIR='D:\a\local'
           mkdir -p "$DIR" && cd "$DIR"
           mkdir go go-cache go-tmp tmpdir
@@ -122,7 +121,6 @@ jobs:
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
         run: |
-          # vroom vroom
           DIR='D:\a\local'
           mkdir -p "$DIR" && cd "$DIR"
           echo "::group::Go"
@@ -157,7 +155,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select slither-analyzer
+          pip3 install --no-cache-dir solc-select crytic-compile
 
       - name: Install solc
         run: |
