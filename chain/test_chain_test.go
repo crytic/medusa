@@ -1,16 +1,18 @@
 package chain
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/compilation/platforms"
-	"github.com/trailofbits/medusa/utils"
-	"github.com/trailofbits/medusa/utils/testutils"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/crytic/medusa/compilation/platforms"
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/testutils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/assert"
 )
 
 // verifyChain verifies various state properties in a TestChain, such as if previous block hashes are correct,
@@ -72,8 +74,9 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 		}
 	}
 
-	// Create a test chain
-	chain, err := NewTestChain(genesisAlloc)
+	// Create a test chain with a default test chain configuration
+	chain, err := NewTestChain(genesisAlloc, nil)
+
 	assert.NoError(t, err)
 
 	return chain, senders
@@ -118,7 +121,7 @@ func TestChainReverting(t *testing.T) {
 		}
 
 		// Clone our chain
-		backup, err := chain.Clone(nil, nil)
+		backup, err := chain.Clone(nil)
 		assert.NoError(t, err)
 		chainBackups = append(chainBackups, backup)
 	}
@@ -183,7 +186,7 @@ func TestChainBlockNumberJumping(t *testing.T) {
 	}
 
 	// Clone our chain
-	recreatedChain, err := chain.Clone(nil, nil)
+	recreatedChain, err := chain.Clone(nil)
 	assert.NoError(t, err)
 
 	// Verify both chains
@@ -235,9 +238,25 @@ func TestChainDynamicDeployments(t *testing.T) {
 							return nil
 						})
 
-						// Deploy the currently indexed contract
-						_, block, err := chain.DeployContract(&contract, []any(nil), senders[0])
+						// Deploy the currently indexed contract next
+
+						// Create a message to represent our contract deployment.
+						msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+						// Create a new pending block we'll commit to chain
+						block, err := chain.PendingBlockCreate()
 						assert.NoError(t, err)
+
+						// Add our transaction to the block
+						err = chain.PendingBlockAddTx(msg)
+						assert.NoError(t, err)
+
+						// Commit the pending block to the chain, so it becomes the new head.
+						err = chain.PendingBlockCommit()
+						assert.NoError(t, err)
+
+						// Ensure our transaction succeeded
+						assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 						deployCount++
 
 						// There should've been two address deployments, an outer and inner deployment.
@@ -268,7 +287,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		}
 
 		// Clone our chain
-		recreatedChain, err := chain.Clone(nil, nil)
+		recreatedChain, err := chain.Clone(nil)
 		assert.NoError(t, err)
 
 		// Verify both chains
@@ -330,16 +349,34 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 						return nil
 					})
 
-					// Deploy the currently indexed contract
-					contractArgs := args[contractName]
-					contractAddress, block, err := chain.DeployContract(&contract, contractArgs, senders[0])
+					// Obtain our message data to represent the deployment with the provided constructor args.
+					msgData, err := contract.GetDeploymentMessageData(args[contractName])
 					assert.NoError(t, err)
+
+					// Create a message to represent our contract deployment.
+					msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), msgData, nil, false)
+
+					// Create a new pending block we'll commit to chain
+					block, err := chain.PendingBlockCreate()
+					assert.NoError(t, err)
+
+					// Add our transaction to the block
+					err = chain.PendingBlockAddTx(msg)
+					assert.NoError(t, err)
+
+					// Commit the pending block to the chain, so it becomes the new head.
+					err = chain.PendingBlockCommit()
+					assert.NoError(t, err)
+
+					// Ensure our transaction succeeded
+					assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 					deployCount++
 
 					assert.EqualValues(t, 1, len(block.MessageResults))
 					assert.EqualValues(t, 1, deployedContracts)
 
 					// Ensure we could get our state
+					contractAddress := block.MessageResults[0].Receipt.ContractAddress
 					stateDB, err := chain.StateAfterBlockNumber(chain.HeadBlockNumber())
 					assert.NoError(t, err)
 
@@ -371,7 +408,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		}
 
 		// Clone our chain
-		recreatedChain, err := chain.Clone(nil, nil)
+		recreatedChain, err := chain.Clone(nil)
 		assert.NoError(t, err)
 
 		// Verify both chains
@@ -411,9 +448,25 @@ func TestChainCloning(t *testing.T) {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
-							// Deploy the currently indexed contract
-							_, _, err = chain.DeployContract(&contract, []any(nil), senders[0])
+							// Deploy the currently indexed contract next
+
+							// Create a message to represent our contract deployment.
+							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+							// Create a new pending block we'll commit to chain
+							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
+
+							// Add our transaction to the block
+							err = chain.PendingBlockAddTx(msg)
+							assert.NoError(t, err)
+
+							// Commit the pending block to the chain, so it becomes the new head.
+							err = chain.PendingBlockCommit()
+							assert.NoError(t, err)
+
+							// Ensure our transaction succeeded
+							assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 
 							// Ensure we could get our state
 							_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -436,7 +489,7 @@ func TestChainCloning(t *testing.T) {
 		}
 
 		// Clone our chain
-		recreatedChain, err := chain.Clone(nil, nil)
+		recreatedChain, err := chain.Clone(nil)
 		assert.NoError(t, err)
 
 		// Verify both chains
@@ -479,9 +532,23 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
-							// Deploy the currently indexed contract
-							_, _, err = chain.DeployContract(&contract, []any(nil), senders[0])
+							// Create a message to represent our contract deployment.
+							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+
+							// Create a new pending block we'll commit to chain
+							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
+
+							// Add our transaction to the block
+							err = chain.PendingBlockAddTx(msg)
+							assert.NoError(t, err)
+
+							// Commit the pending block to the chain, so it becomes the new head.
+							err = chain.PendingBlockCommit()
+							assert.NoError(t, err)
+
+							// Ensure our transaction succeeded
+							assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[0].Receipt.Status, "contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 
 							// Ensure we could get our state
 							_, err = chain.StateAfterBlockNumber(chain.HeadBlockNumber())
@@ -504,7 +571,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChainWithGenesis(chain.genesisDefinition)
+		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

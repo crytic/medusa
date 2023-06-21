@@ -2,17 +2,23 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/types"
 	"strings"
+
+	"github.com/crytic/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // AssertionTestCase describes a test being run by a AssertionTestCaseProvider.
 type AssertionTestCase struct {
-	status         TestCaseStatus
+	// status describes the status of the test case
+	status TestCaseStatus
+	// targetContract describes the target contract where the test case was found
 	targetContract *fuzzerTypes.Contract
-	targetMethod   abi.Method
-	callSequence   *fuzzerTypes.CallSequence
+	// targetMethod describes the target method for the test case
+	targetMethod abi.Method
+	// callSequence describes the call sequence that broke the assertion
+	callSequence *calls.CallSequence
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
@@ -22,7 +28,7 @@ func (t *AssertionTestCase) Status() TestCaseStatus {
 
 // CallSequence describes the types.CallSequence of calls sent to the EVM which resulted in this TestCase result.
 // This should be nil if the result is not related to the CallSequence.
-func (t *AssertionTestCase) CallSequence() *fuzzerTypes.CallSequence {
+func (t *AssertionTestCase) CallSequence() *calls.CallSequence {
 	return t.callSequence
 }
 

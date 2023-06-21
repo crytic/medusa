@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/chain/config"
 	"os"
 
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/utils"
 )
 
 type ProjectConfig struct {
@@ -75,6 +76,9 @@ type FuzzingConfig struct {
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
+
+	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
+	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
 // TestingConfig describes the configuration options used for testing
@@ -86,11 +90,23 @@ type TestingConfig struct {
 	// to determine which contract a deployed contract is.
 	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
 
+	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
+	// than just the contracts specified in the project configuration's deployment order.
+	TestAllContracts bool `json:"testAllContracts"`
+
+	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
+	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
+	// even if this option is not enabled.
+	TraceAll bool `json:"traceAll"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 
 	// PropertyTesting describes the configuration used for property testing.
 	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+
+	// OptimizationTesting describes the configuration used for optimization testing.
+	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -108,6 +124,15 @@ type PropertyTestConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// OptimizationTestingConfig describes the configuration options used for optimization testing
+type OptimizationTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
 	TestPrefixes []string `json:"testPrefixes"`
 }
 

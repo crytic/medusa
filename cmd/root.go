@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.5.0"
+const version = "0.1.0"
 
 // rootCmd represents the root CLI command object which all other commands stem from.
 var rootCmd = &cobra.Command{
