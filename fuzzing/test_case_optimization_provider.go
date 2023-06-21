@@ -12,8 +12,10 @@ import (
 	"sync"
 )
 
+const MIN_INT = "-8000000000000000000000000000000000000000000000000000000000000000"
+
 // OptimizationTestCaseProvider is a provider for on-chain optimization tests.
-// Optimization tests are represented as publicly-accessible view functions which have a name prefix specified by a
+// Optimization tests are represented as publicly-accessible functions which have a name prefix specified by a
 // config.FuzzingConfig. They take no input arguments and return an integer value that needs to be maximized.
 type OptimizationTestCaseProvider struct {
 	// fuzzer describes the Fuzzer which this provider is attached to.
@@ -34,7 +36,7 @@ type OptimizationTestCaseProvider struct {
 type optimizationTestCaseProviderWorkerState struct {
 	// optimizationTestMethods a mapping from contract-method ID to deployed contract-method descriptors.
 	// Each deployed contract-method represents an optimization test method to call for evaluation. Optimization tests
-	// should be read-only (pure/view) functions which take no input parameters and return an integer variable.
+	// should be read-only functions which take no input parameters and return an integer variable.
 	optimizationTestMethods map[contracts.ContractMethodID]contracts.DeployedContractMethod
 
 	// optimizationTestMethodsLock is used for thread-synchronization when updating optimizationTestMethods
@@ -64,8 +66,8 @@ func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) boo
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.TestPrefixes {
 		if strings.HasPrefix(method.Name, prefix) {
-			// An optimization test must take no inputs, return an int256, and be read-only
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.IntTy && method.Outputs[0].Type.Size == 256 && method.IsConstant() {
+			// An optimization test must take no inputs and return an int256
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.IntTy && method.Outputs[0].Type.Size == 256 {
 				return true
 			}
 		}
@@ -103,6 +105,13 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 		return nil, nil, fmt.Errorf("failed to call optimization test method: %v", err)
 	}
 
+	// If the execution reverted, then we know that we do not have any valuable return data, so we return the smallest
+	// integer value
+	if executionResult.Failed() {
+		minInt256, _ := new(big.Int).SetString(MIN_INT, 16)
+		return minInt256, nil, nil
+	}
+
 	// Decode our ABI outputs
 	retVals, err := optimizationTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
@@ -114,7 +123,7 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 		return nil, nil, fmt.Errorf("detected an unexpected number of return values from optimization test '%s'", optimizationTestMethod.Method.Name)
 	}
 
-	// Parse the return value
+	// Parse the return value and it should be an int256
 	newValue, ok := retVals[0].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("failed to parse optimization test's: %s return value: %v", optimizationTestMethod.Method.Name, retVals[0])
@@ -140,8 +149,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method
-			minInt256, _ := new(big.Int).SetString(
-				"-8000000000000000000000000000000000000000000000000000000000000000", 16)
+			minInt256, _ := new(big.Int).SetString(MIN_INT, 16)
 
 			// Create our optimization test case
 			optimizationTestCase := &OptimizationTestCase{
@@ -296,9 +304,12 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 
 		// If we updated the test case's maximum value, we update our state immediately. We provide a shrink verifier which will update
 		// the call sequence for each shrunken sequence provided that still it maintains the maximum value.
+		// TODO: This is very inefficient since this runs every time a new max value is found. It would be ideal if we
+		//  could perform a one-time shrink request. This code should be refactored when we introduce the high-level
+		//  testing API.
 		if newValue.Cmp(testCase.value) == 1 {
 			// Update the new maximum
-			testCase.value = new(big.Int).Set(newValue)
+			testCase.updateValue(newValue)
 
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
@@ -315,8 +326,8 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 					// increased.
 					shrunkenSequenceNewValue, _, err := t.runOptimizationTest(worker, &workerOptimizationTestMethod, false)
 					// Update the test case's max-cached value if necessary
-					if err == nil && shrunkenSequenceNewValue.Cmp(testCase.value) == 1 {
-						testCase.value = new(big.Int).Set(shrunkenSequenceNewValue)
+					if err == nil {
+						testCase.updateValue(shrunkenSequenceNewValue)
 					}
 					// Return true even if the new value is the same as the test case value
 					return shrunkenSequenceNewValue.Cmp(testCase.value) >= 0, err
@@ -341,10 +352,8 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 						return nil
 					}
 
-					// Update our test state and report it finalized.
-					if shrunkenSequenceNewValue.Cmp(testCase.value) == 1 {
-						testCase.value = new(big.Int).Set(shrunkenSequenceNewValue)
-					}
+					// Update our value, call sequence, and trace
+					testCase.updateValue(shrunkenSequenceNewValue)
 					testCase.callSequence = &shrunkenCallSequence
 					testCase.optimizationTestTrace = executionTrace
 					return nil

@@ -68,7 +68,7 @@ func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes {
 		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy && method.IsConstant() {
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
 				return true
 			}
 		}

@@ -75,3 +75,13 @@ func (t *OptimizationTestCase) ID() string {
 func (t *OptimizationTestCase) Value() *big.Int {
 	return t.value
 }
+
+// updateValue updates test case value if the new value is larger than the existing value
+func (t *OptimizationTestCase) updateValue(newValue *big.Int) {
+	t.valueLock.Lock()
+	defer t.valueLock.Unlock()
+
+	if newValue.Cmp(t.value) == 1 {
+		t.value = new(big.Int).Set(newValue)
+	}
+}
