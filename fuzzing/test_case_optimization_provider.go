@@ -308,9 +308,6 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		//  could perform a one-time shrink request. This code should be refactored when we introduce the high-level
 		//  testing API.
 		if newValue.Cmp(testCase.value) == 1 {
-			// Update the new maximum
-			testCase.updateValue(newValue)
-
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
@@ -325,12 +322,14 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 					// Then the shrink verifier ensures that the maximum value has either stayed the same or, hopefully,
 					// increased.
 					shrunkenSequenceNewValue, _, err := t.runOptimizationTest(worker, &workerOptimizationTestMethod, false)
-					// Update the test case's max-cached value if necessary
-					if err == nil {
-						testCase.updateValue(shrunkenSequenceNewValue)
+
+					// If the shrunken value is greater than new value, then set new value to the shrunken one so that it
+					// can be tracked correctly in the finished callback
+					if err == nil && shrunkenSequenceNewValue.Cmp(newValue) == 1 {
+						newValue = new(big.Int).Set(shrunkenSequenceNewValue)
 					}
-					// Return true even if the new value is the same as the test case value
-					return shrunkenSequenceNewValue.Cmp(testCase.value) >= 0, err
+
+					return shrunkenSequenceNewValue.Cmp(newValue) >= 0, err
 				},
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
 					// When we're finished shrinking, attach an execution trace to the last call
@@ -347,13 +346,17 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 						return err
 					}
 
-					// If, for some reason, the shrunken sequence lowers the max value, do not save anything and exit
-					if shrunkenSequenceNewValue.Cmp(testCase.value) < 0 {
-						return nil
+					// If, for some reason, the shrunken sequence lowers the new max value, do not save anything and exit
+					if shrunkenSequenceNewValue.Cmp(newValue) < 0 {
+						return fmt.Errorf("optimized call sequence failed to maximize value")
 					}
 
-					// Update our value, call sequence, and trace
-					testCase.updateValue(shrunkenSequenceNewValue)
+					// Update our value with lock
+					testCase.valueLock.Lock()
+					testCase.value = new(big.Int).Set(shrunkenSequenceNewValue)
+					testCase.valueLock.Unlock()
+
+					// Update call sequence and trace
 					testCase.callSequence = &shrunkenCallSequence
 					testCase.optimizationTestTrace = executionTrace
 					return nil
