@@ -175,7 +175,7 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 	return nil
 }
 
-// onFuzzerStarting is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
+// onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *PropertyTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
@@ -247,7 +247,7 @@ func (t *PropertyTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWor
 	return nil
 }
 
-// onWorkerDeployedContractAdded is the event handler triggered when a FuzzerWorker detects that a previously deployed
+// onWorkerDeployedContractDeleted is the event handler triggered when a FuzzerWorker detects that a previously deployed
 // contract no longer exists on its underlying chain. It ensures any property test methods which the deployed contract
 // contained are no longer tracked by the provider for testing.
 func (t *PropertyTestCaseProvider) onWorkerDeployedContractDeleted(event FuzzerWorkerContractDeletedEvent) error {

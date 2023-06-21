@@ -104,6 +104,9 @@ type TestingConfig struct {
 
 	// PropertyTesting describes the configuration used for property testing.
 	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+
+	// OptimizationTesting describes the configuration used for optimization testing.
+	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -121,6 +124,15 @@ type PropertyTestConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// OptimizationTestingConfig describes the configuration options used for optimization testing
+type OptimizationTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
 	TestPrefixes []string `json:"testPrefixes"`
 }
 
