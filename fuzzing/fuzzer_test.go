@@ -576,7 +576,7 @@ func TestCorpusReplayability(t *testing.T) {
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
-			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceCount()
+			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, true, true)
 
 			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
 			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
@@ -590,8 +590,8 @@ func TestCorpusReplayability(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
-			// Check to see if original and new coverage are the same
-			assert.True(t, originalCoverage.Equals(newCoverage))
+			// Check to see if original and new coverage are the same.
+			assert.True(t, originalCoverage.Equal(newCoverage))
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
 			assert.LessOrEqual(t, f.fuzzer.metrics.SequencesTested().Uint64(), uint64(originalCorpusSequenceCount))
@@ -639,7 +639,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 
 			// Check to see if original and new coverage are the same
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
-			assert.False(t, originalCoverage.Equals(newCoverage))
+			assert.False(t, originalCoverage.Equal(newCoverage))
 		},
 	})
 }

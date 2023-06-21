@@ -105,7 +105,7 @@ jobs:
           node-version: 18.15
 
       - name: Install Node dependencies
-        run: npm install -g hardhat truffle
+        run: npm install -g hardhat
 
       - name: Install Python dependencies
         run: |
