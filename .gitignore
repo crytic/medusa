@@ -13,8 +13,10 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+*node_modules/
 
 # PyCharm project dir
 .idea/
 
-*node_modules/
+# Build results
+result
