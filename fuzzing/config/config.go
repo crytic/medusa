@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/chain/config"
 	"os"
+
+	"github.com/crytic/medusa/chain/config"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/utils"
@@ -138,6 +139,9 @@ type OptimizationTestingConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
 	TestPrefixes []string `json:"testPrefixes"`
+
+	// GasOptimization describes whether gas optimization is used.
+	GasOptimization bool `json:"gasOptimization"`
 }
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.

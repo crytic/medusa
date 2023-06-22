@@ -2,14 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
-	"math/big"
-	"strings"
-	"sync"
 )
 
 const MIN_INT = "-8000000000000000000000000000000000000000000000000000000000000000"
@@ -63,6 +64,10 @@ func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCasePro
 // isOptimizationTest check whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) bool {
+	if t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.GasOptimization {
+		return true
+	}
+
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.TestPrefixes {
 		if strings.HasPrefix(method.Name, prefix) {
@@ -78,6 +83,26 @@ func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) boo
 // runOptimizationTest executes a given optimization test method (w/ an optional execution trace) and returns the return value
 // from the optimization test method. This is called after every call the Fuzzer makes when testing call sequences for each test case.
 func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker, optimizationTestMethod *contracts.DeployedContractMethod, trace bool) (*big.Int, *executiontracer.ExecutionTrace, error) {
+
+	if t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.GasOptimization {
+		pending := worker.Chain().PendingBlock()
+		var gasUsed uint64 = 0
+		if pending != nil {
+			messagesLen := len(pending.MessageResults)
+			if messagesLen > 0 {
+				gasUsed = pending.MessageResults[messagesLen-1].Receipt.GasUsed
+			}
+		} else {
+			blocks := worker.Chain().CommittedBlocks()
+			blocksLen := len(blocks)
+			lastBlock := blocks[blocksLen-1]
+			messagesLen := len(lastBlock.MessageResults)
+			gasUsed = lastBlock.MessageResults[messagesLen-1].Receipt.GasUsed
+		}
+		newValue := big.NewInt(0)
+		newValue.SetUint64(gasUsed)
+		return newValue, nil, nil
+	}
 	// Generate our ABI input data for the call. In this case, optimization test methods take no arguments, so the
 	// variadic argument list here is empty.
 	data, err := optimizationTestMethod.Contract.CompiledContract().Abi.Pack(optimizationTestMethod.Method.Name)
@@ -308,6 +333,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		//  could perform a one-time shrink request. This code should be refactored when we introduce the high-level
 		//  testing API.
 		if newValue.Cmp(testCase.value) == 1 {
+			print(testCase.value.Int64(), " ? ", newValue.Int64(), "\n")
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
@@ -347,7 +373,8 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 					}
 
 					// If, for some reason, the shrunken sequence lowers the new max value, do not save anything and exit
-					if shrunkenSequenceNewValue.Cmp(newValue) < 0 {
+					isGasOptimization := t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.GasOptimization
+					if !isGasOptimization && shrunkenSequenceNewValue.Cmp(newValue) < 0 {
 						return fmt.Errorf("optimized call sequence failed to maximize value")
 					}
 
