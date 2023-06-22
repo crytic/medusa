@@ -333,7 +333,6 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		//  could perform a one-time shrink request. This code should be refactored when we introduce the high-level
 		//  testing API.
 		if newValue.Cmp(testCase.value) == 1 {
-			print(testCase.value.Int64(), " ? ", newValue.Int64(), "\n")
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
