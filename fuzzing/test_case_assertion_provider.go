@@ -73,7 +73,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := utils.IsPanicCodeIncluded(byte(panicCode.Uint64()), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertOptions) && utils.HasEncounteredAssertionFailure(panicCode)
+	encounteredAssertionFailure := panicCode != nil && utils.IsPanicCodeIncluded(byte(panicCode.Uint64()), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertOptions) && utils.HasEncounteredAssertionFailure(panicCode)
 
 	return &methodId, encounteredAssertionFailure, nil
 }
