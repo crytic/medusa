@@ -3,11 +3,11 @@ package fuzzing
 import (
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"sync"
-
-	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -73,7 +73,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed
+	encounteredAssertionFailure := utils.IsPanicCodeIncluded(byte(panicCode.Uint64()), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertOptions) && utils.HasEncounteredAssertionFailure(panicCode)
 
 	return &methodId, encounteredAssertionFailure, nil
 }

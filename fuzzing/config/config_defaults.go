@@ -58,6 +58,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         false,
 					TestViewMethods: false,
+					AssertOptions:   []byte{0x01},
 				},
 				PropertyTesting: PropertyTestConfig{
 					Enabled: true,

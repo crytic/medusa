@@ -81,6 +81,39 @@ func TestAssertionsBasicSolving(t *testing.T) {
 	}
 }
 
+// TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
+func TestAllPanicAssertions(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/assertions/assert_immediate.sol",
+		"testdata/contracts/assertions/assert_arithmetic_underflow.sol",
+		"testdata/contracts/assertions/assert_divide_by_zero.sol",
+		"testdata/contracts/assertions/assert_enum_type_conversion_outofbounds.sol",
+		"testdata/contracts/assertions/assert_incorrect_storage_access.sol",
+		"testdata/contracts/assertions/assert_pop_empty_array.sol",
+		"testdata/contracts/assertions/assert_outofbounds_array_access.sol",
+		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
+		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.AssertionTesting.AssertOptions = []byte{0x01, 0x11, 0x12, 0x21, 0x22, 0x31, 0x32, 0x41, 0x51}
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
 // TestAssertionsNotRequire runs a test to ensure require and revert statements are not mistaken for assert statements.
 // It runs tests against a contract which immediately makes these statements and expects to find no errors before
 // timing out.

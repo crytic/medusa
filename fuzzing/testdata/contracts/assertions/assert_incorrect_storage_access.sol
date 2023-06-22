@@ -1,6 +1,8 @@
 contract TestContract {
-    function incorrectStorageAccess() public {
-        mapping(uint256 => uint256) myMapping;
-        uint256 value = myMapping[123]; // Incorrect storage access
+    uint256[] public myArray;
+
+    function incorrectStorageAccess() public returns(uint256) {
+         uint256 index = 7;  // Index out of bounds
+         return myArray[index];  // Incorrect storage access
     }
 }

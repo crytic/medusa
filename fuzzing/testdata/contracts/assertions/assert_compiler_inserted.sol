@@ -1,5 +1,5 @@
 contract TestContract {
-    constructor() {
-        assert(false);
+    function triggerCompilerPanic() public pure {
+        uint nonExistentVariable;
     }
 }

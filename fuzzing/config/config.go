@@ -113,6 +113,9 @@ type AssertionTestingConfig struct {
 
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
+
+	// AssertOptions describes options for testing panics using the panic codes.
+	AssertOptions []byte `json:"assertOptions"`
 }
 
 // PropertyTestConfig describes the configuration options used for property testing

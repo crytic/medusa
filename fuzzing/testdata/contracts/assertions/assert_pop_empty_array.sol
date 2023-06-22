@@ -1,6 +1,6 @@
 contract TestContract {
+    uint256[] public myArray;
     function popEmptyArray() public {
-        uint256[] memory myArray;
-        uint256 value = myArray.pop(); // Pop from empty array
+        myArray.pop(); // Pop from empty array
     }
 }
