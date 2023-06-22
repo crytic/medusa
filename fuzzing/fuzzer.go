@@ -141,6 +141,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
+	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
+		// TODO: Make this is a warning in the logging PR
+		fmt.Printf("warning: currently optimization mode's call sequence shrinking is inefficient. this may lead to minor performance issues")
+		attachOptimizationTestCaseProvider(fuzzer)
+	}
 	return fuzzer, nil
 }
 
@@ -588,6 +593,11 @@ func (f *Fuzzer) Start() error {
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
 		return err
+	}
+
+	// If StopOnNoTests is true and there are no test cases, then throw an error
+	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
+		return fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
 	}
 
 	// Run the main worker loop
