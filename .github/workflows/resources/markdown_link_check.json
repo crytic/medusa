@@ -9,7 +9,7 @@
   ],
   "ignorePatterns": [
     {
-      "pattern": "^https://github.com/trailofbits/medusa/"
+      "pattern": "^https://github.com/crytic/medusa/"
     }
   ]
 }

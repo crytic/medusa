@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/trailofbits/medusa/chain/config"
+	"github.com/crytic/medusa/chain/config"
 	"os"
 
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/utils"
 )
 
 type ProjectConfig struct {
@@ -90,6 +90,10 @@ type TestingConfig struct {
 	// to determine which contract a deployed contract is.
 	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
 
+	// StopOnNoTests describes whether the fuzzing.Fuzzer should stop the fuzzer from starting if no tests (property,
+	// assertion, optimization, custom) are found.
+	StopOnNoTests bool `json:"stopOnNoTests"`
+
 	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
@@ -104,6 +108,9 @@ type TestingConfig struct {
 
 	// PropertyTesting describes the configuration used for property testing.
 	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+
+	// OptimizationTesting describes the configuration used for optimization testing.
+	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -121,6 +128,15 @@ type PropertyTestConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// OptimizationTestingConfig describes the configuration options used for optimization testing
+type OptimizationTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
 	TestPrefixes []string `json:"testPrefixes"`
 }
 

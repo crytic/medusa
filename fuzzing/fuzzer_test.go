@@ -1,16 +1,17 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/events"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
-	"github.com/trailofbits/medusa/utils"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/utils"
+	"math/big"
 	"math/rand"
 	"testing"
 
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.
@@ -125,6 +126,39 @@ func TestAssertionsAndProperties(t *testing.T) {
 			assert.EqualValues(f.t, 2, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Expected one failure from a property test, and one failure from an assertion test.")
 		},
 	})
+}
+
+// TestOptimizationsSolving runs a test to ensure that optimization mode works as expected
+func TestOptimizationsSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/optimizations/optimize.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = true
+				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check the value found for optimization test
+				var testCases = f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
+				switch v := testCases[0].(type) {
+				case *OptimizationTestCase:
+					assert.EqualValues(t, v.Value().Cmp(big.NewInt(4241)), 0)
+				default:
+					t.Errorf("invalid test case found %T", v)
+				}
+			},
+		})
+	}
 }
 
 // TestChainBehaviour runs tests to ensure the chain behaves as expected.
@@ -291,6 +325,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+				config.Fuzzing.Testing.StopOnNoTests = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Subscribe to any mined block events globally. When receiving them, check contract changes for a
@@ -324,7 +359,7 @@ func TestExecutionTraces(t *testing.T) {
 	expectedMessagesPerTest := map[string][]string{
 		"testdata/contracts/execution_tracing/call_and_deployment_args.sol": {"Hello from deployment args!", "Hello from call args!"},
 		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(true)"},
-		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!"},
+		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!", "Hello from library event args!"},
 		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
 		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},
 		"testdata/contracts/execution_tracing/revert_reasons.sol":           {"RevertingContract was called and reverted."},
@@ -576,7 +611,7 @@ func TestCorpusReplayability(t *testing.T) {
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
-			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceCount()
+			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, true, true)
 
 			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
 			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
@@ -590,8 +625,8 @@ func TestCorpusReplayability(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
-			// Check to see if original and new coverage are the same
-			assert.True(t, originalCoverage.Equals(newCoverage))
+			// Check to see if original and new coverage are the same.
+			assert.True(t, originalCoverage.Equal(newCoverage))
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
 			assert.LessOrEqual(t, f.fuzzer.metrics.SequencesTested().Uint64(), uint64(originalCorpusSequenceCount))
@@ -639,7 +674,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 
 			// Check to see if original and new coverage are the same
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
-			assert.False(t, originalCoverage.Equals(newCoverage))
+			assert.False(t, originalCoverage.Equal(newCoverage))
 		},
 	})
 }

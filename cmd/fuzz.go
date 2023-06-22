@@ -6,10 +6,10 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	"github.com/crytic/medusa/fuzzing"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/trailofbits/medusa/fuzzing"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // fuzzCmd represents the command provider for fuzzing

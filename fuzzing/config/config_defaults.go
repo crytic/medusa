@@ -1,8 +1,8 @@
 package config
 
 import (
-	testChainConfig "github.com/trailofbits/medusa/chain/config"
-	"github.com/trailofbits/medusa/compilation"
+	testChainConfig "github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/compilation"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -53,6 +53,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: true,
+				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
 				AssertionTesting: AssertionTestingConfig{
@@ -63,6 +64,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					Enabled: true,
 					TestPrefixes: []string{
 						"fuzz_",
+					},
+				},
+				OptimizationTesting: OptimizationTestingConfig{
+					Enabled: false,
+					TestPrefixes: []string{
+						"optimize_",
 					},
 				},
 			},

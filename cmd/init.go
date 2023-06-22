@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/trailofbits/medusa/compilation"
-	"github.com/trailofbits/medusa/fuzzing/config"
 )
 
 // Get supported platforms for customized static completions of "init" flag `$ medusa init <tab> <tab>`

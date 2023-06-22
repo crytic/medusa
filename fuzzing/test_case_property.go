@@ -2,19 +2,24 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/calls"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/calls"
-	fuzzerTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/fuzzing/executiontracer"
 	"strings"
 )
 
 // PropertyTestCase describes a test being run by a PropertyTestCaseProvider.
 type PropertyTestCase struct {
-	status            TestCaseStatus
-	targetContract    *fuzzerTypes.Contract
-	targetMethod      abi.Method
-	callSequence      *calls.CallSequence
+	// status describes the status of the test case
+	status TestCaseStatus
+	// targetContract describes the target contract where the test case was found
+	targetContract *fuzzerTypes.Contract
+	// targetMethod describes the target method for the test case
+	targetMethod abi.Method
+	// callSequence describes the call sequence that broke the property
+	callSequence *calls.CallSequence
+	// propertyTestTrace describes the execution trace when running the callSequence
 	propertyTestTrace *executiontracer.ExecutionTrace
 }
 
@@ -38,16 +43,18 @@ func (t *PropertyTestCase) Name() string {
 func (t *PropertyTestCase) Message() string {
 	// If the test failed, return a failure message.
 	if t.Status() == TestCaseStatusFailed {
-		return fmt.Sprintf(
-			"Test \"%s.%s\" failed after the following call sequence:\n%s\n"+
-				"Property test \"%s.%s\" execution:\n%s",
+		msg := fmt.Sprintf(
+			"Property test \"%s.%s\" failed after the following call sequence:\n%s",
 			t.targetContract.Name(),
 			t.targetMethod.Sig,
 			t.CallSequence().String(),
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.propertyTestTrace.String(),
 		)
+		// If an execution trace is attached then add it to the message
+		if t.propertyTestTrace != nil {
+			// TODO: Improve formatting in logging PR
+			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
+		}
+		return msg
 	}
 	return ""
 }

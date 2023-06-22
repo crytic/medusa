@@ -3,18 +3,18 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/trailofbits/medusa/chain"
-	"github.com/trailofbits/medusa/fuzzing/executiontracer"
-	"github.com/trailofbits/medusa/utils"
 	"strconv"
 	"strings"
 
+	chainTypes "github.com/crytic/medusa/chain/types"
+	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	chainTypes "github.com/trailofbits/medusa/chain/types"
-	fuzzingTypes "github.com/trailofbits/medusa/fuzzing/contracts"
-	"github.com/trailofbits/medusa/fuzzing/valuegeneration"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
@@ -94,8 +94,26 @@ func (cs CallSequence) Hash() (common.Hash, error) {
 			return common.Hash{}, err
 		}
 
-		// Hash the call message
-		_, err = hashProvider.Write(utils.MessageToTransaction(cse.Call).Hash().Bytes())
+		// Try to pack the call message and obtain a hash for it.
+		// This may panic if the ABI changed and the ABI method/function targeted does not resolve or the call
+		// could otherwise not be packed/serialized. If it does, we use fixed hash data instead.
+		var messageHashData []byte
+		func() {
+			// If the below operations to obtain a message/call hash fail, we instead substitute it with hardcoded
+			// hash data.
+			defer func() {
+				if r := recover(); r != nil {
+					messageHashData = common.Hash{}.Bytes()
+				}
+			}()
+
+			// Try to obtain a hash for the message/call. If this fails, we will replace it in the deferred panic
+			// recovery.
+			messageHashData = utils.MessageToTransaction(cse.Call).Hash().Bytes()
+		}()
+
+		// Hash the message hash data.
+		_, err = hashProvider.Write(messageHashData)
 		if err != nil {
 			return common.Hash{}, err
 		}

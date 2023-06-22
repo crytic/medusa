@@ -1,13 +1,13 @@
 package fuzzing
 
 import (
-	"github.com/trailofbits/medusa/compilation/abiutils"
-	"github.com/trailofbits/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/calls"
 	"golang.org/x/exp/slices"
 	"sync"
 
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/trailofbits/medusa/fuzzing/contracts"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -118,7 +118,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 	return nil
 }
 
-// onFuzzerStarting is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
+// onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *AssertionTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {

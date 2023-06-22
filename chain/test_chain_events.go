@@ -1,8 +1,8 @@
 package chain
 
 import (
-	"github.com/trailofbits/medusa/chain/types"
-	"github.com/trailofbits/medusa/events"
+	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/events"
 )
 
 // TestChainEvents defines event emitters for a TestChain.
