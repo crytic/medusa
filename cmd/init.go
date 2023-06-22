@@ -30,6 +30,7 @@ var initCmd = &cobra.Command{
 
 		// Examine all the flags, and add any flags that have not been set in the current command line
 		// to a list of unused flags
+		flagUsed := false
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			if !flag.Changed {
 				// When adding a flag to a command, include the "--" prefix to indicate that it is a flag
@@ -37,12 +38,15 @@ var initCmd = &cobra.Command{
 				// a flag name, the "--" prefix will appear again, indicating that more flags are available and that
 				// none of the arguments are positional.
 				unusedFlags = append(unusedFlags, "--"+flag.Name)
+			} else {
+				// If any flag has been used, set flag used to true. This will be used later in the function.
+				flagUsed = true
 			}
 		})
 
 		// If a default platform is not specified, add a list of available platforms to the list of unused flags.
-		// If the --target or --out flag is set, it is assumed that the default platform is being used.
-		if len(args) == 0 && !(cmd.Flag("target").Changed || cmd.Flag("out").Changed) {
+		// If any flag is used, then we can assume that the default platform is used so we don't need to add supported platforms
+		if len(args) == 0 && !flagUsed {
 			unusedFlags = append(unusedFlags, supportedPlatforms...)
 		}
 
