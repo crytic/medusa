@@ -13,6 +13,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     needs: [lint, test]
@@ -21,8 +25,24 @@ jobs:
         environment: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.environment }}
+    timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v3
+
+      - name: Speed up Go (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          DIR='D:\a\local'
+          mkdir -p "$DIR" && cd "$DIR"
+          mkdir go go-cache go-tmp tmpdir
+          go env -w GOPATH="$DIR\\go"
+          go env -w GOCACHE="$DIR\\go-cache"
+          go env -w GOTMPDIR="$DIR\\go-tmp"
+          printf '%s\\go\\bin\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'TMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          go env
 
       - uses: actions/setup-go@v4
         with:
@@ -53,6 +73,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v3
@@ -92,11 +113,36 @@ jobs:
         environment: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.environment }}
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-go@v3
+      - name: Speed up Go, Python, Node (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          DIR='D:\a\local'
+          mkdir -p "$DIR" && cd "$DIR"
+          echo "::group::Go"
+          mkdir -p go go-cache go-tmp tmpdir
+          go env -w GOPATH="$DIR\\go"
+          go env -w GOCACHE="$DIR\\go-cache"
+          go env -w GOTMPDIR="$DIR\\go-tmp"
+          printf '%s\\go\\bin\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'TMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
+          go env
+          echo "::endgroup::"
+          echo "::group::Python"
+          python3 -m venv venv
+          printf '%s\\venv\\Scripts\n' "$DIR" | tee -a "$GITHUB_PATH"
+          printf 'VIRTUAL_ENV=%s\\venv\n' "$DIR" | tee -a "$GITHUB_ENV"
+          echo "::endgroup::"
+          echo "::group::Node"
+          npm config set cache "$DIR\\npm-cache" --global
+          echo "::endgroup::"
+
+      - uses: actions/setup-go@v4
         with:
           go-version: "^1.18.1"
 
@@ -105,17 +151,15 @@ jobs:
           node-version: 18.15
 
       - name: Install Node dependencies
-        run: npm install -g hardhat
+        run: npm install hardhat
 
       - name: Install Python dependencies
         run: |
-          pip3 install solc-select
-          pip3 install slither-analyzer
+          pip3 install --no-cache-dir solc-select crytic-compile
 
       - name: Install solc
         run: |
-          solc-select install 0.8.17
-          solc-select use 0.8.17
+          solc-select use 0.8.17 --always-install
 
       - name: Test
         run: go test ./...

@@ -9,6 +9,7 @@ import (
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // fuzzCmd represents the command provider for fuzzing
@@ -18,6 +19,26 @@ var fuzzCmd = &cobra.Command{
 	Long:  `Starts a fuzzing campaign`,
 	Args:  cmdValidateFuzzArgs,
 	RunE:  cmdRunFuzz,
+	// Run dynamic completion of nouns
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Gather a list of flags that are available to be used in the current command but have not been used yet
+		var unusedFlags []string
+
+		// Examine all the flags, and add any flags that have not been set in the current command line
+		// to a list of unused flags
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+			if !flag.Changed {
+				// When adding a flag to a command, include the "--" prefix to indicate that it is a flag
+				// and not a positional argument. Additionally, when the user presses the TAB key twice after typing
+				// a flag name, the "--" prefix will appear again, indicating that more flags are available and that
+				// none of the arguments are positional.
+				unusedFlags = append(unusedFlags, "--"+flag.Name)
+			}
+		})
+		// Provide a list of flags that can be used in the current command (but have not been used yet)
+		// for autocompletion suggestions
+		return unusedFlags, cobra.ShellCompDirectiveNoFileComp
+	},
 }
 
 // cmdValidateFuzzArgs makes sure that there are no positional arguments provided to the fuzz command

@@ -11,10 +11,14 @@ import (
 
 // AssertionTestCase describes a test being run by a AssertionTestCaseProvider.
 type AssertionTestCase struct {
-	status         TestCaseStatus
+	// status describes the status of the test case
+	status TestCaseStatus
+	// targetContract describes the target contract where the test case was found
 	targetContract *fuzzerTypes.Contract
-	targetMethod   abi.Method
-	callSequence   *calls.CallSequence
+	// targetMethod describes the target method for the test case
+	targetMethod abi.Method
+	// callSequence describes the call sequence that broke the assertion
+	callSequence *calls.CallSequence
 }
 
 // Status describes the TestCaseStatus used to define the current state of the test.
