@@ -118,7 +118,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 	return nil
 }
 
-// onFuzzerStarting is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
+// onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *AssertionTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
