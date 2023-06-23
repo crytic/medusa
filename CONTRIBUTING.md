@@ -18,6 +18,7 @@ To better understand how to make responsible open source contributions, consider
 When introducing changes to the project, note the following requirements:
 
 - All changes to the main branch should be introduced via pull requests.
+- All branches created for pull requests should follow the `dev/*` naming convention, e.g. `dev/coverage-reports`.
 - Every pull request **must** be reviewed by at least one other peer prior to being merged into the main branch.
 - Code **must** be supported on Linux, macOS, and Windows.
 - Code **must** be sufficiently commented:

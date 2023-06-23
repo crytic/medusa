@@ -14,7 +14,10 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# PyCharm project dir
+# Goland project dir
 .idea/
 
 *node_modules/
+
+# Medusa binary
+medusa

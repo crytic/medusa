@@ -21,7 +21,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 
 ### Precompiled binaries
 
-To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `truffle`, `hardhat`) installed on your machine.
+To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `hardhat`) installed on your machine.
 
 You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/crytic/medusa/releases) page.
 
@@ -85,7 +85,7 @@ This will use the `medusa.json` configuration in the current directory and begin
 
 ## Running Unit Tests
 
-First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc` (version >=0.8.7), `truffle`, and `hardhat` available on your system.
+First, install [crytic-compile](https://github.com/crytic/crytic-compile), [solc-select](https://github.com/crytic/solc-select), and ensure you have `solc` (version >=0.8.7), and `hardhat` available on your system.
 
 - From the root of the repository, invoke `go test -v ./...` on through command-line to run tests from all packages at or below the root.
   - Or enter each package directory to run `go test -v .` to test the immediate package.

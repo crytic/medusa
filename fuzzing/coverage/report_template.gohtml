@@ -1,0 +1,243 @@
+<html lang=en>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coverage Report</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 15px;
+            margin: 15px;
+            background-color: #eee;
+        }
+        hr {
+            margin: 15px 0px;
+            background-color: transparent;
+            border: 0;
+            border-top: 1px solid #ccc;
+        }
+        a {
+            color: #2A5DB0;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        a:active {
+            color: black;
+        }
+        a:visited {
+            color: #2A5DB0;
+        }
+        footer {
+            line-height: 1.5;
+        }
+        .progress-coverage {
+            width: 50px;
+        }
+        .unselectable {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .collapsible {
+            background-color: #777;
+            color: white;
+            cursor: pointer;
+            padding: 8px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 12px;
+        }
+        .collapsible-active, .collapsible:hover {
+            background-color: #555;
+        }
+        .collapsible:after {
+            content: "\002B";
+            color: white;
+            font-weight: bold;
+            float: left;
+            margin-left: 5px;
+            margin-right: 5px;
+        }
+        .collapsible-active:after {
+            content: "\2212";
+        }
+        .collapsible-container {
+            margin-bottom: 5px;
+            max-height: 0;
+            overflow: hidden;
+            background-color: #ddd;
+        }
+        .collapsible-container-content {
+            padding: 15px;
+        }
+        .code-coverage-table {
+            border-collapse: collapse;
+            font-family: "Lucida Console", Monaco, monospace;
+            font-size: 12px;
+            font-style: normal;
+            font-variant: normal;
+            font-weight: 400;
+            line-height: 1.5;
+            tab-size: 4;
+            width: 100%;
+        }
+        .row-line-number {
+            width: 10px;
+            text-align: right;
+            padding-right: 3px;
+            color: rgba(0, 0, 0, 0.50);
+        }
+        .row-reverted-status {
+            font-size: 12px;
+            text-align: center;
+            min-width: 10px;
+            background-color: rgba(0, 0, 0, 0.04);
+            color: rgba(0, 0, 0, 0.70);
+            white-space: nowrap;
+        }
+        .row-source {
+            width: 100%;
+            padding-left: 20px;
+        }
+        .row-line-covered {
+            background-color: rgba(23, 255, 0, 0.12);
+            width: min-content;
+        }
+        .row-line-uncovered {
+            background-color: rgba(255, 0, 0, 0.10);
+            width: min-content;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Coverage Report</h1>
+        <hr />
+        <table>
+            <tr><th>Files: </th><td>{{len .Files}}</td></tr>
+            <tr><th>Lines: </th><td>{{.LineCount}}</td></tr>
+            <tr>
+                <th>Covered: </th>
+                <td>
+                    {{/* Analyze some initial coverage metrics */}}
+                    {{$totalLinesCovered := .CoveredLineCount}}
+                    {{$totalLinesActive := .ActiveLineCount}}
+                    {{$totalPercentCoverageInt := percentageInt $totalLinesCovered $totalLinesActive}}
+
+                    {{/* Output our coverage info with a progress bar alongside it.*/}}
+                    {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+                    {{$totalLinesCovered}} / {{$totalLinesActive}} ({{percentageStr $totalLinesCovered $totalLinesActive 1}}%)
+                    <progress class="progress-coverage" value="{{percentageStr $totalLinesCovered $totalLinesActive 0}}" max="100" style="accent-color: hsl({{$totalPercentCoverageInt}}, 100%, 60%)"></progress>
+                </td>
+            </tr>
+        </table>
+    </header>
+    <hr />
+
+    {{/* Loop through all sources */}}
+    {{range $sourceFile := .SortedFiles}}
+        {{/* Analyze some initial coverage metrics */}}
+        {{$linesCovered := $sourceFile.CoveredLineCount}}
+        {{$linesActive := $sourceFile.ActiveLineCount}}
+        {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
+
+        {{/* Output a collapsible header/container for each source*/}}
+        <button class="collapsible">
+            {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+            <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
+            <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
+            <span>{{relativePath $sourceFile.Path}}</span>
+        </button>
+        <div class="collapsible-container">
+            <div class="collapsible-container-content">
+            <hr />
+            {{/* Output the total line coverage statistics*/}}
+            <table>
+                <tr>
+                    <th>Lines covered: </th>
+                    <td>{{$linesCovered}} / {{$linesActive}} ({{percentageStr $linesCovered $linesActive 1}}%)</td>
+                </tr>
+            </table>
+            <hr />
+            {{/* Output a tables with a row for each source line*/}}
+            <table class="code-coverage-table">
+                {{range $lineIndex, $line := $sourceFile.Lines}}
+                    {{/* Create a row for this source line */}}
+                    <tr>
+                        {{/* Output a cell for the line number */}}
+                        <td class="row-line-number unselectable">{{add $lineIndex 1}}</td>
+
+                        {{/* Output two cells for the reverted/non-reverted execution status */}}
+                        <td class="row-reverted-status unselectable">
+                            {{if $line.IsCovered}}
+                                <div title="The source line executed without reverting.">√</div>
+                            {{end}}
+                        </td>
+                        <td class="row-reverted-status unselectable">
+                            {{if $line.IsCoveredReverted}}
+                                <div title="The source line executed, but was reverted.">⟳</div>
+                            {{end}}
+                        </td>
+
+                        {{/* Output a cell for the source line */}}
+                        {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}
+                        {{/* If a source line is "covered", it is green, otherwise it is red. */}}
+                        <td class="row-source">
+                            {{if not $line.IsActive}}
+                                    <pre>{{printf "%s" $line.Contents}}</pre>
+                            {{else if or $line.IsCovered $line.IsCoveredReverted}}
+                                    <pre class="row-line-covered">{{printf "%s" $line.Contents}}</pre>
+                            {{else}}
+                                    <pre class="row-line-uncovered">{{printf "%s" $line.Contents}}</pre>
+                            {{end}}
+                        </td>
+                    </tr>
+                {{end}}
+            </table>
+            </div>
+        </div>
+    {{end}}
+
+
+<script>
+    // Add event listeners for collapsible sections to collapse/expand on click.
+    const collapsibleHeaders = document.getElementsByClassName("collapsible");
+    let i;
+    for (i = 0; i < collapsibleHeaders.length; i++) {
+        collapsibleHeaders[i].addEventListener("click", function() {
+            this.classList.toggle("collapsible-active");
+            const collapsibleContainer = this.nextElementSibling;
+            if (collapsibleContainer.style.maxHeight){
+                collapsibleContainer.style.maxHeight = null;
+            } else {
+                collapsibleContainer.style.maxHeight = collapsibleContainer.scrollHeight + "px";
+            }
+        });
+    }
+
+    // If there's only one item, expand it by default.
+    if (collapsibleHeaders.length === 1) {
+        collapsibleHeaders[0].click();
+    }
+</script>
+
+<hr />
+<footer>
+    <center>
+        Report generated by medusa
+        <br />
+        {{timeNow.UTC}}
+        <br />
+        <a href="https://github.com/crytic/medusa">github.com/crytic/medusa</a>
+    </center>
+</footer>
+</body>
+</html>
