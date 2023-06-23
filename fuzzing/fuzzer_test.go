@@ -141,7 +141,7 @@ func TestOptimizationsSolving(t *testing.T) {
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = true
-				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
+				config.Fuzzing.TestLimit = 10_000 // this test should expose a failure quickly.
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
