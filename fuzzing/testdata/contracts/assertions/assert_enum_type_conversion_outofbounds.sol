@@ -1,3 +1,5 @@
+//Enum type conversion out of bounds would cause a panic
+//PanicCodeEnumTypeConversionOutOfBounds = 0x21
 contract TestContract {
     enum MyEnum { A, B, C }
 

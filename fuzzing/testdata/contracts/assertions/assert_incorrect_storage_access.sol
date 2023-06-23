@@ -1,3 +1,6 @@
+//This contract triggers an incorrect storage access panic
+//PanicCodeIncorrectStorageAccess = 0x22
+
 contract TestContract {
     uint256[] public myArray;
 

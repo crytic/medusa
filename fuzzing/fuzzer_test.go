@@ -101,7 +101,15 @@ func TestAllPanicAssertions(t *testing.T) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.AssertOptions = []byte{0x01, 0x11, 0x12, 0x21, 0x22, 0x31, 0x32, 0x41, 0x51}
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertFailed = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticOverflow = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnEnumTypeConversionOutOfBounds = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnDivideByZero = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnIncorrectStorageAccess = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnOutOfBoundsArrayAccess = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnPopEmptyArray = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer

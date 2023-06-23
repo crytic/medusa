@@ -1,3 +1,6 @@
+//An attempt to call an uninitialized function pointer would cause a panic
+//PanicCodeCallUninitializedVariable = 0x51
+
 contract TestContract {
 
     function uninitializedVariableCall() public returns (int)

@@ -106,6 +106,18 @@ type TestingConfig struct {
 	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
 }
 
+type AssertionModesConfig struct {
+	FailOnAssertFailed                  bool `json:"fail_on_assert_failed"`
+	FailOnArithmeticOverflow            bool `json:"fail_arithmetic_overflow"`
+	FailOnDivideByZero                  bool `json:"fail_divide_by_zero"`
+	FailOnEnumTypeConversionOutOfBounds bool `json:"fail_on_enum_type_conversion_out_of_bounds"`
+	FailOnIncorrectStorageAccess        bool `json:"fail_on_incorrect_storage_access"`
+	FailOnPopEmptyArray                 bool `json:"fail_on_pop_empty_array"`
+	FailOnOutOfBoundsArrayAccess        bool `json:"fail_on_out_of_bounds_array_access"`
+	FailOnAllocateTooMuchMemory         bool `json:"fail_on_allocate_too_much_memory"`
+	FailOnCallUninitializedVariable     bool `json:"fail_on_call_uninitialized_variable"`
+}
+
 // AssertionTestingConfig describes the configuration options used for assertion testing
 type AssertionTestingConfig struct {
 	// Enabled describes whether testing is enabled.
@@ -114,8 +126,8 @@ type AssertionTestingConfig struct {
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
 
-	// AssertOptions describes options for testing panics using the panic codes.
-	AssertOptions []byte `json:"assertOptions"`
+	// AssertionModes describes options for testing different panic modes
+	AssertionModes AssertionModesConfig `json:"assertionModes"`
 }
 
 // PropertyTestConfig describes the configuration options used for property testing

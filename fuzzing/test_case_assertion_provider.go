@@ -4,9 +4,9 @@ import (
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
+	"reflect"
 	"sync"
 )
 
@@ -73,7 +73,44 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := panicCode != nil && utils.IsPanicCodeIncluded(byte(panicCode.Uint64()), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertOptions) && utils.HasEncounteredAssertionFailure(panicCode)
+	encounteredAssertionFailure := false
+	if panicCode != nil {
+		// Define a map of config options and their corresponding panic codes
+		var panicCodes = map[string]int64{
+			"fail_on_assert_failed":                      abiutils.PanicCodeAssertFailed,
+			"fail_arithmetic_overflow":                   abiutils.PanicCodeArithmeticUnderOverflow,
+			"fail_divide_by_zero":                        abiutils.PanicCodeDivideByZero,
+			"fail_on_enum_type_conversion_out_of_bounds": abiutils.PanicCodeEnumTypeConversionOutOfBounds,
+			"fail_on_incorrect_storage_access":           abiutils.PanicCodeIncorrectStorageAccess,
+			"fail_on_pop_empty_array":                    abiutils.PanicCodePopEmptyArray,
+			"fail_on_out_of_bounds_array_access":         abiutils.PanicCodeOutOfBoundsArrayAccess,
+			"fail_on_allocate_too_much_memory":           abiutils.PanicCodeAllocateTooMuchMemory,
+			"fail_on_call_uninitialized_variable":        abiutils.PanicCodeCallUninitializedVariable,
+		}
+
+		// Get the value and type of the config options
+		configValue := reflect.ValueOf(t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+		configType := configValue.Type()
+
+		// Iterate over each config option
+		for i := 0; i < configValue.NumField(); i++ {
+			// Get the value, type, and name of the current field
+			fieldValue := configValue.Field(i)
+			fieldType := configType.Field(i)
+			fieldName := fieldType.Tag.Get("json")
+
+			// Check if the config option is true
+			if fieldValue.Bool() {
+				// Get the panic code associated with the config option
+				code, found := panicCodes[fieldName]
+
+				// Check if the panic code matches the given panic code
+				if found && code == panicCode.Int64() {
+					encounteredAssertionFailure = true
+				}
+			}
+		}
+	}
 
 	return &methodId, encounteredAssertionFailure, nil
 }
