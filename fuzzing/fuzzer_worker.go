@@ -45,7 +45,10 @@ type FuzzerWorker struct {
 	// fuzzing campaigns.
 	sequenceGenerator *CallSequenceGenerator
 
-	valueShrinker *valuegeneration.ShrinkingValueGenerator
+	// shrinkingValueMutator is a value mutator which is used to mutate existing call sequence values in an attempt to shrink
+	// their values, in the call sequence shrinking process.
+	shrinkingValueMutator valuegeneration.ValueMutator
+
 	// valueSet defines a set derived from Fuzzer.BaseValueSet which is further populated with runtime values by the
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
@@ -67,7 +70,8 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		return nil, err
 	}
 
-	valueShrinker, err := fuzzer.Hooks.NewValueShrinkingFunc(fuzzer, valueSet, randomProvider)
+	// Create a new shrinking value mutator for this new worker.
+	shrinkingValueMutator, err := fuzzer.Hooks.NewShrinkingValueMutatorFunc(fuzzer, valueSet, randomProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +87,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		valueSet:             valueSet,
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
-	worker.valueShrinker = valueShrinker
+	worker.shrinkingValueMutator = shrinkingValueMutator
 
 	return worker, nil
 }
@@ -131,6 +135,11 @@ func (fw *FuzzerWorker) ValueSet() *valuegeneration.ValueSet {
 // ValueGenerator obtains the value generator used by this worker.
 func (fw *FuzzerWorker) ValueGenerator() valuegeneration.ValueGenerator {
 	return fw.sequenceGenerator.config.ValueGenerator
+}
+
+// ValueMutator obtains the value mutator used by this worker.
+func (fw *FuzzerWorker) ValueMutator() valuegeneration.ValueMutator {
+	return fw.sequenceGenerator.config.ValueMutator
 }
 
 // getNewCorpusCallSequenceWeight returns a big integer representing the weight that a new corpus item being added now
@@ -401,7 +410,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 				possibleShrunkTransaction, _ := optimizedTransaction.Clone()
 				abiValuesMsgData := possibleShrunkTransaction.Call.MsgDataAbiValues
 				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-					mutatedInput, err := valuegeneration.MutateAbiValue(fw.valueShrinker, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 					if err != nil {
 						print(fmt.Errorf("error when mutating call sequence input argument: %v", err))
 						continue
