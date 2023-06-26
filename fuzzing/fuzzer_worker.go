@@ -2,6 +2,9 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -10,8 +13,6 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -144,6 +145,18 @@ func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.Contract
 		if fw.fuzzer.config.Fuzzing.Testing.StopOnFailedContractMatching {
 			return fmt.Errorf("could not match bytecode of a deployed contract to any contract definition known to the fuzzer")
 		} else {
+			return nil
+		}
+	}
+
+	if fw.fuzzer.config.Fuzzing.Testing.OnlyCallFromDeploymentOrder {
+		contractFound := false
+		for i := range fw.fuzzer.config.Fuzzing.DeploymentOrder {
+			if fw.fuzzer.config.Fuzzing.DeploymentOrder[i] == matchedDefinition.Name() {
+				contractFound = true
+			}
+		}
+		if !contractFound {
 			return nil
 		}
 	}

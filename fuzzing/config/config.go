@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/chain/config"
 	"os"
+
+	"github.com/crytic/medusa/chain/config"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/utils"
@@ -97,6 +98,10 @@ type TestingConfig struct {
 	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
+
+	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
+	// than just the contracts specified in the project configuration's deployment order.
+	OnlyCallFromDeploymentOrder bool `json:"onlyCallFromDeploymentOrder"`
 
 	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
