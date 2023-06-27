@@ -5,6 +5,8 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
 )
@@ -34,24 +36,27 @@ func (t *PropertyTestCase) Name() string {
 	return fmt.Sprintf("Property Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// Message obtains a text-based printable message which describes the test result.
-func (t *PropertyTestCase) Message() string {
+// Message obtains a buffer that represents the result of the PropertyTestCase. This Message can be passed to a logger for
+// console / file logging or String() can be called on it to retrieve its string representation.
+func (t *PropertyTestCase) Message() *logging.LogBuffer {
 	// If the test failed, return a failure message.
+	buffer := logging.NewLogBuffer()
 	if t.Status() == TestCaseStatusFailed {
-		msg := fmt.Sprintf(
-			"Property test \"%s.%s\" failed after the following call sequence:\n%s",
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.CallSequence().String(),
-		)
+		buffer.Append(fmt.Sprintf("Property test \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
+		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+		buffer.Append(t.CallSequence().Log().Args()...)
+		buffer.Append("\n")
+
 		// If an execution trace is attached then add it to the message
 		if t.propertyTestTrace != nil {
-			// TODO: Improve formatting in logging PR
-			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
+			buffer.Append(colors.Bold, "[Property Test Execution Trace]", colors.Reset, "\n")
+			buffer.Append(t.propertyTestTrace.Log().Args()...)
 		}
-		return msg
+		return buffer
 	}
-	return ""
+
+	buffer.Append("")
+	return buffer
 }
 
 // ID obtains a unique identifier for a test result.

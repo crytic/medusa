@@ -260,18 +260,14 @@ func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
 	var info StructuredLogInfo
 
 	// Iterate through each argument in the list and switch on type
-	for i, arg := range args {
+	for _, arg := range args {
 		switch t := arg.(type) {
 		case colors.ColorFunc:
 			// If the argument is a color function, switch the current color context
 			colorCtx = t
 		case StructuredLogInfo:
+			// Note that only one structured log info can be provided for each log message
 			info = t
-			// Note that if a structured log info object is provided, it _must_ be the last variable in the list
-			// If it is not, we return empty strings and a nil object
-			if i != len(args)-1 {
-				return "", "", nil
-			}
 		default:
 			// In the base case, append the object to the two string buffers. The console string buffer will have the
 			// current color context applied to it.
