@@ -3,7 +3,6 @@ package logging
 import (
 	"fmt"
 	"github.com/crytic/medusa/logging/colors"
-	"github.com/crytic/medusa/utils"
 	"github.com/rs/zerolog"
 	"io"
 	"os"
@@ -47,6 +46,9 @@ const (
 	UNSTRUCTURED LogFormat = "unstructured"
 )
 
+// StructuredLogInfo describes a key-value mapping that can be used to log structured data
+type StructuredLogInfo map[string]any
+
 // NewLogger will create a new Logger object with a specific log level. The Logger can output to console, if enabled,
 // and output logs to any number of arbitrary io.Writer channels
 func NewLogger(level zerolog.Level, consoleEnabled bool, writers ...io.Writer) *Logger {
@@ -62,7 +64,7 @@ func NewLogger(level zerolog.Level, consoleEnabled bool, writers ...io.Writer) *
 
 	// If console logging is enabled, update the console logger
 	if consoleEnabled {
-		consoleWriter := setupDefaultFormatting(zerolog.ConsoleWriter{Out: os.Stdout}, level, true)
+		consoleWriter := setupDefaultFormatting(zerolog.ConsoleWriter{Out: os.Stdout}, level)
 		baseConsoleLogger = zerolog.New(consoleWriter).Level(level)
 	}
 
@@ -134,108 +136,155 @@ func (l *Logger) SetLevel(level zerolog.Level) {
 }
 
 // Trace is a wrapper function that will log a trace event
-func (l *Logger) Trace(msg string, fields map[string]any) {
-	// Log to multi logger
-	l.multiLogger.Trace().Fields(fields).Msg(msg)
+func (l *Logger) Trace(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to console
-	// No additional formatting for trace logs
-	l.consoleLogger.Trace().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
+
+	// Log to console and multi logger
+	l.consoleLogger.Trace().Fields(fields).Msg(consoleMsg)
+	l.multiLogger.Trace().Fields(fields).Msg(fileMsg)
 }
 
 // Debug is a wrapper function that will log a debug event
-func (l *Logger) Debug(msg string, fields map[string]any) {
-	// Log to multi logger
-	l.multiLogger.Debug().Fields(fields).Msg(msg)
+func (l *Logger) Debug(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to console
-	// No additional formatting for debug logs
-	l.consoleLogger.Debug().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
+
+	// Log to console and multi logger
+	l.consoleLogger.Debug().Fields(fields).Msg(consoleMsg)
+	l.multiLogger.Debug().Fields(fields).Msg(fileMsg)
 }
 
 // Info is a wrapper function that will log an info event
-// Specific log events may choose to have custom formatting for console
-func (l *Logger) Info(msg string, fields map[string]any) {
-	// Grab formatter field
-	formatterFunc, fields := utils.GetAndRemoveKeyFromMapping(fields, "formatter")
+func (l *Logger) Info(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to multi logger
-	l.multiLogger.Info().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
-	// Colorize and format the fields + msg, if necessary
-	if formatterFunc != nil {
-		msg = formatterFunc.(Formatter)(fields, msg)
-	}
-
-	// Log to console
 	// If we are in debug mode or below, add the fields. Otherwise, just output the message
 	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Info().Fields(fields).Msg(msg)
+		l.consoleLogger.Info().Fields(fields).Msg(consoleMsg)
 	} else {
-		l.consoleLogger.Info().Msg(msg)
+		l.consoleLogger.Info().Msg(consoleMsg)
 	}
+
+	// Log to multi logger
+	l.multiLogger.Info().Fields(fields).Msg(fileMsg)
 }
 
 // Warn is a wrapper function that will log a warning event both on console
-func (l *Logger) Warn(msg string, fields map[string]any) {
-	// Log to multi logger
-	l.multiLogger.Warn().Fields(fields).Msg(msg)
+func (l *Logger) Warn(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to console
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
+
 	// If we are in debug mode or below, add the fields. Otherwise, just output the message
 	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Warn().Fields(fields).Msg(msg)
+		l.consoleLogger.Warn().Fields(fields).Msg(consoleMsg)
 	} else {
-		l.consoleLogger.Warn().Msg(msg)
+		l.consoleLogger.Warn().Msg(consoleMsg)
 	}
+
+	// Log to multi logger
+	l.multiLogger.Warn().Fields(fields).Msg(fileMsg)
 }
 
-// Error is a wrapper function that will log an error event
-// Note that if the error key is not in the fields mapping, this function will panic
-// TODO: Maybe we don't panic and instead just log the msg with an empty err field. Same applies to Fatal and Panic
-func (l *Logger) Error(msg string, fields map[string]any) {
-	// Grab error from fields
-	err, fields := utils.GetAndRemoveKeyFromMapping(fields, "error")
+// Error is a wrapper function that will log an error event.
+func (l *Logger) Error(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to multi logger with stack
-	l.multiLogger.Error().Err(err.(error)).Stack().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
 	// If we are in debug mode or below, log the stack and error. Otherwise, just output the error
 	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Error().Err(err.(error)).Stack().Msg(msg)
+		l.consoleLogger.Error().Stack().Fields(fields).Msg(consoleMsg)
 	} else {
-		l.consoleLogger.Error().Err(err.(error)).Msg(msg)
+		l.consoleLogger.Error().Fields(fields).Msg(consoleMsg)
 	}
+
+	// Log to multi logger with stack
+	l.multiLogger.Error().Stack().Fields(fields).Msg(fileMsg)
 }
 
 // Fatal is a wrapper function that will log a fatal event
-// Note that if the error key is not in the fields mapping, this function will panic
-func (l *Logger) Fatal(msg string, fields map[string]any) {
-	// Grab error from fields
-	err, fields := utils.GetAndRemoveKeyFromMapping(fields, "error")
+func (l *Logger) Fatal(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to multi logger
-	l.multiLogger.Fatal().Err(err.(error)).Stack().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
-	// Log to console with no regard for formatting, all bets are off
-	l.consoleLogger.Fatal().Err(err.(error)).Stack().Fields(fields).Msg(msg)
+	// Log to console and multi-logger with stack
+	l.consoleLogger.Fatal().Stack().Fields(fields).Msg(consoleMsg)
+	l.multiLogger.Fatal().Stack().Fields(fields).Msg(fileMsg)
 }
 
 // Panic is a wrapper function that will log a panic event
-// Note that if the error key is not in the fields mapping, this function will, ironically, panic
-func (l *Logger) Panic(msg string, fields map[string]any) {
-	// Grab error from fields
-	err, fields := utils.GetAndRemoveKeyFromMapping(fields, "error")
+func (l *Logger) Panic(args ...any) {
+	// Create a generic map[string]any fields object that will store structured log info
+	var fields map[string]any
 
-	// Log to multi logger
-	l.multiLogger.Panic().Err(err.(error)).Stack().Fields(fields).Msg(msg)
+	// Build the messages
+	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
-	// Log to console with no regard for formatting, all bets are off
-	l.consoleLogger.Panic().Err(err.(error)).Stack().Fields(fields).Msg(msg)
+	// Log to console and multi-logger with stack
+	l.consoleLogger.Panic().Stack().Fields(fields).Msg(consoleMsg)
+	l.multiLogger.Panic().Stack().Fields(fields).Msg(fileMsg)
+}
+
+// buildMsgs describes a function that takes in a variadic list of arguments of any type and returns two strings and,
+// optionally, a StructuredLogInfo object. The first string will be a colorized-string that can be used for console logging
+// while the second string will be a non-colorized one that can be used for file/structured logging.
+func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
+	// Guard clause
+	if len(args) == 0 {
+		return "", "", nil
+	}
+
+	// Initialize the base color context, the string buffers and the structured log info object
+	colorCtx := colors.Reset
+	consoleOutput := make([]string, 0)
+	fileOutput := make([]string, 0)
+	var info StructuredLogInfo
+
+	// Iterate through each argument in the list and switch on type
+	for i, arg := range args {
+		switch t := arg.(type) {
+		case colors.ColorFunc:
+			// If the argument is a color function, switch the current color context
+			colorCtx = t
+		case StructuredLogInfo:
+			info = t
+			// Note that if a structured log info object is provided, it _must_ be the last variable in the list
+			// If it is not, we return empty strings and a nil object
+			if i != len(args)-1 {
+				return "", "", nil
+			}
+		default:
+			// In the base case, append the object to the two string buffers. The console string buffer will have the
+			// current color context applied to it.
+			consoleOutput = append(consoleOutput, colorCtx(t))
+			fileOutput = append(fileOutput, fmt.Sprintf("%v", t))
+		}
+	}
+
+	return strings.Join(consoleOutput, " "), strings.Join(fileOutput, " "), info
 }
 
 // setupDefaultFormatting will update the console logger's formatting to the medusa standard
-func setupDefaultFormatting(writer zerolog.ConsoleWriter, level zerolog.Level, colorable bool) zerolog.ConsoleWriter {
+func setupDefaultFormatting(writer zerolog.ConsoleWriter, level zerolog.Level) zerolog.ConsoleWriter {
 	// Get rid of the timestamp for console output
 	writer.FormatTimestamp = func(i interface{}) string {
 		return ""
@@ -253,25 +302,25 @@ func setupDefaultFormatting(writer zerolog.ConsoleWriter, level zerolog.Level, c
 		switch level {
 		case zerolog.TraceLevel:
 			// Return a bold, cyan "trace" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelTraceValue), colors.COLOR_CYAN), colors.COLOR_BOLD)
+			return colors.CyanBold(zerolog.LevelTraceValue)
 		case zerolog.DebugLevel:
 			// Return a bold, blue "debug" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelDebugValue), colors.COLOR_BLUE), colors.COLOR_BOLD)
+			return colors.BlueBold(zerolog.LevelDebugValue)
 		case zerolog.InfoLevel:
 			// Return a bold, green left arrow
-			return colors.Colorize(colors.Colorize(colors.LEFT_ARROW, colors.COLOR_GREEN), colors.COLOR_BOLD)
+			return colors.GreenBold(colors.LEFT_ARROW)
 		case zerolog.WarnLevel:
 			// Return a bold, yellow "warn" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelWarnValue), colors.COLOR_YELLOW), colors.COLOR_BOLD)
+			return colors.YellowBold(zerolog.LevelWarnValue)
 		case zerolog.ErrorLevel:
 			// Return a bold, red "err" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelErrorValue), colors.COLOR_RED), colors.COLOR_BOLD)
+			return colors.RedBold(zerolog.LevelErrorValue)
 		case zerolog.FatalLevel:
 			// Return a bold, red "fatal" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelFatalValue), colors.COLOR_RED), colors.COLOR_BOLD)
+			return colors.RedBold(zerolog.LevelFatalValue)
 		case zerolog.PanicLevel:
 			// Return a bold, red "panic" string
-			return colors.Colorize(colors.Colorize(strings.ToUpper(zerolog.LevelPanicValue), colors.COLOR_RED), colors.COLOR_BOLD)
+			return colors.RedBold(zerolog.LevelPanicValue)
 		default:
 			return i.(string)
 		}
