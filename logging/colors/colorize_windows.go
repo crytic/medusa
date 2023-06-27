@@ -20,7 +20,6 @@ var enabled bool
 
 // EnableColor will make a kernel call to see whether ANSI escape codes are supported on the stdout channel for the
 // Windows system.
-// TODO: Is there a better name for this? We are not really "enabling" color because zerolog handles that for us
 func EnableColor() {
 	var mode uint32
 	// If mode does not equal windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING then the stdout does not support ANSI escape codes
@@ -33,7 +32,7 @@ func EnableColor() {
 
 // Colorize returns the string s wrapped in ANSI code c assuming that ANSI is supported on the Windows version
 // Source: https://github.com/rs/zerolog/blob/4fff5db29c3403bc26dee9895e12a108aacc0203/console.go
-func Colorize(s any, c int) string {
+func Colorize(s any, c Color) string {
 	// If ANSI is not supported then just return the original string
 	if !enabled {
 		return fmt.Sprintf("%s", s)
