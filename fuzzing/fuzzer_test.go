@@ -55,36 +55,11 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
-// TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
-func TestAssertionsBasicSolving(t *testing.T) {
+// TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
+func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
 		"testdata/contracts/assertions/assert_even_number.sol",
-	}
-	for _, filePath := range filePaths {
-		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath: filePath,
-			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-			},
-			method: func(f *fuzzerTestContext) {
-				// Start the fuzzer
-				err := f.fuzzer.Start()
-				assert.NoError(t, err)
-
-				// Check for failed assertion tests.
-				assertFailedTestsExpected(f, true)
-			},
-		})
-	}
-}
-
-// TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
-func TestAllPanicAssertions(t *testing.T) {
-	filePaths := []string{
-		"testdata/contracts/assertions/assert_immediate.sol",
 		"testdata/contracts/assertions/assert_arithmetic_underflow.sol",
 		"testdata/contracts/assertions/assert_divide_by_zero.sol",
 		"testdata/contracts/assertions/assert_enum_type_conversion_outofbounds.sol",
