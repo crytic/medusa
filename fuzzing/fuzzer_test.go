@@ -101,7 +101,7 @@ func TestAllPanicAssertions(t *testing.T) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertFailed = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertion = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticOverflow = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true

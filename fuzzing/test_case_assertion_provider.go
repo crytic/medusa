@@ -3,10 +3,10 @@ package fuzzing
 import (
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
-	"reflect"
 	"sync"
 )
 
@@ -23,8 +23,6 @@ type AssertionTestCaseProvider struct {
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
 }
-
-// Define our ABI method
 
 // attachAssertionTestCaseProvider attaches a new AssertionTestCaseProvider to the Fuzzer and returns it.
 func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider {
@@ -66,53 +64,15 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	}
 	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
-	// Check if we encountered an assertion error.
-	// Try to unpack our error and return data for a panic code and verify it matches the "assert failed" panic code.
+	// Check if we encountered an enabled panic code.
+	// Try to unpack our error and return data for a panic code and verify that that panic code should be treated as a failing case.
 	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := false
-	if panicCode != nil {
-		// Define a map of config options and their corresponding panic codes
-		var panicCodes = map[string]int64{
-			"fail_on_assert_failed":                      abiutils.PanicCodeAssertFailed,
-			"fail_arithmetic_overflow":                   abiutils.PanicCodeArithmeticUnderOverflow,
-			"fail_divide_by_zero":                        abiutils.PanicCodeDivideByZero,
-			"fail_on_enum_type_conversion_out_of_bounds": abiutils.PanicCodeEnumTypeConversionOutOfBounds,
-			"fail_on_incorrect_storage_access":           abiutils.PanicCodeIncorrectStorageAccess,
-			"fail_on_pop_empty_array":                    abiutils.PanicCodePopEmptyArray,
-			"fail_on_out_of_bounds_array_access":         abiutils.PanicCodeOutOfBoundsArrayAccess,
-			"fail_on_allocate_too_much_memory":           abiutils.PanicCodeAllocateTooMuchMemory,
-			"fail_on_call_uninitialized_variable":        abiutils.PanicCodeCallUninitializedVariable,
-		}
 
-		// Get the value and type of the config options
-		configValue := reflect.ValueOf(t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
-		configType := configValue.Type()
-
-		// Iterate over each config option
-		for i := 0; i < configValue.NumField(); i++ {
-			// Get the value, type, and name of the current field
-			fieldValue := configValue.Field(i)
-			fieldType := configType.Field(i)
-			fieldName := fieldType.Tag.Get("json")
-
-			// Check if the config option is true
-			if fieldValue.Bool() {
-				// Get the panic code associated with the config option
-				code, found := panicCodes[fieldName]
-
-				// Check if the panic code matches the given panic code
-				if found && code == panicCode.Int64() {
-					encounteredAssertionFailure = true
-				}
-			}
-		}
-	}
-
-	return &methodId, encounteredAssertionFailure, nil
+	return &methodId, encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes), nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
@@ -270,4 +230,80 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	}
 
 	return shrinkRequests, nil
+}
+
+// encounteredAssertionFailure takes in a panic code and a config.AssertionModesConfig and will determine whether the
+// panic code that was hit should be treated as a failing case - which will be determined by whether that panic
+// code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
+// panic if it is provided a panic code that is not defined in the abiutils package.
+// TODO: Also note that this is a terrible design and if there is a better way to maintain assertion and panic logic, it
+//
+//	should be implemented in a future PR
+func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
+	// Switch on panic code
+	switch panicCode {
+	case abiutils.PanicCodeCompilerInserted:
+		if conf.FailOnCompilerInsertedPanic {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeAssertFailed:
+		if conf.FailOnAssertion {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeArithmeticUnderOverflow:
+		if conf.FailOnArithmeticUnderflow {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeDivideByZero:
+		if conf.FailOnDivideByZero {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeEnumTypeConversionOutOfBounds:
+		if conf.FailOnEnumTypeConversionOutOfBounds {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeIncorrectStorageAccess:
+		if conf.FailOnIncorrectStorageAccess {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodePopEmptyArray:
+		if conf.FailOnPopEmptyArray {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeOutOfBoundsArrayAccess:
+		if conf.FailOnOutOfBoundsArrayAccess {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeAllocateTooMuchMemory:
+		if conf.FailOnAllocateTooMuchMemory {
+			return true
+		} else {
+			return false
+		}
+	case abiutils.PanicCodeCallUninitializedVariable:
+		if conf.FailOnCallUninitializedVariable {
+			return true
+		} else {
+			return false
+		}
+	}
+
+	// Throw a panic if we encounter a panic code not defined in the switch statement above
+	panic("encountered unknown panic code")
 }

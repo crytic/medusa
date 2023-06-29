@@ -105,3 +105,35 @@ func GetSolidityCustomRevertError(contractAbi *abi.ABI, returnError error, retur
 	}
 	return nil, nil
 }
+
+// GetPanicReason will take in a panic code as an uint64 and will return the string reason behind that panic code. For
+// example, if panic code is PanicCodeAssertFailed, then "assertion failure" is returned. This is used by the execution
+// tracer to print out the panic reason.
+func GetPanicReason(panicCode uint64) string {
+	// Switch on panic code
+	switch panicCode {
+	case PanicCodeCompilerInserted:
+		return "compiler inserted panic"
+	case PanicCodeAssertFailed:
+		return "assertion failed"
+	case PanicCodeArithmeticUnderOverflow:
+		return "arithmetic underflow"
+	case PanicCodeDivideByZero:
+		return "division by zero"
+	case PanicCodeEnumTypeConversionOutOfBounds:
+		return "enum access out of bounds"
+	case PanicCodeIncorrectStorageAccess:
+		return "incorrect storage access"
+	case PanicCodePopEmptyArray:
+		return "pop on empty array"
+	case PanicCodeOutOfBoundsArrayAccess:
+		return "out of bounds array access"
+	case PanicCodeAllocateTooMuchMemory:
+		return "overallocation of memory"
+	case PanicCodeCallUninitializedVariable:
+		return "call on uninitialized variable"
+	default:
+		// TODO: Should we throw a panic here or just return this string?
+		return "unknown panic code"
+	}
+}
