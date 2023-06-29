@@ -71,8 +71,12 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
+	failure := false
+	if panicCode != nil {
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+	}
 
-	return &methodId, encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes), nil
+	return &methodId, failure, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
