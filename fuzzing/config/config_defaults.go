@@ -54,6 +54,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: true,
+				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
 				AssertionTesting: AssertionTestingConfig{
@@ -64,6 +65,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					Enabled: true,
 					TestPrefixes: []string{
 						"fuzz_",
+					},
+				},
+				OptimizationTesting: OptimizationTestingConfig{
+					Enabled: false,
+					TestPrefixes: []string{
+						"optimize_",
 					},
 				},
 			},
