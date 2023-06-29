@@ -11,10 +11,15 @@ import (
 
 // PropertyTestCase describes a test being run by a PropertyTestCaseProvider.
 type PropertyTestCase struct {
-	status            TestCaseStatus
-	targetContract    *fuzzerTypes.Contract
-	targetMethod      abi.Method
-	callSequence      *calls.CallSequence
+	// status describes the status of the test case
+	status TestCaseStatus
+	// targetContract describes the target contract where the test case was found
+	targetContract *fuzzerTypes.Contract
+	// targetMethod describes the target method for the test case
+	targetMethod abi.Method
+	// callSequence describes the call sequence that broke the property
+	callSequence *calls.CallSequence
+	// propertyTestTrace describes the execution trace when running the callSequence
 	propertyTestTrace *executiontracer.ExecutionTrace
 }
 

@@ -63,14 +63,15 @@ func GetFilePathWithoutExtension(filePath string) string {
 	return filePath[:len(filePath)-len(filepath.Ext(filePath))]
 }
 
-// MakeDirectory creates a directory at the given path
+// MakeDirectory creates a directory at the given path, including any parent directories which do not exist.
+// Returns an error, if one occurred.
 func MakeDirectory(dirToMake string) error {
 	dirInfo, err := os.Stat(dirToMake)
 	if err != nil {
 		// Directory does not exist, as expected.
 		if os.IsNotExist(err) {
 			// TODO: Permissions are way too much but even 666 is not working
-			err = os.Mkdir(dirToMake, 0777)
+			err = os.MkdirAll(dirToMake, 0777)
 			if err != nil {
 				return err
 			}
