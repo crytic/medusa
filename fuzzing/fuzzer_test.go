@@ -103,7 +103,7 @@ func TestAllPanicAssertions(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertion = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticOverflow = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticUnderflow = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnEnumTypeConversionOutOfBounds = true
 				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnDivideByZero = true
