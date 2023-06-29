@@ -340,8 +340,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	// addr: Compute the address for a given private key
 	contract.addMethod("addr", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeAddress}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
-			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
+			// Get the private key object
+			privateKey, err := utils.GetPrivateKey(inputs[0].(*big.Int).Bytes())
+			if err != nil {
+				errorMessage := "addr: " + err.Error()
+				return nil, cheatCodeRevertData([]byte(errorMessage))
+			}
 
 			// Get ECDSA public key
 			publicKey := privateKey.Public().(*ecdsa.PublicKey)
@@ -357,11 +361,15 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	contract.addMethod("sign", abi.Arguments{{Type: typeUint256}, {Type: typeBytes32}},
 		abi.Arguments{{Type: typeUint8}, {Type: typeBytes32}, {Type: typeBytes32}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Using TOECDSAUnsafe b/c the private key is guaranteed to be of length 256 bits, at most
-			privateKey := crypto.ToECDSAUnsafe(inputs[0].(*big.Int).Bytes())
-			digest := inputs[1].([32]byte)
+			// Get the private key object
+			privateKey, err := utils.GetPrivateKey(inputs[0].(*big.Int).Bytes())
+			if err != nil {
+				errorMessage := "sign: " + err.Error()
+				return nil, cheatCodeRevertData([]byte(errorMessage))
+			}
 
 			// Sign digest
+			digest := inputs[1].([32]byte)
 			sig, err := crypto.Sign(digest[:], privateKey)
 			if err != nil {
 				return nil, cheatCodeRevertData([]byte("sign: malformed input to signature algorithm"))

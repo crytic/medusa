@@ -202,7 +202,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 
 	// If this provider has no corpus mutation methods or corpus call sequences, we return a call sequence with
 	// nil elements to signal that we want an entirely new sequence.
-	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.ActiveCallSequenceCount() == 0 {
+	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.ActiveMutableSequenceCount() == 0 {
 		return true, nil
 	}
 
@@ -329,7 +329,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 // Returns an error if one occurs.
 func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
 	// Obtain a call sequence from the corpus
-	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
 	}
@@ -346,7 +346,7 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 // Returns an error if one occurs.
 func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
 	// Obtain a call sequence from the corpus
-	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
 	}
@@ -365,11 +365,11 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 // Returns an error if one occurs.
 func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
 	// Obtain two corpus call sequence entries
-	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain head corpus call sequence for splice-at-random corpus mutation: %v", err)
 	}
-	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
 	}
@@ -397,11 +397,11 @@ func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequ
 // Returns an error if one occurs.
 func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
 	// Obtain two corpus call sequence entries
-	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
 	}
-	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomCallSequence()
+	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
 		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
 	}
