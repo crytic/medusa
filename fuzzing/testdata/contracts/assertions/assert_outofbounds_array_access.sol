@@ -1,5 +1,5 @@
-//This contract triggers an out-of-bounds array access panic
-//PanicCodeOutOfBoundsArrayAccess  = 0x32
+// This contract triggers an out-of-bounds array access panic
+// PanicCodeOutOfBoundsArrayAccess  = 0x32
 
 contract TestContract {
     function outOfBoundsArrayAccess() public {
