@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"golang.org/x/exp/slices"
 	"os"
 	"strings"
@@ -47,11 +48,13 @@ var supportedShells = []string{"bash", "zsh", "powershell"}
 
 // completionCmd represents the completion command
 var completionCmd = &cobra.Command{
-	Use:   "completion <shell>",
-	Short: "generate the autocompletion script for medusa for the specific shell",
-	Long:  generalComDesc,
-	Args:  cmdValidateCompletionArgs,
-	RunE:  cmdRunCompletion,
+	Use:           "completion <shell>",
+	Short:         "generate the autocompletion script for medusa for the specific shell",
+	Long:          generalComDesc,
+	Args:          cmdValidateCompletionArgs,
+	RunE:          cmdRunCompletion,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {
@@ -62,12 +65,14 @@ func init() {
 func cmdValidateCompletionArgs(cmd *cobra.Command, args []string) error {
 	// Make sure we have exactly 1 argument
 	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
-		return fmt.Errorf("completion requires only 1 shell argument (options: %s)", strings.Join(supportedShells, ", "))
+		err = fmt.Errorf("completion requires only 1 shell argument (options: %s)", strings.Join(supportedShells, ", "))
+		cmdLogger.Error("failed to validate args to completion", logging.StructuredLogInfo{"error": err})
 	}
 
 	// Make sure that the shell is a supported type
 	if contains := slices.Contains(supportedShells, args[0]); !contains {
-		return fmt.Errorf("%s is not a supported shell", args[0])
+		err := fmt.Errorf("%s is not a supported shell", args[0])
+		cmdLogger.Error("failed to validate args to completion", logging.StructuredLogInfo{"error": err})
 	}
 
 	return nil
@@ -76,15 +81,22 @@ func cmdValidateCompletionArgs(cmd *cobra.Command, args []string) error {
 // cmdRunCompletion executes the completion CLI command
 func cmdRunCompletion(cmd *cobra.Command, args []string) error {
 	// NOTE: Please be aware that if the supported shells changes, then this switch statement must also change
+	var err error
 	switch args[0] {
 	case "bash":
-		return cmd.Root().GenBashCompletionV2(os.Stdout, true)
+		err = cmd.Root().GenBashCompletionV2(os.Stdout, true)
 	case "zsh":
-		return cmd.Root().GenZshCompletion(os.Stdout)
+		err = cmd.Root().GenZshCompletion(os.Stdout)
 	case "powershell":
-		return cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+		err = cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
 	default:
 		// We are throwing a panic here because our validation function should have handled this and something is wrong.
-		panic(fmt.Errorf("%s is not a supported shell type", args[0]))
+		cmdLogger.Panic("failed to run the completion command", logging.StructuredLogInfo{"error": fmt.Errorf("%s is not a supported shell type", args[0])})
 	}
+
+	// Log an error if we encountered one
+	if err != nil {
+		cmdLogger.Error("failed to run the completion command", logging.StructuredLogInfo{"error": err})
+	}
+	return err
 }
