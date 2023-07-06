@@ -41,27 +41,33 @@ func (t *PropertyTestCase) Name() string {
 	return fmt.Sprintf("Property Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// Message obtains a buffer that represents the result of the PropertyTestCase. This Message can be passed to a logger for
-// console / file logging or String() can be called on it to retrieve its string representation.
-func (t *PropertyTestCase) Message() *logging.LogBuffer {
+// LogMessage obtains a buffer that represents the result of the PropertyTestCase. This buffer can be passed to a logger for
+// console or file logging.
+func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
 	// If the test failed, return a failure message.
 	buffer := logging.NewLogBuffer()
 	if t.Status() == TestCaseStatusFailed {
-		buffer.Append(fmt.Sprintf("Property test \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s]", t.Status()), colors.Reset, t.Name(), "\n")
+		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
 		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
-		buffer.Append(t.CallSequence().Log().Args()...)
-		buffer.Append("\n")
+		buffer.Append(t.CallSequence().Log().Elements()...)
 
 		// If an execution trace is attached then add it to the message
 		if t.propertyTestTrace != nil {
 			buffer.Append(colors.Bold, "[Property Test Execution Trace]", colors.Reset, "\n")
-			buffer.Append(t.propertyTestTrace.Log().Args()...)
+			buffer.Append(t.propertyTestTrace.Log().Elements()...)
 		}
 		return buffer
 	}
 
-	buffer.Append("")
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s]", t.Status()), colors.Reset, t.Name())
 	return buffer
+}
+
+// Message obtains a text-based printable message which describes the result of the PropertyTestCase.
+func (t *PropertyTestCase) Message() string {
+	// Internally, we just call log message and convert it to a string. This can be useful for 3rd party apps
+	return t.LogMessage().String()
 }
 
 // ID obtains a unique identifier for a test result.

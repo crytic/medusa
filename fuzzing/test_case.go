@@ -32,9 +32,12 @@ type TestCase interface {
 	// Name describes the name of the test case.
 	Name() string
 
-	// Message obtains a buffer that represents the result of the TestCase. This Message can be passed to a logger for
-	// console / file logging or String() can be called on it to retrieve its string representation.
-	Message() *logging.LogBuffer
+	// LogMessage obtains a logging.LogBuffer that represents the result of the TestCase. This buffer can be passed to a logger for
+	// console or file logging.
+	LogMessage() *logging.LogBuffer
+
+	// Message obtains a text-based printable message which describes the result of the AssertionTestCase.
+	Message() string
 
 	// ID obtains a unique identifier for a test result. If the same test fails, this ID should match for both
 	// TestResult instances (even if the CallSequence differs or has not been shrunk).

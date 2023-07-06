@@ -50,13 +50,20 @@ func (cs CallSequence) Log() *logging.LogBuffer {
 
 		// If we have an execution trace attached, print information about it.
 		if cs[i].ExecutionTrace != nil {
-			buffer.Append(cs[i].ExecutionTrace.Log().Args()...)
+			buffer.Append(cs[i].ExecutionTrace.Log().Elements()...)
 			buffer.Append("\n")
 		}
 	}
 
 	// Return the buffer
 	return buffer
+}
+
+// String returns the string representation of this call sequence
+func (cs CallSequence) String() string {
+	// Internally, we just call the log function, get the list of elements and create their non-colorized string representation
+	// Might be useful for 3rd party apps
+	return cs.Log().String()
 }
 
 // Clone creates a copy of the underlying CallSequence.

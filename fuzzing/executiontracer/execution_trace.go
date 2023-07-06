@@ -34,11 +34,12 @@ func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
 	}
 }
 
-// generateCallFrameEnterBuffer generates a logging.LogBuffer describing top level information about this call frame.
-// The buffer will hold information about what kind of call it is, wei sent, what method is called, and more.
-func (t *ExecutionTrace) generateCallFrameEnterBuffer(callFrame *CallFrame) *logging.LogBuffer {
-	// Create buffer
-	buffer := logging.NewLogBuffer()
+// generateCallFrameEnterElements generates a list of elements describing top level information about this call frame.
+// This list of elements will hold information about what kind of call it is, wei sent, what method is called, and more.
+// Additionally, the list may also hold formatting options for console output.
+func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []any {
+	// Create list of elements
+	elements := make([]any, 0)
 
 	// Define some strings and objects that represent our current call frame
 	var (
@@ -57,8 +58,8 @@ func (t *ExecutionTrace) generateCallFrameEnterBuffer(callFrame *CallFrame) *log
 		callType = []any{colors.CyanBold, "[proxy call]", colors.Reset}
 	}
 
-	// Append the formatted call type information to the buffer
-	buffer.Append(callType...)
+	// Append the formatted call type information to the list of elements
+	elements = append(elements, callType...)
 
 	// Resolve our contract names, as well as our method and its name from the code contract.
 	if callFrame.ToContractAbi != nil {
@@ -125,17 +126,17 @@ func (t *ExecutionTrace) generateCallFrameEnterBuffer(callFrame *CallFrame) *log
 		}
 	}
 
-	// Add call information to the buffer
-	buffer.Append(callInfo)
+	// Add call information to the elements
+	elements = append(elements, callInfo, "\n")
 
-	return buffer
+	return elements
 }
 
-// generateCallFrameExitBuffer generates a footer logging.LogBuffer describing the return data of the call frame (e.g.
-// traditional return data, assertion failure, revert data, etc.)
-func (t *ExecutionTrace) generateCallFrameExitBuffer(callFrame *CallFrame) *logging.LogBuffer {
-	// Create buffer
-	buffer := logging.NewLogBuffer()
+// generateCallFrameExitElements generates a list of elements describing the return data of the call frame (e.g.
+// traditional return data, assertion failure, revert data, etc.). Additionally, the list may also hold formatting options for console output.
+func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []any {
+	// Create list of elements
+	elements := make([]any, 0)
 
 	// Define some strings that represent our current call frame
 	var method *abi.Method
@@ -173,22 +174,22 @@ func (t *ExecutionTrace) generateCallFrameExitBuffer(callFrame *CallFrame) *logg
 
 	// Wrap our return message and output it at the end.
 	if callFrame.ReturnError == nil {
-		buffer.Append(colors.GreenBold, fmt.Sprintf("[return (%v)]", *outputArgumentsDisplayText), colors.Reset)
-		return buffer
+		elements = append(elements, colors.GreenBold, fmt.Sprintf("[return (%v)]", *outputArgumentsDisplayText), colors.Reset, "\n")
+		return elements
 	}
 
 	// Try to resolve a panic message and check if it signals a failed assertion.
 	panicCode := abiutils.GetSolidityPanicCode(callFrame.ReturnError, callFrame.ReturnData, true)
 	if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
-		buffer.Append(colors.RedBold, "[assertion failed]", colors.Reset)
-		return buffer
+		elements = append(elements, colors.RedBold, "[assertion failed]", colors.Reset, "\n")
+		return elements
 	}
 
 	// Try to resolve an assertion failed panic code.
 	errorMessage := abiutils.GetSolidityRevertErrorString(callFrame.ReturnError, callFrame.ReturnData)
 	if errorMessage != nil {
-		buffer.Append(colors.RedBold, fmt.Sprintf("[revert ('%v')]", *errorMessage), colors.Reset)
-		return buffer
+		elements = append(elements, colors.RedBold, fmt.Sprintf("[revert ('%v')]", *errorMessage), colors.Reset, "\n")
+		return elements
 	}
 
 	// Try to unpack a custom Solidity error from the return values.
@@ -196,27 +197,27 @@ func (t *ExecutionTrace) generateCallFrameExitBuffer(callFrame *CallFrame) *logg
 	if matchedCustomError != nil {
 		customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
 		if err == nil {
-			buffer.Append(colors.RedBold, fmt.Sprintf("[revert (error: %v(%v))]", matchedCustomError.Name, customErrorArgsDisplayText), colors.Reset)
-			return buffer
+			elements = append(elements, colors.RedBold, fmt.Sprintf("[revert (error: %v(%v))]", matchedCustomError.Name, customErrorArgsDisplayText), colors.Reset, "\n")
+			return elements
 		}
 	}
 
 	// Check if this is a generic revert.
 	if callFrame.ReturnError == vm.ErrExecutionReverted {
-		buffer.Append(colors.RedBold, "[revert]", colors.Reset)
-		return buffer
+		elements = append(elements, colors.RedBold, "[revert]", colors.Reset, "\n")
+		return elements
 	}
 
 	// If we could not resolve any custom error, we simply print out the generic VM error message.
-	buffer.Append(colors.RedBold, fmt.Sprintf("[vm error ('%v')]", callFrame.ReturnError.Error()), colors.Reset)
-	return buffer
+	elements = append(elements, colors.RedBold, fmt.Sprintf("[vm error ('%v')]", callFrame.ReturnError.Error()), colors.Reset, "\n")
+	return elements
 }
 
-// generateEventEmittedBuffer generates a logging.LogBuffer used to express an event emission. It contains information about an
-// event log.
-func (t *ExecutionTrace) generateEventEmittedBuffer(callFrame *CallFrame, eventLog *coreTypes.Log) *logging.LogBuffer {
-	// Create buffer
-	buffer := logging.NewLogBuffer()
+// generateEventEmittedElements generates a list of elements used to express an event emission. It contains information about an
+// event log such as the topics and the event data. Additionally, the list may also hold formatting options for console output.
+func (t *ExecutionTrace) generateEventEmittedElements(callFrame *CallFrame, eventLog *coreTypes.Log) []any {
+	// Create list of elements
+	elements := make([]any, 0)
 
 	// If this is an event log, match it in our contract's ABI.
 	var eventDisplayText *string
@@ -258,28 +259,27 @@ func (t *ExecutionTrace) generateEventEmittedBuffer(callFrame *CallFrame, eventL
 	}
 
 	// Finally, add our output line with this event data to it.
-	buffer.Append(colors.MagentaBold, "[event]", colors.Reset, *eventDisplayText)
-	return buffer
+	elements = append(elements, colors.MagentaBold, "[event]", colors.Reset, *eventDisplayText, "\n")
+	return elements
 }
 
-// generateBufferForCallFrame generates a logging.LogBuffer for a given call frame and its children.
-// Returns the buffer, to be formatted by the logger.
-func (t *ExecutionTrace) generateBufferForCallFrame(currentDepth int, callFrame *CallFrame) *logging.LogBuffer {
-	// Create buffer
-	buffer := logging.NewLogBuffer()
+// generateElementsForCallFrame generates a list of elements for a given call frame and its children. Additionally,
+// the list may also hold formatting options for console output.
+func (t *ExecutionTrace) generateElementsForCallFrame(currentDepth int, callFrame *CallFrame) []any {
+	// Create list of elements
+	elements := make([]any, 0)
 
 	// Create our current call line prefix (indented by call depth)
 	prefix := strings.Repeat("\t", currentDepth) + " => "
 
 	// If we're printing the root frame, add the overall execution trace header.
 	if currentDepth == 0 {
-		buffer.Append(colors.Bold, "[Execution Trace]", colors.Reset, "\n")
+		elements = append(elements, colors.Bold, "[Execution Trace]", colors.Reset, "\n")
 	}
 
-	// Add the call frame enter header
-	buffer.Append(prefix)
-	buffer.Append(t.generateCallFrameEnterBuffer(callFrame).Args()...)
-	buffer.Append("\n")
+	// Add the call frame enter header elements
+	elements = append(elements, prefix)
+	elements = append(elements, t.generateCallFrameEnterElements(callFrame)...)
 
 	// Now that the header has been printed, create our indent level to express everything that
 	// happened under it.
@@ -293,35 +293,40 @@ func (t *ExecutionTrace) generateBufferForCallFrame(currentDepth int, callFrame 
 		for _, operation := range callFrame.Operations {
 			if childCallFrame, ok := operation.(*CallFrame); ok {
 				// If this is a call frame being entered, generate information recursively.
-				childOutputLines := t.generateBufferForCallFrame(currentDepth+1, childCallFrame)
-				buffer.Append(childOutputLines.Args()...)
+				childOutputLines := t.generateElementsForCallFrame(currentDepth+1, childCallFrame)
+				elements = append(elements, childOutputLines...)
 			} else if eventLog, ok := operation.(*coreTypes.Log); ok {
 				// If an event log was emitted, add a message for it.
-				buffer.Append(prefix)
-				buffer.Append(t.generateEventEmittedBuffer(callFrame, eventLog).Args()...)
-				buffer.Append("\n")
+				elements = append(elements, prefix)
+				elements = append(elements, t.generateEventEmittedElements(callFrame, eventLog)...)
 			}
 		}
 
 		// If we self-destructed, add a message for it before our footer.
 		if callFrame.SelfDestructed {
-			buffer.Append(prefix, colors.MagentaBold, "[selfdestruct]", colors.Reset, "\n")
+			elements = append(elements, prefix, colors.MagentaBold, "[selfdestruct]", colors.Reset, "\n")
 		}
 
 		// Add the call frame exit footer
-		buffer.Append(prefix)
-		buffer.Append(t.generateCallFrameExitBuffer(callFrame).Args()...)
-		buffer.Append("\n")
+		elements = append(elements, prefix)
+		elements = append(elements, t.generateCallFrameExitElements(callFrame)...)
 	}
 
-	// Return our buffer
-	return buffer
+	// Return our elements
+	return elements
 }
 
 // Log returns a logging.LogBuffer that represents this execution trace. This buffer will be passed to the underlying
 // logger which will format it accordingly for console or file.
 func (t *ExecutionTrace) Log() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
-	buffer.Append(t.generateBufferForCallFrame(0, t.TopLevelCallFrame).Args()...)
+	buffer.Append(t.generateElementsForCallFrame(0, t.TopLevelCallFrame)...)
 	return buffer
+}
+
+// String returns the string representation of this execution trace
+func (t *ExecutionTrace) String() string {
+	// Internally, we just call the log function, get the list of elements and create their non-colorized string representation
+	// Might be useful for 3rd party apps
+	return t.Log().String()
 }
