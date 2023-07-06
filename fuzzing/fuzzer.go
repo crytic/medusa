@@ -8,6 +8,7 @@ import (
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
+	"io"
 	"math/big"
 	"math/rand"
 	"path/filepath"
@@ -88,7 +89,7 @@ type Fuzzer struct {
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create the global logger, set some global logging parameters, and enable terminal coloring
-	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, nil)
+	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, make([]io.Writer, 0)...)
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	colors.EnableColor()
