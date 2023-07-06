@@ -8,7 +8,6 @@ import (
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
-	"io"
 	"math/big"
 	"math/rand"
 	"path/filepath"
@@ -88,12 +87,10 @@ type Fuzzer struct {
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// Create the global logger and set some global logging parameters
-	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, make([]io.Writer, 0)...)
+	// Create the global logger, set some global logging parameters, and enable terminal coloring
+	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, nil)
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
-	// Enable terminal coloring, if possible
 	colors.EnableColor()
 
 	// If the log directory is a non-empty string, create a file for file logging

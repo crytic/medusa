@@ -32,10 +32,6 @@ type Logger struct {
 	writers []io.Writer
 }
 
-// Formatter describes a function that can be used to provide custom formatting for specific log events.
-// This is especially useful when logging to console where we want to colorize specific items
-type Formatter func(fields map[string]any, msg string) string
-
 // LogFormat describes what format to log in
 type LogFormat string
 
@@ -99,11 +95,8 @@ func (l *Logger) AddWriter(writer io.Writer, format LogFormat) {
 	}
 
 	// If we want unstructured output, wrap the base writer object into a console writer so that we get unstructured output with no ANSI coloring
-	switch format {
-	case UNSTRUCTURED:
+	if format == UNSTRUCTURED {
 		writer = zerolog.ConsoleWriter{Out: writer, NoColor: true}
-	default:
-		return
 	}
 
 	// Add it to the list of writers and update the multi logger
@@ -206,19 +199,6 @@ func (l *Logger) Error(args ...any) {
 	l.multiLogger.Error().Stack().Fields(fields).Msg(fileMsg)
 }
 
-// Fatal is a wrapper function that will log a fatal event
-func (l *Logger) Fatal(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
-
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
-
-	// Log to console and multi-logger with stack
-	l.consoleLogger.Fatal().Stack().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Fatal().Stack().Fields(fields).Msg(fileMsg)
-}
-
 // Panic is a wrapper function that will log a panic event
 func (l *Logger) Panic(args ...any) {
 	// Create a generic map[string]any fields object that will store structured log info
@@ -227,9 +207,11 @@ func (l *Logger) Panic(args ...any) {
 	// Build the messages
 	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
+	// Defer the log to multi logger so that when the call to console logger panics, we can also log to multi logger before
+	// exit
 	defer l.multiLogger.Panic().Stack().Fields(fields).Msg(fileMsg)
 
-	// Log to console and multi-logger with stack
+	// Log to console with stack
 	l.consoleLogger.Panic().Stack().Fields(fields).Msg(consoleMsg)
 
 }
