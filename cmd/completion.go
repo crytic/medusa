@@ -67,12 +67,14 @@ func cmdValidateCompletionArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
 		err = fmt.Errorf("completion requires only 1 shell argument (options: %s)", strings.Join(supportedShells, ", "))
 		cmdLogger.Error("Failed to validate args for completion command", logging.StructuredLogInfo{"error": err})
+		return err
 	}
 
 	// Make sure that the shell is a supported type
 	if contains := slices.Contains(supportedShells, args[0]); !contains {
 		err := fmt.Errorf("%s is not a supported shell", args[0])
 		cmdLogger.Error("Failed to validate args for completion command", logging.StructuredLogInfo{"error": err})
+		return err
 	}
 
 	return nil

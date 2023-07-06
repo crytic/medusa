@@ -31,7 +31,4 @@ const (
 const (
 	// LEFT_ARROW is the unicode string for a left arrow glyph
 	LEFT_ARROW = "\u21fe"
-
-	// DOWNWARD_LEFT_ARROW is the unicode string for a left arrow glyph but with a downward intention
-	DOWNWARD_LEFT_ARROW = "\u21b3"
 )
