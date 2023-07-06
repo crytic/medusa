@@ -32,7 +32,7 @@ func init() {
 		// If this platform already exists in our mapping, panic. Each platform should have a unique identifier.
 		if _, platformIdExists := defaultPlatformConfigGenerator[platformId]; platformIdExists {
 			err := fmt.Errorf("the compilation platform '%s' is registered with more than one provider", platformId)
-			logging.GlobalLogger.Panic("failed to initialize default platform configurations", logging.StructuredLogInfo{"error": err})
+			logging.GlobalLogger.Panic("Failed to initialize default platform configurations", logging.StructuredLogInfo{"error": err})
 		}
 
 		// Add this entry to our mapping

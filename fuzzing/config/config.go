@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/rs/zerolog"
 	"os"
@@ -176,7 +175,6 @@ type FileLoggingConfig struct {
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
-	fmt.Printf("Reading configuration file: %s\n", path)
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

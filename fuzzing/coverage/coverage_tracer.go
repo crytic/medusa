@@ -92,7 +92,7 @@ func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	if err != nil {
 		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
-			logging.GlobalLogger.Panic("coverage tracer failed to update revert coverage map during capture end", logging.StructuredLogInfo{"error": revertCoverageErr})
+			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", logging.StructuredLogInfo{"error": revertCoverageErr})
 		}
 	}
 
@@ -100,7 +100,7 @@ func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 	if coverageUpdateErr != nil {
 		// Use global logger here since it is a safe assumption that the global logger has been instantiated
-		logging.GlobalLogger.Panic("coverage tracer failed to update coverage map during capture end", logging.StructuredLogInfo{"error": coverageUpdateErr})
+		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", logging.StructuredLogInfo{"error": coverageUpdateErr})
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -125,14 +125,14 @@ func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if err != nil {
 		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
-			logging.GlobalLogger.Panic("coverage tracer failed to update revert coverage map during capture exit", logging.StructuredLogInfo{"error": revertCoverageErr})
+			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture exit", logging.StructuredLogInfo{"error": revertCoverageErr})
 		}
 	}
 
 	// Commit all our coverage maps up one call frame.
 	_, _, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 	if coverageUpdateErr != nil {
-		logging.GlobalLogger.Panic("coverage tracer failed to update coverage map during capture exit", logging.StructuredLogInfo{"error": coverageUpdateErr})
+		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture exit", logging.StructuredLogInfo{"error": coverageUpdateErr})
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -158,7 +158,7 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		// Record coverage for this location in our map.
 		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), pc)
 		if coverageUpdateErr != nil {
-			logging.GlobalLogger.Panic("coverage tracer failed to update coverage map while tracing state", logging.StructuredLogInfo{"error": coverageUpdateErr})
+			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", logging.StructuredLogInfo{"error": coverageUpdateErr})
 		}
 	}
 }

@@ -9,11 +9,11 @@ import (
 	"strings"
 )
 
-// GlobalLogger describes a Logger that is instantiated when a fuzzer is created and is then used to create
-// sub-loggers for each individual module / package. This allows to create unique logging instances depending on the use case.
-var GlobalLogger *Logger
+// GlobalLogger describes a Logger that is disabled by default and is instantiated when the fuzzer is created. Each module/package
+// should create its own sub-logger. This allows to create unique logging instances depending on the use case.
+var GlobalLogger = NewLogger(zerolog.Disabled, false, nil)
 
-// MultiLogger describes a custom logging object that can log events to any arbitrary channel and can handle specialized
+// Logger describes a custom logging object that can log events to any arbitrary channel and can handle specialized
 // output to console as well
 type Logger struct {
 	// level describes the log level
@@ -169,14 +169,8 @@ func (l *Logger) Info(args ...any) {
 	// Build the messages
 	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
-	// If we are in debug mode or below, add the fields. Otherwise, just output the message
-	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Info().Fields(fields).Msg(consoleMsg)
-	} else {
-		l.consoleLogger.Info().Msg(consoleMsg)
-	}
-
-	// Log to multi logger
+	// Log to console and multi logger
+	l.consoleLogger.Info().Fields(fields).Msg(consoleMsg)
 	l.multiLogger.Info().Fields(fields).Msg(fileMsg)
 }
 
@@ -188,14 +182,8 @@ func (l *Logger) Warn(args ...any) {
 	// Build the messages
 	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
-	// If we are in debug mode or below, add the fields. Otherwise, just output the message
-	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Warn().Fields(fields).Msg(consoleMsg)
-	} else {
-		l.consoleLogger.Warn().Msg(consoleMsg)
-	}
-
-	// Log to multi logger
+	// Log to console and multi logger
+	l.consoleLogger.Warn().Fields(fields).Msg(consoleMsg)
 	l.multiLogger.Warn().Fields(fields).Msg(fileMsg)
 }
 
@@ -239,9 +227,11 @@ func (l *Logger) Panic(args ...any) {
 	// Build the messages
 	consoleMsg, fileMsg, fields := buildMsgs(args...)
 
+	defer l.multiLogger.Panic().Stack().Fields(fields).Msg(fileMsg)
+
 	// Log to console and multi-logger with stack
 	l.consoleLogger.Panic().Stack().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Panic().Stack().Fields(fields).Msg(fileMsg)
+
 }
 
 // buildMsgs describes a function that takes in a variadic list of arguments of any type and returns two strings and,

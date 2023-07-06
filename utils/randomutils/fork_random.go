@@ -14,7 +14,7 @@ func ForkRandomProvider(randomProvider *rand.Rand) *rand.Rand {
 	b := make([]byte, 8)
 	_, err := randomProvider.Read(b)
 	if err != nil {
-		logging.GlobalLogger.Panic("failed to fork random child provider", logging.StructuredLogInfo{"error": err})
+		logging.GlobalLogger.Panic("Failed to fork random child provider", logging.StructuredLogInfo{"error": err})
 	}
 
 	// Return a new random provider with our derived seed.

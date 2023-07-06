@@ -101,10 +101,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		// Filename will be the "log-current_unix_timestamp.log"
 		filename := "log-" + strconv.FormatInt(time.Now().Unix(), 10) + ".log"
 		// Create the file
-		// TODO: Add the file back after testing is done
 		file, err := utils.CreateFile(config.Logging.LogDirectory, filename)
 		if err != nil {
-			logging.GlobalLogger.Error("unable to create log file", map[string]any{"error": err})
+			logging.GlobalLogger.Error("Failed to create log file", map[string]any{"error": err})
 			return nil, err
 		}
 		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED)
@@ -116,21 +115,21 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Validate our provided config
 	err := config.Validate()
 	if err != nil {
-		logger.Error("invalid configuration", map[string]any{"error": err})
+		logger.Error("Invalid configuration", map[string]any{"error": err})
 		return nil, err
 	}
 
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
 	if err != nil {
-		logger.Error("invalid sender address(es)", map[string]any{"error": err})
+		logger.Error("Invalid sender address(es)", map[string]any{"error": err})
 		return nil, err
 	}
 
 	// Parse the deployer address from our account config
 	deployer, err := utils.HexStringToAddress(config.Fuzzing.DeployerAddress)
 	if err != nil {
-		logger.Error("invalid deployer address", map[string]any{"error": err})
+		logger.Error("Invalid deployer address", map[string]any{"error": err})
 		return nil, err
 	}
 
@@ -161,10 +160,10 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
 		// Compile the targets specified in the compilation config
-		fuzzer.logger.Info(fmt.Sprintf("compiling targets with %s", fuzzer.config.Compilation.Platform))
+		fuzzer.logger.Info("Compiling targets with", colors.CyanBold, fuzzer.config.Compilation.Platform, colors.Reset)
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
-			fuzzer.logger.Error("failed to compile target", logging.StructuredLogInfo{"error": err})
+			fuzzer.logger.Error("Failed to compile target", logging.StructuredLogInfo{"error": err})
 			return nil, err
 		}
 
@@ -180,8 +179,8 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
 	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
-		// TODO: Make this is a warning in the logging PR
-		fmt.Printf("warning: currently optimization mode's call sequence shrinking is inefficient. this may lead to minor performance issues")
+		// TODO: Remove this warning when call sequence shrinking is improved
+		fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
 	return fuzzer, nil
@@ -258,11 +257,7 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 	// We only log here if we're not configured to stop on the first test failure. This is because the fuzzer prints
 	// results on exit, so we avoid duplicate messages.
 	if !f.config.Fuzzing.Testing.StopOnFailedTest {
-		// Note that we mark the test with red since only failed test cases report back to the fuzzer.
-		buffer := logging.NewLogBuffer()
-		buffer.Append(colors.RedBold, fmt.Sprintf("[%s]", testCase.Status()), colors.Reset, testCase.Name(), "\n")
-		buffer.Append(testCase.Message().Args())
-		f.logger.Info(buffer.Args()...)
+		f.logger.Info(testCase.LogMessage().Elements()...)
 	}
 
 	// If the config specifies, we stop after the first failed test reported.
@@ -296,7 +291,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		// Cache all of our source code if it hasn't been already.
 		err := compilation.CacheSourceCode()
 		if err != nil {
-			f.logger.Warn("could not cache compilation source file data due to an error", logging.StructuredLogInfo{"error": err})
+			f.logger.Warn("Failed to cache compilation source file data", logging.StructuredLogInfo{"error": err})
 		}
 	}
 }
@@ -493,7 +488,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	working := !utils.CheckContextDone(f.ctx)
 
 	// Log that we are about to create the workers and start fuzzing
-	f.logger.Info(fmt.Sprintf("creating %d workers ...", f.config.Fuzzing.Workers))
+	f.logger.Info("Creating", colors.CyanBold, f.config.Fuzzing.Workers, colors.Reset, "workers...")
 	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
@@ -591,14 +586,14 @@ func (f *Fuzzer) Start() error {
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
-		f.logger.Info(fmt.Sprintf("running with timeout of %d seconds\n", f.config.Fuzzing.Timeout))
+		f.logger.Info("Running with a timeout of", colors.CyanBold, f.config.Fuzzing.Timeout, "seconds")
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
 	// Set up the corpus
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
-		f.logger.Error("failed to create the corpus", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to create the corpus", logging.StructuredLogInfo{"error": err})
 		return err
 	}
 
@@ -614,21 +609,21 @@ func (f *Fuzzer) Start() error {
 	// Create our test chain
 	baseTestChain, err := f.createTestChain()
 	if err != nil {
-		f.logger.Error("failed to create the test chain", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to create the test chain", logging.StructuredLogInfo{"error": err})
 		return err
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
-		f.logger.Error("failed to initialize the test chain", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to initialize the test chain", logging.StructuredLogInfo{"error": err})
 		return err
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
-		f.logger.Error("failed to initialize the corpus", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to initialize the corpus", logging.StructuredLogInfo{"error": err})
 		return err
 	}
 
@@ -644,13 +639,15 @@ func (f *Fuzzer) Start() error {
 
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
-		return fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
+		err = fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
+		f.logger.Error("Failed to start fuzzer", logging.StructuredLogInfo{"error": err})
+		return err
 	}
 
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 	if err != nil {
-		f.logger.Error("encountered an error in the main fuzzing loop", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Encountered an error in the main fuzzing loop", logging.StructuredLogInfo{"error": err})
 	}
 
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
@@ -661,7 +658,7 @@ func (f *Fuzzer) Start() error {
 		corpusFlushErr := f.corpus.Flush()
 		if err == nil && corpusFlushErr != nil {
 			err = corpusFlushErr
-			f.logger.Info("failed to flush the corpus", logging.StructuredLogInfo{"error": err})
+			f.logger.Info("Failed to flush the corpus", logging.StructuredLogInfo{"error": err})
 		}
 	}
 
@@ -679,7 +676,7 @@ func (f *Fuzzer) Start() error {
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
-		f.logger.Info(fmt.Sprintf("coverage report saved to file: %v\n", coverageReportPath))
+		f.logger.Info("Coverage report saved to file:", colors.CyanBold, coverageReportPath, colors.Reset)
 	}
 
 	// Return any encountered error.
@@ -735,7 +732,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		// If we reached our transaction threshold, halt
 		testLimit := f.config.Fuzzing.TestLimit
 		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
-			f.logger.Info("transaction test limit reached, halting now...")
+			f.logger.Info("Transaction test limit reached, halting now...")
 			f.Stop()
 			break
 		}
@@ -775,18 +772,9 @@ func (f *Fuzzer) printExitingResults() {
 	)
 
 	// Print the results of each individual test case.
-	f.logger.Info("fuzzer stopped, test results follow below ...")
+	f.logger.Info("Fuzzer stopped, test results follow below ...")
 	for _, testCase := range f.testCases {
-		// Log the test case. If the test passed, simply log the status and name of the test. If the test failed, then
-		// log the status, name, and the test case message.
-		buffer := logging.NewLogBuffer()
-		if testCase.Status() == TestCaseStatusPassed {
-			f.logger.Info(colors.GreenBold, fmt.Sprintf("[%s]", testCase.Status()), colors.Reset, strings.TrimSpace(testCase.Name()))
-		} else {
-			buffer.Append(colors.RedBold, fmt.Sprintf("[%s]", testCase.Status()), colors.Reset, testCase.Name(), "\n")
-			buffer.Append(testCase.Message().Args()...)
-		}
-		f.logger.Info(buffer.Args()...)
+		f.logger.Info(testCase.LogMessage().Elements()...)
 
 		// Tally our pass/fail count.
 		if testCase.Status() == TestCaseStatusPassed {

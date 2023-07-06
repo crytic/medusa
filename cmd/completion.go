@@ -49,7 +49,7 @@ var supportedShells = []string{"bash", "zsh", "powershell"}
 // completionCmd represents the completion command
 var completionCmd = &cobra.Command{
 	Use:           "completion <shell>",
-	Short:         "generate the autocompletion script for medusa for the specific shell",
+	Short:         "Generate the autocompletion script for medusa for the specific shell",
 	Long:          generalComDesc,
 	Args:          cmdValidateCompletionArgs,
 	RunE:          cmdRunCompletion,
@@ -66,13 +66,13 @@ func cmdValidateCompletionArgs(cmd *cobra.Command, args []string) error {
 	// Make sure we have exactly 1 argument
 	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
 		err = fmt.Errorf("completion requires only 1 shell argument (options: %s)", strings.Join(supportedShells, ", "))
-		cmdLogger.Error("failed to validate args to completion", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to validate args for completion command", logging.StructuredLogInfo{"error": err})
 	}
 
 	// Make sure that the shell is a supported type
 	if contains := slices.Contains(supportedShells, args[0]); !contains {
 		err := fmt.Errorf("%s is not a supported shell", args[0])
-		cmdLogger.Error("failed to validate args to completion", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to validate args for completion command", logging.StructuredLogInfo{"error": err})
 	}
 
 	return nil
@@ -91,12 +91,12 @@ func cmdRunCompletion(cmd *cobra.Command, args []string) error {
 		err = cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
 	default:
 		// We are throwing a panic here because our validation function should have handled this and something is wrong.
-		cmdLogger.Panic("failed to run the completion command", logging.StructuredLogInfo{"error": fmt.Errorf("%s is not a supported shell type", args[0])})
+		cmdLogger.Panic("Failed to run the completion command", logging.StructuredLogInfo{"error": fmt.Errorf("%s is not a supported shell type", args[0])})
 	}
 
 	// Log an error if we encountered one
 	if err != nil {
-		cmdLogger.Error("failed to run the completion command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to run the completion command", logging.StructuredLogInfo{"error": err})
 	}
 	return err
 }

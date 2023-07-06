@@ -102,12 +102,12 @@ func (c *CheatCodeContract) Abi() *abi.ABI {
 func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
-		logging.GlobalLogger.Panic("failed to add method to precompile cheatcode contract", logging.StructuredLogInfo{"error": fmt.Errorf("empty method name provided")})
+		logging.GlobalLogger.Panic("Failed to add method to precompile cheatcode contract", logging.StructuredLogInfo{"error": fmt.Errorf("empty method name provided")})
 	}
 
 	// Verify a method handler was provided
 	if handler == nil {
-		logging.GlobalLogger.Panic("failed to add method to precompile cheatcode contract", logging.StructuredLogInfo{"error": fmt.Errorf("nil method handler provided")})
+		logging.GlobalLogger.Panic("Failed to add method to precompile cheatcode contract", logging.StructuredLogInfo{"error": fmt.Errorf("nil method handler provided")})
 	}
 
 	// Set the method information in our method lookup
