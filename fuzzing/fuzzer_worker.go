@@ -433,13 +433,15 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 				return nil, nil
 			}
 
+			// Clone the optimized sequence.
 			possibleShrunkSequence, _ := optimizedSequence.Clone()
+
+			// Loop for each argument in the currently indexed call to mutate it.
 			abiValuesMsgData := possibleShrunkSequence[i].Call.MsgDataAbiValues
 			for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 				mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 				if err != nil {
-					print(fmt.Errorf("error when shrinking call sequence input argument: %v", err))
-					continue
+					return nil, fmt.Errorf("error when shrinking call sequence input argument: %v", err)
 				}
 				abiValuesMsgData.InputValues[j] = mutatedInput
 			}
