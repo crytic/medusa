@@ -320,7 +320,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
-// shrink verifier.
+// shrink verifier. Chain state is reverted to the testing base prior to returning.
 // Returns a boolean indicating if the shrunken call sequence is valid for a given shrink request, or an error if one occurred.
 func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (bool, error) {
 	// Our "fetch next call method" method will simply fetch and fix the call message in case any fields are not correct due to shrinking.
@@ -386,20 +386,10 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 // Returns a call sequence that was optimized to include as little calls as possible to trigger the
 // expected conditions, or an error if one occurred.
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
-	// In case of any error, we defer an operation to revert our chain state. We purposefully ignore errors from it to
-	// prioritize any others which occurred.
-	var err error
-	defer func() {
-		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
-		}
-	}()
-
 	// Define a variable to track our most optimized sequence across all optimization iterations.
 	optimizedSequence := callSequence
 
-	// First try to remove any calls we can. We do this from beginning to end to not cause shifts in the indexed
-	// calls.
+	// First try to remove any calls we can. We go from start to end to avoid index shifting.
 	for i := 0; i < len(optimizedSequence); {
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -415,6 +405,9 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 		// Test the shrunken sequence.
 		validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
+		if err != nil {
+			return nil, err
+		}
 
 		// If this current sequence satisfied our conditions, set it as our optimized sequence.
 		if validShrunkSequence {
@@ -448,9 +441,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 			// Test the shrunken sequence.
 			validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
-
-			// After testing the sequence, we'll want to rollback changes to reset our testing state.
-			if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+			if err != nil {
 				return nil, err
 			}
 
@@ -463,14 +454,14 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.
 	if shrinkRequest.RecordResultInCorpus {
-		err = fw.fuzzer.corpus.AddTestResultCallSequence(optimizedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		err := fw.fuzzer.corpus.AddTestResultCallSequence(optimizedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// We have a finalized call sequence, re-execute it, so our current chain state is representative of post-execution.
-	_, err = calls.ExecuteCallSequence(fw.chain, optimizedSequence)
+	_, err := calls.ExecuteCallSequence(fw.chain, optimizedSequence)
 	if err != nil {
 		return nil, err
 	}
@@ -491,6 +482,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		return nil, err
 	}
 
+	// After testing the sequence, we'll want to rollback changes to reset our testing state.
+	if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+		return nil, err
+	}
 	return optimizedSequence, err
 }
 
