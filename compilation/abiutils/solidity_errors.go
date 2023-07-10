@@ -2,6 +2,7 @@ package abiutils
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
@@ -107,8 +108,7 @@ func GetSolidityCustomRevertError(contractAbi *abi.ABI, returnError error, retur
 }
 
 // GetPanicReason will take in a panic code as an uint64 and will return the string reason behind that panic code. For
-// example, if panic code is PanicCodeAssertFailed, then "assertion failure" is returned. This is used by the execution
-// tracer to print out the panic reason.
+// example, if panic code is PanicCodeAssertFailed, then "assertion failure" is returned.
 func GetPanicReason(panicCode uint64) string {
 	// Switch on panic code
 	switch panicCode {
@@ -133,7 +133,6 @@ func GetPanicReason(panicCode uint64) string {
 	case PanicCodeCallUninitializedVariable:
 		return "call on uninitialized variable"
 	default:
-		// TODO: Should we throw a panic here or just return this string?
-		return "unknown panic code"
+		return fmt.Sprintf("unknown panic code(%v)", panicCode)
 	}
 }

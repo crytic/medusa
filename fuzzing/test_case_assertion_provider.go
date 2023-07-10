@@ -240,74 +240,32 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 // panic code that was hit should be treated as a failing case - which will be determined by whether that panic
 // code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
 // panic if it is provided a panic code that is not defined in the abiutils package.
-// TODO: Also note that this is a terrible design and if there is a better way to maintain assertion and panic logic, it
-//
-//	should be implemented in a future PR
+// TODO: This is a terrible design and a future PR should be made to maintain assertion and panic logic correctly
 func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
 	// Switch on panic code
 	switch panicCode {
 	case abiutils.PanicCodeCompilerInserted:
-		if conf.FailOnCompilerInsertedPanic {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnCompilerInsertedPanic
 	case abiutils.PanicCodeAssertFailed:
-		if conf.FailOnAssertion {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnAssertion
 	case abiutils.PanicCodeArithmeticUnderOverflow:
-		if conf.FailOnArithmeticUnderflow {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnArithmeticUnderflow
 	case abiutils.PanicCodeDivideByZero:
-		if conf.FailOnDivideByZero {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnDivideByZero
 	case abiutils.PanicCodeEnumTypeConversionOutOfBounds:
-		if conf.FailOnEnumTypeConversionOutOfBounds {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnEnumTypeConversionOutOfBounds
 	case abiutils.PanicCodeIncorrectStorageAccess:
-		if conf.FailOnIncorrectStorageAccess {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnIncorrectStorageAccess
 	case abiutils.PanicCodePopEmptyArray:
-		if conf.FailOnPopEmptyArray {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnPopEmptyArray
 	case abiutils.PanicCodeOutOfBoundsArrayAccess:
-		if conf.FailOnOutOfBoundsArrayAccess {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnOutOfBoundsArrayAccess
 	case abiutils.PanicCodeAllocateTooMuchMemory:
-		if conf.FailOnAllocateTooMuchMemory {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnAllocateTooMuchMemory
 	case abiutils.PanicCodeCallUninitializedVariable:
-		if conf.FailOnCallUninitializedVariable {
-			return true
-		} else {
-			return false
-		}
+		return conf.FailOnCallUninitializedVariable
+	default:
+		// If we encounter an unknown panic code, we ignore it
+		return false
 	}
-
-	// Throw a panic if we encounter a panic code not defined in the switch statement above
-	panic("encountered unknown panic code")
 }
