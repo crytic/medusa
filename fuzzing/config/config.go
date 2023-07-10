@@ -120,6 +120,43 @@ type AssertionTestingConfig struct {
 
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
+
+	// AssertionModes describes the various panic codes that can be enabled and be treated as a "failing case"
+	AssertionModes AssertionModesConfig `json:"assertionModes"`
+}
+
+// AssertionModesConfig describes the configuration options for the various modes that can be enabled for assertion
+// testing
+type AssertionModesConfig struct {
+	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
+	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
+
+	// FailOnAssertion describes whether an assertion failure should be treated as a failing case
+	FailOnAssertion bool `json:"failOnAssertion"`
+
+	// FailOnArithmeticUnderflow describes whether an arithmetic underflow should be treated as a failing case
+	FailOnArithmeticUnderflow bool `json:"failOnArithmeticUnderflow"`
+
+	// FailOnDivideByZero describes whether division by zero should be treated as a failing case
+	FailOnDivideByZero bool `json:"failOnDivideByZero"`
+
+	// FailOnEnumTypeConversionOutOfBounds describes whether an out-of-bounds enum access should be treated as a failing case
+	FailOnEnumTypeConversionOutOfBounds bool `json:"failOnEnumTypeConversionOutOfBounds"`
+
+	// FailOnIncorrectStorageAccess describes whether an out-of-bounds storage access should be treated as a failing case
+	FailOnIncorrectStorageAccess bool `json:"failOnIncorrectStorageAccess"`
+
+	// FailOnPopEmptyArray describes whether a pop operation on an empty array should be treated as a failing case
+	FailOnPopEmptyArray bool `json:"failOnPopEmptyArray"`
+
+	// FailOnOutOfBoundsArrayAccess describes whether an out-of-bounds array access should be treated as a failing case
+	FailOnOutOfBoundsArrayAccess bool `json:"failOnOutOfBoundsArrayAccess"`
+
+	// FailOnAllocateTooMuchMemory describes whether excessive memory usage should be treated as a failing case
+	FailOnAllocateTooMuchMemory bool `json:"failOnAllocateTooMuchMemory"`
+
+	// FailOnCallUninitializedVariable describes whether calling an un-initialized variable should be treated as a failing case
+	FailOnCallUninitializedVariable bool `json:"failOnCallUninitializedVariable"`
 }
 
 // PropertyTestConfig describes the configuration options used for property testing
