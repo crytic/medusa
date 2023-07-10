@@ -56,11 +56,19 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
-// TestAssertionsBasicSolving runs tests to ensure that assertion testing behaves as expected.
-func TestAssertionsBasicSolving(t *testing.T) {
+// TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
+func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
 		"testdata/contracts/assertions/assert_even_number.sol",
+		"testdata/contracts/assertions/assert_arithmetic_underflow.sol",
+		"testdata/contracts/assertions/assert_divide_by_zero.sol",
+		"testdata/contracts/assertions/assert_enum_type_conversion_outofbounds.sol",
+		"testdata/contracts/assertions/assert_incorrect_storage_access.sol",
+		"testdata/contracts/assertions/assert_pop_empty_array.sol",
+		"testdata/contracts/assertions/assert_outofbounds_array_access.sol",
+		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
+		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -69,12 +77,20 @@ func TestAssertionsBasicSolving(t *testing.T) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertion = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticUnderflow = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnEnumTypeConversionOutOfBounds = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnDivideByZero = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnIncorrectStorageAccess = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnOutOfBoundsArrayAccess = true
+				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnPopEmptyArray = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
 				err := f.fuzzer.Start()
 				assert.NoError(t, err)
-
 				// Check for failed assertion tests.
 				assertFailedTestsExpected(f, true)
 			},
