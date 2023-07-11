@@ -84,10 +84,13 @@ type CallSequenceGeneratorConfig struct {
 	// number of calls from each.
 	RandomMutatedInterleaveAtRandomWeight uint64
 
-	// ValueGenerator defines the value provider to use when generating or mutating call sequences. This is used both
+	// ValueGenerator defines the value provider to use when generating new values for call sequences. This is used both
 	// for ABI call data generation, and generation of additional values such as the "value" field of a
 	// transaction/call.
 	ValueGenerator valuegeneration.ValueGenerator
+
+	// ValueMutator defines the value provider to use when mutating corpus call sequences.
+	ValueMutator valuegeneration.ValueMutator
 }
 
 // CallSequenceGeneratorFunc defines a method used to populate a provided call sequence with generated calls.
@@ -445,7 +448,7 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 	// Loop for each input value and mutate it
 	abiValuesMsgData := element.Call.MsgDataAbiValues
 	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
-		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
+		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
 		if err != nil {
 			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
 		}

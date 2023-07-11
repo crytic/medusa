@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"golang.org/x/exp/constraints"
 	"math/big"
+
+	"golang.org/x/exp/constraints"
 )
 
 // ConstrainIntegerToBounds takes a provided big integer and minimum/maximum bounds (inclusive) and ensures

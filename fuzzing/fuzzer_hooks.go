@@ -1,19 +1,26 @@
 package fuzzing
 
 import (
+	"math/rand"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"math/rand"
 )
 
 // FuzzerHooks defines the hooks that can be used for the Fuzzer on an API level.
 type FuzzerHooks struct {
 	// NewCallSequenceGeneratorConfigFunc describes the function to use to set up a new CallSequenceGeneratorConfig,
 	// defining parameters for a new FuzzerWorker's CallSequenceGenerator.
-	// Note: The value generator provided within the config must be either thread safe, or a new instance must be
-	// provided per call to avoid concurrent access issues between workers.
+	// The value generator provided must be either thread safe, or a new instance must be provided per invocation to
+	// avoid concurrent access issues between workers.
 	NewCallSequenceGeneratorConfigFunc NewCallSequenceGeneratorConfigFunc
+
+	// NewShrinkingValueMutatorFunc describes the function used to set up a value mutator used to shrink call
+	// values in the fuzzer's call sequence shrinking process.
+	// The value mutator provided must be either thread safe, or a new instance must be provided per invocation to
+	// avoid concurrent access issues between workers.
+	NewShrinkingValueMutatorFunc NewShrinkingValueMutatorFunc
 
 	// ChainSetupFunc describes the function to use to set up a new test chain's initial state prior to fuzzing.
 	ChainSetupFunc TestChainSetupFunc
@@ -22,6 +29,11 @@ type FuzzerHooks struct {
 	// in a call sequence.
 	CallSequenceTestFuncs []CallSequenceTestFunc
 }
+
+// NewShrinkingValueMutatorFunc describes the function used to set up a value mutator used to shrink call
+// values in the fuzzer's call sequence shrinking process.
+// Returns a new value mutator, or an error if one occurred.
+type NewShrinkingValueMutatorFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueMutator, error)
 
 // NewCallSequenceGeneratorConfigFunc defines a method is called to create a new CallSequenceGeneratorConfig, defining
 // the parameters for the new FuzzerWorker to use when creating its CallSequenceGenerator used to power fuzzing.

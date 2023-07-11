@@ -99,7 +99,7 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 
 // MutateAbiValue takes an ABI packable input value, alongside its type definition and a value generator, to mutate
 // existing ABI input values.
-func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (any, error) {
+func MutateAbiValue(generator ValueGenerator, mutator ValueMutator, inputType *abi.Type, value any) (any, error) {
 	// Switch on the type of value and mutate it recursively.
 	switch inputType.T {
 	case abi.AddressTy:
@@ -107,38 +107,38 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		if !ok {
 			return nil, fmt.Errorf("could not mutate address input as the value provided is not an address type")
 		}
-		return generator.MutateAddress(addr), nil
+		return mutator.MutateAddress(addr), nil
 	case abi.UintTy:
 		if inputType.Size == 64 {
 			v, ok := value.(uint64)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return generator.MutateInteger(new(big.Int).SetUint64(v), false, inputType.Size).Uint64(), nil
+			return mutator.MutateInteger(new(big.Int).SetUint64(v), false, inputType.Size).Uint64(), nil
 		} else if inputType.Size == 32 {
 			v, ok := value.(uint32)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return uint32(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+			return uint32(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else if inputType.Size == 16 {
 			v, ok := value.(uint16)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return uint16(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+			return uint16(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else if inputType.Size == 8 {
 			v, ok := value.(uint8)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return uint8(generator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
+			return uint8(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
 		} else {
 			v, ok := value.(*big.Int)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return generator.MutateInteger(new(big.Int).Set(v), false, inputType.Size), nil
+			return mutator.MutateInteger(new(big.Int).Set(v), false, inputType.Size), nil
 		}
 	case abi.IntTy:
 		if inputType.Size == 64 {
@@ -146,55 +146,55 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return generator.MutateInteger(new(big.Int).SetInt64(v), true, inputType.Size).Int64(), nil
+			return mutator.MutateInteger(new(big.Int).SetInt64(v), true, inputType.Size).Int64(), nil
 		} else if inputType.Size == 32 {
 			v, ok := value.(int32)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return int32(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+			return int32(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else if inputType.Size == 16 {
 			v, ok := value.(int16)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return int16(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+			return int16(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else if inputType.Size == 8 {
 			v, ok := value.(int8)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return int8(generator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
+			return int8(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
 		} else {
 			v, ok := value.(*big.Int)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
-			return generator.MutateInteger(new(big.Int).Set(v), true, inputType.Size), nil
+			return mutator.MutateInteger(new(big.Int).Set(v), true, inputType.Size), nil
 		}
 	case abi.BoolTy:
 		v, ok := value.(bool)
 		if !ok {
 			return nil, fmt.Errorf("could not mutate boolean input as the value provided is not a boolean type")
 		}
-		return generator.MutateBool(v), nil
+		return mutator.MutateBool(v), nil
 	case abi.StringTy:
 		v, ok := value.(string)
 		if !ok {
 			return nil, fmt.Errorf("could not mutate string input as the value provided is not a string type")
 		}
-		return generator.MutateString(v), nil
+		return mutator.MutateString(v), nil
 	case abi.BytesTy:
 		v, ok := value.([]byte)
 		if !ok {
 			return nil, fmt.Errorf("could not mutate dynamic-sized bytes input as the value provided is not a byte slice type")
 		}
-		return generator.MutateBytes(v), nil
+		return mutator.MutateBytes(v), nil
 	case abi.FixedBytesTy:
 		// This needs to be an array type, not a slice. But arrays can't be dynamically defined without reflection.
 		// We opt to keep our API for generators simple, creating the array here and copying elements from a slice.
 		valueAsSlice := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
-		mutatedValue := generator.MutateFixedBytes(valueAsSlice)
+		mutatedValue := mutator.MutateFixedBytes(valueAsSlice)
 		mutatedValueAsArray := reflectionutils.SliceToArray(reflect.ValueOf(mutatedValue))
 		mutatedValueAsArrayLen := reflect.ValueOf(mutatedValueAsArray).Len()
 		if mutatedValueAsArrayLen != inputType.Size {
@@ -207,7 +207,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		array := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
 
 		// Mutate our array structure first
-		mutatedValues := generator.MutateArray(reflectionutils.GetReflectedArrayValues(array), true)
+		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(array), true)
 
 		// Create a new array of the appropriate size
 		array = reflect.New(reflect.ArrayOf(array.Len(), array.Type().Elem())).Elem()
@@ -222,7 +222,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 				generatedElement := GenerateAbiValue(generator, inputType.Elem)
 				reflectedElement.Set(reflect.ValueOf(generatedElement))
 			} else {
-				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
+				mutatedElement, err := MutateAbiValue(generator, mutator, inputType.Elem, mutatedValues[i])
 				if err != nil {
 					return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
 				}
@@ -237,7 +237,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		slice := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
 
 		// Mutate our slice structure first
-		mutatedValues := generator.MutateArray(reflectionutils.GetReflectedArrayValues(slice), false)
+		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(slice), false)
 
 		// Create a new slice of the appropriate size
 		slice = reflect.MakeSlice(reflect.SliceOf(slice.Type().Elem()), len(mutatedValues), len(mutatedValues))
@@ -252,7 +252,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 				generatedElement := GenerateAbiValue(generator, inputType.Elem)
 				reflectedElement.Set(reflect.ValueOf(generatedElement))
 			} else {
-				mutatedElement, err := MutateAbiValue(generator, inputType.Elem, mutatedValues[i])
+				mutatedElement, err := MutateAbiValue(generator, mutator, inputType.Elem, mutatedValues[i])
 				if err != nil {
 					return nil, fmt.Errorf("could not mutate slice input as the value generator encountered an error: %v", err)
 				}
@@ -267,7 +267,7 @@ func MutateAbiValue(generator ValueGenerator, inputType *abi.Type, value any) (a
 		for i := 0; i < len(inputType.TupleElems); i++ {
 			field := tuple.Field(i)
 			fieldValue := reflectionutils.GetField(field)
-			mutatedValue, err := MutateAbiValue(generator, inputType.TupleElems[i], fieldValue)
+			mutatedValue, err := MutateAbiValue(generator, mutator, inputType.TupleElems[i], fieldValue)
 			if err != nil {
 				return nil, fmt.Errorf("could not mutate struct/tuple input as the value generator encountered an error: %v", err)
 			}
