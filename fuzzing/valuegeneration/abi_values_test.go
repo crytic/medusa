@@ -247,7 +247,7 @@ func TestABIRoundtripEncodingAllTypes(t *testing.T) {
 // re-encoded data matches the originally encoded data.
 func TestABIGenerationAndMutation(t *testing.T) {
 	// Create a value generator
-	valueGenConfig := &MutatingValueGeneratorConfig{
+	mutationalGeneratorConfig := &MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
 		GenerateRandomAddressBias:       0.5,
@@ -273,7 +273,7 @@ func TestABIGenerationAndMutation(t *testing.T) {
 			GenerateRandomStringMaxSize: 100,
 		},
 	}
-	valueGenerator := NewMutatingValueGenerator(valueGenConfig, NewValueSet(), rand.New(rand.NewSource(time.Now().UnixNano())))
+	mutationalGenerator := NewMutationalValueGenerator(mutationalGeneratorConfig, NewValueSet(), rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	// Obtain our test ABI arguments
 	args := getTestABIArguments()
@@ -283,10 +283,10 @@ func TestABIGenerationAndMutation(t *testing.T) {
 		// Test each argument round trip serialization with different generated values (iterate a number of times).
 		for i := 0; i < 5; i++ {
 			// Generate a value for this argument
-			value := GenerateAbiValue(valueGenerator, &arg.Type)
+			value := GenerateAbiValue(mutationalGenerator, &arg.Type)
 
 			// Mutate and ensure no error occurred.
-			mutatedValue, err := MutateAbiValue(valueGenerator, &arg.Type, value)
+			mutatedValue, err := MutateAbiValue(mutationalGenerator, mutationalGenerator, &arg.Type, value)
 			assert.NoError(t, err)
 
 			// Verify the types of the value and mutated value are the same
