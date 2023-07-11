@@ -101,7 +101,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		// Create the file
 		file, err := utils.CreateFile(config.Logging.LogDirectory, filename)
 		if err != nil {
-			logging.GlobalLogger.Error("Failed to create log file", map[string]any{"error": err})
+			logging.GlobalLogger.Error("Failed to create log file", err)
 			return nil, err
 		}
 		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED)
@@ -113,21 +113,21 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Validate our provided config
 	err := config.Validate()
 	if err != nil {
-		logger.Error("Invalid configuration", map[string]any{"error": err})
+		logger.Error("Invalid configuration", err)
 		return nil, err
 	}
 
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
 	if err != nil {
-		logger.Error("Invalid sender address(es)", map[string]any{"error": err})
+		logger.Error("Invalid sender address(es)", err)
 		return nil, err
 	}
 
 	// Parse the deployer address from our account config
 	deployer, err := utils.HexStringToAddress(config.Fuzzing.DeployerAddress)
 	if err != nil {
-		logger.Error("Invalid deployer address", map[string]any{"error": err})
+		logger.Error("Invalid deployer address", err)
 		return nil, err
 	}
 
@@ -161,7 +161,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.logger.Info("Compiling targets with", colors.CyanBold, fuzzer.config.Compilation.Platform, colors.Reset)
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
-			fuzzer.logger.Error("Failed to compile target", logging.StructuredLogInfo{"error": err})
+			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
 
@@ -289,7 +289,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		// Cache all of our source code if it hasn't been already.
 		err := compilation.CacheSourceCode()
 		if err != nil {
-			f.logger.Warn("Failed to cache compilation source file data", logging.StructuredLogInfo{"error": err})
+			f.logger.Warn("Failed to cache compilation source file data", err)
 		}
 	}
 }
@@ -591,7 +591,7 @@ func (f *Fuzzer) Start() error {
 	// Set up the corpus
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
-		f.logger.Error("Failed to create the corpus", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to create the corpus", err)
 		return err
 	}
 
@@ -607,21 +607,21 @@ func (f *Fuzzer) Start() error {
 	// Create our test chain
 	baseTestChain, err := f.createTestChain()
 	if err != nil {
-		f.logger.Error("Failed to create the test chain", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to create the test chain", err)
 		return err
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
-		f.logger.Error("Failed to initialize the test chain", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to initialize the test chain", err)
 		return err
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
-		f.logger.Error("Failed to initialize the corpus", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to initialize the corpus", err)
 		return err
 	}
 
@@ -631,21 +631,21 @@ func (f *Fuzzer) Start() error {
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
-		f.logger.Error("FuzzerStarting event subscriber returned an error", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("FuzzerStarting event subscriber returned an error", err)
 		return err
 	}
 
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
 		err = fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
-		f.logger.Error("Failed to start fuzzer", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Failed to start fuzzer", err)
 		return err
 	}
 
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 	if err != nil {
-		f.logger.Error("Encountered an error in the main fuzzing loop", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("Encountered an error in the main fuzzing loop", err)
 	}
 
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
@@ -656,7 +656,7 @@ func (f *Fuzzer) Start() error {
 		corpusFlushErr := f.corpus.Flush()
 		if err == nil && corpusFlushErr != nil {
 			err = corpusFlushErr
-			f.logger.Info("Failed to flush the corpus", logging.StructuredLogInfo{"error": err})
+			f.logger.Info("Failed to flush the corpus", err)
 		}
 	}
 
@@ -664,7 +664,7 @@ func (f *Fuzzer) Start() error {
 	fuzzerStoppingErr := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: err})
 	if err == nil && fuzzerStoppingErr != nil {
 		err = fuzzerStoppingErr
-		f.logger.Error("FuzzerStopping event subscriber returned an error", logging.StructuredLogInfo{"error": err})
+		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
 
 	// Print our results on exit.
@@ -711,15 +711,12 @@ func (f *Fuzzer) printMetricsLoop() {
 		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
 		// Print a metrics update
-		f.logger.Info(fmt.Sprintf(
-			"fuzz: elapsed: %s s, calls: %d (%d/sec), seq/s: %d, resets/s: %d, coverage: %d",
-			time.Since(startTime).Round(time.Second),
-			callsTested,
-			uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate),
-			uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate),
-			uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate),
-			f.corpus.ActiveMutableSequenceCount(),
-		))
+		f.logger.Info(colors.Bold, "fuzz:", colors.Reset,
+			"elapsed:", colors.CyanBold, fmt.Sprintf("%s", time.Since(startTime).Round(time.Second)), colors.Reset,
+			"calls:", colors.CyanBold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			"seq/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			"resets/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			"coverage:", colors.CyanBold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 
 		// Update our delta tracking metrics
 		lastPrintedTime = time.Now()

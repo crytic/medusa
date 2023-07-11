@@ -56,7 +56,7 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 		return newStruct
 	}
 
-	logging.GlobalLogger.Panic("Failed to copy reflected value", logging.StructuredLogInfo{"error": fmt.Errorf("type not supported")})
+	logging.GlobalLogger.Panic("Failed to copy reflected value", fmt.Errorf("type not supported"))
 	return reflectedValue
 }
 
@@ -75,7 +75,7 @@ func GetReflectedArrayValues(reflectedArray reflect.Value) []any {
 		return values
 	}
 
-	logging.GlobalLogger.Panic("Failed to get reflected array values", logging.StructuredLogInfo{"error": fmt.Errorf("type not supported")})
+	logging.GlobalLogger.Panic("Failed to get reflected array values", fmt.Errorf("type not supported"))
 	return nil
 }
 
@@ -99,6 +99,6 @@ func SetReflectedArrayValues(reflectedArray reflect.Value, values []any) error {
 		return nil
 	}
 
-	logging.GlobalLogger.Panic("Failed to set reflected array values", logging.StructuredLogInfo{"error": fmt.Errorf("type not supported")})
+	logging.GlobalLogger.Panic("Failed to set reflected array values", fmt.Errorf("type not supported"))
 	return nil
 }

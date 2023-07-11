@@ -96,7 +96,7 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		// - FixedPoint types are currently unsupported.
 
 		err := fmt.Errorf("attempt to generate function argument of unsupported type: '%s'", inputType.String())
-		logging.GlobalLogger.Panic("Failed to generate abi value", logging.StructuredLogInfo{"error": err})
+		logging.GlobalLogger.Panic("Failed to generate abi value", err)
 		return nil
 	}
 }

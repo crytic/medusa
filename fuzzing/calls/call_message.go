@@ -138,7 +138,7 @@ func (m *CallMessage) Data() []byte {
 	if m.MsgDataAbiValues != nil {
 		data, err := m.MsgDataAbiValues.Pack()
 		if err != nil {
-			logging.GlobalLogger.Panic("Failed to pack call message ABI values", logging.StructuredLogInfo{"error": err})
+			logging.GlobalLogger.Panic("Failed to pack call message ABI values", err)
 		}
 		return data
 	}

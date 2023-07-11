@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"path/filepath"
@@ -34,7 +33,7 @@ func init() {
 	// Add flags to init command
 	err := addInitFlags()
 	if err != nil {
-		cmdLogger.Panic("Failed to initialize the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Panic("Failed to initialize the init command", err)
 	}
 
 	// Add the init command and its associated flags to the root command
@@ -79,14 +78,14 @@ func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
 		err = fmt.Errorf("init accepts at most 1 platform argument (options: %s). "+
 			"default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
-		cmdLogger.Error("Failed to validate args to the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to validate args to the init command", err)
 		return err
 	}
 
 	// Ensure the optional provided argument refers to a supported platform
 	if len(args) == 1 && !compilation.IsSupportedCompilationPlatform(args[0]) {
 		err := fmt.Errorf("init was provided invalid platform argument '%s' (options: %s)", args[0], strings.Join(supportedPlatforms, ", "))
-		cmdLogger.Error("Failed to validate args to the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to validate args to the init command", err)
 		return err
 	}
 
@@ -99,14 +98,14 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	outputFlagUsed := cmd.Flags().Changed("out")
 	outputPath, err := cmd.Flags().GetString("out")
 	if err != nil {
-		cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to run the init command", err)
 		return err
 	}
 	// If we weren't provided an output path (flag was not used), we use our working directory
 	if !outputFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
-			cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+			cmdLogger.Error("Failed to run the init command", err)
 			return err
 		}
 		outputPath = filepath.Join(workingDirectory, DefaultProjectConfigFilename)
@@ -115,7 +114,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// By default, projectConfig will be the default project config for the DefaultCompilationPlatform
 	projectConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
-		cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to run the init command", err)
 		return err
 	}
 
@@ -124,7 +123,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 && args[0] != DefaultCompilationPlatform {
 		projectConfig, err = config.GetDefaultProjectConfig(args[0])
 		if err != nil {
-			cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+			cmdLogger.Error("Failed to run the init command", err)
 
 			return err
 		}
@@ -133,14 +132,14 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	// Update the project configuration given whatever flags were set using the CLI
 	err = updateProjectConfigWithInitFlags(cmd, projectConfig)
 	if err != nil {
-		cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to run the init command", err)
 		return err
 	}
 
 	// Write our project configuration
 	err = projectConfig.WriteToFile(outputPath)
 	if err != nil {
-		cmdLogger.Error("Failed to run the init command", logging.StructuredLogInfo{"error": err})
+		cmdLogger.Error("Failed to run the init command", err)
 		return err
 	}
 
