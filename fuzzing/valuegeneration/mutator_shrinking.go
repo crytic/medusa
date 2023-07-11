@@ -106,25 +106,23 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 // transform the integer with a random input and operation. This is used in a loop to create
 // mutated integer values.
 var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.Int) *big.Int{
+	// Subtract a random input from our value.
 	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Subtract a random input
-		var r *big.Int
-		if x.Cmp(big.NewInt(0)) > 0 {
-			r = big.NewInt(0).Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
-		} else if x.Cmp(big.NewInt(0)) < 0 {
-			r = big.NewInt(0).Add(x, inputs[g.randomProvider.Intn(len(inputs))])
-		} else {
-			r = big.NewInt(0)
+		// If our base value is positive, we subtract from it. If it's positive, we add to it.
+		// If it's zero, we leave it unchanged.
+		r := big.NewInt(0)
+		if x.Cmp(r) > 0 {
+			r = r.Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
+		} else if x.Cmp(r) < 0 {
+			r = r.Add(x, inputs[g.randomProvider.Intn(len(inputs))])
 		}
 		return r
 
 	},
+	// Divide our value by a random input.
 	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide by two
 		return big.NewInt(0).Div(x, big.NewInt(2))
-	},
-	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
-		return big.NewInt(0)
 	},
 }
 
@@ -168,11 +166,10 @@ func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength
 }
 
 // stringShrinkingMethods define methods which take an initial string and a set of inputs to transform the input. The
-// transformed input is returned. This is used in a loop to mutate strings.
+// transformed input is returned.
 var stringShrinkingMethods = []func(*ShrinkingValueMutator, string) string{
 	// Replace a random index with a NULL char
 	func(g *ShrinkingValueMutator, s string) string {
-
 		// If the string is empty, we can simply return a new string with just the rune in it.
 		r := []rune(s)
 		if len(r) == 0 {
