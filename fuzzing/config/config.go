@@ -254,5 +254,11 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
+
+	// Ensure that the log level is a valid one
+	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
+		return err
+	}
+
 	return nil
 }

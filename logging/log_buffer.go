@@ -21,13 +21,13 @@ func (l *LogBuffer) Append(newElements ...any) {
 	l.elements = append(l.elements, newElements...)
 }
 
-// Args returns the list of elements stored in this LogBuffer
+// Elements returns the list of elements stored in this LogBuffer
 func (l *LogBuffer) Elements() []any {
 	return l.elements
 }
 
 // String provides the non-colorized string representation of the LogBuffer
 func (l LogBuffer) String() string {
-	_, msg, _ := buildMsgs(l.elements)
+	_, msg, _, _ := buildMsgs(l.elements)
 	return msg
 }
