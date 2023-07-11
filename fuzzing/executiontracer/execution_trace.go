@@ -183,6 +183,8 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []a
 	if panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed {
 		elements = append(elements, colors.RedBold, "[assertion failed]", colors.Reset, "\n")
 		return elements
+	if panicCode != nil {
+		return "[" + abiutils.GetPanicReason(panicCode.Uint64()) + "]"
 	}
 
 	// Try to resolve an assertion failed panic code.

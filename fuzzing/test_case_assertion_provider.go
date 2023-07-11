@@ -3,11 +3,11 @@ package fuzzing
 import (
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
-	"golang.org/x/exp/slices"
-	"sync"
-
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"golang.org/x/exp/slices"
+	"sync"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -23,8 +23,6 @@ type AssertionTestCaseProvider struct {
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
 }
-
-// Define our ABI method
 
 // attachAssertionTestCaseProvider attaches a new AssertionTestCaseProvider to the Fuzzer and returns it.
 func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider {
@@ -66,16 +64,19 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	}
 	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
-	// Check if we encountered an assertion error.
-	// Try to unpack our error and return data for a panic code and verify it matches the "assert failed" panic code.
+	// Check if we encountered an enabled panic code.
+	// Try to unpack our error and return data for a panic code and verify that that panic code should be treated as a failing case.
 	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
-	encounteredAssertionFailure := panicCode != nil && panicCode.Uint64() == abiutils.PanicCodeAssertFailed
+	failure := false
+	if panicCode != nil {
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+	}
 
-	return &methodId, encounteredAssertionFailure, nil
+	return &methodId, failure, nil
 }
 
 // onFuzzerStarting is the event handler triggered when the Fuzzer is starting a fuzzing campaign. It creates test cases
@@ -233,4 +234,38 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	}
 
 	return shrinkRequests, nil
+}
+
+// encounteredAssertionFailure takes in a panic code and a config.AssertionModesConfig and will determine whether the
+// panic code that was hit should be treated as a failing case - which will be determined by whether that panic
+// code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
+// panic if it is provided a panic code that is not defined in the abiutils package.
+// TODO: This is a terrible design and a future PR should be made to maintain assertion and panic logic correctly
+func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
+	// Switch on panic code
+	switch panicCode {
+	case abiutils.PanicCodeCompilerInserted:
+		return conf.FailOnCompilerInsertedPanic
+	case abiutils.PanicCodeAssertFailed:
+		return conf.FailOnAssertion
+	case abiutils.PanicCodeArithmeticUnderOverflow:
+		return conf.FailOnArithmeticUnderflow
+	case abiutils.PanicCodeDivideByZero:
+		return conf.FailOnDivideByZero
+	case abiutils.PanicCodeEnumTypeConversionOutOfBounds:
+		return conf.FailOnEnumTypeConversionOutOfBounds
+	case abiutils.PanicCodeIncorrectStorageAccess:
+		return conf.FailOnIncorrectStorageAccess
+	case abiutils.PanicCodePopEmptyArray:
+		return conf.FailOnPopEmptyArray
+	case abiutils.PanicCodeOutOfBoundsArrayAccess:
+		return conf.FailOnOutOfBoundsArrayAccess
+	case abiutils.PanicCodeAllocateTooMuchMemory:
+		return conf.FailOnAllocateTooMuchMemory
+	case abiutils.PanicCodeCallUninitializedVariable:
+		return conf.FailOnCallUninitializedVariable
+	default:
+		// If we encounter an unknown panic code, we ignore it
+		return false
+	}
 }
