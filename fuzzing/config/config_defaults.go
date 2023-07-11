@@ -74,6 +74,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					TestPrefixes: []string{
 						"optimize_",
 					},
+					GasOptimization: false,
 				},
 			},
 			TestChainConfig: *chainConfig,
