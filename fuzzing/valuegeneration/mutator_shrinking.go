@@ -105,7 +105,6 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 // integerShrinkingMethods define methods which take a big integer and a set of inputs and
 // transform the integer with a random input and operation.
 var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.Int) *big.Int{
-	// Subtract a random input from our value.
 	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// If our base value is positive, we subtract from it. If it's positive, we add to it.
 		// If it's zero, we leave it unchanged.
@@ -118,7 +117,6 @@ var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.I
 		return r
 
 	},
-	// Divide our value by a random input.
 	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
 		// Divide by two
 		return big.NewInt(0).Div(x, big.NewInt(2))
@@ -144,7 +142,7 @@ func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength
 			inputs = append(inputs, max)
 		}
 
-		// Determine which value we'll use as an initial input, and how many mutations we will perform.
+		// Set the input and ensure it is constrained to the value boundaries
 		input := new(big.Int).Set(i)
 		input = utils.ConstrainIntegerToBounds(input, min, max)
 
