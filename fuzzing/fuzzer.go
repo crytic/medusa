@@ -107,7 +107,8 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		Hooks: FuzzerHooks{
-			NewCallSequenceGeneratorConfigFunc: defaultNewCallSequenceGeneratorConfigFunc,
+			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
+			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
 			ChainSetupFunc:                     chainSetupFromCompilations,
 			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 		},
@@ -376,11 +377,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	return nil
 }
 
-// defaultNewCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
+// defaultCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
 // CallSequenceGeneratorConfig with a default configuration. Returns the config or an error, if one occurs.
-func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
-	// Create the underlying value generator for the worker and its sequence generator.
-	valueGenConfig := &valuegeneration.MutatingValueGeneratorConfig{
+func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
+	// Create the value generator and mutator for the worker.
+	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
 		GenerateRandomAddressBias:       0.5,
@@ -406,7 +407,7 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 			GenerateRandomStringMaxSize: 100,
 		},
 	}
-	valueGenerator := valuegeneration.NewMutatingValueGenerator(valueGenConfig, valueSet, randomProvider)
+	mutationalGenerator := valuegeneration.NewMutationalValueGenerator(mutationalGeneratorConfig, valueSet, randomProvider)
 
 	// Create a sequence generator config which uses the created value generator.
 	sequenceGenConfig := &CallSequenceGeneratorConfig{
@@ -419,9 +420,21 @@ func defaultNewCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuege
 		RandomMutatedCorpusTailWeight:            10,
 		RandomMutatedSpliceAtRandomWeight:        20,
 		RandomMutatedInterleaveAtRandomWeight:    10,
-		ValueGenerator:                           valueGenerator,
+		ValueGenerator:                           mutationalGenerator,
+		ValueMutator:                             mutationalGenerator,
 	}
 	return sequenceGenConfig, nil
+}
+
+// defaultShrinkingValueMutatorFunc is a NewShrinkingValueMutatorFunc which creates value mutator to be used for
+// shrinking purposes. Returns the value mutator or an error, if one occurs.
+func defaultShrinkingValueMutatorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueMutator, error) {
+	// Create the shrinking value mutator for the worker.
+	shrinkingValueMutatorConfig := &valuegeneration.ShrinkingValueMutatorConfig{
+		ShrinkValueProbability: 0.1,
+	}
+	shrinkingValueMutator := valuegeneration.NewShrinkingValueMutator(shrinkingValueMutatorConfig, valueSet, randomProvider)
+	return shrinkingValueMutator, nil
 }
 
 // spawnWorkersLoop is a method which spawns a config-defined amount of FuzzerWorker to carry out the fuzzing campaign.
