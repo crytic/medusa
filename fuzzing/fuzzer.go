@@ -712,7 +712,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 		// Print a metrics update
 		f.logger.Info(colors.Bold, "fuzz:", colors.Reset,
-			"elapsed:", colors.CyanBold, fmt.Sprintf("%s", time.Since(startTime).Round(time.Second)), colors.Reset,
+			"elapsed:", colors.CyanBold, time.Since(startTime).Round(time.Second).String(), colors.Reset,
 			"calls:", colors.CyanBold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
 			"seq/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
 			"resets/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset,
