@@ -102,7 +102,7 @@ func NewMutationalValueGenerator(config *MutationalValueGeneratorConfig, valueSe
 
 // getMutationParams takes a length of inputs and returns an initial input index to start with as a base value, as well
 // as a random number of mutations which should be performed (within the mutation range specified by the
-// ValueGeneratorConfig).
+// MutationalValueGeneratorConfig).
 func (g *MutationalValueGenerator) getMutationParams(inputsLen int) (int, int) {
 	inputIdx := g.randomProvider.Intn(inputsLen)
 	mutationCount := g.randomProvider.Intn(((g.config.MaxMutationRounds - g.config.MinMutationRounds) + 1) + g.config.MinMutationRounds)
