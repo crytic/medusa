@@ -130,99 +130,108 @@ func (l *Logger) SetLevel(level zerolog.Level) {
 
 // Trace is a wrapper function that will log a trace event
 func (l *Logger) Trace(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Trace()
+	multiLog := l.multiLogger.Trace()
 
-	// Log to console and multi logger
-	l.consoleLogger.Trace().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Trace().Fields(fields).Msg(fileMsg)
+	// Chain the error
+	chainError(consoleLog, multiLog, err, l.level <= zerolog.DebugLevel)
+
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // Debug is a wrapper function that will log a debug event
 func (l *Logger) Debug(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Debug()
+	multiLog := l.multiLogger.Debug()
 
-	// Log to console and multi logger
-	l.consoleLogger.Debug().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Debug().Fields(fields).Msg(fileMsg)
+	// Chain the error
+	chainError(consoleLog, multiLog, err, l.level <= zerolog.DebugLevel)
+
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // Info is a wrapper function that will log an info event
 func (l *Logger) Info(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Info()
+	multiLog := l.multiLogger.Info()
 
-	// Log to console and multi logger
-	l.consoleLogger.Info().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Info().Fields(fields).Msg(fileMsg)
+	// Chain the error
+	chainError(consoleLog, multiLog, err, l.level <= zerolog.DebugLevel)
+
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // Warn is a wrapper function that will log a warning event both on console
 func (l *Logger) Warn(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Warn()
+	multiLog := l.multiLogger.Warn()
 
-	// Log to console and multi logger
-	l.consoleLogger.Warn().Fields(fields).Msg(consoleMsg)
-	l.multiLogger.Warn().Fields(fields).Msg(fileMsg)
+	// Chain the error
+	chainError(consoleLog, multiLog, err, l.level <= zerolog.DebugLevel)
+
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // Error is a wrapper function that will log an error event.
 func (l *Logger) Error(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Error()
+	multiLog := l.multiLogger.Error()
 
-	// If we are in debug mode or below, log the stack and error. Otherwise, just output the error
-	if l.consoleLogger.GetLevel() <= zerolog.DebugLevel {
-		l.consoleLogger.Error().Stack().Fields(fields).Msg(consoleMsg)
-	} else {
-		l.consoleLogger.Error().Fields(fields).Msg(consoleMsg)
-	}
+	// Chain the error
+	chainError(consoleLog, multiLog, err, l.level <= zerolog.DebugLevel)
 
-	// Log to multi logger with stack
-	l.multiLogger.Error().Stack().Fields(fields).Msg(fileMsg)
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // Panic is a wrapper function that will log a panic event
 func (l *Logger) Panic(args ...any) {
-	// Create a generic map[string]any fields object that will store structured log info
-	var fields map[string]any
+	// Build the messages and retrieve any error or associated structured log info
+	consoleMsg, multiMsg, err, info := buildMsgs(args...)
 
-	// Build the messages
-	consoleMsg, fileMsg, fields := buildMsgs(args...)
+	// Instantiate log events
+	consoleLog := l.consoleLogger.Panic()
+	multiLog := l.multiLogger.Panic()
 
-	// Defer the log to multi logger so that when the call to console logger panics, we can also log to multi logger before
-	// exit
-	defer l.multiLogger.Panic().Stack().Fields(fields).Msg(fileMsg)
+	// Chain the error
+	chainError(consoleLog, multiLog, err, true)
 
-	// Log to console with stack
-	l.consoleLogger.Panic().Stack().Fields(fields).Msg(consoleMsg)
-
+	// Chain the structured log info and messages and send off the logs
+	chainStructuredLogInfoAndMsgs(consoleLog, multiLog, info, consoleMsg, multiMsg)
 }
 
 // buildMsgs describes a function that takes in a variadic list of arguments of any type and returns two strings and,
-// optionally, a StructuredLogInfo object. The first string will be a colorized-string that can be used for console logging
-// while the second string will be a non-colorized one that can be used for file/structured logging.
-func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
+// optionally, an error and a StructuredLogInfo object. The first string will be a colorized-string that can be used for
+// console logging while the second string will be a non-colorized one that can be used for file/structured logging.
+// The error and the StructuredLogInfo can be used to add additional context to log messages
+func buildMsgs(args ...any) (string, string, error, StructuredLogInfo) {
 	// Guard clause
 	if len(args) == 0 {
-		return "", "", nil
+		return "", "", nil, nil
 	}
 
 	// Initialize the base color context, the string buffers and the structured log info object
@@ -230,6 +239,7 @@ func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
 	consoleOutput := make([]string, 0)
 	fileOutput := make([]string, 0)
 	var info StructuredLogInfo
+	var err error
 
 	// Iterate through each argument in the list and switch on type
 	for _, arg := range args {
@@ -240,6 +250,9 @@ func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
 		case StructuredLogInfo:
 			// Note that only one structured log info can be provided for each log message
 			info = t
+		case error:
+			// Note that only one error can be provided for each log message
+			err = t
 		default:
 			// In the base case, append the object to the two string buffers. The console string buffer will have the
 			// current color context applied to it.
@@ -248,7 +261,38 @@ func buildMsgs(args ...any) (string, string, StructuredLogInfo) {
 		}
 	}
 
-	return strings.Join(consoleOutput, " "), strings.Join(fileOutput, " "), info
+	return strings.Join(consoleOutput, " "), strings.Join(fileOutput, " "), err, info
+}
+
+// chainError is a helper function that takes in a *zerolog.Event for console and multi-log output and chains an error
+// to both events. If debug is true, then a stack trace is added to both events as well.
+func chainError(consoleLog *zerolog.Event, multiLog *zerolog.Event, err error, debug bool) {
+	// First append the errors to each event. Note that even if err is nil, there will not be a panic here
+	consoleLog.Err(err)
+	multiLog.Err(err)
+
+	// If we are in debug mode or below, then we will add the stack traces as well for debugging
+	if debug {
+		consoleLog.Stack()
+		multiLog.Stack()
+	}
+}
+
+// chainStructuredLogInfoAndMsgs is a helper function that takes in a *zerolog.Event for console and multi-log output,
+// chains any StructuredLogInfo provided to it, adds the associated messages, and sends out the logs to their respective
+// channels.
+func chainStructuredLogInfoAndMsgs(consoleLog *zerolog.Event, multiLog *zerolog.Event, info StructuredLogInfo, consoleMsg string, multiMsg string) {
+	// If we are provided a structured log info object, add that as a key-value pair to the events
+	if info != nil {
+		consoleLog.Any("info", info)
+		multiLog.Any("info", info)
+	}
+
+	// Append the messages to each event. This will also result in the log events being sent out to their respective
+	// streams. Note that we are deferring the msg to multi logger in case we are logging a panic and want to make sure that
+	// all channels receive the panic log
+	defer multiLog.Msg(multiMsg)
+	consoleLog.Msg(consoleMsg)
 }
 
 // setupDefaultFormatting will update the console logger's formatting to the medusa standard
