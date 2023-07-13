@@ -7,13 +7,6 @@ import (
 	"fmt"
 	"golang.org/x/sys/windows"
 	"os"
-	"syscall"
-	"unsafe"
-)
-
-var (
-	kernel32           = syscall.NewLazyDLL("kernel32.dll")
-	procGetConsoleMode = kernel32.NewProc("GetConsoleMode")
 )
 
 var enabled bool
@@ -21,13 +14,33 @@ var enabled bool
 // EnableColor will make a kernel call to see whether ANSI escape codes are supported on the stdout channel for the
 // Windows system.
 func EnableColor() {
+	// Obtain our current console mode.
 	var mode uint32
-	// If mode does not equal windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING then the stdout does not support ANSI escape codes
-	if r, _, _ := procGetConsoleMode.Call(os.Stdout.Fd(), uintptr(unsafe.Pointer(&mode))); r != 0 && mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0 {
+	consoleHandle := windows.Handle(os.Stdout.Fd())
+	err := windows.GetConsoleMode(consoleHandle, &mode)
+	if err != nil {
 		enabled = false
-	} else {
-		enabled = true
+		return
 	}
+
+	// If color is not enabled, try to enable it.
+	if mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING == 0 {
+		err = windows.SetConsoleMode(consoleHandle, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+		if err != nil {
+			enabled = false
+			return
+		}
+	}
+
+	// Fetch the console mode once more
+	err = windows.GetConsoleMode(consoleHandle, &mode)
+	if err != nil {
+		enabled = false
+		return
+	}
+
+	// Set our enabled status finally after trying to enable it.
+	enabled = mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0
 }
 
 // Colorize returns the string s wrapped in ANSI code c assuming that ANSI is supported on the Windows version
@@ -35,7 +48,7 @@ func EnableColor() {
 func Colorize(s any, c Color) string {
 	// If ANSI is not supported then just return the original string
 	if !enabled {
-		return fmt.Sprintf("%s", s)
+		return fmt.Sprintf("%v", s)
 	}
 
 	// Otherwise, returned an ANSI-wrapped string
