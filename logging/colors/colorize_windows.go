@@ -20,7 +20,7 @@ func EnableColor() {
 	// Iterate across each file descriptor and enable coloring
 	for _, fd := range fds {
 		// Obtain our current console mode.
-		consoleHandle := windows.Handle(os.Stdout.Fd())
+		consoleHandle := windows.Handle(fd)
 		err := windows.GetConsoleMode(consoleHandle, &mode)
 		if err != nil {
 			enabled = false
