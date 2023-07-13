@@ -53,9 +53,9 @@ func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
 
 	// Note that optimization tests will always pass
-	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s]", t.Status()), colors.Reset, t.Name(), "\n")
-	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value:", t.targetContract.Name(), t.targetMethod.Sig))
-	buffer.Append(colors.CyanBold, t.value, colors.Reset, "\n")
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
+	buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
 	buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
 	buffer.Append(t.CallSequence().Log().Elements()...)
 	// If an execution trace is attached then add it to the message

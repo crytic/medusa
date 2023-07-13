@@ -92,7 +92,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, make([]io.Writer, 0)...)
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	colors.EnableColor()
 
 	// If the log directory is a non-empty string, create a file for file logging
 	if config.Logging.LogDirectory != "" {
@@ -159,7 +158,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
 		// Compile the targets specified in the compilation config
-		fuzzer.logger.Info("Compiling targets with", colors.CyanBold, fuzzer.config.Compilation.Platform, colors.Reset)
+		fuzzer.logger.Info("Compiling targets with ", colors.Bold, fuzzer.config.Compilation.Platform, colors.Reset)
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
 			fuzzer.logger.Error("Failed to compile target", err)
@@ -499,7 +498,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	working := !utils.CheckContextDone(f.ctx)
 
 	// Log that we are about to create the workers and start fuzzing
-	f.logger.Info("Creating", colors.CyanBold, f.config.Fuzzing.Workers, colors.Reset, "workers...")
+	f.logger.Info("Creating ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers...")
 	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
@@ -597,7 +596,7 @@ func (f *Fuzzer) Start() error {
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
-		f.logger.Info("Running with a timeout of", colors.CyanBold, f.config.Fuzzing.Timeout, "seconds")
+		f.logger.Info("Running with a timeout of ", colors.Bold, f.config.Fuzzing.Timeout, " seconds")
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
@@ -687,7 +686,7 @@ func (f *Fuzzer) Start() error {
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
-		f.logger.Info("Coverage report saved to file:", colors.CyanBold, coverageReportPath, colors.Reset)
+		f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
 	}
 
 	// Return any encountered error.
@@ -724,12 +723,12 @@ func (f *Fuzzer) printMetricsLoop() {
 		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
 		// Print a metrics update
-		f.logger.Info(colors.Bold, "fuzz:", colors.Reset,
-			"elapsed:", colors.CyanBold, time.Since(startTime).Round(time.Second).String(), colors.Reset,
-			"calls:", colors.CyanBold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			"seq/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			"resets/s:", colors.CyanBold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			"coverage:", colors.CyanBold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		f.logger.Info(colors.Bold, "fuzz: ", colors.Reset,
+			"elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset,
+			", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset,
+			", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 
 		// Update our delta tracking metrics
 		lastPrintedTime = time.Now()
@@ -793,5 +792,5 @@ func (f *Fuzzer) printExitingResults() {
 	}
 
 	// Print our final tally of test statuses.
-	f.logger.Info("Test summary:", colors.GreenBold, testCountPassed, colors.Reset, "test(s) passed,", colors.RedBold, testCountFailed, colors.Reset, "test(s) failed")
+	f.logger.Info("Test summary: ", colors.GreenBold, testCountPassed, colors.Reset, " test(s) passed, ", colors.RedBold, testCountFailed, colors.Reset, " test(s) failed")
 }

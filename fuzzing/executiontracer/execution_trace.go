@@ -43,7 +43,7 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []
 
 	// Define some strings and objects that represent our current call frame
 	var (
-		callType          = []any{colors.BlueBold, "[call]", colors.Reset}
+		callType          = []any{colors.BlueBold, "[call] ", colors.Reset}
 		proxyContractName = "<unresolved proxy>"
 		codeContractName  = "<unresolved contract>"
 		methodName        = "<unresolved method>"
@@ -53,9 +53,9 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []
 
 	// If this is a contract creation or proxy call, use different formatting for call type
 	if callFrame.IsContractCreation() {
-		callType = []any{colors.YellowBold, "[creation]", colors.Reset}
+		callType = []any{colors.YellowBold, "[creation] ", colors.Reset}
 	} else if callFrame.IsProxyCall() {
-		callType = []any{colors.CyanBold, "[proxy call]", colors.Reset}
+		callType = []any{colors.CyanBold, "[proxy call] ", colors.Reset}
 	}
 
 	// Append the formatted call type information to the list of elements
@@ -259,7 +259,7 @@ func (t *ExecutionTrace) generateEventEmittedElements(callFrame *CallFrame, even
 	}
 
 	// Finally, add our output line with this event data to it.
-	elements = append(elements, colors.MagentaBold, "[event]", colors.Reset, *eventDisplayText, "\n")
+	elements = append(elements, colors.MagentaBold, "[event] ", colors.Reset, *eventDisplayText, "\n")
 	return elements
 }
 

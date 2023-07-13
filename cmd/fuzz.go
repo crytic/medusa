@@ -100,7 +100,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	// Possibility #1: File was found
 	if existenceError == nil {
 		// Try to read the configuration file and throw an error if something goes wrong
-		cmdLogger.Info("Reading the configuration file at:", colors.CyanBold, configPath, colors.Reset)
+		cmdLogger.Info("Reading the configuration file at: ", colors.Bold, configPath, colors.Reset)
 		projectConfig, err = config.ReadProjectConfigFromFile(configPath)
 		if err != nil {
 			cmdLogger.Error("Failed to run the fuzz command", err)

@@ -47,7 +47,7 @@ func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
 	// If the test failed, return a failure message.
 	buffer := logging.NewLogBuffer()
 	if t.Status() == TestCaseStatusFailed {
-		buffer.Append(colors.RedBold, fmt.Sprintf("[%s]", t.Status()), colors.Reset, t.Name(), "\n")
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
 		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
 		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
 		buffer.Append(t.CallSequence().Log().Elements()...)
@@ -60,7 +60,7 @@ func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
 		return buffer
 	}
 
-	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s]", t.Status()), colors.Reset, t.Name())
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset)
 	return buffer
 }
 

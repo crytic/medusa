@@ -261,7 +261,7 @@ func buildMsgs(args ...any) (string, string, error, StructuredLogInfo) {
 		}
 	}
 
-	return strings.Join(consoleOutput, " "), strings.Join(fileOutput, " "), err, info
+	return strings.Join(consoleOutput, ""), strings.Join(fileOutput, ""), err, info
 }
 
 // chainError is a helper function that takes in a *zerolog.Event for console and multi-log output and chains an error

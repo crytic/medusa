@@ -147,6 +147,6 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if absoluteOutputPath, err := filepath.Abs(outputPath); err == nil {
 		outputPath = absoluteOutputPath
 	}
-	cmdLogger.Info("Project configuration successfully output to:", colors.CyanBold, outputPath, colors.Reset)
+	cmdLogger.Info("Project configuration successfully output to: ", colors.Bold, outputPath, colors.Reset)
 	return nil
 }

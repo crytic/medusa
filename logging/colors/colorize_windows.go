@@ -11,36 +11,46 @@ import (
 
 var enabled bool
 
-// EnableColor will make a kernel call to see whether ANSI escape codes are supported on the stdout channel for the
-// Windows system.
+// EnableColor will make a kernel call to enable ANSI escape codes on both stdout and stderr. Note that if enablement
+// on either stream fails, then coloring will not be enabled.
 func EnableColor() {
-	// Obtain our current console mode.
 	var mode uint32
-	consoleHandle := windows.Handle(os.Stdout.Fd())
-	err := windows.GetConsoleMode(consoleHandle, &mode)
-	if err != nil {
-		enabled = false
-		return
-	}
+	fds := []*File{os.Stdout.Fd(), os.Stderr.Fd()}
 
-	// If color is not enabled, try to enable it.
-	if mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING == 0 {
-		err = windows.SetConsoleMode(consoleHandle, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+	// Iterate across each file descriptor and enable coloring
+	for _, fd := range fds {
+		// Obtain our current console mode.
+		consoleHandle := windows.Handle(os.Stdout.Fd())
+		err := windows.GetConsoleMode(consoleHandle, &mode)
 		if err != nil {
 			enabled = false
 			return
 		}
-	}
 
-	// Fetch the console mode once more
-	err = windows.GetConsoleMode(consoleHandle, &mode)
-	if err != nil {
-		enabled = false
-		return
-	}
+		// If color is not enabled, try to enable it.
+		if mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING == 0 {
+			err = windows.SetConsoleMode(consoleHandle, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+			if err != nil {
+				enabled = false
+				return
+			}
+		}
 
-	// Set our enabled status finally after trying to enable it.
-	enabled = mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0
+		// Fetch the console mode once more
+		err = windows.GetConsoleMode(consoleHandle, &mode)
+		if err != nil {
+			enabled = false
+			return
+		}
+
+		// Set our enabled status after trying to enable it.
+		enabled = mode&windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0
+
+		// If we failed to enable on this file descriptor, exit out
+		if !enabled {
+			return
+		}
+	}
 }
 
 // Colorize returns the string s wrapped in ANSI code c assuming that ANSI is supported on the Windows version
