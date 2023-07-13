@@ -15,7 +15,7 @@ var enabled bool
 // on either stream fails, then coloring will not be enabled.
 func EnableColor() {
 	var mode uint32
-	fds := []*File{os.Stdout.Fd(), os.Stderr.Fd()}
+	fds := []uintptr{os.Stdout.Fd(), os.Stderr.Fd()}
 
 	// Iterate across each file descriptor and enable coloring
 	for _, fd := range fds {
