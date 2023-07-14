@@ -3,6 +3,7 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -93,7 +94,10 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 		// - Mappings cannot be used in public/external methods and must reference storage, so we shouldn't ever
 		//	 see cases of it unless Solidity was updated in the future.
 		// - FixedPoint types are currently unsupported.
-		panic(fmt.Sprintf("attempt to generate function argument of unsupported type: '%s'", inputType.String()))
+
+		err := fmt.Errorf("attempt to generate function argument of unsupported type: '%s'", inputType.String())
+		logging.GlobalLogger.Panic("Failed to generate abi value", err)
+		return nil
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
@@ -51,6 +53,9 @@ type Corpus struct {
 	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
 	// callSequences.
 	callSequencesLock sync.Mutex
+
+	// logger describes the Corpus's log object that can be used to log important events
+	logger *logging.Logger
 }
 
 // NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
@@ -64,6 +69,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		immutableSequenceFiles:  newCorpusDirectory[calls.CallSequence](""),
 		testResultSequenceFiles: newCorpusDirectory[calls.CallSequence](""),
 		unexecutedCallSequences: make([]calls.CallSequence, 0),
+		logger:                  logging.GlobalLogger.NewSubLogger("module", "corpus"),
 	}
 
 	// If we have a corpus directory set, parse our call sequences.
@@ -216,7 +222,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
-			fmt.Printf("corpus item '%v' disabled due to error when replaying it: %v\n", sequenceFileData.fileName, sequenceInvalidError)
+			c.logger.Warn("Corpus item ", colors.Bold, sequenceFileData.fileName, colors.Reset, " disabled due to error when replaying it", sequenceInvalidError)
 		}
 
 		// Revert chain state to our starting point to test the next sequence.

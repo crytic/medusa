@@ -144,8 +144,8 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
-// TestOptimizationsSolving runs a test to ensure that optimization mode works as expected
-func TestOptimizationsSolving(t *testing.T) {
+// TestOptimizationMode runs a test to ensure that optimization mode works as expected
+func TestOptimizationMode(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/optimizations/optimize.sol",
 	}
@@ -407,7 +407,7 @@ func TestExecutionTraces(t *testing.T) {
 				assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
 
 				// Get the execution trace message
-				executionTraceMsg := lastCall.ExecutionTrace.String()
+				executionTraceMsg := lastCall.ExecutionTrace.Log().String()
 
 				// Verify it contains all expected strings
 				for _, expectedTraceMessage := range expectedTraceMessages {

@@ -5,6 +5,8 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"math/big"
 	"strings"
@@ -45,25 +47,29 @@ func (t *OptimizationTestCase) Name() string {
 	return fmt.Sprintf("Optimization Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// Message obtains a text-based printable message which describes the test result.
-func (t *OptimizationTestCase) Message() string {
-	// We print final value in case the test case passed for optimization test
-	if t.Status() == TestCaseStatusPassed {
-		msg := fmt.Sprintf(
-			"Optimization test \"%s.%s\" resulted in the maximum value: %s with the following sequence:\n%s",
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.value,
-			t.CallSequence().String(),
-		)
-		// If an execution trace is attached then add it to the message
-		if t.optimizationTestTrace != nil {
-			// TODO: Improve formatting in logging PR
-			msg += fmt.Sprintf("\nOptimization test execution trace:\n%s", t.optimizationTestTrace.String())
-		}
-		return msg
+// LogMessage obtains a buffer that represents the result of the AssertionTestCase. This buffer can be passed to a logger for
+// console or file logging.
+func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
+	buffer := logging.NewLogBuffer()
+
+	// Note that optimization tests will always pass
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
+	buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
+	buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+	buffer.Append(t.CallSequence().Log().Elements()...)
+	// If an execution trace is attached then add it to the message
+	if t.optimizationTestTrace != nil {
+		buffer.Append(colors.Bold, "[Optimization Test Execution Trace]", colors.Reset, "\n")
+		buffer.Append(t.optimizationTestTrace.Log().Elements()...)
 	}
-	return ""
+	return buffer
+}
+
+// Message obtains a text-based printable message which describes the result of the OptimizationTestCase.
+func (t *OptimizationTestCase) Message() string {
+	// Internally, we just call log message and convert it to a string. This can be useful for 3rd party apps
+	return t.LogMessage().String()
 }
 
 // ID obtains a unique identifier for a test result.

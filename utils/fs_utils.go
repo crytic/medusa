@@ -2,10 +2,37 @@ package utils
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
 )
+
+// CreateFile will create a file at the given path and file name combination. If the path is the empty string, the
+// file will be created in the current working directory
+func CreateFile(path string, fileName string) (*os.File, error) {
+	// By default, the path will be the name of the file
+	filePath := fileName
+
+	// Check to see if the file needs to be created in another directory or the working directory
+	if path != "" {
+		// Make the directory, if it does not exist already
+		err := MakeDirectory(path)
+		if err != nil {
+			return nil, err
+		}
+		// Since the path is non-empty, concatenate the path with the name of the file
+		filePath = filepath.Join(path, fileName)
+	}
+
+	// Create the file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return file, nil
+}
 
 // CopyFile copies a file from a source path to a destination path. File permissions are retained. Returns an error
 // if one occurs.

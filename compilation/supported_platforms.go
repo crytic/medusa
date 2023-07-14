@@ -3,6 +3,7 @@ package compilation
 import (
 	"fmt"
 	"github.com/crytic/medusa/compilation/platforms"
+	"github.com/crytic/medusa/logging"
 )
 
 // defaultPlatformConfigGenerator is a mapping of platform identifier to generator functions which can be used to create
@@ -30,7 +31,8 @@ func init() {
 
 		// If this platform already exists in our mapping, panic. Each platform should have a unique identifier.
 		if _, platformIdExists := defaultPlatformConfigGenerator[platformId]; platformIdExists {
-			panic(fmt.Errorf("the compilation platform '%s' is registered with more than one provider", platformId))
+			err := fmt.Errorf("the compilation platform '%s' is registered with more than one provider", platformId)
+			logging.GlobalLogger.Panic("Failed to initialize default platform configurations", err)
 		}
 
 		// Add this entry to our mapping

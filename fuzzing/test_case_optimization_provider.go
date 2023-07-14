@@ -180,11 +180,6 @@ func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEven
 	for _, testCase := range t.testCases {
 		if testCase.status == TestCaseStatusRunning {
 			testCase.status = TestCaseStatusPassed
-			// Since optimization tests do not really "finish", we will report that they are finished when the fuzzer
-			// stops.
-			if event.Fuzzer != nil {
-				event.Fuzzer.ReportTestCaseFinished(testCase)
-			}
 		}
 	}
 	return nil

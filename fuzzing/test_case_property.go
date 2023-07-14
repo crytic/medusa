@@ -5,6 +5,8 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
 )
@@ -39,24 +41,33 @@ func (t *PropertyTestCase) Name() string {
 	return fmt.Sprintf("Property Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// Message obtains a text-based printable message which describes the test result.
-func (t *PropertyTestCase) Message() string {
+// LogMessage obtains a buffer that represents the result of the PropertyTestCase. This buffer can be passed to a logger for
+// console or file logging.
+func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
 	// If the test failed, return a failure message.
+	buffer := logging.NewLogBuffer()
 	if t.Status() == TestCaseStatusFailed {
-		msg := fmt.Sprintf(
-			"Property test \"%s.%s\" failed after the following call sequence:\n%s",
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.CallSequence().String(),
-		)
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
+		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+		buffer.Append(t.CallSequence().Log().Elements()...)
+
 		// If an execution trace is attached then add it to the message
 		if t.propertyTestTrace != nil {
-			// TODO: Improve formatting in logging PR
-			msg += fmt.Sprintf("\nProperty test execution trace:\n%s", t.propertyTestTrace.String())
+			buffer.Append(colors.Bold, "[Property Test Execution Trace]", colors.Reset, "\n")
+			buffer.Append(t.propertyTestTrace.Log().Elements()...)
 		}
-		return msg
+		return buffer
 	}
-	return ""
+
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset)
+	return buffer
+}
+
+// Message obtains a text-based printable message which describes the result of the PropertyTestCase.
+func (t *PropertyTestCase) Message() string {
+	// Internally, we just call log message and convert it to a string. This can be useful for 3rd party apps
+	return t.LogMessage().String()
 }
 
 // ID obtains a unique identifier for a test result.

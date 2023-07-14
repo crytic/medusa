@@ -3,6 +3,7 @@ package config
 import (
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/rs/zerolog"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -79,6 +80,10 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Logging: LoggingConfig{
+			Level:        zerolog.InfoLevel,
+			LogDirectory: "",
+		},
 	}
 
 	// Return the project configuration
