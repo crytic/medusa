@@ -1,8 +1,8 @@
 package coverage
 
 import (
-	"fmt"
 	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
@@ -92,14 +92,14 @@ func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	if err != nil {
 		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
-			panic(revertCoverageErr)
+			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", revertCoverageErr)
 		}
 	}
 
 	// Commit all our coverage maps up one call frame.
 	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 	if coverageUpdateErr != nil {
-		panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
+		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", coverageUpdateErr)
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -124,14 +124,14 @@ func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if err != nil {
 		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
-			panic(revertCoverageErr)
+			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture exit", revertCoverageErr)
 		}
 	}
 
 	// Commit all our coverage maps up one call frame.
 	_, _, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
 	if coverageUpdateErr != nil {
-		panic(fmt.Sprintf("coverage tracer failed to update coverage map during capture exit: %v", coverageUpdateErr))
+		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture exit", coverageUpdateErr)
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
@@ -157,7 +157,7 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		// Record coverage for this location in our map.
 		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), pc)
 		if coverageUpdateErr != nil {
-			panic(fmt.Sprintf("coverage tracer failed to update coverage map while tracing state: %v", coverageUpdateErr))
+			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
 	}
 }

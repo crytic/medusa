@@ -1,8 +1,8 @@
 package calls
 
 import (
-	"fmt"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
@@ -138,7 +138,7 @@ func (m *CallMessage) Data() []byte {
 	if m.MsgDataAbiValues != nil {
 		data, err := m.MsgDataAbiValues.Pack()
 		if err != nil {
-			panic(fmt.Errorf("error while packing call message ABI values: %v", err))
+			logging.GlobalLogger.Panic("Failed to pack call message ABI values", err)
 		}
 		return data
 	}

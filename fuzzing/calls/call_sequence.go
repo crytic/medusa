@@ -4,17 +4,16 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/crytic/medusa/chain"
+	chainTypes "github.com/crytic/medusa/chain/types"
+	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"strconv"
-	"strings"
-
-	chainTypes "github.com/crytic/medusa/chain/types"
-	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
@@ -34,27 +33,37 @@ func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDef
 	return nil
 }
 
-// String returns a displayable string representing the CallSequence.
-func (cs CallSequence) String() string {
+// Log returns a logging.LogBuffer that represents this call sequence. This buffer will be passed to the underlying
+// logger which will format it accordingly for console or file.
+func (cs CallSequence) Log() *logging.LogBuffer {
+	buffer := logging.NewLogBuffer()
 	// If we have an empty call sequence, return a special string
 	if len(cs) == 0 {
-		return "<none>"
+		buffer.Append("<none>")
+		return buffer
 	}
 
-	// Construct a list of strings for each call made in the sequence
-	var elementStrings []string
+	// Construct the buffer for each call made in the sequence
 	for i := 0; i < len(cs); i++ {
 		// Add the string representing the call
-		elementStrings = append(elementStrings, fmt.Sprintf("%d) %s", i+1, cs[i].String()))
+		buffer.Append(fmt.Sprintf("%d) %s\n", i+1, cs[i].String()))
 
 		// If we have an execution trace attached, print information about it.
 		if cs[i].ExecutionTrace != nil {
-			elementStrings = append(elementStrings, cs[i].ExecutionTrace.String())
+			buffer.Append(cs[i].ExecutionTrace.Log().Elements()...)
+			buffer.Append("\n")
 		}
 	}
 
-	// Join each element with new lines and return it.
-	return strings.Join(elementStrings, "\n")
+	// Return the buffer
+	return buffer
+}
+
+// String returns the string representation of this call sequence
+func (cs CallSequence) String() string {
+	// Internally, we just call the log function, get the list of elements and create their non-colorized string representation
+	// Might be useful for 3rd party apps
+	return cs.Log().String()
 }
 
 // Clone creates a copy of the underlying CallSequence.

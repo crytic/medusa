@@ -2,6 +2,8 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"strings"
 
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -37,18 +39,27 @@ func (t *AssertionTestCase) Name() string {
 	return fmt.Sprintf("Assertion Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// Message obtains a text-based printable message which describes the test result.
-func (t *AssertionTestCase) Message() string {
+// LogMessage obtains a buffer that represents the result of the AssertionTestCase. This buffer can be passed to a logger for
+// console or file logging.
+func (t *AssertionTestCase) LogMessage() *logging.LogBuffer {
 	// If the test failed, return a failure message.
+	buffer := logging.NewLogBuffer()
 	if t.Status() == TestCaseStatusFailed {
-		return fmt.Sprintf(
-			"Test for method \"%s.%s\" failed after the following call sequence resulted in an assertion:\n%s",
-			t.targetContract.Name(),
-			t.targetMethod.Sig,
-			t.CallSequence().String(),
-		)
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in an assertion failure after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
+		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+		buffer.Append(t.CallSequence().Log().Elements()...)
+		return buffer
 	}
-	return ""
+
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset)
+	return buffer
+}
+
+// Message obtains a text-based printable message which describes the result of the AssertionTestCase.
+func (t *AssertionTestCase) Message() string {
+	// Internally, we just call log message and convert it to a string. This can be useful for 3rd party apps
+	return t.LogMessage().String()
 }
 
 // ID obtains a unique identifier for a test result.

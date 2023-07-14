@@ -2,6 +2,7 @@ package randomutils
 
 import (
 	"encoding/binary"
+	"github.com/crytic/medusa/logging"
 	"math/rand"
 )
 
@@ -13,7 +14,7 @@ func ForkRandomProvider(randomProvider *rand.Rand) *rand.Rand {
 	b := make([]byte, 8)
 	_, err := randomProvider.Read(b)
 	if err != nil {
-		panic(err)
+		logging.GlobalLogger.Panic("Failed to fork random child provider", err)
 	}
 
 	// Return a new random provider with our derived seed.

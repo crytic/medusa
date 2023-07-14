@@ -2,6 +2,8 @@ package chain
 
 import (
 	"encoding/binary"
+	"fmt"
+	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -100,12 +102,12 @@ func (c *CheatCodeContract) Abi() *abi.ABI {
 func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
-		panic("could not add method to precompiled cheatcode contract, empty method name provided")
+		logging.GlobalLogger.Panic("Failed to add method to precompile cheatcode contract", fmt.Errorf("empty method name provided"))
 	}
 
 	// Verify a method handler was provided
 	if handler == nil {
-		panic("could not add method to precompiled cheatcode contract, nil method handler provided")
+		logging.GlobalLogger.Panic("Failed to add method to precompile cheatcode contract", fmt.Errorf("nil method handler provided"))
 	}
 
 	// Set the method information in our method lookup

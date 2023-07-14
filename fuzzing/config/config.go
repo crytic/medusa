@@ -3,8 +3,8 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/crytic/medusa/chain/config"
+	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/crytic/medusa/compilation"
@@ -17,6 +17,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Logging describes the configuration used for logging to file and console
+	Logging LoggingConfig `json:"logging"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -177,11 +180,38 @@ type OptimizationTestingConfig struct {
 	TestPrefixes []string `json:"testPrefixes"`
 }
 
+// LoggingConfig describes the configuration options for logging to console and file
+type LoggingConfig struct {
+	// Level describes whether logs of certain severity levels (eg info, warning, etc.) will be emitted or discarded.
+	// Increasing level values represent more severe logs
+	Level zerolog.Level `json:"level"`
+
+	// LogDirectory describes what directory log files should be outputted in/ LogDirectory being a non-empty string is
+	// equivalent to enabling file logging.
+	LogDirectory string `json:"logDirectory"`
+}
+
+// ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type ConsoleLoggingConfig struct {
+	// Enabled describes whether console logging is enabled.
+	Enabled bool `json:"enabled"`
+}
+
+// FileLoggingConfig describes the configuration options for logging to file. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type FileLoggingConfig struct {
+	// LogDirectory describes what directory log files should be outputted in. LogDirectory being a non-empty string
+	// is equivalent to enabling file logging.
+	LogDirectory bool `json:"logDirectory"`
+}
+
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
-	fmt.Printf("Reading configuration file: %s\n", path)
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -261,5 +291,11 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
+
+	// Ensure that the log level is a valid one
+	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
+		return err
+	}
+
 	return nil
 }
