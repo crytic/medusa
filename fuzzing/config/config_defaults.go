@@ -3,6 +3,7 @@ package config
 import (
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/rs/zerolog"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -53,11 +54,15 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: true,
+				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         false,
 					TestViewMethods: false,
+					AssertionModes: AssertionModesConfig{
+						FailOnAssertion: true,
+					},
 				},
 				PropertyTesting: PropertyTestConfig{
 					Enabled: true,
@@ -65,10 +70,20 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 						"fuzz_",
 					},
 				},
+				OptimizationTesting: OptimizationTestingConfig{
+					Enabled: false,
+					TestPrefixes: []string{
+						"optimize_",
+					},
+				},
 			},
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Logging: LoggingConfig{
+			Level:        zerolog.InfoLevel,
+			LogDirectory: "",
+		},
 	}
 
 	// Return the project configuration

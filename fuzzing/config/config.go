@@ -3,8 +3,8 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/crytic/medusa/chain/config"
+	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/crytic/medusa/compilation"
@@ -17,6 +17,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Logging describes the configuration used for logging to file and console
+	Logging LoggingConfig `json:"logging"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.
@@ -90,6 +93,10 @@ type TestingConfig struct {
 	// to determine which contract a deployed contract is.
 	StopOnFailedContractMatching bool `json:"stopOnFailedContractMatching"`
 
+	// StopOnNoTests describes whether the fuzzing.Fuzzer should stop the fuzzer from starting if no tests (property,
+	// assertion, optimization, custom) are found.
+	StopOnNoTests bool `json:"stopOnNoTests"`
+
 	// TestAllContracts indicates whether all contracts should be tested (including dynamically deployed ones), rather
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
@@ -104,6 +111,9 @@ type TestingConfig struct {
 
 	// PropertyTesting describes the configuration used for property testing.
 	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+
+	// OptimizationTesting describes the configuration used for optimization testing.
+	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -113,6 +123,43 @@ type AssertionTestingConfig struct {
 
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
+
+	// AssertionModes describes the various panic codes that can be enabled and be treated as a "failing case"
+	AssertionModes AssertionModesConfig `json:"assertionModes"`
+}
+
+// AssertionModesConfig describes the configuration options for the various modes that can be enabled for assertion
+// testing
+type AssertionModesConfig struct {
+	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
+	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
+
+	// FailOnAssertion describes whether an assertion failure should be treated as a failing case
+	FailOnAssertion bool `json:"failOnAssertion"`
+
+	// FailOnArithmeticUnderflow describes whether an arithmetic underflow should be treated as a failing case
+	FailOnArithmeticUnderflow bool `json:"failOnArithmeticUnderflow"`
+
+	// FailOnDivideByZero describes whether division by zero should be treated as a failing case
+	FailOnDivideByZero bool `json:"failOnDivideByZero"`
+
+	// FailOnEnumTypeConversionOutOfBounds describes whether an out-of-bounds enum access should be treated as a failing case
+	FailOnEnumTypeConversionOutOfBounds bool `json:"failOnEnumTypeConversionOutOfBounds"`
+
+	// FailOnIncorrectStorageAccess describes whether an out-of-bounds storage access should be treated as a failing case
+	FailOnIncorrectStorageAccess bool `json:"failOnIncorrectStorageAccess"`
+
+	// FailOnPopEmptyArray describes whether a pop operation on an empty array should be treated as a failing case
+	FailOnPopEmptyArray bool `json:"failOnPopEmptyArray"`
+
+	// FailOnOutOfBoundsArrayAccess describes whether an out-of-bounds array access should be treated as a failing case
+	FailOnOutOfBoundsArrayAccess bool `json:"failOnOutOfBoundsArrayAccess"`
+
+	// FailOnAllocateTooMuchMemory describes whether excessive memory usage should be treated as a failing case
+	FailOnAllocateTooMuchMemory bool `json:"failOnAllocateTooMuchMemory"`
+
+	// FailOnCallUninitializedVariable describes whether calling an un-initialized variable should be treated as a failing case
+	FailOnCallUninitializedVariable bool `json:"failOnCallUninitializedVariable"`
 }
 
 // PropertyTestConfig describes the configuration options used for property testing
@@ -124,11 +171,47 @@ type PropertyTestConfig struct {
 	TestPrefixes []string `json:"testPrefixes"`
 }
 
+// OptimizationTestingConfig describes the configuration options used for optimization testing
+type OptimizationTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
+	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// LoggingConfig describes the configuration options for logging to console and file
+type LoggingConfig struct {
+	// Level describes whether logs of certain severity levels (eg info, warning, etc.) will be emitted or discarded.
+	// Increasing level values represent more severe logs
+	Level zerolog.Level `json:"level"`
+
+	// LogDirectory describes what directory log files should be outputted in/ LogDirectory being a non-empty string is
+	// equivalent to enabling file logging.
+	LogDirectory string `json:"logDirectory"`
+}
+
+// ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type ConsoleLoggingConfig struct {
+	// Enabled describes whether console logging is enabled.
+	Enabled bool `json:"enabled"`
+}
+
+// FileLoggingConfig describes the configuration options for logging to file. Note that this not being used right now
+// but will be added to LoggingConfig down the line
+// TODO: Update when implementing a structured logging solution
+type FileLoggingConfig struct {
+	// LogDirectory describes what directory log files should be outputted in. LogDirectory being a non-empty string
+	// is equivalent to enabling file logging.
+	LogDirectory bool `json:"logDirectory"`
+}
+
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
 func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	// Read our project configuration file data
-	fmt.Printf("Reading configuration file: %s\n", path)
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -208,5 +291,11 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
+
+	// Ensure that the log level is a valid one
+	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
+		return err
+	}
+
 	return nil
 }

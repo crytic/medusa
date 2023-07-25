@@ -61,6 +61,10 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().Bool("assertion-mode", false,
 		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.AssertionTesting.Enabled))
 
+	// Optimization mode
+	fuzzCmd.Flags().Bool("optimization-mode", false,
+		fmt.Sprintf("enable optimization mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.OptimizationTesting.Enabled))
+
 	// Trace all
 	fuzzCmd.Flags().Bool("trace-all", false,
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
@@ -152,6 +156,14 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	// Update assertion mode enablement
 	if cmd.Flags().Changed("assertion-mode") {
 		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.Flags().GetBool("assertion-mode")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update optimization mode enablement
+	if cmd.Flags().Changed("optimization-mode") {
+		projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled, err = cmd.Flags().GetBool("optimization-mode")
 		if err != nil {
 			return err
 		}

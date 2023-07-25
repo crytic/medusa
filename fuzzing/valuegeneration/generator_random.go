@@ -7,9 +7,8 @@ import (
 	"math/rand"
 )
 
-// RandomValueGenerator represents an interface for a provider used to generate transaction fields and call arguments
-// using a random provider. As such it may not be accurate in many test results with tightly-bound pre-conditions.
-// This provider does not mutate existing values and will leave them unaltered.
+// RandomValueGenerator represents a ValueGenerator used to generate transaction fields and call arguments with values
+// provided by a random number generator.
 type RandomValueGenerator struct {
 	// config describes the configuration defining value generation parameters.
 	config *RandomValueGeneratorConfig
@@ -34,7 +33,7 @@ type RandomValueGeneratorConfig struct {
 	GenerateRandomStringMaxSize int
 }
 
-// NewRandomValueGenerator creates a new RandomValueGenerator with a new random provider.
+// NewRandomValueGenerator creates a new RandomValueGenerator.
 func NewRandomValueGenerator(config *RandomValueGeneratorConfig, randomProvider *rand.Rand) *RandomValueGenerator {
 	// Create and return our generator
 	generator := &RandomValueGenerator{
@@ -42,11 +41,6 @@ func NewRandomValueGenerator(config *RandomValueGeneratorConfig, randomProvider 
 		randomProvider: randomProvider,
 	}
 	return generator
-}
-
-// RandomProvider returns the internal random provider used for value generation.
-func (g *RandomValueGenerator) RandomProvider() *rand.Rand {
-	return g.randomProvider
 }
 
 // GenerateAddress generates a random address to use when populating inputs.

@@ -2,6 +2,7 @@ package reflectionutils
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"reflect"
 )
 
@@ -54,7 +55,9 @@ func CopyReflectedType(reflectedValue reflect.Value) reflect.Value {
 		}
 		return newStruct
 	}
-	panic("failed to copy reflected value, type not supported")
+
+	logging.GlobalLogger.Panic("Failed to copy reflected value", fmt.Errorf("type not supported"))
+	return reflectedValue
 }
 
 // GetReflectedArrayValues obtains the values of each element of a reflected array or slice variable.
@@ -71,7 +74,9 @@ func GetReflectedArrayValues(reflectedArray reflect.Value) []any {
 		}
 		return values
 	}
-	panic("failed to get reflected array values, type not supported")
+
+	logging.GlobalLogger.Panic("Failed to get reflected array values", fmt.Errorf("type not supported"))
+	return nil
 }
 
 // SetReflectedArrayValues takes an array or slice of the same length as the values provided, and sets each element
@@ -93,5 +98,7 @@ func SetReflectedArrayValues(reflectedArray reflect.Value, values []any) error {
 		}
 		return nil
 	}
-	panic("failed to set reflected array values, type not supported")
+
+	logging.GlobalLogger.Panic("Failed to set reflected array values", fmt.Errorf("type not supported"))
+	return nil
 }

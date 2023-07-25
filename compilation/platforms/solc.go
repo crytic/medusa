@@ -104,6 +104,18 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Create a compilation unit out of this.
 	compilation := types.NewCompilation()
+	if sourceList, ok := results["sourceList"]; ok {
+		if sourceListCasted, ok := sourceList.([]any); ok {
+			compilation.SourceList = make([]string, len(sourceListCasted))
+			for i := 0; i < len(sourceListCasted); i++ {
+				compilation.SourceList[i] = sourceListCasted[i].(string)
+			}
+		} else {
+			return nil, "", fmt.Errorf("could not parse compiled source artifact because 'sourcesList' was not a []string type")
+		}
+	} else {
+		return nil, "", fmt.Errorf("could not parse compiled source artifact because 'sourcesList' did not exist")
+	}
 
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
@@ -135,6 +147,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+
 	for name, contract := range contracts {
 		// Split our name which should be of form "filename:contractname"
 		nameSplit := strings.Split(name, ":")

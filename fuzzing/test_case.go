@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/logging"
 )
 
 // TestCaseStatus defines the status of a TestCase as a string-represented enum.
@@ -31,7 +32,11 @@ type TestCase interface {
 	// Name describes the name of the test case.
 	Name() string
 
-	// Message obtains a text-based printable message which describes the test result.
+	// LogMessage obtains a logging.LogBuffer that represents the result of the TestCase. This buffer can be passed to a logger for
+	// console or file logging.
+	LogMessage() *logging.LogBuffer
+
+	// Message obtains a text-based printable message which describes the result of the AssertionTestCase.
 	Message() string
 
 	// ID obtains a unique identifier for a test result. If the same test fails, this ID should match for both
