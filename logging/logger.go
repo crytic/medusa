@@ -411,7 +411,8 @@ func formatUnstructuredWriter(writer io.Writer, level zerolog.Level, colored boo
 		consoleWriter.FieldsExclude = []string{"module"}
 	}
 
-	// Since coloring is enabled, we will return a custom, colored string for each log severity level
+	// If coloring is enabled, we will return a custom, colored string for each log severity level
+	// Otherwise, we will just return a non-colorized string for each log severity level
 	consoleWriter.FormatLevel = func(i any) string {
 		// Create a level object for better switch logic
 		level, err := zerolog.ParseLevel(i.(string))
