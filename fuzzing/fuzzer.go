@@ -89,7 +89,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create the global logger and add stdout as an unstructured, colored output stream
 	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
 	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
-	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, false)
 
 	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
 	if config.Logging.LogDirectory != "" {
