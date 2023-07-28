@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"golang.org/x/exp/slices"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -184,9 +183,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	return fuzzer, nil
 }
 
-// ContractDefinitions exposes the contract definitions registered with the Fuzzer.
+// // ContractDefinitions exposes the contract definitions registered with the Fuzzer.
 func (f *Fuzzer) ContractDefinitions() fuzzerTypes.Contracts {
-	return slices.Clone(f.contractDefinitions)
+	contractDefinitions := make(fuzzerTypes.Contracts)
+	for name, contract := range f.contractDefinitions {
+		contractDefinitions[name] = contract
+	}
+	return contractDefinitions
 }
 
 // Config exposes the underlying project configuration provided to the Fuzzer.
@@ -282,7 +285,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
-				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
+				f.contractDefinitions[contractName] = contractDefinition
 			}
 		}
 
@@ -330,7 +333,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 	// we can infer the deployment order. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
 		if len(fuzzer.contractDefinitions) == 1 {
-			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
+			for name, _ := range fuzzer.contractDefinitions {
+				fuzzer.config.Fuzzing.DeploymentOrder = []string{name}
+			}
 		} else {
 			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
 		}
@@ -338,75 +343,145 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 	// Loop for all contracts to deploy
 	deployedContractAddr := make(map[string]common.Address)
+	libraryPlaceholders := make(map[string]string)
+
+	// Look for a contract in our compiled contract definitions that matches this one
 	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
-		// Look for a contract in our compiled contract definitions that matches this one
-		found := false
-		for _, contract := range fuzzer.contractDefinitions {
-			// If we found a contract definition that matches this definition by name, try to deploy it
-			if contract.Name() == contractName {
-				args := make([]any, 0)
-				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
-					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
-					if !ok {
-						return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
-					}
-					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
-						jsonArgs, deployedContractAddr)
-					if err != nil {
-						return err
-					}
-					args = decoded
-				}
+		if deployedContractAddr[contractName] != (common.Address{}) {
+			continue
+		}
+		contract, ok := fuzzer.contractDefinitions[contractName]
 
-				// Constructor our deployment message/tx data field
-				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
-				if err != nil {
-					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
-				}
+		if !ok {
+			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %s", contractName)
+		}
 
-				// Create a message to represent our contract deployment (we let deployments consume the whole block
-				// gas limit rather than use tx gas limit)
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
-				msg.FillFromTestChainProperties(testChain)
+		// Because the LibraryDependencies are in post-order, we do not need to determine the order in which to deploy
+		for _, linkInfo := range contract.CompiledContract().LibraryDependencies {
+			libraryName, libraryPlaceholder := linkInfo.Name, linkInfo.Placeholder
 
-				// Create a new pending block we'll commit to chain
-				block, err := testChain.PendingBlockCreate()
-				if err != nil {
-					return err
-				}
-
-				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg)
-				if err != nil {
-					return err
-				}
-
-				// Commit the pending block to the chain, so it becomes the new head.
-				err = testChain.PendingBlockCommit()
-				if err != nil {
-					return err
-				}
-
-				// Ensure our transaction succeeded
-				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
-				}
-
-				// Record our deployed contract so the next config-specified constructor args can reference this
-				// contract by name.
-				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
-
-				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
-				// inner loop to process the next contract to deploy in the outer loop.
-				found = true
-				break
+			// If the library was already deployed (another contract/library depended on it), link to its existing address
+			if deployedContractAddr[libraryName] != (common.Address{}) {
+				addr := deployedContractAddr[libraryName].String()[2:]
+				contract.CompiledContract().UnlinkedInitBytecode = strings.ReplaceAll(contract.CompiledContract().UnlinkedInitBytecode, libraryPlaceholder, addr)
+				contract.CompiledContract().UnlinkedRuntimeBytecode = strings.ReplaceAll(contract.CompiledContract().UnlinkedRuntimeBytecode, libraryPlaceholder, addr)
+				continue
 			}
+
+			library, ok := fuzzer.contractDefinitions[libraryName]
+			if !ok {
+				return fmt.Errorf("library not found in compilation: %s", contractName)
+			}
+
+			// Link any previously deployed libraries that the current library depends on
+			for previousLibraryName, previousPlaceholder := range libraryPlaceholders {
+				previousDeployedAddress := deployedContractAddr[previousLibraryName].String()[2:]
+				library.CompiledContract().UnlinkedInitBytecode = strings.ReplaceAll(library.CompiledContract().UnlinkedInitBytecode, previousPlaceholder, previousDeployedAddress)
+				library.CompiledContract().UnlinkedRuntimeBytecode = strings.ReplaceAll(library.CompiledContract().UnlinkedRuntimeBytecode, previousPlaceholder, previousDeployedAddress)
+			}
+			// TODO create helper to deduplicate deployment code
+			// After linking, decode the bytecode so that init and runtime are set
+			err := library.CompiledContract().DecodeFullyLinkedBytecode()
+			if err != nil {
+				return err
+			}
+
+			msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, library.CompiledContract().InitBytecode)
+			msg.FillFromTestChainProperties(testChain)
+
+			// Create a new pending block we'll commit to chain
+			block, err := testChain.PendingBlockCreate()
+			if err != nil {
+				return err
+			}
+
+			// Add our transaction to the block
+			err = testChain.PendingBlockAddTx(msg)
+			if err != nil {
+				return err
+			}
+
+			// Commit the pending block to the chain, so it becomes the new head.
+			err = testChain.PendingBlockCommit()
+			if err != nil {
+				return err
+			}
+
+			// Ensure our transaction succeeded
+			if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+				return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+			}
+
+			// Record our deployed contract so the next config-specified constructor args can reference this
+			// contract by name.
+			deployedAddress := block.MessageResults[0].Receipt.ContractAddress
+
+			deployedContractAddr[libraryName] = deployedAddress
+			libraryPlaceholders[libraryName] = libraryPlaceholder
+
+			// Link the library to the deployed address in the contract's bytecode
+			deployedAddressStr := deployedAddress.String()[2:]
+			contract.CompiledContract().UnlinkedInitBytecode = strings.ReplaceAll(contract.CompiledContract().UnlinkedInitBytecode, libraryPlaceholder, deployedAddressStr)
+			contract.CompiledContract().UnlinkedRuntimeBytecode = strings.ReplaceAll(contract.CompiledContract().UnlinkedRuntimeBytecode, libraryPlaceholder, deployedAddressStr)
 		}
 
-		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
-		if !found {
-			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
+		// After linking, decode the bytecode so that init and runtime are set
+		err := contract.CompiledContract().DecodeFullyLinkedBytecode()
+		if err != nil {
+			return err
 		}
+
+		args := make([]any, 0)
+		if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+			jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
+			if !ok {
+				return fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+			}
+			decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
+				jsonArgs, deployedContractAddr)
+			if err != nil {
+				return err
+			}
+			args = decoded
+		}
+
+		// Constructor our deployment message/tx data field
+		msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
+		if err != nil {
+			return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+		}
+
+		// Create a message to represent our contract deployment (we let deployments consume the whole block
+		// gas limit rather than use tx gas limit)
+		msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+		msg.FillFromTestChainProperties(testChain)
+
+		// Create a new pending block we'll commit to chain
+		block, err := testChain.PendingBlockCreate()
+		if err != nil {
+			return err
+		}
+
+		// Add our transaction to the block
+		err = testChain.PendingBlockAddTx(msg)
+		if err != nil {
+			return err
+		}
+
+		// Commit the pending block to the chain, so it becomes the new head.
+		err = testChain.PendingBlockCommit()
+		if err != nil {
+			return err
+		}
+
+		// Ensure our transaction succeeded
+		if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+			return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+		}
+
+		// Record our deployed contract so the next config-specified constructor args can reference this
+		// contract by name.
+		deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
 	}
 	return nil
 }

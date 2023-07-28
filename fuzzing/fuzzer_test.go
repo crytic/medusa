@@ -694,3 +694,22 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 		},
 	})
 }
+
+// TestDeploymentsExternalLibrary runs a test to ensure external libraries behave correctly.
+func TestDeploymentsExternalLibrary(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/external_library.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestExternalLibrary"}
+			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}

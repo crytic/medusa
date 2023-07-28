@@ -1,7 +1,6 @@
 package platforms
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,6 +151,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		Abi           any    `json:"abi"`
 		Bin           string `json:"bin"`
 		BinRuntime    string `json:"bin-runtime"`
+		LibraryDependencies []types.LinkInfo `json:"libraries"`
 	}
 	type solcExportData struct {
 		Sources    map[string]solcExportSource   `json:"sources"`
@@ -212,23 +212,17 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
 			}
 
-			// Decode our init and runtime bytecode
-			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
-			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-			}
-			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
-			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
-			}
 
-			// Add contract details
+			// Add contract details. InitBytecode and RuntimeBytecode will be set by DecodeFullyLinkedBytecode after library linking
 			compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
-				Abi:             *contractAbi,
-				InitBytecode:    initBytecode,
-				RuntimeBytecode: runtimeBytecode,
-				SrcMapsInit:     contract.SrcMap,
-				SrcMapsRuntime:  contract.SrcMapRuntime,
+				Abi:                     *contractAbi,
+				UnlinkedInitBytecode:    contract.Bin,
+				InitBytecode:            []byte{},
+				UnlinkedRuntimeBytecode: contract.BinRuntime,
+				RuntimeBytecode:         []byte{},
+				SrcMapsInit:             contract.SrcMap,
+				SrcMapsRuntime:          contract.SrcMapRuntime,
+				LibraryDependencies:     contract.LibraryDependencies,
 			}
 		}
 
