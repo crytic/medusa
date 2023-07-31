@@ -94,7 +94,7 @@ func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformC
 
 	// Update platform, assuming the platform is supported
 	if !IsSupportedCompilationPlatform(platformConfig.Platform()) {
-		return fmt.Errorf("compilation platform '%v' is unsupported", platformConfig.Platform)
+		return fmt.Errorf("compilation platform '%v' is unsupported", platformConfig.Platform())
 	}
 	c.Platform = platformConfig.Platform()
 
