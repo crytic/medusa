@@ -52,11 +52,6 @@ func NewCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformCon
 // is then used to compile the underlying targets. Returns a list of compilations returned by the platform provider or
 // an error. Command-line input may also be returned in either case.,
 func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
-	// Verify the platform is valid
-	if !IsSupportedCompilationPlatform(c.Platform) {
-		return nil, "", fmt.Errorf("could not compile from configs: platform '%s' is unsupported", c.Platform)
-	}
-
 	// Get the platform config
 	platformConfig, err := c.GetPlatformConfig()
 	if err != nil {
@@ -69,6 +64,16 @@ func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 // GetPlatformConfig will return the de-serialized version of platforms.PlatformConfig for a given CompilationConfig
 func (c *CompilationConfig) GetPlatformConfig() (platforms.PlatformConfig, error) {
+	// Ensure that the platform is non-empty
+	if c.Platform == "" {
+		return nil, fmt.Errorf("must specify a platform for compilation")
+	}
+
+	// Ensure that the platform is supported
+	if !IsSupportedCompilationPlatform(c.Platform) {
+		return nil, fmt.Errorf("compilation platform '%v' is unsupported", c.Platform)
+	}
+
 	// Allocate a platform config given our platform string in our compilation config
 	// It is necessary to do so as json.Unmarshal needs a concrete structure to populate
 	platformConfig := GetDefaultPlatformConfig(c.Platform)
@@ -87,7 +92,10 @@ func (c *CompilationConfig) SetPlatformConfig(platformConfig platforms.PlatformC
 		return errors.New("platformConfig must be non-nil")
 	}
 
-	// Update platform
+	// Update platform, assuming the platform is supported
+	if !IsSupportedCompilationPlatform(platformConfig.Platform()) {
+		return fmt.Errorf("compilation platform '%v' is unsupported", platformConfig.Platform())
+	}
 	c.Platform = platformConfig.Platform()
 
 	// Serialize
