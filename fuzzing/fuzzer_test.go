@@ -258,12 +258,21 @@ func TestCheatCodes(t *testing.T) {
 	}
 }
 
-// TestConsoleLog tests console log
+// TestConsoleLog tests the console.log precompile contract by logging a variety of different primitive types and
+// then failing. The execution trace for the failing call sequence should hold the various logs.
 func TestConsoleLog(t *testing.T) {
+	// These are the logs that should show up in the execution trace
+	expectedLogs := []string{
+		"2",
+		"hello world",
+		"byte",
+		"i is 2",
+		"% bool is true, addr is 0x0000000000000000000000000000000000000000, u is 100",
+	}
+
 	filePaths := []string{
 		"testdata/contracts/cheat_codes/console_log/console_log.sol",
 	}
-
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
@@ -280,7 +289,24 @@ func TestConsoleLog(t *testing.T) {
 				assert.NoError(t, err)
 
 				// Check for failed assertion tests.
-				assertFailedTestsExpected(f, true)
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Obtain the last call
+				lastCall := failingSequence[len(failingSequence)-1]
+				assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+				// Get the execution trace message
+				executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+				// Verify it contains all expected logs
+				for _, expectedLog := range expectedLogs {
+					assert.Contains(t, executionTraceMsg, expectedLog)
+				}
 			},
 		})
 	}

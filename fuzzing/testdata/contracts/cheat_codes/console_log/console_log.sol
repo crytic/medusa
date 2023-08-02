@@ -1,8 +1,33 @@
-/// @dev The original console.sol uses `int` and `uint` for computing function selectors, but it should
-/// use `int256` and `uint256`. This modified version fixes that. This version is recommended
-/// over `console.sol` if you don't need compatibility with Hardhat as the logs will show up in
-/// forge stack traces. If you do need compatibility with Hardhat, you must use `console.sol`.
-/// Reference: https://github.com/NomicFoundation/hardhat/issues/2178
+// Test console.log capabilities to make sure logging and string formatting are happening as expected
+contract TestContract {
+
+    function testConsoleLog() public {
+        // Log an int256
+        int256 i = 2;
+        console.log(i);
+
+        // Log bytes
+        bytes memory byteSlice = "hello world";
+        console.logBytes(byteSlice);
+
+        // Log fixed bytes
+        bytes4 fixedBytes = "byte";
+        console.logBytes4(fixedBytes);
+
+        // Log a string and int256 while testing string formatting
+        string memory str = "i is %d";
+        console.log(str, i);
+
+        // Test the permutation logic by logging a random permutation and also string formatting
+        bool b = true;
+        address addr = address(0);
+        uint256 u = 100;
+        str = "%% bool is %t, addr is %s, u is %d";
+        console.log(str, b, addr, u);
+        assert(false);
+    }
+}
+
 library console {
     address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
 
@@ -1540,31 +1565,4 @@ library console {
         _sendLogPayload(abi.encodeWithSignature("log(address,address,address,address)", p0, p1, p2, p3));
     }
 
-}
-
-contract TestContract {
-    uint x;
-
-    function setX(uint value) public {
-        // Obtain our cheat code contract reference.
-        // Console log x
-        //console.log("This %s", value);
-        assert(value % 2 == 0);
-    }
-
-    function fuzz_test() public view returns (bool) {
-        uint u = 1;
-        int i = 2;
-        bytes memory test = "hello world";
-        bytes4 b = "byte";
-        address t = address(0);
-        console.logInt(i);
-        console.logBytes(test);
-        console.logBytes4(b);
-        console.log("hello", i);
-        //console.log(i);
-        //console.log(test);
-        //console.log(t);
-        return false;
-    }
 }

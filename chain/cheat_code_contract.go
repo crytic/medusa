@@ -70,7 +70,7 @@ func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
 	}
 
 	// Obtain the console.log pre-compile
-	consoleCheatCodeContract, err := getConsoleCheatCodeContract(tracer)
+	consoleCheatCodeContract, err := getConsoleLogCheatCodeContract(tracer)
 	if err != nil {
 		return nil, nil, err
 	}
