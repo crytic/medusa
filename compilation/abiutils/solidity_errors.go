@@ -115,7 +115,7 @@ func GetPanicReason(panicCode uint64) string {
 	case PanicCodeCompilerInserted:
 		return "panic: compiler inserted panic"
 	case PanicCodeAssertFailed:
-		return "assertion failed"
+		return "panic: assertion failed"
 	case PanicCodeArithmeticUnderOverflow:
 		return "panic: arithmetic underflow"
 	case PanicCodeDivideByZero:
