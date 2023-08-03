@@ -369,7 +369,7 @@ func (t *ExecutionTrace) Log() *logging.LogBuffer {
 		buffer.Append(colors.Bold, "[Logs]", colors.Reset, "\n")
 		buffer.Append(logs...)
 	}
-	
+
 	return buffer
 }
 
