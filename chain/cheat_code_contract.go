@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/pkg/errors"
 )
 
 // CheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
@@ -146,25 +145,6 @@ func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs
 	// Note: Normally the key here should be the method name, not sig. But cheat code contracts have duplicate
 	// method names with different parameter types, so we use this so they don't override.
 	c.abi.Methods[method.Sig] = method
-}
-
-// addEvent adds a new event to the precompiled contract ABI and returns the event signature
-func (c *CheatCodeContract) addEvent(name string, inputs abi.Arguments) (common.Hash, error) {
-	// Verify an event name was provided
-	if name == "" {
-		return common.Hash{}, errors.New("could not add event to precompiled cheatcode contract, empty event name provided")
-	}
-
-	// Verify that there is at least one input argument
-	if len(inputs) == 0 {
-		return common.Hash{}, errors.New("could not add event to precompiled cheatcode contract, no input arguments provided")
-	}
-
-	// Create the event and add it to the cheatcode contract's ABI
-	event := abi.NewEvent(name, name, false, inputs)
-	c.abi.Events[event.Sig] = event
-
-	return event.ID, nil
 }
 
 // RequiredGas determines the amount of gas necessary to execute the pre-compile with the given input data.
