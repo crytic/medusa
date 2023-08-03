@@ -441,12 +441,12 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 // Returns an error if one occurs.
 func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, element *calls.CallSequenceElement) error {
 	// If this element has no ABI value based call data, exit early.
-	if element.Call == nil || element.Call.MsgDataAbiValues == nil {
+	if element.Call == nil || element.Call.DataAbiValues == nil {
 		return nil
 	}
 
 	// Loop for each input value and mutate it
-	abiValuesMsgData := element.Call.MsgDataAbiValues
+	abiValuesMsgData := element.Call.DataAbiValues
 	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
 		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
 		if err != nil {
