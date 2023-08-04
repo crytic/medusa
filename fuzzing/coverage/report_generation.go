@@ -3,19 +3,25 @@ package coverage
 import (
 	_ "embed"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/utils"
 	"html/template"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
 )
 
 var (
 	//go:embed report_template.gohtml
 	htmlReportTemplate []byte
+)
+var (
+	//go:embed report_template.gojson
+	jsonReportTemplate []byte
 )
 
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
@@ -31,7 +37,80 @@ func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps
 	// Finally, export the report data we analyzed.
 	if htmlReportPath != "" {
 		err = exportCoverageReport(sourceAnalysis, htmlReportPath)
+		err = exportCoverageReportJSON(sourceAnalysis, htmlReportPath)
 	}
+	return err
+}
+
+// exportCoverageReportJSON takes a previously performed source analysis and generates a JSON coverage report from it.
+// Returns an error if one occurs.
+func exportCoverageReportJSON(sourceAnalysis *SourceAnalysis, outputPath string) error {
+	functionMap := template.FuncMap{
+		"add": func(x int, y int) int {
+			return x + y
+		},
+		"sub": func(x int, y int) int {
+			return x - y
+		},
+		"relativePath": func(path string) string {
+			// Obtain a path relative to our current working directory.
+			// If we encounter an error, return the original path.
+			cwd, err := os.Getwd()
+			if err != nil {
+				return path
+			}
+			relativePath, err := filepath.Rel(cwd, path)
+			if err != nil {
+				return path
+			}
+
+			return relativePath
+		},
+		"lastActiveIndex": func(sourceFileAnalysis *SourceFileAnalysis) int {
+			// Determine the last active line index and return it
+			lastIndex := 0
+			for lineIndex, line := range sourceFileAnalysis.Lines {
+				if line.IsActive {
+					lastIndex = lineIndex
+				}
+			}
+			return lastIndex
+		},
+	}
+
+	// Parse our JSON template
+	tmpl, err := template.New("coverage_report.json").Funcs(functionMap).Parse(string(jsonReportTemplate))
+
+	// Converts the html path to the json path
+	// TODO: Remove this in favor of a more generic approach
+	parts := strings.Split(outputPath, "/")
+	parts = parts[:len(parts)-1]
+	outputPath = strings.Join(parts, "/")
+	outputPath = outputPath + "/coverage_report.json"
+
+	fmt.Println("Report path:", outputPath)
+
+	// If the parent directory doesn't exist, create it.
+	parentDirectory := filepath.Dir(outputPath)
+	err = utils.MakeDirectory(parentDirectory)
+	if err != nil {
+		return err
+	}
+
+	// Create our report file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		_ = file.Close()
+		return fmt.Errorf("could not export report, failed to open file for writing: %v", err)
+	}
+
+	// Execute the template and write it back to file.
+	err = tmpl.Execute(file, sourceAnalysis)
+	fileCloseErr := file.Close()
+	if err == nil {
+		err = fileCloseErr
+	}
+
 	return err
 }
 

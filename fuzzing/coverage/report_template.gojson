@@ -1,0 +1,15 @@
+[{{range $index, $sourceFile := .SortedFiles}}{{if $index}},{{end}}
+	{
+		"lines": {
+			"found": {{$sourceFile.ActiveLineCount}},
+			"hit": {{$sourceFile.CoveredLineCount}},
+			"details": [{{$lastActive := lastActiveIndex $sourceFile}}{{range $lineIndex, $line := $sourceFile.Lines}}{{if $line.IsActive}}
+				{
+					"line": {{add $lineIndex 1}},
+					"hit": {{if or $line.IsCovered $line.IsCoveredReverted}} 1 {{else}} 0 {{end}}
+				}{{if ne $lineIndex $lastActive}},{{end}}{{end}}{{end}}
+				],
+            "file": "{{relativePath $sourceFile.Path}}"
+		}
+	}{{end}}
+]
