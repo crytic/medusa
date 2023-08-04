@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/crytic/medusa/compilation/types"
@@ -27,7 +26,7 @@ var (
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
 // all source mapped ranges of the source files which were covered or not.
 // Returns an error if one occurred.
-func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps, htmlReportPath string) error {
+func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps, reportPath string) error {
 	// Perform source analysis.
 	sourceAnalysis, err := AnalyzeSourceCoverage(compilations, coverageMaps)
 	if err != nil {
@@ -35,9 +34,9 @@ func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps
 	}
 
 	// Finally, export the report data we analyzed.
-	if htmlReportPath != "" {
-		err = exportCoverageReport(sourceAnalysis, htmlReportPath)
-		err = exportCoverageReportJSON(sourceAnalysis, htmlReportPath)
+	if reportPath != "" {
+		err = exportCoverageReport(sourceAnalysis, reportPath)
+		err = exportCoverageReportJSON(sourceAnalysis, reportPath)
 	}
 	return err
 }
@@ -81,12 +80,8 @@ func exportCoverageReportJSON(sourceAnalysis *SourceAnalysis, outputPath string)
 	// Parse our JSON template
 	tmpl, err := template.New("coverage_report.json").Funcs(functionMap).Parse(string(jsonReportTemplate))
 
-	// Converts the html path to the json path
-	// TODO: Remove this in favor of a more generic approach
-	parts := strings.Split(outputPath, "/")
-	parts = parts[:len(parts)-1]
-	outputPath = strings.Join(parts, "/")
-	outputPath = outputPath + "/coverage_report.json"
+	// Add the report file to the path
+	outputPath = filepath.Join(outputPath, "coverage_report.json")
 
 	fmt.Println("Report path:", outputPath)
 
@@ -160,6 +155,9 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 	if err != nil {
 		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
 	}
+
+	// Add the report file to the path
+	outputPath = filepath.Join(outputPath, "coverage_report.html")
 
 	// If the parent directory doesn't exist, create it.
 	parentDirectory := filepath.Dir(outputPath)

@@ -8,8 +8,8 @@
 					"line": {{add $lineIndex 1}},
 					"hit": {{if or $line.IsCovered $line.IsCoveredReverted}} 1 {{else}} 0 {{end}}
 				}{{if ne $lineIndex $lastActive}},{{end}}{{end}}{{end}}
-				],
-            "file": "{{relativePath $sourceFile.Path}}"
-		}
+				]
+		},
+        "file": "{{relativePath $sourceFile.Path}}"
 	}{{end}}
 ]

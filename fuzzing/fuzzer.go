@@ -3,20 +3,20 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/coverage"
-	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/pkgerrors"
 	"io"
 	"math/big"
 	"math/rand"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -684,7 +684,7 @@ func (f *Fuzzer) Start() error {
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
+		coverageReportPath := f.config.Fuzzing.CorpusDirectory
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
 		f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
 	}
