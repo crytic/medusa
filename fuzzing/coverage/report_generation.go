@@ -88,8 +88,9 @@ func exportJsonCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string)
 
 	// Parse our JSON template
 	tmpl, err := template.New("coverage_report.json").Funcs(functionMap).Parse(string(jsonReportTemplate))
-
-	fmt.Println("Report path:", outputPath)
+	if err != nil {
+		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
+	}
 
 	// If the parent directory doesn't exist, create it.
 	parentDirectory := filepath.Dir(outputPath)
