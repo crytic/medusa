@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -747,18 +748,12 @@ func (f *Fuzzer) Start() error {
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-<<<<<<< HEAD
 		htmlReportPath := f.config.Fuzzing.HtmlReportFile
 		jsonReportPath := f.config.Fuzzing.JsonReportFile
 		corpusDir := f.config.Fuzzing.CorpusDirectory
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), corpusDir, htmlReportPath, jsonReportPath)
 		f.logger.Info("HTML Coverage report saved to file: ", colors.Bold, filepath.Join(corpusDir, htmlReportPath), colors.Reset)
 		f.logger.Info("JSON Coverage report saved to file: ", colors.Bold, filepath.Join(corpusDir, jsonReportPath), colors.Reset)
-=======
-		coverageReportPath := f.config.Fuzzing.CorpusDirectory
-		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
-		f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
->>>>>>> aa8e54b (fix json template, change htmlReportPath to corpus path)
 	}
 
 	// Return any encountered error.

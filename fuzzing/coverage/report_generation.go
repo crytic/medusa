@@ -163,9 +163,6 @@ func exportHtmlCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string)
 		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
 	}
 
-	// Add the report file to the path
-	outputPath = filepath.Join(outputPath, "coverage_report.html")
-
 	// If the parent directory doesn't exist, create it.
 	parentDirectory := filepath.Dir(outputPath)
 	err = utils.MakeDirectory(parentDirectory)

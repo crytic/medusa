@@ -7,11 +7,12 @@ import (
 	"os"
 
 	"github.com/crytic/medusa/chain/config"
+	"github.com/rs/zerolog"
+
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/rs/zerolog"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
