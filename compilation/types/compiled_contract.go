@@ -2,12 +2,19 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"strings"
 )
+
+// LinkInfo provides the library name and placeholder string to replace in the unlinked bytecode.
+type LinkInfo struct {
+	Name string
+	Placeholder string
+}
 
 // CompiledContract represents a single contract unit from a smart contract compilation.
 type CompiledContract struct {
@@ -16,11 +23,17 @@ type CompiledContract struct {
 	// information, event declarations, and fallback and receive methods.
 	Abi abi.ABI
 
-	// InitBytecode describes the bytecode used to deploy a contract.
+	// InitBytecode is the raw (potentially unlinked) init bytecode.
+	UnlinkedInitBytecode string
+
+	// InitBytecode is the hex-decoded bytecode used to deploy a contract.
 	InitBytecode []byte
 
-	// RuntimeBytecode represents the rudimentary bytecode to be expected once the contract has been successfully
-	// deployed. This may differ at runtime based on constructor arguments, immutables, linked libraries, etc.
+	// InitBytecode is the raw (potentially unlinked) runtime bytecode.
+	UnlinkedRuntimeBytecode string
+
+	// RuntimeBytecode is the bytecode expected to exist at the deployed address after construction. 
+	// This may differ at runtime based on constructor arguments, immutables, etc.
 	RuntimeBytecode []byte
 
 	// SrcMapsInit describes the source mappings to associate source file and bytecode segments in InitBytecode.
@@ -28,6 +41,24 @@ type CompiledContract struct {
 
 	// SrcMapsRuntime describes the source mappings to associate source file and bytecode segments in RuntimeBytecode.
 	SrcMapsRuntime string
+
+	// LibraryDependencies lists the resolved library dependencies for this contract in post-order. 
+	// They must be deployed in this order to handle libraries which depend on other libraries.
+	LibraryDependencies []LinkInfo
+}
+
+// Decode our init and runtime bytecode from string to hex. This should be called after library linking.
+func (c *CompiledContract) DecodeFullyLinkedBytecode() error {
+	var err error
+	c.InitBytecode, err = hex.DecodeString(strings.TrimPrefix(c.UnlinkedInitBytecode, "0x"))
+	if err != nil {
+		return fmt.Errorf("unable to parse init bytecode for contract. Are all libraries linked?\n")
+	}
+	c.RuntimeBytecode, err = hex.DecodeString(strings.TrimPrefix(c.UnlinkedRuntimeBytecode, "0x"))
+	if err != nil {
+		return fmt.Errorf("unable to parse runtime bytecode for contract\n Are all libraries linked?\n")
+	}
+	return nil
 }
 
 // IsMatch returns a boolean indicating whether provided contract bytecode is a match to this compiled contract

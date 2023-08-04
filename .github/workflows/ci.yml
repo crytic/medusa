@@ -155,7 +155,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select 
+          pip3 install --no-cache-dir git+https://github.com/crytic/crytic-compile.git@feat/add-libraries-to-solc-export#egg=crytic-compile
 
       - name: Install solc
         run: |
