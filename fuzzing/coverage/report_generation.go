@@ -17,8 +17,6 @@ import (
 var (
 	//go:embed report_template.gohtml
 	htmlReportTemplate []byte
-)
-var (
 	//go:embed report_template.gojson
 	jsonReportTemplate []byte
 )
@@ -26,24 +24,35 @@ var (
 // GenerateReport takes a set of CoverageMaps and compilations, and produces a coverage report using them, detailing
 // all source mapped ranges of the source files which were covered or not.
 // Returns an error if one occurred.
-func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps, reportPath string) error {
+func GenerateReport(compilations []types.Compilation, coverageMaps *CoverageMaps, corpusPath string, htmlReportPath string, jsonReportPath string) error {
 	// Perform source analysis.
 	sourceAnalysis, err := AnalyzeSourceCoverage(compilations, coverageMaps)
 	if err != nil {
 		return err
 	}
 
-	// Finally, export the report data we analyzed.
-	if reportPath != "" {
-		err = exportCoverageReport(sourceAnalysis, reportPath)
-		err = exportCoverageReportJSON(sourceAnalysis, reportPath)
+	// Stores the output path of the report
+	var outputPath string
+
+	// Export the html report of the data we analyzed.
+	if htmlReportPath != "" {
+		outputPath = filepath.Join(corpusPath, htmlReportPath)
+		err = exportHtmlCoverageReport(sourceAnalysis, outputPath)
+	}
+	// Export the json report of the data we analyzed.
+	if jsonReportPath != "" {
+		outputPath = filepath.Join(corpusPath, jsonReportPath)
+		err2 := exportJsonCoverageReport(sourceAnalysis, outputPath)
+		if err == nil && err2 != nil {
+			err = err2
+		}
 	}
 	return err
 }
 
 // exportCoverageReportJSON takes a previously performed source analysis and generates a JSON coverage report from it.
 // Returns an error if one occurs.
-func exportCoverageReportJSON(sourceAnalysis *SourceAnalysis, outputPath string) error {
+func exportJsonCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) error {
 	functionMap := template.FuncMap{
 		"add": func(x int, y int) int {
 			return x + y
@@ -80,9 +89,6 @@ func exportCoverageReportJSON(sourceAnalysis *SourceAnalysis, outputPath string)
 	// Parse our JSON template
 	tmpl, err := template.New("coverage_report.json").Funcs(functionMap).Parse(string(jsonReportTemplate))
 
-	// Add the report file to the path
-	outputPath = filepath.Join(outputPath, "coverage_report.json")
-
 	fmt.Println("Report path:", outputPath)
 
 	// If the parent directory doesn't exist, create it.
@@ -111,7 +117,7 @@ func exportCoverageReportJSON(sourceAnalysis *SourceAnalysis, outputPath string)
 
 // exportCoverageReport takes a previously performed source analysis and generates an HTML coverage report from it.
 // Returns an error if one occurs.
-func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) error {
+func exportHtmlCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) error {
 	// Define mappings onto some useful variables/functions.
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
@@ -155,9 +161,6 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 	if err != nil {
 		return fmt.Errorf("could not export report, failed to parse report template: %v", err)
 	}
-
-	// Add the report file to the path
-	outputPath = filepath.Join(outputPath, "coverage_report.html")
 
 	// If the parent directory doesn't exist, create it.
 	parentDirectory := filepath.Dir(outputPath)
