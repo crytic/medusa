@@ -89,6 +89,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		return nil, err
 	}
 
+	// TODO: go-ethereum doesn't set shanghai start time for THEIR test `ChainConfig` struct.
+	//   Note: We have our own `TestChainConfig` definition that is different (second argument in this function).
+	//  We should allow the user to provide a go-ethereum `ChainConfig` to do custom fork selection, inside of our
+	//  `TestChainConfig` definition. Or we should wrap it in our own struct to simplify the options and not pollute
+	//  our overall medusa project config.
+	shanghaiTime := uint64(0)
+	chainConfig.ShanghaiTime = &shanghaiTime
+
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
 		Config:    chainConfig,
