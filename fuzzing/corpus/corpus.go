@@ -222,7 +222,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
-			c.logger.Warn("Corpus item ", colors.Bold, sequenceFileData.fileName, colors.Reset, " disabled due to error when replaying it", sequenceInvalidError)
+			c.logger.Debug("Corpus item ", colors.Bold, sequenceFileData.fileName, colors.Reset, " disabled due to error when replaying it", sequenceInvalidError)
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
