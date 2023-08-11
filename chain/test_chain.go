@@ -89,6 +89,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		return nil, err
 	}
 
+	// TODO: go-ethereum doesn't set shanghai start time for THEIR test `ChainConfig` struct.
+	//   Note: We have our own `TestChainConfig` definition that is different (second argument in this function).
+	//  We should allow the user to provide a go-ethereum `ChainConfig` to do custom fork selection, inside of our
+	//  `TestChainConfig` definition. Or we should wrap it in our own struct to simplify the options and not pollute
+	//  our overall medusa project config.
+	shanghaiTime := uint64(0)
+	chainConfig.ShanghaiTime = &shanghaiTime
+
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
 		Config:    chainConfig,
@@ -527,7 +535,7 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg core.Message, state *state.StateDB, additionalTracers ...vm.EVMLogger) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additionalTracers ...vm.EVMLogger) (*core.ExecutionResult, error) {
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state
@@ -537,7 +545,7 @@ func (t *TestChain) CallContract(msg core.Message, state *state.StateDB, additio
 	snapshot := state.Snapshot()
 
 	// Set infinite balance to the fake caller account
-	from := state.GetOrNewStateObject(msg.From())
+	from := state.GetOrNewStateObject(msg.From)
 	from.SetBalance(math.MaxBig256)
 
 	// Create our transaction and block contexts for the vm
@@ -552,7 +560,7 @@ func (t *TestChain) CallContract(msg core.Message, state *state.StateDB, additio
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
-		Debug:            true,
+		//Debug:            true,
 		Tracer:           extendedTracerRouter,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
@@ -672,7 +680,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockAddTx(message core.Message) error {
+func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
@@ -692,7 +700,7 @@ func (t *TestChain) PendingBlockAddTx(message core.Message) error {
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
-		Debug:            true,
+		//Debug:            true,
 		Tracer:           t.transactionTracerRouter,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,

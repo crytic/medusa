@@ -260,6 +260,9 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 		}
 	}
 
+	// Update the element with the current nonce for the associated chain.
+	element.Call.FillFromTestChainProperties(g.worker.chain)
+
 	// Update our base sequence, advance our position, and return the processed element from this round.
 	g.baseSequence[g.fetchIndex] = element
 	g.fetchIndex++
@@ -301,7 +304,6 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		Method:      &selectedMethod.Method,
 		InputValues: args,
 	})
-	msg.FillFromTestChainProperties(g.worker.chain)
 
 	// Determine our delay values for this element
 	blockNumberDelay := uint64(0)
@@ -441,12 +443,12 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 // Returns an error if one occurs.
 func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, element *calls.CallSequenceElement) error {
 	// If this element has no ABI value based call data, exit early.
-	if element.Call == nil || element.Call.MsgDataAbiValues == nil {
+	if element.Call == nil || element.Call.DataAbiValues == nil {
 		return nil
 	}
 
 	// Loop for each input value and mutate it
-	abiValuesMsgData := element.Call.MsgDataAbiValues
+	abiValuesMsgData := element.Call.DataAbiValues
 	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
 		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
 		if err != nil {
