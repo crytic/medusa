@@ -18,7 +18,7 @@ type Block struct {
 	// of a transaction occurs and can be thought of as an internal EVM transaction. It contains typical transaction
 	// fields plainly (e.g., no transaction signature is included, the sender is derived and simply supplied as a field
 	// in a message).
-	Messages []core.Message
+	Messages []*core.Message
 
 	// MessageResults represents the results recorded while executing transactions.
 	MessageResults []*MessageResults
@@ -30,7 +30,7 @@ func NewBlock(header *types.Header) *Block {
 	block := &Block{
 		Hash:           header.Hash(),
 		Header:         header,
-		Messages:       make([]core.Message, 0),
+		Messages:       make([]*core.Message, 0),
 		MessageResults: make([]*MessageResults, 0),
 	}
 	return block

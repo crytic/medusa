@@ -170,7 +170,7 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, er
 		operandCount := 0
 		if op.IsPush() {
 			if op == vm.PUSH0 {
-				operandCount = 1
+				operandCount = 0
 			} else {
 				operandCount = int(op) - int(vm.PUSH1) + 1
 			}

@@ -171,21 +171,21 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 			// If we are deploying a contract and not targeting one with this call, there should be no work to do.
 			currentSequenceElement := sequence[currentIndex]
-			if currentSequenceElement.Call.MsgTo == nil {
+			if currentSequenceElement.Call.To == nil {
 				return currentSequenceElement, nil
 			}
 
 			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
-			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.MsgTo]
+			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.To]
 			if !resolvedContractExists {
-				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.MsgTo.String())
+				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.To.String())
 				return nil, nil
 			}
 			currentSequenceElement.Contract = resolvedContract
 
 			// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
 			// sufficient for runtime use, until we use it to resolve runtime references.
-			callAbiValues := currentSequenceElement.Call.MsgDataAbiValues
+			callAbiValues := currentSequenceElement.Call.DataAbiValues
 			if callAbiValues != nil {
 				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
 				if sequenceInvalidError != nil {
