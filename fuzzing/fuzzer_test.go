@@ -433,7 +433,7 @@ func TestExecutionTraces(t *testing.T) {
 		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
 		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},
 		"testdata/contracts/execution_tracing/revert_reasons.sol":           {"RevertingContract was called and reverted."},
-		"testdata/contracts/execution_tracing/self_destruct.sol":            {"[selfdestruct]", "[assertion failed]"},
+		"testdata/contracts/execution_tracing/self_destruct.sol":            {"[selfdestruct]", "[panic: assertion failed]"},
 	}
 	for filePath, expectedTraceMessages := range expectedMessagesPerTest {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
