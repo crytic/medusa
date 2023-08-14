@@ -1,0 +1,21 @@
+[book]
+authors = ["Trail of Bits"]
+language = "en"
+multilingual = false
+src = "docs"
+title = "Medusa Documentation"
+description = ""
+logo = "docs/static/TOB_Black.svg"
+
+[output.html]
+git-repository-url = "https://github.com/crytic/medusa"
+edit-url-template = "https://github.com/crytic/medusa/edit/master/{path}"
+cname = "crytic.github.io/medusa"
+no-section-label = true
+additional-css = ["docs/static/custom.css"]
+default-theme = "light"
+mathjax-support = true
+
+[output.html.fold]
+enable = true
+level = 1
