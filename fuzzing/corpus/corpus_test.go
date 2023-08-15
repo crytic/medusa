@@ -55,15 +55,15 @@ func getMockCallSequenceElement() *calls.CallSequenceElement {
 func getMockCallSequenceElementCall() *calls.CallMessage {
 	to := common.BigToAddress(big.NewInt(rand.Int63()))
 	txn := calls.CallMessage{
-		MsgFrom:      common.BigToAddress(big.NewInt(rand.Int63())),
-		MsgTo:        &to,
-		MsgNonce:     rand.Uint64(),
-		MsgValue:     big.NewInt(int64(rand.Int())),
-		MsgGas:       rand.Uint64(),
-		MsgGasPrice:  big.NewInt(int64(rand.Int())),
-		MsgGasFeeCap: big.NewInt(int64(rand.Int())),
-		MsgGasTipCap: big.NewInt(int64(rand.Int())),
-		MsgData:      []byte{uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64())},
+		From:      common.BigToAddress(big.NewInt(rand.Int63())),
+		To:        &to,
+		Nonce:     rand.Uint64(),
+		Value:     big.NewInt(int64(rand.Int())),
+		GasLimit:  rand.Uint64(),
+		GasPrice:  big.NewInt(int64(rand.Int())),
+		GasFeeCap: big.NewInt(int64(rand.Int())),
+		GasTipCap: big.NewInt(int64(rand.Int())),
+		Data:      []byte{uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64()), uint8(rand.Uint64())},
 	}
 	return &txn
 }

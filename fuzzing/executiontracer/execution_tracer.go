@@ -14,7 +14,7 @@ import (
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contracts.Contracts, msg core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
 	executionTracer := NewExecutionTracer(contractDefinitions, chain.CheatCodeContracts())
 
