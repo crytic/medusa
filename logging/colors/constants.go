@@ -31,4 +31,7 @@ const (
 const (
 	// LEFT_ARROW is the unicode string for a left arrow glyph
 	LEFT_ARROW = "\u21fe"
+
+	// BULLET_POINT is the unicode string for a triangular bullet point
+	BULLET_POINT = "\u2023"
 )
