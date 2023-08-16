@@ -99,10 +99,10 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
 		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-		executionResult, err = worker.Chain().CallContract(msg, nil, executionTracer)
+		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil, executionTracer)
 		executionTrace = executionTracer.Trace()
 	} else {
-		executionResult, err = worker.Chain().CallContract(msg, nil)
+		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to call property test method: %v", err)

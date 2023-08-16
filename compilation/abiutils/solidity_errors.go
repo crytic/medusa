@@ -113,25 +113,25 @@ func GetPanicReason(panicCode uint64) string {
 	// Switch on panic code
 	switch panicCode {
 	case PanicCodeCompilerInserted:
-		return "compiler inserted panic"
+		return "panic: compiler inserted panic"
 	case PanicCodeAssertFailed:
-		return "assertion failed"
+		return "panic: assertion failed"
 	case PanicCodeArithmeticUnderOverflow:
-		return "arithmetic underflow"
+		return "panic: arithmetic underflow"
 	case PanicCodeDivideByZero:
-		return "division by zero"
+		return "panic: division by zero"
 	case PanicCodeEnumTypeConversionOutOfBounds:
-		return "enum access out of bounds"
+		return "panic: enum access out of bounds"
 	case PanicCodeIncorrectStorageAccess:
-		return "incorrect storage access"
+		return "panic: incorrect storage access"
 	case PanicCodePopEmptyArray:
-		return "pop on empty array"
+		return "panic: pop on empty array"
 	case PanicCodeOutOfBoundsArrayAccess:
-		return "out of bounds array access"
+		return "panic: out of bounds array access"
 	case PanicCodeAllocateTooMuchMemory:
-		return "overallocation of memory"
+		return "panic; overallocation of memory"
 	case PanicCodeCallUninitializedVariable:
-		return "call on uninitialized variable"
+		return "panic: call on uninitialized variable"
 	default:
 		return fmt.Sprintf("unknown panic code(%v)", panicCode)
 	}

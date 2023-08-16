@@ -323,6 +323,14 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 // shrink verifier. Chain state is reverted to the testing base prior to returning.
 // Returns a boolean indicating if the shrunken call sequence is valid for a given shrink request, or an error if one occurred.
 func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (bool, error) {
+	// After testing the sequence, we'll want to rollback changes to reset our testing state.
+	var err error
+	defer func() {
+		if err == nil {
+			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		}
+	}()
+
 	// Our "fetch next call method" method will simply fetch and fix the call message in case any fields are not correct due to shrinking.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
 		// If we are at the end of our sequence, return nil indicating we should stop executing.
@@ -340,9 +348,9 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 		// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
 		// If we detect coverage changes, add this sequence.
-		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
-		if err != nil {
-			return true, err
+		seqErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		if seqErr != nil {
+			return true, seqErr
 		}
 
 		// If our fuzzer context is done, exit out immediately without results.
@@ -354,7 +362,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	}
 
 	// Execute our call sequence.
-	_, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+	_, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 	if err != nil {
 		return false, err
 	}
@@ -371,11 +379,6 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 		if err != nil {
 			return false, err
 		}
-	}
-
-	// After testing the sequence, we'll want to rollback changes to reset our testing state.
-	if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
-		return false, err
 	}
 	return validShrunkSequence, nil
 }
@@ -430,7 +433,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			possibleShrunkSequence, _ := optimizedSequence.Clone()
 
 			// Loop for each argument in the currently indexed call to mutate it.
-			abiValuesMsgData := possibleShrunkSequence[i].Call.MsgDataAbiValues
+			abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
 			for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 				mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 				if err != nil {
