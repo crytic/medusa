@@ -40,7 +40,7 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 					}
 				} else {
 					if decValue, err := decimal.NewFromString(literalValue); err == nil {
-						b := getValueInDenomination(decValue, literalSubdenomination)
+						b := getAbsoluteValueFromDenominatedValue(decValue, literalSubdenomination)
 						if literalSubdenomination != nil {
 							print(fmt.Sprintf("Number: %v\nDenom: %v\nResult: %v", literalValue, *literalSubdenomination, b.String()))
 						}
@@ -56,11 +56,11 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 	})
 }
 
-// getValueInDenomination converts a given decimal number in a provided denomination to a big.Int
+// getAbsoluteValueFromDenominatedValue converts a given decimal number in a provided denomination to a big.Int
 // that represents its actual calculated value.
 // Note: Decimals must be used as big.Float is prone to similar mantissa-related precision issues as float32/float64.
 // Returns the calculated value given the floating point number in a given denomination.
-func getValueInDenomination(number decimal.Decimal, denomination *string) *big.Int {
+func getAbsoluteValueFromDenominatedValue(number decimal.Decimal, denomination *string) *big.Int {
 	// If the denomination is nil, we do nothing
 	if denomination == nil {
 		return number.BigInt()
@@ -71,39 +71,27 @@ func getValueInDenomination(number decimal.Decimal, denomination *string) *big.I
 	switch *denomination {
 	case "wei":
 		multiplier = decimal.NewFromFloat32(1)
-		break
 	case "gwei":
 		multiplier = decimal.NewFromFloat32(1e9)
-		break
 	case "szabo":
 		multiplier = decimal.NewFromFloat32(1e12)
-		break
 	case "finney":
 		multiplier = decimal.NewFromFloat32(1e15)
-		break
 	case "ether":
 		multiplier = decimal.NewFromFloat32(1e18)
-		break
 	case "seconds":
 		multiplier = decimal.NewFromFloat32(1)
-		break
 	case "minutes":
 		multiplier = decimal.NewFromFloat32(60)
-		break
 	case "hours":
 		multiplier = decimal.NewFromFloat32(60 * 60)
-		break
 	case "days":
 		multiplier = decimal.NewFromFloat32(60 * 60 * 24)
-		break
 	case "weeks":
 		multiplier = decimal.NewFromFloat32(60 * 60 * 24 * 7)
-		break
 	case "years":
 		multiplier = decimal.NewFromFloat32(60 * 60 * 24 * 7 * 365)
-		break
 	default:
-		break
 	}
 
 	// Obtain the transformed number as an integer.
