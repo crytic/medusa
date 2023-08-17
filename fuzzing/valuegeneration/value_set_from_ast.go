@@ -1,7 +1,6 @@
 package valuegeneration
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 	"math/big"
@@ -41,9 +40,6 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 				} else {
 					if decValue, err := decimal.NewFromString(literalValue); err == nil {
 						b := getAbsoluteValueFromDenominatedValue(decValue, literalSubdenomination)
-						if literalSubdenomination != nil {
-							print(fmt.Sprintf("Number: %v\nDenom: %v\nResult: %v", literalValue, *literalSubdenomination, b.String()))
-						}
 						vs.AddInteger(b)
 						vs.AddInteger(new(big.Int).Neg(b))
 						vs.AddAddress(common.BigToAddress(b))
