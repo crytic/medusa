@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
 	"math/big"
 	"math/rand"
 	"os"
