@@ -88,6 +88,7 @@ func getAbsoluteValueFromDenominatedValue(number decimal.Decimal, denomination *
 	case "years":
 		multiplier = decimal.NewFromFloat32(60 * 60 * 24 * 7 * 365)
 	default:
+		multiplier = decimal.NewFromFloat32(1)
 	}
 
 	// Obtain the transformed number as an integer.
