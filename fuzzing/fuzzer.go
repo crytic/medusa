@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"math/rand"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -723,13 +724,24 @@ func (f *Fuzzer) printMetricsLoop() {
 		// Calculate time elapsed since the last update
 		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
+		// Obtain memory usage stats
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		memoryUsedMB := memStats.Alloc / 1024 / 1024
+		memoryTotalMB := memStats.Sys / 1024 / 1024
+
 		// Print a metrics update
-		f.logger.Info(colors.Bold, "fuzz: ", colors.Reset,
-			"elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset,
-			", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset,
-			", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		logBuffer := logging.NewLogBuffer()
+		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
+		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
+		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		if f.logger.Level() <= zerolog.DebugLevel {
+			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
+			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		}
+		f.logger.Info(logBuffer.Elements()...)
 
 		// Update our delta tracking metrics
 		lastPrintedTime = time.Now()
