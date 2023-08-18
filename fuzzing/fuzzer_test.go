@@ -1,11 +1,13 @@
 package fuzzing
 
 import (
+	"encoding/hex"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -593,6 +595,75 @@ func TestValueGenerationSolving(t *testing.T) {
 			},
 		})
 	}
+}
+
+// TestASTValueExtraction runs a test to ensure appropriate AST values can be mined out of a compiled source's AST.
+func TestASTValueExtraction(t *testing.T) {
+	// Define our expected values to be mined.
+	expectedAddresses := []common.Address{
+		common.HexToAddress("0x7109709ECfa91a80626fF3989D68f67F5b1DD12D"),
+		common.HexToAddress("0x1234567890123456789012345678901234567890"),
+	}
+	expectedIntegers := []string{
+		// Unsigned integer tests
+		"111",                 // no denomination
+		"1",                   // 1 wei (base unit)
+		"2000000000",          // 2 gwei
+		"5000000000000000000", // 5 ether
+		"6",                   // 6 seconds (base unit)
+		"420",                 // 7 minutes
+		"28800",               // 8 hours
+		"777600",              // 9 days
+		"6048000",             // 10 weeks
+
+		// Signed integer tests
+		"-111",                 // no denomination
+		"-1",                   // 1 wei (base unit)
+		"-2000000000",          // 2 gwei
+		"-5000000000000000000", // 5 ether
+		"-6",                   // 6 seconds (base unit)
+		"-420",                 // 7 minutes
+		"-28800",               // 8 hours
+		"-777600",              // 9 days
+		"-6048000",             // 10 weeks
+	}
+	expectedStrings := []string{
+		"testString",
+		"testString2",
+	}
+	expectedByteSequences := make([][]byte, 0) // no tests yet
+
+	// Run the fuzzer test
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/value_generation/ast_value_extraction.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TestLimit = 1 // stop immediately to simply see what values were mined.
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Verify all of our expected values exist
+			valueSet := f.fuzzer.BaseValueSet()
+			for _, expectedAddr := range expectedAddresses {
+				assert.True(t, valueSet.ContainsAddress(expectedAddr), "Value set did not contain expected address: %v", expectedAddr.String())
+			}
+			for _, expectedIntegerStr := range expectedIntegers {
+				expectedInteger, ok := new(big.Int).SetString(expectedIntegerStr, 10)
+				assert.True(t, ok, "Could not parse provided expected integer string in test: \"%v\"", expectedIntegerStr)
+				assert.True(t, valueSet.ContainsInteger(expectedInteger), "Value set did not contain expected integer: %v", expectedInteger.String())
+			}
+			for _, expectedString := range expectedStrings {
+				assert.True(t, valueSet.ContainsString(expectedString), "Value set did not contain expected string: \"%v\"", expectedString)
+			}
+			for _, expectedByteSequence := range expectedByteSequences {
+				assert.True(t, valueSet.ContainsBytes(expectedByteSequence), "Value set did not contain expected bytes: \"%v\"", hex.EncodeToString(expectedByteSequence))
+			}
+		},
+	})
 }
 
 // TestVMCorrectness runs tests to ensure block properties are reported consistently within the EVM, as it's configured
