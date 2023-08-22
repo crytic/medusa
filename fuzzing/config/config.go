@@ -3,9 +3,10 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/rs/zerolog"
-	"os"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/utils"
@@ -45,6 +46,14 @@ type FuzzingConfig struct {
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
+
+	// HtmlReportFile describes the name for the html coverage file. If empty,
+	// the html coverage file will not be saved
+	HtmlReportFile string `json:"htmlReportPath"`
+
+	// JsonReportFile describes the name for the html coverage file. If empty,
+	// the json coverage file will not be saved
+	JsonReportFile string `json:"jsonReportPath"`
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
