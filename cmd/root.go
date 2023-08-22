@@ -4,7 +4,7 @@ import (
 	"github.com/crytic/medusa/logging"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"io"
+	"os"
 )
 
 const version = "0.1.1"
@@ -18,11 +18,13 @@ var rootCmd = &cobra.Command{
 }
 
 // cmdLogger is the logger that will be used for the cmd package
-var cmdLogger = logging.NewLogger(zerolog.InfoLevel, true, make([]io.Writer, 0)...)
+var cmdLogger = logging.NewLogger(zerolog.InfoLevel)
 
-// Execute provides an exportable function to invoke the CLI.
-// Returns an error if one was encountered.
+// Execute provides an exportable function to invoke the CLI. Returns an error if one was encountered.
 func Execute() error {
+	// Add stdout as an unstructured, colorized output stream for the command logger
+	cmdLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
+
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	return rootCmd.Execute()
 }
