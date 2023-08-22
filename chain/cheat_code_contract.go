@@ -54,6 +54,30 @@ type cheatCodeRawReturnData struct {
 	Err error
 }
 
+// getCheatCodeProviders obtains a cheatCodeTracer (used to power cheat code analysis) and associated CheatCodeContract
+// objects linked to the tracer (providing on-chain callable methods as an entry point). These objects are attached to
+// the TestChain to enable cheat code functionality.
+// Returns the tracer and associated pre-compile contracts, or an error, if one occurred.
+func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
+	// Create a cheat code tracer and attach it to the chain.
+	tracer := newCheatCodeTracer()
+
+	// Obtain our standard cheat code pre-compile
+	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Obtain the console.log pre-compile
+	consoleCheatCodeContract, err := getConsoleLogCheatCodeContract(tracer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Return the tracer and precompiles
+	return tracer, []*CheatCodeContract{stdCheatCodeContract, consoleCheatCodeContract}, nil
+}
+
 // newCheatCodeContract returns a new precompiledContract which uses the attached cheatCodeTracer for execution
 // context.
 func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address, name string) *CheatCodeContract {
@@ -98,7 +122,7 @@ func (c *CheatCodeContract) Abi() *abi.ABI {
 }
 
 // addMethod adds a new method to the precompiled contract.
-// Returns an error if one occurred.
+// Throws a panic if either the name is the empty string or the handler is nil.
 func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs abi.Arguments, handler cheatCodeMethodHandler) {
 	// Verify a method name was provided
 	if name == "" {
@@ -117,7 +141,6 @@ func (c *CheatCodeContract) addMethod(name string, inputs abi.Arguments, outputs
 		method:  method,
 		handler: handler,
 	}
-
 	// Add the method to the ABI.
 	// Note: Normally the key here should be the method name, not sig. But cheat code contracts have duplicate
 	// method names with different parameter types, so we use this so they don't override.

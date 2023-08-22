@@ -118,7 +118,7 @@ func (cs CallSequence) Hash() (common.Hash, error) {
 
 			// Try to obtain a hash for the message/call. If this fails, we will replace it in the deferred panic
 			// recovery.
-			messageHashData = utils.MessageToTransaction(cse.Call).Hash().Bytes()
+			messageHashData = utils.MessageToTransaction(cse.Call.ToCoreMessage()).Hash().Bytes()
 		}()
 
 		// Hash the message hash data.
@@ -205,7 +205,7 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	if cse.Contract == nil {
 		return nil, nil
 	}
-	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data())
+	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
 }
 
 // String returns a displayable string representing the CallSequenceElement.
@@ -224,7 +224,7 @@ func (cse *CallSequenceElement) String() string {
 	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
-	args, err := method.Inputs.Unpack(cse.Call.Data()[4:])
+	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
 		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
@@ -249,10 +249,10 @@ func (cse *CallSequenceElement) String() string {
 		argsText,
 		blockNumberStr,
 		blockTimeStr,
-		cse.Call.Gas(),
-		cse.Call.GasPrice().String(),
-		cse.Call.Value().String(),
-		cse.Call.From(),
+		cse.Call.GasLimit,
+		cse.Call.GasPrice.String(),
+		cse.Call.Value.String(),
+		cse.Call.From,
 	)
 }
 
@@ -273,7 +273,7 @@ func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, con
 	}
 
 	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call, state)
+	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), state)
 	if err != nil {
 		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
 	}

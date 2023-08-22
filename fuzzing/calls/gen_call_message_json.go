@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var _ = (*callMessageMarshaling)(nil)
@@ -15,78 +16,90 @@ var _ = (*callMessageMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c CallMessage) MarshalJSON() ([]byte, error) {
 	type CallMessage struct {
-		MsgFrom          common.Address            `json:"from"`
-		MsgTo            *common.Address           `json:"to"`
-		MsgNonce         uint64                    `json:"nonce"`
-		MsgValue         *hexutil.Big              `json:"value"`
-		MsgGas           uint64                    `json:"gas"`
-		MsgGasPrice      *hexutil.Big              `json:"gasPrice"`
-		MsgGasFeeCap     *hexutil.Big              `json:"gasFeeCap"`
-		MsgGasTipCap     *hexutil.Big              `json:"gasTipCap"`
-		MsgData          hexutil.Bytes             `json:"data,omitempty"`
-		MsgDataAbiValues *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		From              common.Address            `json:"from"`
+		To                *common.Address           `json:"to"`
+		Nonce             uint64                    `json:"nonce"`
+		Value             *hexutil.Big              `json:"value"`
+		GasLimit          uint64                    `json:"gasLimit"`
+		GasPrice          *hexutil.Big              `json:"gasPrice"`
+		GasFeeCap         *hexutil.Big              `json:"gasFeeCap"`
+		GasTipCap         *hexutil.Big              `json:"gasTipCap"`
+		Data              hexutil.Bytes             `json:"data,omitempty"`
+		DataAbiValues     *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		AccessList        types.AccessList
+		SkipAccountChecks bool
 	}
 	var enc CallMessage
-	enc.MsgFrom = c.MsgFrom
-	enc.MsgTo = c.MsgTo
-	enc.MsgNonce = c.MsgNonce
-	enc.MsgValue = (*hexutil.Big)(c.MsgValue)
-	enc.MsgGas = c.MsgGas
-	enc.MsgGasPrice = (*hexutil.Big)(c.MsgGasPrice)
-	enc.MsgGasFeeCap = (*hexutil.Big)(c.MsgGasFeeCap)
-	enc.MsgGasTipCap = (*hexutil.Big)(c.MsgGasTipCap)
-	enc.MsgData = c.MsgData
-	enc.MsgDataAbiValues = c.MsgDataAbiValues
+	enc.From = c.From
+	enc.To = c.To
+	enc.Nonce = c.Nonce
+	enc.Value = (*hexutil.Big)(c.Value)
+	enc.GasLimit = c.GasLimit
+	enc.GasPrice = (*hexutil.Big)(c.GasPrice)
+	enc.GasFeeCap = (*hexutil.Big)(c.GasFeeCap)
+	enc.GasTipCap = (*hexutil.Big)(c.GasTipCap)
+	enc.Data = c.Data
+	enc.DataAbiValues = c.DataAbiValues
+	enc.AccessList = c.AccessList
+	enc.SkipAccountChecks = c.SkipAccountChecks
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (c *CallMessage) UnmarshalJSON(input []byte) error {
 	type CallMessage struct {
-		MsgFrom          *common.Address           `json:"from"`
-		MsgTo            *common.Address           `json:"to"`
-		MsgNonce         *uint64                   `json:"nonce"`
-		MsgValue         *hexutil.Big              `json:"value"`
-		MsgGas           *uint64                   `json:"gas"`
-		MsgGasPrice      *hexutil.Big              `json:"gasPrice"`
-		MsgGasFeeCap     *hexutil.Big              `json:"gasFeeCap"`
-		MsgGasTipCap     *hexutil.Big              `json:"gasTipCap"`
-		MsgData          *hexutil.Bytes            `json:"data,omitempty"`
-		MsgDataAbiValues *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		From              *common.Address           `json:"from"`
+		To                *common.Address           `json:"to"`
+		Nonce             *uint64                   `json:"nonce"`
+		Value             *hexutil.Big              `json:"value"`
+		GasLimit          *uint64                   `json:"gasLimit"`
+		GasPrice          *hexutil.Big              `json:"gasPrice"`
+		GasFeeCap         *hexutil.Big              `json:"gasFeeCap"`
+		GasTipCap         *hexutil.Big              `json:"gasTipCap"`
+		Data              *hexutil.Bytes            `json:"data,omitempty"`
+		DataAbiValues     *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		AccessList        *types.AccessList
+		SkipAccountChecks *bool
 	}
 	var dec CallMessage
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	if dec.MsgFrom != nil {
-		c.MsgFrom = *dec.MsgFrom
+	if dec.From != nil {
+		c.From = *dec.From
 	}
-	if dec.MsgTo != nil {
-		c.MsgTo = dec.MsgTo
+	if dec.To != nil {
+		c.To = dec.To
 	}
-	if dec.MsgNonce != nil {
-		c.MsgNonce = *dec.MsgNonce
+	if dec.Nonce != nil {
+		c.Nonce = *dec.Nonce
 	}
-	if dec.MsgValue != nil {
-		c.MsgValue = (*big.Int)(dec.MsgValue)
+	if dec.Value != nil {
+		c.Value = (*big.Int)(dec.Value)
 	}
-	if dec.MsgGas != nil {
-		c.MsgGas = *dec.MsgGas
+	if dec.GasLimit != nil {
+		c.GasLimit = *dec.GasLimit
 	}
-	if dec.MsgGasPrice != nil {
-		c.MsgGasPrice = (*big.Int)(dec.MsgGasPrice)
+	if dec.GasPrice != nil {
+		c.GasPrice = (*big.Int)(dec.GasPrice)
 	}
-	if dec.MsgGasFeeCap != nil {
-		c.MsgGasFeeCap = (*big.Int)(dec.MsgGasFeeCap)
+	if dec.GasFeeCap != nil {
+		c.GasFeeCap = (*big.Int)(dec.GasFeeCap)
 	}
-	if dec.MsgGasTipCap != nil {
-		c.MsgGasTipCap = (*big.Int)(dec.MsgGasTipCap)
+	if dec.GasTipCap != nil {
+		c.GasTipCap = (*big.Int)(dec.GasTipCap)
 	}
-	if dec.MsgData != nil {
-		c.MsgData = *dec.MsgData
+	if dec.Data != nil {
+		c.Data = *dec.Data
 	}
-	if dec.MsgDataAbiValues != nil {
-		c.MsgDataAbiValues = dec.MsgDataAbiValues
+	if dec.DataAbiValues != nil {
+		c.DataAbiValues = dec.DataAbiValues
+	}
+	if dec.AccessList != nil {
+		c.AccessList = *dec.AccessList
+	}
+	if dec.SkipAccountChecks != nil {
+		c.SkipAccountChecks = *dec.SkipAccountChecks
 	}
 	return nil
 }

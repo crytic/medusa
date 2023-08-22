@@ -64,6 +64,12 @@ func (vs *ValueSet) AddAddress(a common.Address) {
 	vs.addresses[a] = nil
 }
 
+// ContainsAddress checks if an address is contained in the ValueSet.
+func (vs *ValueSet) ContainsAddress(a common.Address) bool {
+	_, contains := vs.addresses[a]
+	return contains
+}
+
 // RemoveAddress removes an address item from the ValueSet.
 func (vs *ValueSet) RemoveAddress(a common.Address) {
 	delete(vs.addresses, a)
@@ -85,6 +91,12 @@ func (vs *ValueSet) AddInteger(b *big.Int) {
 	vs.integers[b.String()] = b
 }
 
+// ContainsInteger checks if an integer is contained in the ValueSet.
+func (vs *ValueSet) ContainsInteger(b *big.Int) bool {
+	_, contains := vs.integers[b.String()]
+	return contains
+}
+
 // RemoveInteger removes an integer item from the ValueSet.
 func (vs *ValueSet) RemoveInteger(b *big.Int) {
 	delete(vs.integers, b.String())
@@ -104,6 +116,12 @@ func (vs *ValueSet) Strings() []string {
 // AddString adds a string item to the ValueSet.
 func (vs *ValueSet) AddString(s string) {
 	vs.strings[s] = nil
+}
+
+// ContainsString checks if a string is contained in the ValueSet.
+func (vs *ValueSet) ContainsString(s string) bool {
+	_, contains := vs.strings[s]
+	return contains
 }
 
 // RemoveString removes a string item from the ValueSet.
@@ -131,6 +149,18 @@ func (vs *ValueSet) AddBytes(b []byte) {
 
 	// Add our hash to our "set" (map)
 	vs.bytes[hashStr] = b
+}
+
+// ContainsBytes checks if a byte sequence is contained in the ValueSet.
+func (vs *ValueSet) ContainsBytes(b []byte) bool {
+	// Calculate hash and reset our hash provider
+	vs.hashProvider.Write(b)
+	hashStr := hex.EncodeToString(vs.hashProvider.Sum(nil))
+	vs.hashProvider.Reset()
+
+	// Check if the key exists in our lookup
+	_, contains := vs.bytes[hashStr]
+	return contains
 }
 
 // RemoveBytes removes a byte sequence item from the ValueSet.

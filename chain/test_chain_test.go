@@ -241,14 +241,26 @@ func TestChainDynamicDeployments(t *testing.T) {
 						// Deploy the currently indexed contract next
 
 						// Create a message to represent our contract deployment.
-						msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+						msg := core.Message{
+							To:                nil,
+							From:              senders[0],
+							Nonce:             chain.State().GetNonce(senders[0]),
+							Value:             big.NewInt(0),
+							GasLimit:          chain.BlockGasLimit,
+							GasPrice:          big.NewInt(1),
+							GasFeeCap:         big.NewInt(0),
+							GasTipCap:         big.NewInt(0),
+							Data:              contract.InitBytecode,
+							AccessList:        nil,
+							SkipAccountChecks: false,
+						}
 
 						// Create a new pending block we'll commit to chain
 						block, err := chain.PendingBlockCreate()
 						assert.NoError(t, err)
 
 						// Add our transaction to the block
-						err = chain.PendingBlockAddTx(msg)
+						err = chain.PendingBlockAddTx(&msg)
 						assert.NoError(t, err)
 
 						// Commit the pending block to the chain, so it becomes the new head.
@@ -354,14 +366,26 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 					assert.NoError(t, err)
 
 					// Create a message to represent our contract deployment.
-					msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), msgData, nil, false)
+					msg := core.Message{
+						To:                nil,
+						From:              senders[0],
+						Nonce:             chain.State().GetNonce(senders[0]),
+						Value:             big.NewInt(0),
+						GasLimit:          chain.BlockGasLimit,
+						GasPrice:          big.NewInt(1),
+						GasFeeCap:         big.NewInt(0),
+						GasTipCap:         big.NewInt(0),
+						Data:              msgData,
+						AccessList:        nil,
+						SkipAccountChecks: false,
+					}
 
 					// Create a new pending block we'll commit to chain
 					block, err := chain.PendingBlockCreate()
 					assert.NoError(t, err)
 
 					// Add our transaction to the block
-					err = chain.PendingBlockAddTx(msg)
+					err = chain.PendingBlockAddTx(&msg)
 					assert.NoError(t, err)
 
 					// Commit the pending block to the chain, so it becomes the new head.
@@ -451,14 +475,26 @@ func TestChainCloning(t *testing.T) {
 							// Deploy the currently indexed contract next
 
 							// Create a message to represent our contract deployment.
-							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+							msg := core.Message{
+								To:                nil,
+								From:              senders[0],
+								Nonce:             chain.State().GetNonce(senders[0]),
+								Value:             big.NewInt(0),
+								GasLimit:          chain.BlockGasLimit,
+								GasPrice:          big.NewInt(1),
+								GasFeeCap:         big.NewInt(0),
+								GasTipCap:         big.NewInt(0),
+								Data:              contract.InitBytecode,
+								AccessList:        nil,
+								SkipAccountChecks: false,
+							}
 
 							// Create a new pending block we'll commit to chain
 							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(msg)
+							err = chain.PendingBlockAddTx(&msg)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
@@ -533,14 +569,26 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
 							// Create a message to represent our contract deployment.
-							msg := types.NewMessage(senders[0], nil, chain.State().GetNonce(senders[0]), big.NewInt(0), chain.BlockGasLimit, big.NewInt(1), big.NewInt(0), big.NewInt(0), contract.InitBytecode, nil, false)
+							msg := core.Message{
+								To:                nil,
+								From:              senders[0],
+								Nonce:             chain.State().GetNonce(senders[0]),
+								Value:             big.NewInt(0),
+								GasLimit:          chain.BlockGasLimit,
+								GasPrice:          big.NewInt(1),
+								GasFeeCap:         big.NewInt(0),
+								GasTipCap:         big.NewInt(0),
+								Data:              contract.InitBytecode,
+								AccessList:        nil,
+								SkipAccountChecks: false,
+							}
 
 							// Create a new pending block we'll commit to chain
 							block, err := chain.PendingBlockCreate()
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(msg)
+							err = chain.PendingBlockAddTx(&msg)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
