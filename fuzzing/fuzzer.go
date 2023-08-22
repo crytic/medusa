@@ -7,10 +7,9 @@ import (
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/pkgerrors"
-	"io"
 	"math/big"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -89,12 +88,11 @@ type Fuzzer struct {
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// Create the global logger, set some global logging parameters, and enable terminal coloring
-	logging.GlobalLogger = logging.NewLogger(config.Logging.Level, true, make([]io.Writer, 0)...)
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	// Create the global logger and add stdout as an unstructured, colored output stream
+	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
+	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
 
-	// If the log directory is a non-empty string, create a file for file logging
+	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
 	if config.Logging.LogDirectory != "" {
 		// Filename will be the "log-current_unix_timestamp.log"
 		filename := "log-" + strconv.FormatInt(time.Now().Unix(), 10) + ".log"
@@ -104,7 +102,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			logging.GlobalLogger.Error("Failed to create log file", err)
 			return nil, err
 		}
-		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED)
+		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED, false)
 	}
 
 	// Get the fuzzer's custom sub-logger
