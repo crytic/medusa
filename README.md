@@ -21,7 +21,10 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 
 ### Precompiled binaries
 
-To use `medusa`, first ensure you have [crytic-compile](https://github.com/crytic/crytic-compile) and a suitable compilation framework (e.g. `solc`, `hardhat`) installed on your machine.
+To use `medusa`, ensure you have:
+
+- [crytic-compile](https://github.com/crytic/crytic-compile) (`pip3 install crytic-compile`)
+- a suitable compilation framework (e.g. `solc`, `hardhat`) installed on your machine. We recommend [solc-select](https://github.com/crytic/solc-select) to quickly switch between Solidity compiler versions.
 
 You can then fetch the latest binaries for your platform from our [GitHub Releases](https://github.com/crytic/medusa/releases) page.
 
