@@ -168,18 +168,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.AddCompilationTargets(compilations)
 	}
 
-	// Register any default providers if specified.
-	if fuzzer.config.Fuzzing.Testing.PropertyTesting.Enabled {
-		attachPropertyTestCaseProvider(fuzzer)
-	}
-	if fuzzer.config.Fuzzing.Testing.AssertionTesting.Enabled {
-		attachAssertionTestCaseProvider(fuzzer)
-	}
-	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
-		// TODO: Remove this warning when call sequence shrinking is improved
-		fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
-		attachOptimizationTestCaseProvider(fuzzer)
-	}
+	// Register the default testing providers
+	attachPropertyTestCaseProvider(fuzzer)
+	attachAssertionTestCaseProvider(fuzzer)
+
+	// TODO: Remove this warning when call sequence shrinking is improved
+	fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
+	attachOptimizationTestCaseProvider(fuzzer)
 	return fuzzer, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"sync"
@@ -44,8 +45,18 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 // isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
 // Returns true if this target should be tested, false otherwise.
 func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
+	// Do not test optimization tests
+	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTestPrefixes) {
+		return false
+	}
+
+	// Do not test property tests
+	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.InvariantTestPrefixes) {
+		return false
+	}
+
 	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
+	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.TestViewMethods
 }
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
@@ -73,7 +84,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
 	failure := false
 	if panicCode != nil {
-		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.PanicCodeConfig)
 	}
 
 	return &methodId, failure, nil
@@ -241,7 +252,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 // code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
 // panic if it is provided a panic code that is not defined in the abiutils package.
 // TODO: This is a terrible design and a future PR should be made to maintain assertion and panic logic correctly
-func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
+func encounteredAssertionFailure(panicCode uint64, conf config.PanicCodeConfig) bool {
 	// Switch on panic code
 	switch panicCode {
 	case abiutils.PanicCodeCompilerInserted:

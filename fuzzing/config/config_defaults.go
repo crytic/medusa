@@ -57,24 +57,14 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
-				AssertionTesting: AssertionTestingConfig{
-					Enabled:         false,
-					TestViewMethods: false,
-					AssertionModes: AssertionModesConfig{
-						FailOnAssertion: true,
-					},
+				InvariantTestPrefixes: []string{
+					"invariant_",
 				},
-				PropertyTesting: PropertyTestConfig{
-					Enabled: true,
-					TestPrefixes: []string{
-						"fuzz_",
-					},
+				OptimizationTestPrefixes: []string{
+					"optimize_",
 				},
-				OptimizationTesting: OptimizationTestingConfig{
-					Enabled: false,
-					TestPrefixes: []string{
-						"optimize_",
-					},
+				PanicCodeConfig: PanicCodeConfig{
+					FailOnAssertion: true,
 				},
 			},
 			TestChainConfig: *chainConfig,

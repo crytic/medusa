@@ -106,31 +106,21 @@ type TestingConfig struct {
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
 
-	// AssertionTesting describes the configuration used for assertion testing.
-	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
-
-	// PropertyTesting describes the configuration used for property testing.
-	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
-
-	// OptimizationTesting describes the configuration used for optimization testing.
-	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
-}
-
-// AssertionTestingConfig describes the configuration options used for assertion testing
-type AssertionTestingConfig struct {
-	// Enabled describes whether testing is enabled.
-	Enabled bool `json:"enabled"`
-
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
 
-	// AssertionModes describes the various panic codes that can be enabled and be treated as a "failing case"
-	AssertionModes AssertionModesConfig `json:"assertionModes"`
+	// InvariantTestPrefixes dictates what method name prefixes will determine if a contract method is an invariant test.
+	InvariantTestPrefixes []string `json:"invariantTestPrefixes"`
+
+	// OptimizationTestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
+	OptimizationTestPrefixes []string `json:"optimizationTestPrefixes"`
+
+	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
+	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`
 }
 
-// AssertionModesConfig describes the configuration options for the various modes that can be enabled for assertion
-// testing
-type AssertionModesConfig struct {
+// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a failing assertion test
+type PanicCodeConfig struct {
 	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
 	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
 
@@ -160,24 +150,6 @@ type AssertionModesConfig struct {
 
 	// FailOnCallUninitializedVariable describes whether calling an un-initialized variable should be treated as a failing case
 	FailOnCallUninitializedVariable bool `json:"failOnCallUninitializedVariable"`
-}
-
-// PropertyTestConfig describes the configuration options used for property testing
-type PropertyTestConfig struct {
-	// Enabled describes whether testing is enabled.
-	Enabled bool `json:"enabled"`
-
-	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
-	TestPrefixes []string `json:"testPrefixes"`
-}
-
-// OptimizationTestingConfig describes the configuration options used for optimization testing
-type OptimizationTestingConfig struct {
-	// Enabled describes whether testing is enabled.
-	Enabled bool `json:"enabled"`
-
-	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
-	TestPrefixes []string `json:"testPrefixes"`
 }
 
 // LoggingConfig describes the configuration options for logging to console and file
@@ -282,14 +254,6 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
 		return errors.New("project configuration must specify only a well-formed deployer address")
-	}
-
-	// Verify property testing fields.
-	if p.Fuzzing.Testing.PropertyTesting.Enabled {
-		// Test prefixes must be supplied if property testing is enabled.
-		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
-			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
-		}
 	}
 
 	// Ensure that the log level is a valid one

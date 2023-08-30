@@ -22,8 +22,6 @@ func TestFuzzerHooks(t *testing.T) {
 		filePath: "testdata/contracts/assertions/assert_immediate.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
@@ -77,17 +75,15 @@ func TestAssertionMode(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertion = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticUnderflow = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnEnumTypeConversionOutOfBounds = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnDivideByZero = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnIncorrectStorageAccess = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnOutOfBoundsArrayAccess = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnAssertion = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnAllocateTooMuchMemory = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnArithmeticUnderflow = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnCallUninitializedVariable = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnEnumTypeConversionOutOfBounds = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnDivideByZero = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnIncorrectStorageAccess = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
+				config.Fuzzing.Testing.PanicCodeConfig.FailOnPopEmptyArray = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -109,8 +105,6 @@ func TestAssertionsNotRequire(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -132,8 +126,6 @@ func TestAssertionsAndProperties(t *testing.T) {
 			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = false
-			config.Fuzzing.Testing.PropertyTesting.Enabled = true
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -156,9 +148,6 @@ func TestOptimizationMode(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = false
-				config.Fuzzing.Testing.OptimizationTesting.Enabled = true
 				config.Fuzzing.TestLimit = 10_000 // this test should expose a failure quickly.
 			},
 			method: func(f *fuzzerTestContext) {
@@ -168,11 +157,10 @@ func TestOptimizationMode(t *testing.T) {
 
 				// Check the value found for optimization test
 				var testCases = f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
-				switch v := testCases[0].(type) {
-				case *OptimizationTestCase:
-					assert.EqualValues(t, v.Value().Cmp(big.NewInt(4241)), 0)
-				default:
-					t.Errorf("invalid test case found %T", v)
+				for _, testCase := range testCases {
+					if optimizationTestCase, ok := testCase.(*OptimizationTestCase); ok {
+						assert.EqualValues(t, optimizationTestCase.Value().Cmp(big.NewInt(4241)), 0)
+					}
 				}
 			},
 		})
@@ -239,13 +227,10 @@ func TestCheatCodes(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 
-				// some tests require full sequence + revert to test fully
+				// Some tests require full sequence + revert to test fully
 				config.Fuzzing.Workers = 3
 				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
 
-				// enable assertion testing only
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
@@ -281,9 +266,6 @@ func TestConsoleLog(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
 				config.Fuzzing.TestLimit = 10000
-				// enable assertion testing only
-				config.Fuzzing.Testing.PropertyTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -442,8 +424,6 @@ func TestExecutionTraces(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -485,8 +465,6 @@ func TestTestingScope(t *testing.T) {
 				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.TestAllContracts = testingAllContracts
 				config.Fuzzing.Testing.StopOnFailedTest = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.PropertyTesting.Enabled = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -638,8 +616,6 @@ func TestASTValueExtraction(t *testing.T) {
 		filePath: "testdata/contracts/value_generation/ast_value_extraction.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TestLimit = 1 // stop immediately to simply see what values were mined.
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
