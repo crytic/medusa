@@ -327,23 +327,23 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
-// definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
+// definitions, as well as those added by Fuzzer.AddCompilationTargets. The target contracts is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// Verify contract deployment order is not empty. If it's empty, but we only have one contract definition,
-	// we can infer the deployment order. Otherwise, we report an error.
-	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
+	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
+	// we can infer the target contracts. Otherwise, we report an error.
+	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
 		if len(fuzzer.contractDefinitions) == 1 {
-			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
+			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("missing deployment order (update fuzzing.deploymentOrder in the project config " +
-				"or use the --deployment-order CLI flag)")
+			return fmt.Errorf("missing target contracts (update fuzzing.targetContracts in the project config " +
+				"or use the --target-contracts CLI flag)")
 		}
 	}
 
 	// Loop for all contracts to deploy
 	deployedContractAddr := make(map[string]common.Address)
-	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
+	for _, contractName := range fuzzer.config.Fuzzing.TargetContracts {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
@@ -411,8 +411,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("%v was specified in the deployment order (see fuzzing.deploymentOrder in the "+
-				"project config or the --deployment-order CLI flag) but was not found in the compilation artifacts", contractName)
+			return fmt.Errorf("%v was specified in the target contracts (see fuzzing.targetContracts in the "+
+				"project config or the --target-contracts CLI flag) but was not found in the compilation artifacts", contractName)
 		}
 	}
 	return nil

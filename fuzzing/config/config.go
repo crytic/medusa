@@ -50,10 +50,11 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	// DeploymentOrder determines the order in which the contracts should be deployed
-	DeploymentOrder []string `json:"deploymentOrder"`
+	// TargetContracts are the target contracts for fuzz testing
+	TargetContracts []string `json:"targetContracts"`
 
-	// Constructor arguments for contracts deployment. It is available only in init mode
+	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
+	// configuration
 	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
 
 	// DeployerAddress describe the account address to be used to deploy contracts.

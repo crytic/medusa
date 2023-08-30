@@ -7,6 +7,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/core"
+	"golang.org/x/exp/slices"
 	"math/big"
 	"sync"
 )
@@ -125,6 +126,11 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 
 	// Create a test case for every optimization test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
+		// If we're not testing all contracts, verify the current contract is one we specified in our target contracts
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
+			continue
+		}
+		
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is an optimization test method
 			if !utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {

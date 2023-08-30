@@ -37,7 +37,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Timeout:            0,
 			TestLimit:          0,
 			CallSequenceLength: 100,
-			DeploymentOrder:    []string{},
+			TargetContracts:    []string{},
 			ConstructorArgs:    map[string]map[string]any{},
 			CorpusDirectory:    "",
 			CoverageEnabled:    true,
