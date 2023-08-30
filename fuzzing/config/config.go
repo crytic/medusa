@@ -283,6 +283,22 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
+	// Verify property testing fields.
+	if p.Fuzzing.Testing.PropertyTesting.Enabled {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+		}
+	}
+
+	// Verify optimization testing fields.
+	if p.Fuzzing.Testing.OptimizationTesting.Enabled {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(p.Fuzzing.Testing.OptimizationTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if optimization testing is enabled")
+		}
+	}
+
 	// Ensure that the log level is a valid one
 	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
 		return err
