@@ -89,7 +89,8 @@ type Fuzzer struct {
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create the global logger and add stdout as an unstructured, colored output stream
-	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
+	// Note that we are not using the project config's log level because we have not validated it yet
+	logging.GlobalLogger = logging.NewLogger(zerolog.InfoLevel)
 	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
 
 	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
@@ -105,15 +106,18 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED, false)
 	}
 
-	// Get the fuzzer's custom sub-logger
-	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
-
 	// Validate our provided config
 	err := config.Validate()
 	if err != nil {
-		logger.Error("Invalid configuration", err)
+		logging.GlobalLogger.Error("Invalid configuration", err)
 		return nil, err
 	}
+
+	// Update the log level of the global logger now
+	logging.GlobalLogger.SetLevel(config.Logging.Level)
+
+	// Get the fuzzer's custom sub-logger
+	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
 
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
@@ -332,7 +336,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+			return fmt.Errorf("missing deployment order (update fuzzing.deploymentOrder in the project config " +
+				"or use the --deployment-order CLI flag)")
 		}
 	}
 
@@ -406,7 +411,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
+			return fmt.Errorf("%v was specified in the deployment order (see fuzzing.deploymentOrder in the "+
+				"project config or the --deployment-order CLI flag) but was not found in the compilation artifacts", contractName)
 		}
 	}
 	return nil

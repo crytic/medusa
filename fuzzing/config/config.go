@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/logging"
 	"github.com/rs/zerolog"
 	"os"
 
@@ -250,44 +251,75 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 // Validate validates that the ProjectConfig meets certain requirements.
 // Returns an error if one occurs.
 func (p *ProjectConfig) Validate() error {
+	// Create logger instance if global logger is available
+	logger := logging.NewLogger(zerolog.Disabled)
+	if logging.GlobalLogger != nil {
+		logger = logging.GlobalLogger.NewSubLogger("module", "fuzzer config")
+	}
+
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
-		return errors.New("project configuration must specify a positive number for the worker count")
+		return errors.New("worker count must be a positive number (update fuzzing.workers in the project config " +
+			"or use the --workers CLI flag)")
 	}
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence length")
+		return errors.New("call sequence length must be a positive number (update fuzzing.callSequenceLength in " +
+			"the project config or use the --seq-len CLI flag)")
 	}
 
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
-		return errors.New("project configuration must specify a positive number for the worker reset limit")
+		return errors.New("worker reset limit must be a positive number (update fuzzing.workerResetLimit in the " +
+			"project config)")
+	}
+
+	// Verify timeout
+	if p.Fuzzing.Timeout < 0 {
+		return errors.New("timeout must be a positive number (update fuzzing.timeout in the project config or " +
+			"use the --timeout CLI flag)")
 	}
 
 	// Verify gas limits are appropriate
 	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
-		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
+		return errors.New("project config must specify a block gas limit which is not less than the transaction gas limit")
 	}
 	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
+		return errors.New("project config must specify a block and transaction gas limit which are non-zero")
+	}
+
+	// Log warning if max block delay is zero
+	if p.Fuzzing.MaxBlockNumberDelay == 0 {
+		logger.Warn("The maximum block number delay is set to zero. Please be aware that transactions will " +
+			"always be fit in the same block until the block gas limit is reached and that the block number will always " +
+			"increment by one.")
+	}
+
+	// Log warning if max timestamp delay is zero
+	if p.Fuzzing.MaxBlockTimestampDelay == 0 {
+		logger.Warn("The maximum timestamp delay is set to zero. Please be aware that block time jumps will " +
+			"always be exactly one.")
 	}
 
 	// Verify that senders are well-formed addresses
 	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
-		return errors.New("project configuration must specify only well-formed sender address(es)")
+		return errors.New("sender address(es) must be well-formed (update fuzzing.senderAddresses in the project " +
+			"config or use the --senders CLI flag)")
 	}
 
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
-		return errors.New("project configuration must specify only a well-formed deployer address")
+		return errors.New("deployer address must be well-formed (update fuzzing.deployerAddress in the project " +
+			"config or use the --deployer CLI flag)")
 	}
 
 	// Verify property testing fields.
 	if p.Fuzzing.Testing.PropertyTesting.Enabled {
 		// Test prefixes must be supplied if property testing is enabled.
 		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
-			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+			return errors.New("project config must specify test prefixes if property testing is enabled " +
+				"(update fuzzing.testing.propertyTesting.testPrefixes)")
 		}
 	}
 
@@ -295,13 +327,16 @@ func (p *ProjectConfig) Validate() error {
 	if p.Fuzzing.Testing.OptimizationTesting.Enabled {
 		// Test prefixes must be supplied if property testing is enabled.
 		if len(p.Fuzzing.Testing.OptimizationTesting.TestPrefixes) == 0 {
-			return errors.New("project configuration must specify test name prefixes if optimization testing is enabled")
+			return errors.New("project config must specify test prefixes if optimization testing is enabled" +
+				"(update fuzzing.testing.optimizationTesting.testPrefixes)")
 		}
+
 	}
 
 	// Ensure that the log level is a valid one
-	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
-		return err
+	level, err := zerolog.ParseLevel(p.Logging.Level.String())
+	if err != nil || level == zerolog.FatalLevel {
+		return errors.New("project config must specify a valid log level (trace, debug, info, warn, error, or panic)")
 	}
 
 	return nil
