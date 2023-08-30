@@ -343,7 +343,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 	// Loop for all contracts to deploy
 	deployedContractAddr := make(map[string]common.Address)
-	for _, contractName := range fuzzer.config.Fuzzing.TargetContracts {
+	for i, contractName := range fuzzer.config.Fuzzing.TargetContracts {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
@@ -369,9 +369,15 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
 				}
 
+				// If our project config has a non-zero balance for this target contract, retrieve it
+				contractBalance := big.NewInt(0)
+				if len(fuzzer.config.Fuzzing.TargetContractsBalances) > i {
+					contractBalance = new(big.Int).Set(fuzzer.config.Fuzzing.TargetContractsBalances[i])
+				}
+
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
 				// gas limit rather than use tx gas limit)
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, contractBalance, fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
 				msg.FillFromTestChainProperties(testChain)
 
 				// Create a new pending block we'll commit to chain

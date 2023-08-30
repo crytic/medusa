@@ -5,12 +5,19 @@ import (
 	"errors"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/logging"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
+	"math/big"
 	"os"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/utils"
 )
+
+// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
+// templates defined below. They should be preserved for re-use in case we change our structures.
+//go:generate go get github.com/fjl/gencodec
+//go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
 
 type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
@@ -53,6 +60,10 @@ type FuzzingConfig struct {
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
+	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
+	// TargetContracts
+	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
 	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
@@ -84,6 +95,13 @@ type FuzzingConfig struct {
 
 	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
+}
+
+// fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
+// have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
+// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
+type fuzzingConfigMarshaling struct {
+	TargetContractsBalances []*hexutil.Big
 }
 
 // TestingConfig describes the configuration options used for testing

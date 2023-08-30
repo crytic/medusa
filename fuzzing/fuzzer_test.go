@@ -385,6 +385,29 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 	})
 }
 
+// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+func TestDeploymentsWithPayableConstructors(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
+			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
+			config.Fuzzing.TestLimit = 1 // this should happen immediately
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
 // TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsSelfDestruct(t *testing.T) {
