@@ -46,11 +46,6 @@ type propertyTestCaseProviderWorkerState struct {
 
 // attachPropertyTestCaseProvider attaches a new PropertyTestCaseProvider to the Fuzzer and returns it.
 func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
-	// If there are no property test prefixes, don't create a test case provider and don't subscribe to any events
-	if len(fuzzer.config.Fuzzing.Testing.InvariantTestPrefixes) == 0 {
-		return nil
-	}
-
 	// Create a test case provider
 	t := &PropertyTestCaseProvider{
 		fuzzer: fuzzer,
@@ -140,7 +135,7 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is a property test method
-			if !utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.InvariantTestPrefixes) {
+			if !utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
 				continue
 			}
 

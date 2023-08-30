@@ -106,14 +106,23 @@ type TestingConfig struct {
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
 
+	// AssertionTesting describes the configuration used for assertion testing.
+	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
+
+	// PropertyTesting describes the configuration used for property testing.
+	PropertyTesting PropertyTestingConfig `json:"propertyTesting"`
+
+	// OptimizationTesting describes the configuration used for optimization testing.
+	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
+}
+
+// AssertionTestingConfig describes the configuration options used for assertion testing
+type AssertionTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
-
-	// InvariantTestPrefixes dictates what method name prefixes will determine if a contract method is an invariant test.
-	InvariantTestPrefixes []string `json:"invariantTestPrefixes"`
-
-	// OptimizationTestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
-	OptimizationTestPrefixes []string `json:"optimizationTestPrefixes"`
 
 	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
 	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`
@@ -150,6 +159,24 @@ type PanicCodeConfig struct {
 
 	// FailOnCallUninitializedVariable describes whether calling an un-initialized variable should be treated as a failing case
 	FailOnCallUninitializedVariable bool `json:"failOnCallUninitializedVariable"`
+}
+
+// PropertyTestingConfig describes the configuration options used for property testing
+type PropertyTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
+	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// OptimizationTestingConfig describes the configuration options used for optimization testing
+type OptimizationTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
+	TestPrefixes []string `json:"testPrefixes"`
 }
 
 // LoggingConfig describes the configuration options for logging to console and file

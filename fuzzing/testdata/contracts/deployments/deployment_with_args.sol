@@ -15,15 +15,15 @@ contract DeploymentWithArgs {
         z = _z;
     }
 
-    function invariant_checkX() public returns (bool) {
+    function property_checkX() public returns (bool) {
         return x != 123456789;
     }
 
-    function invariant_checkY() public returns (bool) {
+    function property_checkY() public returns (bool) {
         return y != 0x5465;
     }
 
-    function invariant_checkZ() public returns (bool) {
+    function property_checkZ() public returns (bool) {
         return z.a != 0x4d2;
     }
 
@@ -40,7 +40,7 @@ contract Dependent {
         deployed = _deployed;
     }
 
-    function invariant_checkDeployed() public returns (bool) {
+    function property_checkDeployed() public returns (bool) {
         return deployed == 0x0000000000000000000000000000000000000000;
     }
 

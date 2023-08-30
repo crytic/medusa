@@ -46,17 +46,17 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 // Returns true if this target should be tested, false otherwise.
 func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 	// Do not test optimization tests
-	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTestPrefixes) {
+	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
 		return false
 	}
 
 	// Do not test property tests
-	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.InvariantTestPrefixes) {
+	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
 		return false
 	}
 
 	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.TestViewMethods
+	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
@@ -84,7 +84,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
 	failure := false
 	if panicCode != nil {
-		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.PanicCodeConfig)
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig)
 	}
 
 	return &methodId, failure, nil

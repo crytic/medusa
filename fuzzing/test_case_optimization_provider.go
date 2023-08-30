@@ -44,11 +44,6 @@ type optimizationTestCaseProviderWorkerState struct {
 
 // attachOptimizationTestCaseProvider attaches a new OptimizationTestCaseProvider to the Fuzzer and returns it.
 func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCaseProvider {
-	// If there are no optimization test prefixes, don't create a test case provider and don't subscribe to any events
-	if len(fuzzer.config.Fuzzing.Testing.OptimizationTestPrefixes) == 0 {
-		return nil
-	}
-
 	// Create a test case provider
 	t := &OptimizationTestCaseProvider{
 		fuzzer: fuzzer,
@@ -132,7 +127,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 	for _, contract := range t.fuzzer.ContractDefinitions() {
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is an optimization test method
-			if !utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTestPrefixes) {
+			if !utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
 				continue
 			}
 			// Create local variables to avoid pointer types in the loop being overridden.

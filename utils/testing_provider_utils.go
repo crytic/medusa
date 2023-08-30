@@ -25,10 +25,9 @@ func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 func IsPropertyTest(method abi.Method, prefixes []string) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
-				return true
-			}
+		// The property test must simply have the right prefix and take no inputs
+		if strings.HasPrefix(method.Name, prefix) && len(method.Inputs) == 0 {
+			return true
 		}
 	}
 	return false
