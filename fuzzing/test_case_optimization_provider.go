@@ -130,7 +130,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
 			continue
 		}
-		
+
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is an optimization test method
 			if !utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
