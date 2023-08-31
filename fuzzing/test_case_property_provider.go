@@ -46,6 +46,11 @@ type propertyTestCaseProviderWorkerState struct {
 
 // attachPropertyTestCaseProvider attaches a new PropertyTestCaseProvider to the Fuzzer and returns it.
 func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
+	// If there are no testing prefixes, then there is no reason to attach a test case provider and subscribe to events
+	if len(fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
+		return nil
+	}
+
 	// Create a test case provider
 	t := &PropertyTestCaseProvider{
 		fuzzer: fuzzer,

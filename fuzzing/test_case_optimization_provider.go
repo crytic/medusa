@@ -45,6 +45,11 @@ type optimizationTestCaseProviderWorkerState struct {
 
 // attachOptimizationTestCaseProvider attaches a new OptimizationTestCaseProvider to the Fuzzer and returns it.
 func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCaseProvider {
+	// If there are no testing prefixes, then there is no reason to attach a test case provider and subscribe to events
+	if len(fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) == 0 {
+		return nil
+	}
+
 	// Create a test case provider
 	t := &OptimizationTestCaseProvider{
 		fuzzer: fuzzer,

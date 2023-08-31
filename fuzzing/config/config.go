@@ -333,25 +333,6 @@ func (p *ProjectConfig) Validate() error {
 			"config or use the --deployer CLI flag)")
 	}
 
-	// Verify property testing fields.
-	if p.Fuzzing.Testing.PropertyTesting.Enabled {
-		// Test prefixes must be supplied if property testing is enabled.
-		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
-			return errors.New("project config must specify test prefixes if property testing is enabled " +
-				"(update fuzzing.testing.propertyTesting.testPrefixes)")
-		}
-	}
-
-	// Verify optimization testing fields.
-	if p.Fuzzing.Testing.OptimizationTesting.Enabled {
-		// Test prefixes must be supplied if property testing is enabled.
-		if len(p.Fuzzing.Testing.OptimizationTesting.TestPrefixes) == 0 {
-			return errors.New("project config must specify test prefixes if optimization testing is enabled" +
-				"(update fuzzing.testing.optimizationTesting.testPrefixes)")
-		}
-
-	}
-
 	// Ensure that the log level is a valid one
 	level, err := zerolog.ParseLevel(p.Logging.Level.String())
 	if err != nil || level == zerolog.FatalLevel {
