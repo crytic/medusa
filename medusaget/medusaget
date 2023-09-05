@@ -105,7 +105,6 @@ fi
 tar -xzvf $TMP_FILE -C $MEDUSA_BIN_DIR
 rm -f $TMP_FILE
 
-# Add Medusa to PATH if not already present
 PROFILE="$HOME/.bashrc"  # Default to bash
 case $SHELL in
   */zsh)
@@ -119,6 +118,7 @@ case $SHELL in
     ;;
 esac
 
+# Add Medusa to PATH if not already present
 if [[ ":$PATH:" != *":${MEDUSA_BIN_DIR}:"* ]]; then
     echo "export PATH=\"\$PATH:$MEDUSA_BIN_DIR\"" >> $PROFILE
 fi
