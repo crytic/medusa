@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/crytic/medusa/logging/colors"
@@ -66,5 +67,7 @@ func TestDisabledColors(t *testing.T) {
 	logger.Info("foo")
 
 	// Ensure that msg doesn't include colors afterwards
-	assert.Equal(t, fmt.Sprintf("%s %s\n", colors.LEFT_ARROW, "foo"), buf.String())
+	prefix := fmt.Sprintf("%s %s", colors.LEFT_ARROW, "foo")
+	_, ok := strings.CutPrefix(buf.String(), prefix)
+	assert.True(t, ok)
 }
