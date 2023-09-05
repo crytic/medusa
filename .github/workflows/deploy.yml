@@ -1,0 +1,38 @@
+name: Deploy GH Pages
+on:
+  push:
+    branches:
+      - docs
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: cargo install --git https://github.com/montyly/mdBook.git mdbook || true
+      - run: cd docs && mdbook build
+      - uses: actions/upload-pages-artifact@v2
+        with:
+          path: ./docs/book
+
+  deploy:
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
