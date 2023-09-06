@@ -32,8 +32,8 @@ if ! pip3 show crytic-compile &> /dev/null; then
   pip3 install crytic-compile
 fi
 
-if ! command -v solc &> /dev/null && ! command -v hardhat &> /dev/null; then
-  echo "Either solc or hardhat is required but neither is installed. Exiting."
+if ! command -v solc &> /dev/null && ! command -v hardhat &> /dev/null && ! command -v truffle &> /dev/null && ! command -v brownie &> /dev/null && ! command -v foundry &> /dev/null; then
+  echo "No Solidity compiler found. Exiting."
   exit 1
 fi
 
