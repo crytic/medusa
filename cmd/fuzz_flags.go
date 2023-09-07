@@ -70,7 +70,7 @@ func addFuzzFlags() error {
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
 
 	// Logging color
-	fuzzCmd.Flags().Bool("no-color", false, "disable colored output")
+	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
 
 	return nil
 }
