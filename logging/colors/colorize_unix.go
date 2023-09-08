@@ -7,10 +7,10 @@ import "fmt"
 
 var enabled = true
 
-// EnableColor is a simple function for non-windows systems because we know that they support ANSI escape codes
+// EnableColor enables the use of colors for non-windows systems.
 func EnableColor() { enabled = true }
 
-// DisableColor is a simple function for non-windows systems because we know that they support ANSI escape codes
+// DisableColor disables the use of colors for non-windows systems.
 func DisableColor() { enabled = false }
 
 // Colorize returns the string s wrapped in ANSI code c for non-windows systems

@@ -51,6 +51,8 @@ func TestAddAndRemoveWriter(t *testing.T) {
 	assert.Equal(t, len(logger.structuredWriters), 0)
 }
 
+// TestDisabledColors verifies the behavior of the unstructured colored logger when colors are disabled,
+// ensuring that it does not output colors when the color feature is turned off.
 func TestDisabledColors(t *testing.T) {
 	// Create a base logger
 	logger := NewLogger(zerolog.InfoLevel)
