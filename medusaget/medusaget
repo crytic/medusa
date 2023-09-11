@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e # Exit on error
 
+# Display the banner
 banner() {
   printf "
 
@@ -30,7 +31,7 @@ Contribute : https://github.com/crytic/medusa/contribute
 "
 }
 
-# --help output
+# Display usage information
 usage() {
   cat 1>&2 <<EOF
 The installer for Medusa.
@@ -43,6 +44,11 @@ USAGE:
 OPTIONS:
     -h, --help      Print help information
     -v, --version   Install a specific version
+    -b, --branch    Install a specific branch
+    -P, --pr        Install a specific pull request
+    -C, --commit    Install a specific commit
+    -r, --repo      Install a remote repository
+    -p, --path      Install a local repository
 EOF
 }
 
@@ -64,28 +70,35 @@ check_cmd() {
   ! command -v "$1" &>/dev/null
 }
 
-# Check Go version
+# Check if Go version is 1.18 or higher
 check_go_version() {
   local version=$(go version | awk '{print $3}' | tr -d 'go')
   [[ $(echo "$version 1.18" | awk '{print ($1 >= $2)}') -eq 1 ]]
 }
 
 main() {
+  # Define directories
   BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
   MEDUSA_DIR="$BASE_DIR/.medusa"
   MEDUSA_BIN_DIR="$MEDUSA_DIR/bin"
 
-  need_cmd go
-  need_cmd git
-  need_cmd pip3
+  # Check for required commands
+  need_cmd go   # Go is required to build medusa
+  need_cmd git  # Git is required to clone medusa
+  need_cmd pip3 # pip3 is required to install crytic-compile
 
+  # Parse command-line arguments
   while [[ $1 ]]; do
     case $1 in
-      --version=*|-v=*)
-        MEDUSA_VERSION="${1#*=}"
-        ;;
-      --branch=*|-b=*)
-        MEDUSA_BRANCH="${1#*=}"
+      --version=*|-v=*) MEDUSA_VERSION="${1#*=}" ;;
+      --branch=*|-b=*)  MEDUSA_BRANCH="${1#*=}"  ;;
+      --pr=*|-P=*)      MEDUSA_PR="${1#*=}"      ;;
+      --commit=*|-C=*)  MEDUSA_COMMIT="${1#*=}"  ;;
+      --repo=*|-r=*)    MEDUSA_REPO="${1#*=}"    ;;
+      --path=*|-p=*)    MEDUSA_PATH="${1#*=}"    ;;
+      --help|-h)
+        usage
+        exit 0
         ;;
       *)
         say "unknown option: $1"
@@ -95,25 +108,48 @@ main() {
     shift
   done
 
+  # Check for conflicting options
+  if [ -n "$MEDUSA_PR" ] && [ -n "$MEDUSA_BRANCH" ]; then
+    say "cannot specify both --pr and --branch"
+    exit 1
+  fi
+
+  # Handle local repository intallation
+  if [ -n "$MEDUSA_PATH"]; then
+    say "Installing from local repository: $MEDUSA_PATH"
+
+    # Navigate to the local repo and build
+    cd "$MEDUSA_PATH"
+    go build -v -o "$MEDUSA_BIN_DIR/medusa"
+    say "medusa installed. Add $MEDUSA_BIN_DIR to your PATH."
+    exit 0
+  fi
+
+  # Display the banner
   banner
 
+  # Check if Go version is 1.18 or higher
   if ! check_go_version; then
     say "Go version 1.18 or higher is required. Exiting."
     exit 1
   fi
 
+  # Check if crytic-compile is installed, if not, install it
   if ! pip3 show crytic-compile &> /dev/null; then
     say "Installing crytic-compile"
     pip3 install crytic-compile
   fi
 
+  # Check for a Solidity compiler
   if check_cmd solc && check_cmd hardhat && check_cmd truffle && check_cmd brownie && check_cmd foundry; then
     say "No Solidity compiler found. Exiting."
     exit 1
   fi
 
+  # Create the medusa bin directory if it doesn't exist
   mkdir -p "$MEDUSA_BIN_DIR"
 
+  # Detect platform and architecture
   PLATFORM=$(uname -s)
   ARCHITECTURE=$(uname -m)
 
@@ -130,6 +166,7 @@ main() {
     *) say "Unsupported architecture: $ARCHITECTURE"; exit 1 ;;
   esac
 
+  # Clone medusa repo if it doesn't exist
   MEDUSA_REPO="https://github.com/crytic/medusa.git"
   CLONE_DIR="$MEDUSA_DIR/src"
 
@@ -137,10 +174,17 @@ main() {
     git clone "$MEDUSA_REPO" "$CLONE_DIR"
   fi
 
+  # Navigate to the medusa repo and fetch updates
   cd "$CLONE_DIR"
   git fetch origin
 
-  if [ -n "$MEDUSA_BRANCH" ]; then
+  # Checkout to the specified branch, version, or commit
+  if [ -n "$MEDUSA_COMMIT" ]; then
+    git checkout "$MEDUSA_COMMIT"
+  elif [ -n "$MEDUSA_PR" ]; then
+    git fetch origin pull/$MEDUSA_PR/head:pr$MEDUSA_PR
+    git checkout pr$MEDUSA_PR
+  elif [ -n "$MEDUSA_BRANCH" ]; then
     git checkout "$MEDUSA_BRANCH"
   elif [ -n "$MEDUSA_VERSION" ]; then
     git checkout "tags/$MEDUSA_VERSION"
@@ -148,9 +192,12 @@ main() {
     git checkout master
   fi
 
+  # Build medusa
   go build -v -o "$MEDUSA_BIN_DIR/medusa"
 
+  # Final message
   say "medusa installed. Add $MEDUSA_BIN_DIR to your PATH."
 }
 
+# Execture the main function
 main "$@" || exit 1
