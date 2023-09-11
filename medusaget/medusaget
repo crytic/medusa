@@ -30,6 +30,22 @@ Contribute : https://github.com/crytic/medusa/contribute
 "
 }
 
+# --help output
+usage() {
+  cat 1>&2 <<EOF
+The installer for Medusa.
+
+Easily update or install a specific version of Medusa.
+
+USAGE:
+    medusaget <OPTIONS>
+
+OPTIONS:
+    -h, --help      Print help information
+    -v, --version   Install a specific version
+EOF
+}
+
 # Log messages
 say() {
   echo "medusaget: $1"
@@ -55,36 +71,49 @@ check_go_version() {
 }
 
 main() {
-  # Define directories
   BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
-  MEDUSA_DIR=${MEDUSA_DIR:-"$BASE_DIR/.medusa"}
+  MEDUSA_DIR="$BASE_DIR/.medusa"
   MEDUSA_BIN_DIR="$MEDUSA_DIR/bin"
 
   need_cmd go
+  need_cmd git
   need_cmd pip3
 
-  # Check Go version
+  while [[ $1 ]]; do
+    case $1 in
+      --version=*|-v=*)
+        MEDUSA_VERSION="${1#*=}"
+        ;;
+      --branch=*|-b=*)
+        MEDUSA_BRANCH="${1#*=}"
+        ;;
+      *)
+        say "unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+
+  banner
+
   if ! check_go_version; then
     say "Go version 1.18 or higher is required. Exiting."
     exit 1
   fi
 
-  # Install crytic-compile if not installed
   if ! pip3 show crytic-compile &> /dev/null; then
     say "Installing crytic-compile"
     pip3 install crytic-compile
   fi
 
-  # Check for a Solidity compiler
   if check_cmd solc && check_cmd hardhat && check_cmd truffle && check_cmd brownie && check_cmd foundry; then
     say "No Solidity compiler found. Exiting."
     exit 1
   fi
 
-  # Create medusa bin directory
   mkdir -p "$MEDUSA_BIN_DIR"
 
-  # Detect platform and architecture
   PLATFORM=$(uname -s)
   ARCHITECTURE=$(uname -m)
 
@@ -92,7 +121,7 @@ main() {
     Linux) PLATFORM="linux" ;;
     Darwin) PLATFORM="mac" ;;
     MINGW*) PLATFORM="win" ;;
-    *) say "Unsupported platform"; exit 1 ;;
+    *) say "Unsupported platform"; e 1 ;;
   esac
 
   case $ARCHITECTURE in
@@ -101,85 +130,27 @@ main() {
     *) say "Unsupported architecture: $ARCHITECTURE"; exit 1 ;;
   esac
 
-  # Parse command-line-arguments
-  VERSION="latest"
+  MEDUSA_REPO="https://github.com/crytic/medusa.git"
+  CLONE_DIR="$MEDUSA_DIR/src"
 
-  for arg in "$@"; do
-    case $arg in
-      --version=*)
-        VERSION="${arg#*=}"
-        shift
-        ;;
-      *)
-        say "Invalid option: $arg"
-        exit 1
-        ;;
-    esac
-  done
-
-  # Fetch the latest version if not specified
-  if [ "$VERSION" == "latest" ]; then
-    VERSION=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+  if [ ! -d "$CLONE_DIR" ]; then
+    git clone "$MEDUSA_REPO" "$CLONE_DIR"
   fi
 
-  [[ -z "$VERSION" ]] && say "Couldn't get the specified version. Exiting." && exit 1
+  cd "$CLONE_DIR"
+  git fetch origin
 
-  # Initialize BIN_URL
-  BIN_URL="https://github.com/crytic/medusa/releases/download/$VERSION/medusa-$PLATFORM-$ARCHITECTURE.tar.gz"
-
-  # Fetch asset URLs
-  need_cmd curl
-  ASSETS_JSON=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/tags/$VERSION" | grep -o 'https://[^"]*')
-
-  if [[ $? -ne 0 ]]; then
-    say "Failed to fetch asset URL. Exiting."
-    exit 1
+  if [ -n "$MEDUSA_BRANCH" ]; then
+    git checkout "$MEDUSA_BRANCH"
+  elif [ -n "$MEDUSA_VERSION" ]; then
+    git checkout "tags/$MEDUSA_VERSION"
+  else
+    git checkout master
   fi
 
-  # Loop through assets to find correct URL
-  for asset in $ASSETS_JSON; do
-    if [[ $asset == "$PLATFORM-$ARCHITECTURE.tar.gz"* ]]; then
-      BIN_URL=$asset
-      break
-    elif [[ $asset == *"$PLATFORM-$ARCHITECTURE.zip"* ]]; then
-      BIN_URL=$asset
-      break
-    fi
-  done
+  go build -v -o "$MEDUSA_BIN_DIR/medusa"
 
-  # Download and extract medusa
-  need_cmd tar
-  need_cmd unzip
-  say "Downloading medusa..."
-  TMP_FILE=$(mktemp)
-  curl -L $BIN_URL -o "$TMP_FILE"
-
-  case $BIN_URL in
-    *.tar.gz)
-      tar -xzvf "$TMP_FILE" -C "$MEDUSA_BIN_DIR"
-      ;;
-    *.zip)
-      unzip "$TMP_FILE" -d "$MEDUSA_BIN_DIR"
-      ;;
-    *)
-      say "Unsupported file type. Exiting."
-      exit 1
-      ;;
-  esac
-
-  rm -f "$TMP_FILE"
-
-  # Detect shell and update PATH in user's profile
-  PROFILE="$HOME/.bashrc"
-  case $SHELL in
-    */zsh) PROFILE="$HOME/.zshrc" ;;
-    */fish) PROFILE="$HOME/.config/fish/config.fish" ;;
-  esac
-
-  [[ ":$PATH:" != *":${MEDUSA_BIN_DIR}:"* ]] && echo "export PATH=\"\$PATH:$MEDUSA_BIN_DIR\"" >> "$PROFILE"
-
-  say "medusa installed. Run 'source $PROFILE' or start a new terminal session to use it."
-  banner
+  say "medusa installed. Add $MEDUSA_BIN_DIR to your PATH."
 }
 
 main "$@" || exit 1
