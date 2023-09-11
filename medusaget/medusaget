@@ -115,13 +115,13 @@ main() {
   fi
 
   # Handle local repository intallation
-  if [ -n "$MEDUSA_PATH"]; then
+  if [ "$MEDUSA_PATH" != "" ]; then
     say "Installing from local repository: $MEDUSA_PATH"
 
     # Navigate to the local repo and build
     cd "$MEDUSA_PATH"
     go build -v -o "$MEDUSA_BIN_DIR/medusa"
-    say "medusa installed. Add $MEDUSA_BIN_DIR to your PATH."
+    say "medusa installed."
     exit 0
   fi
 
@@ -196,7 +196,7 @@ main() {
   go build -v -o "$MEDUSA_BIN_DIR/medusa"
 
   # Final message
-  say "medusa installed. Add $MEDUSA_BIN_DIR to your PATH."
+  say "medusa installed."
 }
 
 # Execture the main function
