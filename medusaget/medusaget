@@ -1,85 +1,185 @@
 #!/usr/bin/env bash
-set -e
+set -e # Exit on error
 
-# Define directories and utility functions
-BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
-MEDUSA_DIR=${MEDUSA_DIR:-"$BASE_DIR/.medusa"}
-MEDUSA_BIN_DIR="$MEDUSA_DIR/bin"
+banner() {
+  printf "
 
-need_cmd() {
-  if ! command -v "$1" &>/dev/null; then
-    echo "need '$1' (command not found)"
-    exit 1
-  fi
+=========================================================================================
+
+  __  __          _
+ |  \/  |        | |        ____
+ | \  / | ___  __| | _   _ / ___/  ____   
+ | |\/| |/ _ \/ _  || | | |\___ \ /    |
+ | |  | |  __/ (_| || |_| | ___) || () |     
+ |_|  |_|\___|\____| \___/ |____/ |_/|_|
+
+ 
+      Parallelized, coverage-guided, mutational Solidity smart contract fuzzing.
+
+
+==========================================================================================
+
+Repo       : https://github.com/crytic/medusa/
+License    : AGPL-3.0
+Latest     : $(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+Support    : https://github.com/crytic/medusa/issues
+Contribute : https://github.com/crytic/medusa/contribute
+
+==========================================================================================
+
+"
 }
 
+# Log messages
 say() {
   echo "medusaget: $1"
 }
 
-need_cmd go
-need_cmd curl
-need_cmd pip3
+# Check if command exists
+need_cmd() {
+  if check_cmd "$1"; then
+    say "need '$1' (command not found)"
+    exit 1
+  fi
+}
 
-GO_VERSION=$(go version | awk '{print $3}' | tr -d 'go')
-if [[ $(echo "$GO_VERSION 1.18" | awk '{print ($1 >= $2)}') -ne 1 ]]; then
-  echo "Go version 1.18 or higher is required. Exiting."
-  exit 1
-fi
+# Helper function to check command
+check_cmd() {
+  ! command -v "$1" &>/dev/null
+}
 
-if ! pip3 show crytic-compile &> /dev/null; then
-  say "Installing crytic-compile"
-  pip3 install crytic-compile
-fi
+# Check Go version
+check_go_version() {
+  local version=$(go version | awk '{print $3}' | tr -d 'go')
+  [[ $(echo "$version 1.18" | awk '{print ($1 >= $2)}') -eq 1 ]]
+}
 
-if ! command -v solc &> /dev/null && ! command -v hardhat &> /dev/null && ! command -v truffle &> /dev/null && ! command -v brownie &> /dev/null && ! command -v foundry &> /dev/null; then
-  echo "No Solidity compiler found. Exiting."
-  exit 1
-fi
+main() {
+  # Define directories
+  BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
+  MEDUSA_DIR=${MEDUSA_DIR:-"$BASE_DIR/.medusa"}
+  MEDUSA_BIN_DIR="$MEDUSA_DIR/bin"
 
-mkdir -p $MEDUSA_BIN_DIR
+  need_cmd go
+  need_cmd pip3
 
-PLATFORM="$(uname -s)"
-ARCHITECTURE="$(uname -m)"
+  # Check Go version
+  if ! check_go_version; then
+    say "Go version 1.18 or higher is required. Exiting."
+    exit 1
+  fi
 
-case $PLATFORM in
-  Linux) PLATFORM="linux" ;;
-  Darwin) PLATFORM="mac" ;;
-  MINGW*) PLATFORM="win" ;;
-  *) say "Unsupported platform"; exit 1 ;;
-esac
+  # Install crytic-compile if not installed
+  if ! pip3 show crytic-compile &> /dev/null; then
+    say "Installing crytic-compile"
+    pip3 install crytic-compile
+  fi
 
-if [ "$ARCHITECTURE" = "x86_64" ]; then
-  ARCHITECTURE="x64"
-elif [ "$ARCHITECTURE" = "arm64" ]; then
-  ARCHITECTURE="arm64"
-else
-  echo "unsupported architecture: $ARCHITECTURE"
-  exit 1
-fi
+  # Check for a Solidity compiler
+  if check_cmd solc && check_cmd hardhat && check_cmd truffle && check_cmd brownie && check_cmd foundry; then
+    say "No Solidity compiler found. Exiting."
+    exit 1
+  fi
 
-LATEST_VERSION=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-if [[ -z "$LATEST_VERSION" ]]; then
-  say "Couldn't get the latest version. Exiting."
-  exit 1
-fi
+  # Create medusa bin directory
+  mkdir -p "$MEDUSA_BIN_DIR"
 
-BIN_URL="https://github.com/crytic/medusa/releases/download/$LATEST_VERSION/medusa-$PLATFORM-$ARCHITECTURE.tar.gz"
+  # Detect platform and architecture
+  PLATFORM=$(uname -s)
+  ARCHITECTURE=$(uname -m)
 
-say "Downloading Medusa..."
-TMP_FILE=$(mktemp)
-curl -L $BIN_URL -o $TMP_FILE
-tar -xzvf $TMP_FILE -C $MEDUSA_BIN_DIR
-rm -f $TMP_FILE
+  case $PLATFORM in
+    Linux) PLATFORM="linux" ;;
+    Darwin) PLATFORM="mac" ;;
+    MINGW*) PLATFORM="win" ;;
+    *) say "Unsupported platform"; exit 1 ;;
+  esac
 
-PROFILE="$HOME/.bashrc"
-case $SHELL in
-  */zsh) PROFILE="$HOME/.zshrc" ;;
-  */fish) PROFILE="$HOME/.config/fish/config.fish" ;;
-esac
+  case $ARCHITECTURE in
+    x86_64) ARCHITECTURE="x64" ;;
+    arm64) ARCHITECTURE="arm64" ;;
+    *) say "Unsupported architecture: $ARCHITECTURE"; exit 1 ;;
+  esac
 
-if [[ ":$PATH:" != *":${MEDUSA_BIN_DIR}:"* ]]; then
-  echo "export PATH=\"\$PATH:$MEDUSA_BIN_DIR\"" >> $PROFILE
-fi
+  # Parse command-line-arguments
+  VERSION="latest"
 
-say "Medusa installed. Run 'source $PROFILE' or start a new terminal session to use it."
+  for arg in "$@"; do
+    case $arg in
+      --version=*)
+        VERSION="${arg#*=}"
+        shift
+        ;;
+      *)
+        say "Invalid option: $arg"
+        exit 1
+        ;;
+    esac
+  done
+
+  # Fetch the latest version if not specified
+  if [ "$VERSION" == "latest" ]; then
+    VERSION=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+  fi
+
+  [[ -z "$VERSION" ]] && say "Couldn't get the specified version. Exiting." && exit 1
+
+  # Initialize BIN_URL
+  BIN_URL="https://github.com/crytic/medusa/releases/download/$VERSION/medusa-$PLATFORM-$ARCHITECTURE.tar.gz"
+
+  # Fetch asset URLs
+  need_cmd curl
+  ASSETS_JSON=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/tags/$VERSION" | grep -o 'https://[^"]*')
+
+  if [[ $? -ne 0 ]]; then
+    say "Failed to fetch asset URL. Exiting."
+    exit 1
+  fi
+
+  # Loop through assets to find correct URL
+  for asset in $ASSETS_JSON; do
+    if [[ $asset == "$PLATFORM-$ARCHITECTURE.tar.gz"* ]]; then
+      BIN_URL=$asset
+      break
+    elif [[ $asset == *"$PLATFORM-$ARCHITECTURE.zip"* ]]; then
+      BIN_URL=$asset
+      break
+    fi
+  done
+
+  # Download and extract medusa
+  need_cmd tar
+  need_cmd unzip
+  say "Downloading medusa..."
+  TMP_FILE=$(mktemp)
+  curl -L $BIN_URL -o "$TMP_FILE"
+
+  case $BIN_URL in
+    *.tar.gz)
+      tar -xzvf "$TMP_FILE" -C "$MEDUSA_BIN_DIR"
+      ;;
+    *.zip)
+      unzip "$TMP_FILE" -d "$MEDUSA_BIN_DIR"
+      ;;
+    *)
+      say "Unsupported file type. Exiting."
+      exit 1
+      ;;
+  esac
+
+  rm -f "$TMP_FILE"
+
+  # Detect shell and update PATH in user's profile
+  PROFILE="$HOME/.bashrc"
+  case $SHELL in
+    */zsh) PROFILE="$HOME/.zshrc" ;;
+    */fish) PROFILE="$HOME/.config/fish/config.fish" ;;
+  esac
+
+  [[ ":$PATH:" != *":${MEDUSA_BIN_DIR}:"* ]] && echo "export PATH=\"\$PATH:$MEDUSA_BIN_DIR\"" >> "$PROFILE"
+
+  say "medusa installed. Run 'source $PROFILE' or start a new terminal session to use it."
+  banner
+}
+
+main "$@" || exit 1
