@@ -34,6 +34,47 @@ If any of these requirements are violated, you should expect your pull request t
 
 Pull request reviewers have a responsibility to uphold these standards. Even if a pull request is compliant with these requirements, a reviewer which identifies an opportunity to document some caveat (such as a `// TODO: ` comment) should request it be added prior to pull request approval.
 
+### Linters
+
+Several linters and security checkers are run on the PRs.
+
+#### Go
+
+To install
+
+- `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+
+To run
+
+- `go fmt ./...`
+- `golangci-lint run --timeout 5m0s`
+
+#### Markdown/Json/Yaml
+
+To install
+
+- `npm install -g prettier`
+- `npm install -g markdown-link-check@3.10.3`
+
+To run
+
+- `prettier '**.json' '**/*.md' '**/*.yml' '!(pkg)'`
+- `markdown-link-check --config .github/workflows/resources/markdown_link_check.json ./*.md`
+
+To format (overwrite files)
+
+- `prettier '**.json' '**/*.md' '**/*.yml' '!(pkg)' -w`
+
+#### Github action
+
+To install
+
+- `go install github.com/rhysd/actionlint/cmd/actionlint@latest`
+
+To run
+
+- `actionlint`
+
 ### Cross-platform considerations
 
 - Ensure file/directory names do not exceed 32 characters in length to minimize filepath length issues on Windows. File/directory names should be shorter than this where possible.
