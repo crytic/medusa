@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-set -e # Exit on error
 
 # Display the banner
-banner() {
+function print_banner {
   printf "
 
 =========================================================================================
@@ -32,7 +31,7 @@ Contribute : https://github.com/crytic/medusa/contribute
 }
 
 # Display usage information
-usage() {
+function show_usage {
   cat 1>&2 <<EOF
 The installer for Medusa.
 
@@ -46,158 +45,191 @@ OPTIONS:
     -v, --version   Install a specific version
     -b, --branch    Install a specific branch
     -P, --pr        Install a specific pull request
-    -C, --commit    Install a specific commit
+    -c, --commit    Install a specific commit
     -r, --repo      Install a remote repository
     -p, --path      Install a local repository
 EOF
 }
 
 # Log messages
-say() {
-  echo "medusaget: $1"
+function log {
+  echo "INFO: $1"
 }
 
-# Check if command exists
-need_cmd() {
-  if check_cmd "$1"; then
-    say "need '$1' (command not found)"
-    exit 1
+# Log error and exit
+function error {
+  echo "ERROR: $1"
+  exit 1
+}
+
+# Check for required dependencies 
+function validate_deps {
+  local deps=("go" "git" "pip3" "curl")
+  for cmd in "${deps[@]}"; do
+    if ! command -v $cmd &>/dev/null; then
+      error "Missing $cmd. Exiting."
+    fi
+  done
+}
+
+# Get the go version
+function get_go_version {
+  go version | cut -d ' ' -f3 | tr -d 'go'
+}
+
+# Check that the go version is supported by medusa
+function validate_go_version {
+  local min="1.18"
+  local ver=$(get_go_version)
+  if [[ $ver < $min ]]; then
+    error "Go $min+ required. Exiting."
   fi
 }
 
-# Helper function to check command
-check_cmd() {
-  ! command -v "$1" &>/dev/null
+# Install crytic compile if it isn't available
+function install_crytic_compile {
+  if ! pip3 show crytic-compile &> /dev/null; then
+    pip3 install crytic-compile
+  fi
 }
 
-# Check if Go version is 1.18 or higher
-check_go_version() {
-  local version=$(go version | awk '{print $3}' | tr -d 'go')
-  [[ $(echo "$version 1.18" | awk '{print ($1 >= $2)}') -eq 1 ]]
+# Check for a valid solidity compiler
+function validate_solidity_compiler {
+  local solc=("solc" "hardhat" "truffle" "brownie" "foundry")
+  for cmd in "${solc[@]}"; do
+    if command -v $cmd &>/dev/null; then
+      return 0
+    fi
+  done
+  error "No Solidity compiler found. Exiting."
 }
 
-main() {
-  # Define directories
-  BASE_DIR=${XDG_CONFIG_HOME:-$HOME}
-  MEDUSA_DIR="$BASE_DIR/.medusa"
-  MEDUSA_BIN_DIR="$MEDUSA_DIR/bin"
+# Verify platform and architecture
+function check_platform_and_arch {
+  local platform=$(uname -s)
+  local architecture=$(uname -m)
 
-  # Check for required commands
-  need_cmd go   # Go is required to build medusa
-  need_cmd git  # Git is required to clone medusa
-  need_cmd pip3 # pip3 is required to install crytic-compile
+  case $platform in
+    Linux) platform="linux" ;;
+    Darwin) platform="mac" ;;
+    MINGW*) platform="win" ;;
+    *) error "Unsupported platform"; ;;
+  esac
 
+  case $architecture in
+    x86_64) architecture="x64" ;;
+    arm64) architecture="arm64" ;;
+    *) error "Unsupported architecture: $architecture"; ;;
+  esac
+}
+
+function main {
   # Parse command-line arguments
-  while [[ $1 ]]; do
-    case $1 in
-      --version=*|-v=*) MEDUSA_VERSION="${1#*=}" ;;
-      --branch=*|-b=*)  MEDUSA_BRANCH="${1#*=}"  ;;
-      --pr=*|-P=*)      MEDUSA_PR="${1#*=}"      ;;
-      --commit=*|-C=*)  MEDUSA_COMMIT="${1#*=}"  ;;
-      --repo=*|-r=*)    MEDUSA_REPO="${1#*=}"    ;;
-      --path=*|-p=*)    MEDUSA_PATH="${1#*=}"    ;;
+  while (( "$#" )); do
+    case "$1" in
+      -v|--version) version="$2"; shift ;;
+      -b|--branch)  branch="$2";  shift ;;
+      -P|--pr)      pr="$2";      shift ;;
+      -c|--commit)  commit="$2";  shift ;;
+      -r|--repo)    repo="$2";    shift ;;
+      -p|--path)    path="$2";    shift ;;
       --help|-h)
-        usage
+        show_usage
         exit 0
         ;;
-      *)
-        say "unknown option: $1"
-        exit 1
-        ;;
+      *) error "Unknown option: $1. Exiting." ;;
     esac
     shift
   done
 
   # Check for conflicting options
-  if [ -n "$MEDUSA_PR" ] && [ -n "$MEDUSA_BRANCH" ]; then
-    say "cannot specify both --pr and --branch"
-    exit 1
+  if [ -n "$pr" ] && [ -n "$branch" ]; then
+    error "Cannot specify both --pr and --branch. Exiting."
   fi
 
-  # Handle local repository intallation
-  if [ "$MEDUSA_PATH" != "" ]; then
-    say "Installing from local repository: $MEDUSA_PATH"
+  # Pre-requisites
+  check_platform_and_arch
+  validate_deps
+  validate_solidity_compiler
 
-    # Navigate to the local repo and build
-    cd "$MEDUSA_PATH"
-    go build -v -o "$MEDUSA_BIN_DIR/medusa"
-    say "medusa installed."
+  # Setup base directories
+  base_dir="${XDG_CONFIG_HOME:-$HOME}"
+  bin_dir="$base_dir/.medusa/bin"
+  mkdir -p "$bin_dir"
+
+  print_banner
+
+  # Handle local installation if provided
+  if [ "$path" != "" ]; then
+    log "Installing from local repository: $path"
+
+    cd "$path"
+    go build -v -o "$bin_dir/medusa"
+    log "medusa installed."
     exit 0
   fi
 
-  # Display the banner
-  banner
-
-  # Check if Go version is 1.18 or higher
-  if ! check_go_version; then
-    say "Go version 1.18 or higher is required. Exiting."
-    exit 1
-  fi
-
-  # Check if crytic-compile is installed, if not, install it
-  if ! pip3 show crytic-compile &> /dev/null; then
-    say "Installing crytic-compile"
-    pip3 install crytic-compile
-  fi
-
-  # Check for a Solidity compiler
-  if check_cmd solc && check_cmd hardhat && check_cmd truffle && check_cmd brownie && check_cmd foundry; then
-    say "No Solidity compiler found. Exiting."
-    exit 1
-  fi
-
-  # Create the medusa bin directory if it doesn't exist
-  mkdir -p "$MEDUSA_BIN_DIR"
-
-  # Detect platform and architecture
-  PLATFORM=$(uname -s)
-  ARCHITECTURE=$(uname -m)
-
-  case $PLATFORM in
-    Linux) PLATFORM="linux" ;;
-    Darwin) PLATFORM="mac" ;;
-    MINGW*) PLATFORM="win" ;;
-    *) say "Unsupported platform"; e 1 ;;
-  esac
-
-  case $ARCHITECTURE in
-    x86_64) ARCHITECTURE="x64" ;;
-    arm64) ARCHITECTURE="arm64" ;;
-    *) say "Unsupported architecture: $ARCHITECTURE"; exit 1 ;;
-  esac
-
   # Clone medusa repo if it doesn't exist
-  MEDUSA_REPO="https://github.com/crytic/medusa.git"
-  CLONE_DIR="$MEDUSA_DIR/src"
+  repo="https://github.com/crytic/medusa.git"
+  clone_dir="$base_dir/src/medusa"
 
-  if [ ! -d "$CLONE_DIR" ]; then
-    git clone "$MEDUSA_REPO" "$CLONE_DIR"
+  if [ ! -d "$clone_dir" ]; then
+    git clone "$repo" "$clone_dir"
   fi
 
   # Navigate to the medusa repo and fetch updates
-  cd "$CLONE_DIR"
+  cd "$clone_dir"
   git fetch origin
 
-  # Checkout to the specified branch, version, or commit
-  if [ -n "$MEDUSA_COMMIT" ]; then
-    git checkout "$MEDUSA_COMMIT"
-  elif [ -n "$MEDUSA_PR" ]; then
-    git fetch origin pull/$MEDUSA_PR/head:pr$MEDUSA_PR
-    git checkout pr$MEDUSA_PR
-  elif [ -n "$MEDUSA_BRANCH" ]; then
-    git checkout "$MEDUSA_BRANCH"
-  elif [ -n "$MEDUSA_VERSION" ]; then
-    git checkout "tags/$MEDUSA_VERSION"
-  else
-    git checkout master
+  # Save the current active branch
+  active_branch=$(git symbolic-ref HEAD 2>/dev/null | cut -d'/' -f 3)
+
+  # Determine target branch or state based on user options
+  target=""
+  [ -n "$branch" ] && target=$branch
+  [ -n "$pr" ] && target="pr$pr"
+
+  # Pre-fetch the target, but don't checkout
+  if [ -n "$branch" ]; then
+    git fetch origin "$branch"
+  elif [ -n "$pr" ]; then
+    git fetch origin pull/$pr/head:pr$pr
   fi
 
-  # Build medusa
-  go build -v -o "$MEDUSA_BIN_DIR/medusa"
+  # If the active branch is not the one you're about to install, switch to master
+  [ "$active_branch" != "$target" ] && git checkout master
 
-  # Final message
-  say "medusa installed."
+  # Save list of old branches and remove them
+  old_branches=$(git for-each-ref --format '%(refname:short)' refs/heads/)
+  for old in $old_branches; do
+    [ "$old" != "master" ] && git branch -D $old
+  done
+
+  # Now checkout to the target
+  if [ -n "$branch" ]; then
+    git checkout -b "$branch" --track "origin/$branch"
+  elif [ -n "$pr" ]; then
+    git checkout pr$pr
+  elif [ -n "$commit" ]; then
+    git checkout "$commit"
+  fi
+
+  # Append to PATH if not already there
+  add_to_path="export PATH=\$PATH:$bin_dir"
+  case "$SHELL" in
+    */zsh)
+      grep -qF "$add_to_path" ~/.zshrc || echo "$add_to_path" >> ~/.zshrc
+      ;;
+    */bash)
+      grep -qF "$add_to_path" ~/.bashrc || echo "$add_to_path" >> ~/.bashrc
+      ;;
+    *)
+     error "Unknown shell. Manually add to PATH."
+     ;;
+  esac
+
+  log "medusa installed."
 }
 
-# Execture the main function
-main "$@" || exit 1
+main "$@"
+
