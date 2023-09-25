@@ -68,6 +68,10 @@ func addFuzzFlags() error {
 	// Trace all
 	fuzzCmd.Flags().Bool("trace-all", false,
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
+
+	// Logging color
+	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
+
 	return nil
 }
 
@@ -172,6 +176,14 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	// Update trace all enablement
 	if cmd.Flags().Changed("trace-all") {
 		projectConfig.Fuzzing.Testing.TraceAll, err = cmd.Flags().GetBool("trace-all")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update logging color mode
+	if cmd.Flags().Changed("no-color") {
+		projectConfig.Logging.NoColor, err = cmd.Flags().GetBool("no-color")
 		if err != nil {
 			return err
 		}
