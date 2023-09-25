@@ -89,9 +89,13 @@ type Fuzzer struct {
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// Create the global logger and add stdout as an unstructured, colored output stream
+	// Disable colors if requested
+	if config.Logging.NoColor {
+		colors.DisableColor()
+	}
+	// Create the global logger and add stdout as an unstructured output stream
 	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
-	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
+	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
 
 	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
 	if config.Logging.LogDirectory != "" {
