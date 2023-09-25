@@ -5,8 +5,9 @@ package colors
 
 import (
 	"fmt"
-	"golang.org/x/sys/windows"
 	"os"
+
+	"golang.org/x/sys/windows"
 )
 
 var enabled bool
@@ -52,6 +53,9 @@ func EnableColor() {
 		}
 	}
 }
+
+// DisableColor will disable colors
+func DisableColor() { enabled = false }
 
 // Colorize returns the string s wrapped in ANSI code c assuming that ANSI is supported on the Windows version
 // Source: https://github.com/rs/zerolog/blob/4fff5db29c3403bc26dee9895e12a108aacc0203/console.go
