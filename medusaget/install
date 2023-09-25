@@ -36,7 +36,7 @@ function main {
   base_dir=${XDG_CONFIG_HOME:-$HOME}
   root_dir="$base_dir/.medusa"
   bin_dir="$root_dir/bin"
-  fetch_url="https://raw.githubusercontent.com/zachmdsi/medusa/feat/one-line-install/medusaget/medusaget"
+  fetch_url="https://raw.githubusercontent.com/crytic/medusa/feat/one-line-install/medusaget/medusaget"
   fetch_path="$bin_dir/medusaget"
 
   # Create dir & Download medusaget
