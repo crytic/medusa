@@ -3,9 +3,10 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/rs/zerolog"
-	"os"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/utils"
@@ -189,6 +190,9 @@ type LoggingConfig struct {
 	// LogDirectory describes what directory log files should be outputted in/ LogDirectory being a non-empty string is
 	// equivalent to enabling file logging.
 	LogDirectory string `json:"logDirectory"`
+
+	// NoColor indicates whether or not log messages should be displayed with colored formatting.
+	NoColor bool `json:"noColor"`
 }
 
 // ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now
