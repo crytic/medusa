@@ -14,30 +14,14 @@ import (
 	"strings"
 )
 
-// getCheatCodeProviders obtains a cheatCodeTracer (used to power cheat code analysis) and associated CheatCodeContract
-// objects linked to the tracer (providing on-chain callable methods as an entry point). These objects are attached to
-// the TestChain to enable cheat code functionality.
-// Returns the tracer and associated pre-compile contracts, or an error, if one occurred.
-func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
-	// Create a cheat code tracer and attach it to the chain.
-	tracer := newCheatCodeTracer()
-
-	// Obtain our cheat code pre-compiles
-	stdCheatCodeContract, err := getStandardCheatCodeContract(tracer)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Return the tracer and precompiles
-	return tracer, []*CheatCodeContract{stdCheatCodeContract}, nil
-}
+// StandardCheatcodeContractAddress is the address for the standard cheatcode contract
+var StandardCheatcodeContractAddress = common.HexToAddress("0x7109709ECfa91a80626fF3989D68f67F5b1DD12D")
 
 // getStandardCheatCodeContract obtains a CheatCodeContract which implements common cheat codes.
 // Returns the precompiled contract, or an error if one occurs.
 func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, error) {
-	// Define our address for this precompile contract, then create a new precompile to add methods to.
-	contractAddress := common.HexToAddress("0x7109709ECfa91a80626fF3989D68f67F5b1DD12D")
-	contract := newCheatCodeContract(tracer, contractAddress, "StdCheats")
+	// Create a new precompile to add methods to.
+	contract := newCheatCodeContract(tracer, StandardCheatcodeContractAddress, "StdCheats")
 
 	// Define some basic ABI argument types
 	typeAddress, err := abi.NewType("address", "", nil)

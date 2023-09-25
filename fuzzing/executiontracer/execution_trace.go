@@ -3,6 +3,7 @@ package executiontracer
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
@@ -11,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"regexp"
 	"strings"
 )
 
@@ -36,10 +38,12 @@ func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
 
 // generateCallFrameEnterElements generates a list of elements describing top level information about this call frame.
 // This list of elements will hold information about what kind of call it is, wei sent, what method is called, and more.
-// Additionally, the list may also hold formatting options for console output.
-func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []any {
-	// Create list of elements
+// Additionally, the list may also hold formatting options for console output. This function also returns a non-empty
+// string in case this call frame represents a call to the console.log precompile contract.
+func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([]any, string) {
+	// Create list of elements and console log string
 	elements := make([]any, 0)
+	var consoleLogString string
 
 	// Define some strings and objects that represent our current call frame
 	var (
@@ -95,9 +99,29 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []
 		// Unpack our input values and obtain a string to represent them
 		inputValues, err := method.Inputs.Unpack(abiDataInputBuffer)
 		if err == nil {
+			// Encode the ABI arguments into strings
 			encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
 			if err == nil {
 				inputArgumentsDisplayText = &encodedInputString
+			}
+
+			// If the call was made to the console log precompile address, let's retrieve the log and format it
+			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
+				// First, attempt to do string formatting if the first element is a string and has a percent sign in it
+				exp := regexp.MustCompile(`%`)
+				stringInput, isString := inputValues[0].(string)
+				if isString && exp.MatchString(stringInput) {
+					// Format the string and add it to the list of logs
+					consoleLogString = fmt.Sprintf(inputValues[0].(string), inputValues[1:]...)
+				} else {
+					// The string does not need to be formatted, and we can just use the encoded input string
+					consoleLogString = encodedInputString
+				}
+
+				// Add a bullet point before the string and a new line after the string
+				if len(consoleLogString) > 0 {
+					consoleLogString = colors.BULLET_POINT + " " + consoleLogString + "\n"
+				}
 			}
 		}
 	}
@@ -120,7 +144,11 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []
 		}
 	} else {
 		if callFrame.ExecutedCode {
-			callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
+				callInfo = fmt.Sprintf("%v.%v(%v)", codeContractName, methodName, *inputArgumentsDisplayText)
+			} else {
+				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			}
 		} else {
 			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		}
@@ -129,7 +157,7 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) []
 	// Add call information to the elements
 	elements = append(elements, callInfo, "\n")
 
-	return elements
+	return elements, consoleLogString
 }
 
 // generateCallFrameExitElements generates a list of elements describing the return data of the call frame (e.g.
@@ -263,11 +291,13 @@ func (t *ExecutionTrace) generateEventEmittedElements(callFrame *CallFrame, even
 	return elements
 }
 
-// generateElementsForCallFrame generates a list of elements for a given call frame and its children. Additionally,
-// the list may also hold formatting options for console output.
-func (t *ExecutionTrace) generateElementsForCallFrame(currentDepth int, callFrame *CallFrame) []any {
-	// Create list of elements
+// generateElementsAndLogsForCallFrame generates a list of elements and logs for a given call frame and its children.
+// The list of elements may also hold formatting options for console output. The list of logs represent calls to the
+// console.log precompile contract.
+func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, callFrame *CallFrame) ([]any, []any) {
+	// Create list of elements and logs
 	elements := make([]any, 0)
+	consoleLogs := make([]any, 0)
 
 	// Create our current call line prefix (indented by call depth)
 	prefix := strings.Repeat("\t", currentDepth) + " => "
@@ -278,8 +308,14 @@ func (t *ExecutionTrace) generateElementsForCallFrame(currentDepth int, callFram
 	}
 
 	// Add the call frame enter header elements
+	newElements, consoleLogString := t.generateCallFrameEnterElements(callFrame)
 	elements = append(elements, prefix)
-	elements = append(elements, t.generateCallFrameEnterElements(callFrame)...)
+	elements = append(elements, newElements...)
+
+	// If this call frame was a console.log contract call, add the string to the list of logs
+	if len(consoleLogString) > 0 {
+		consoleLogs = append(consoleLogs, consoleLogString)
+	}
 
 	// Now that the header has been printed, create our indent level to express everything that
 	// happened under it.
@@ -293,8 +329,9 @@ func (t *ExecutionTrace) generateElementsForCallFrame(currentDepth int, callFram
 		for _, operation := range callFrame.Operations {
 			if childCallFrame, ok := operation.(*CallFrame); ok {
 				// If this is a call frame being entered, generate information recursively.
-				childOutputLines := t.generateElementsForCallFrame(currentDepth+1, childCallFrame)
+				childOutputLines, childConsoleLogStrings := t.generateElementsAndLogsForCallFrame(currentDepth+1, childCallFrame)
 				elements = append(elements, childOutputLines...)
+				consoleLogs = append(consoleLogs, childConsoleLogStrings...)
 			} else if eventLog, ok := operation.(*coreTypes.Log); ok {
 				// If an event log was emitted, add a message for it.
 				elements = append(elements, prefix)
@@ -304,23 +341,35 @@ func (t *ExecutionTrace) generateElementsForCallFrame(currentDepth int, callFram
 
 		// If we self-destructed, add a message for it before our footer.
 		if callFrame.SelfDestructed {
-			elements = append(elements, prefix, colors.MagentaBold, "[selfdestruct]", colors.Reset, "\n")
+			elements = append(elements, prefix, colors.RedBold, "[selfdestruct]", colors.Reset, "\n")
 		}
 
 		// Add the call frame exit footer
 		elements = append(elements, prefix)
 		elements = append(elements, t.generateCallFrameExitElements(callFrame)...)
+
 	}
 
 	// Return our elements
-	return elements
+	return elements, consoleLogs
 }
 
 // Log returns a logging.LogBuffer that represents this execution trace. This buffer will be passed to the underlying
 // logger which will format it accordingly for console or file.
 func (t *ExecutionTrace) Log() *logging.LogBuffer {
+	// Create a buffer
 	buffer := logging.NewLogBuffer()
-	buffer.Append(t.generateElementsForCallFrame(0, t.TopLevelCallFrame)...)
+
+	// First, add the elements that make up the overarching execution trace
+	elements, logs := t.generateElementsAndLogsForCallFrame(0, t.TopLevelCallFrame)
+	buffer.Append(elements...)
+
+	// If we captured any logs during tracing, add them to the overarching execution trace
+	if len(logs) > 0 {
+		buffer.Append(colors.Bold, "[Logs]", colors.Reset, "\n")
+		buffer.Append(logs...)
+	}
+
 	return buffer
 }
 
