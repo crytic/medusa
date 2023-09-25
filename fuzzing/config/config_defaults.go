@@ -83,6 +83,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",
+			NoColor:      false,
 		},
 	}
 
