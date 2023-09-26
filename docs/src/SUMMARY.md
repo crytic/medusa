@@ -2,15 +2,14 @@
 
 - [Introduction](./README.md)
 
-# User Guide
-
 - [Project Configuration](./project-configuration.md)
 - [Example Project Configuration File](./example-config-file.md)
 - [Command Line Interface](./command-line-interface.md)
 - [API Overview (WIP)](./api-overview.md)
 - [Testing with `medusa`](./writing-tests.md)
 
-# [Cheatcodes](./cheatcodes_overview.md)
+# Appendices
+- [Cheatcodes](./cheatcodes_overview.md)
   - [warp](./cheatcodes/warp.md)
   - [roll](./cheatcodes/roll.md)
   - [fee](./cheatcodes/fee.md)
@@ -35,6 +34,5 @@
   - [parseUint](./cheatcodes/parse_uint.md)
   - [parseBool](./cheatcodes/parse_bool.md)
   - [parseAddress](./cheatcodes/parse_address.md)
-
-
+- [Console Logging](./console_logging.md)
 - [FAQ](./faq.md)
