@@ -151,13 +151,12 @@ function main {
   check_platform_and_arch
   validate_deps
   validate_solidity_compiler
+  print_banner
 
   # Setup base directories
   base_dir="${XDG_CONFIG_HOME:-$HOME}"
   bin_dir="$base_dir/.medusa/bin"
   mkdir -p "$bin_dir"
-
-  print_banner
 
   # Handle local installation if provided
   if [ "$path" != "" ]; then
@@ -196,14 +195,14 @@ function main {
     git fetch origin pull/$pr/head:pr$pr
   fi
 
-  # If the active branch is not the one you're about to install, switch to master
-  [ "$active_branch" != "$target" ] && git checkout master
-
   # Save list of old branches and remove them
   old_branches=$(git for-each-ref --format '%(refname:short)' refs/heads/)
   for old in $old_branches; do
     [ "$old" != "master" ] && git branch -D $old
   done
+
+  # If the active branch is not the one you're about to install, switch to master
+  [ "$active_branch" != "$target" ] && git checkout master
 
   # Now checkout to the target
   if [ -n "$branch" ]; then
@@ -212,6 +211,8 @@ function main {
     git checkout pr$pr
   elif [ -n "$commit" ]; then
     git checkout "$commit"
+  elif [ -n "$version" ]; then
+    git checkout "tags/$version"
   fi
 
   # Append to PATH if not already there
@@ -227,6 +228,8 @@ function main {
      error "Unknown shell. Manually add to PATH."
      ;;
   esac
+
+  go build -v -o "$bin_dir/medusa"
 
   log "medusa installed."
 }

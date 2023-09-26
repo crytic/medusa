@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-set -e
 
 function install_medusaget {
   echo "Downloading medusaget..."
-  curl -# -k -L "$1" -o "$2"
+  curl -# -L "$1" -o "$2"
   chmod +x "$2"
 }
 
@@ -36,7 +35,7 @@ function main {
   base_dir=${XDG_CONFIG_HOME:-$HOME}
   root_dir="$base_dir/.medusa"
   bin_dir="$root_dir/bin"
-  fetch_url="https://raw.githubusercontent.com/crytic/medusa/feat/one-line-install/medusaget/medusaget"
+  fetch_url="https://raw.githubusercontent.com/crytic/medusa/master/medusaget/medusaget"
   fetch_path="$bin_dir/medusaget"
 
   # Create dir & Download medusaget
@@ -47,7 +46,9 @@ function main {
   case "$SHELL" in
     *zsh)  sh_type="zsh"  ;;
     *bash) sh_type="bash" ;;
-    *)     sh_type="unknown" ;;
+    *)
+      echo "Unknown shell. Manually add to PATH."
+      exit 1
   esac
   configure_shell "$sh_type" "$bin_dir"
 
@@ -57,5 +58,5 @@ function main {
   echo "medusaget is ready. Simply run 'medusaget' to get started."
 }
 
-main "$@"
+main"$@"
 
