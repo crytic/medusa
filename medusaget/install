@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
+set -e
 
-function install_medusaget {
+install_medusaget() {
   echo "Downloading medusaget..."
   curl -# -L "$1" -o "$2"
   chmod +x "$2"
 }
 
-function configure_shell {
+configure_shell() {
   local shell_type="$1"
   local bin_path="$2"
 
   case "$shell_type" in
-    zsh)
-      echo "export PATH=\$PATH:$bin_path" >> ~/.zshrc
-      ;;
-    bash)
-      echo "export PATH=\$PATH:$bin_path" >> ~/.bashrc
-      ;;
+    zsh)  echo "export PATH=\$PATH:$bin_path" >> ~/.zshrc  ;;
+    bash) echo "export PATH=\$PATH:$bin_path" >> ~/.bashrc ;;
     *)
       echo "Unknown shell. Manually add to PATH."
       exit 1
@@ -24,22 +21,22 @@ function configure_shell {
   esac
 }
 
-function check_libusb_macos {
+check_libusb_macos() {
   if [[ ! -f /usr/local/opt/libusb/lib/libusb-1.0.0.dylib && ! -f /opt/homebrew/opt/libusb/lib/libusb-1.0.0.dylib ]]; then
     echo "Warning: libusb not found. You may need to install it manually via Homebrew (brew install libusb)."
   fi
 }
 
-function main {
+main() {
   # Configurations
-  base_dir=${XDG_CONFIG_HOME:-$HOME}
-  root_dir="$base_dir/.medusa"
-  bin_dir="$root_dir/bin"
+  base=${XDG_CONFIG_HOME:-$HOME}
+  root="$base/.medusa"
+  bin="$root/bin"
   fetch_url="https://raw.githubusercontent.com/crytic/medusa/master/medusaget/medusaget"
-  fetch_path="$bin_dir/medusaget"
+  fetch_path="$bin/medusaget"
 
   # Create dir & Download medusaget
-  mkdir -p "$bin_dir"
+  mkdir -p "$bin"
   install_medusaget "$fetch_url" "$fetch_path"
 
   # Shell & PATH setup
@@ -50,7 +47,7 @@ function main {
       echo "Unknown shell. Manually add to PATH."
       exit 1
   esac
-  configure_shell "$sh_type" "$bin_dir"
+  configure_shell "$sh_type" "$bin"
 
   # MacOS libusb check
   [[ "$OSTYPE" =~ ^darwin ]] && check_libusb_macos
@@ -58,5 +55,5 @@ function main {
   echo "medusaget is ready. Simply run 'medusaget' to get started."
 }
 
-main"$@"
+main "$@"
 
