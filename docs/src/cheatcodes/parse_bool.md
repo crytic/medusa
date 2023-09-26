@@ -5,7 +5,7 @@ The `parseBool` cheatcode will parse the input string into a boolean
 
 ## Example
 ```solidity
-    contract TestContract {
+contract TestContract {
     uint x = 123;
     function test() public {
         // Obtain our cheat code contract reference.
@@ -23,5 +23,5 @@ The `parseBool` cheatcode will parse the input string into a boolean
 
 ## Function Signature
 ```solidity
-    function parseBool(string calldata) external returns (bool);
+function parseBool(string calldata) external returns (bool);
 ```

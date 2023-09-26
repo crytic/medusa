@@ -8,15 +8,15 @@ Note that this behavior will change in the future.
 
 ## Example
 ```solidity
-    // Obtain our cheat code contract reference.
-    IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+// Obtain our cheat code contract reference.
+IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-    // Change value and verify.
-    cheats.difficulty(x);
-    assert(block.difficulty == x);
+// Change value and verify.
+cheats.difficulty(x);
+assert(block.difficulty == x);
 ```
 
 ## Function Signature
 ```solidity
-    function difficulty(uint256) external;
+function difficulty(uint256) external;
 ```

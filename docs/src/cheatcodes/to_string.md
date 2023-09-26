@@ -72,10 +72,10 @@ contract TestContract {
 
 ## Function Signatures
 ```solidity
-    function toString(address) external returns (string memory);
-    function toString(bool) external returns (string memory);
-    function toString(uint256) external returns (string memory);
-    function toString(int256) external returns (string memory);
-    function toString(bytes32) external returns (string memory);
-    function toString(bytes) external returns (string memory);
+function toString(address) external returns (string memory);
+function toString(bool) external returns (string memory);
+function toString(uint256) external returns (string memory);
+function toString(int256) external returns (string memory);
+function toString(bytes32) external returns (string memory);
+function toString(bytes) external returns (string memory);
 ```

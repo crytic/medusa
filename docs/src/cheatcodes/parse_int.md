@@ -5,7 +5,7 @@ The `parseInt` cheatcode will parse the input string into a int256
 
 ## Example
 ```solidity
-    contract TestContract {
+contract TestContract {
     uint x = 123;
     function test() public {
         // Obtain our cheat code contract reference.
@@ -23,5 +23,5 @@ The `parseInt` cheatcode will parse the input string into a int256
 
 ## Function Signature
 ```solidity
-    function parseInt(string calldata) external returns (int256);
+function parseInt(string calldata) external returns (int256);
 ```

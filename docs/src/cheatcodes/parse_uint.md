@@ -5,7 +5,7 @@ The `parseUint` cheatcode will parse the input string into a uint256
 
 ## Example
 ```solidity
-    contract TestContract {
+contract TestContract {
     uint x = 123;
     function test() public {
         // Obtain our cheat code contract reference.
@@ -23,5 +23,5 @@ The `parseUint` cheatcode will parse the input string into a uint256
 
 ## Function Signature
 ```solidity
-    function parseUint(string calldata) external returns (uint256);
+function parseUint(string calldata) external returns (uint256);
 ```

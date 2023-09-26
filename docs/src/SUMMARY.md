@@ -1,16 +1,30 @@
 # Summary
 
-- [Introduction](./README.md)
+[Introduction](./README.md)
 
 # Getting Started
-- [Installation](./installation.md)
-- [Project Configuration](./project-configuration.md)
-  - [Example Project Configuration File](./example-config-file.md)
+
+- [Installation](./getting_started/installation.md)
+
+# Project Configuration
+- [Configuration Overview](project_configuration/overview.md)
+- [Fuzzing Configuration](project_configuration/fuzzing_config.md)
+- [Testing Configuration](project_configuration/testing_config.md)
+- [Compilation Configuration](project_configuration/compilation_config.md)
+- [Logging Configuration](project_configuration/logging_config.md)
+
+# Medusa CLI
+- [init](./cli/init.md)
+- [fuzz](./cli/fuzz.md)
+- [autocompletion](./cli/autocompletion.md)
+
+
 - [Command Line Interface](./command-line-interface.md)
 - [API Overview (WIP)](./api-overview.md)
 - [Testing with `medusa`](./writing-tests.md)
 
 # Appendices
+
 - [Cheatcodes](./cheatcodes_overview.md)
   - [warp](./cheatcodes/warp.md)
   - [roll](./cheatcodes/roll.md)
@@ -37,4 +51,5 @@
   - [parseBool](./cheatcodes/parse_bool.md)
   - [parseAddress](./cheatcodes/parse_address.md)
 - [Console Logging](./console_logging.md)
-- [FAQ](./faq.md)
+
+[FAQ](./faq.md)

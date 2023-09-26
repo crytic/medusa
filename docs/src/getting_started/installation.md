@@ -1,6 +1,6 @@
 # Installation
 
-There are three main ways to install medusa at the moment. The first is using Homebrew, 
+There are three main ways to install medusa at the moment. The first is using Homebrew,
 building from source, or installing a precompiled binary.
 
 If you have any difficulty with installing medusa, please [open an issue](https://github.com/crytic/medusa/issues) on GitHub.
@@ -27,8 +27,8 @@ brew install medusa
 Before downloading medusa, you will need to download Golang and `crytic-compile`.
 - Installation instructions for Golang can be found [here](https://go.dev/doc/install)
 - Installation instructions for `crytic-compile` can be found [here](https://github.com/crytic/crytic-compile#installation)
-  - Note that `crytic-compile` requires a Python environment. Installation instructions for Python can be found 
-  [here](https://www.python.org/downloads/).
+    - Note that `crytic-compile` requires a Python environment. Installation instructions for Python can be found
+      [here](https://www.python.org/downloads/).
 
 ### Build medusa
 
@@ -43,8 +43,8 @@ go build -trimpath
 ```
 
 You will now need to move the binary (`medusa` or `medusa.exe`) to somewhere in your `PATH` environment variable so that
-it is accessible via the command line. Please review the instructions 
-[here](https://zwbetz.com/how-to-add-a-binary-to-your-path-on-macos-linux-windows/). If you are a Windows user, we 
+it is accessible via the command line. Please review the instructions
+[here](https://zwbetz.com/how-to-add-a-binary-to-your-path-on-macos-linux-windows/). If you are a Windows user, we
 recommend using the Windows GUI.
 
 ## Precompiled binaries

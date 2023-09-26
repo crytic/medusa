@@ -5,7 +5,7 @@ The `parseBytes` cheatcode will parse the input string into bytes
 
 ## Example
 ```solidity
-    contract TestContract {
+contract TestContract {
     uint x = 123;
     function test() public {
         // Obtain our cheat code contract reference.
@@ -23,5 +23,5 @@ The `parseBytes` cheatcode will parse the input string into bytes
 
 ## Function Signature
 ```solidity
-    function parseBytes(string calldata) external returns (bytes memory);
+function parseBytes(string calldata) external returns (bytes memory);
 ```
