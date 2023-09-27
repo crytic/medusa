@@ -9,7 +9,6 @@ description = "This repository, brought to you by Trail of Bits, contains the do
 [output.html]
 git-repository-url = "https://github.com/crytic/medusa"
 edit-url-template = "https://github.com/crytic/medusa/edit/master/docs/{path}"
-additional-js = ["src/static/solidity.min.js"]
 default-theme = "light"
 
 [output.html.fold]

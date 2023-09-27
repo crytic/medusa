@@ -1,1 +1,0 @@
-# Example Project Configuration File
