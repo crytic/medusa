@@ -20,8 +20,7 @@
 - [fuzz](./cli/fuzz.md)
 - [completion](./cli/completion.md)
 
-
-- [Command Line Interface](./command-line-interface.md)
+# Writing Tests
 - [API Overview (WIP)](./api-overview.md)
 - [Testing with `medusa`](./writing-tests.md)
 
