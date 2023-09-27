@@ -48,7 +48,7 @@ that help drive fuzzer features (e.g. a call sequence that increases code covera
 can then be re-used/mutated by the fuzzer during the next fuzzing campaign.
 - **Default**: ""
 
-### `deploymentOrder`
+### `targetContracts`
 - **Type**: [String] (e.g. `[FirstContract, SecondContract, ThirdContract]`)
 - **Description**: The list of contracts that will be deployed on the blockchain and then targeted for fuzzing by medusa.
 For single-contract compilations, this value can be left as `[]`. This, however, is rare since most projects are multi-contract compilations. 

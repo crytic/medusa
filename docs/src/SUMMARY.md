@@ -5,6 +5,7 @@
 # Getting Started
 
 - [Installation](./getting_started/installation.md)
+- [First Steps](./getting_started/first_steps.md)
 
 # Project Configuration
 - [Configuration Overview](project_configuration/overview.md)
@@ -13,10 +14,11 @@
 - [Compilation Configuration](project_configuration/compilation_config.md)
 - [Logging Configuration](project_configuration/logging_config.md)
 
-# Medusa CLI
+# Command Line Interface (CLI)
+- [CLI Overview](./cli/overview.md)
 - [init](./cli/init.md)
 - [fuzz](./cli/fuzz.md)
-- [autocompletion](./cli/autocompletion.md)
+- [completion](./cli/completion.md)
 
 
 - [Command Line Interface](./command-line-interface.md)

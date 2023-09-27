@@ -21,7 +21,7 @@ is hit, or the user manually stops execution.
 - **Type**: Boolean
 - **Description**: Determines whether the fuzzer should stop execution if it is unable to match the bytecode of a dynamically
 deployed contract. A dynamically deployed contract is one that is created during the fuzzing campaign 
-(versus one that is specified in the [`deploymentOrder`](./fuzzing_config.md#deploymentorder)).
+(versus one that is specified in the [`fuzzing.targetContracts`](./fuzzing_config.md#targetcontracts)).
 Here is an example of a dynamically deployed contract:
 ```solidity
 
@@ -46,7 +46,7 @@ the [`timeout`](./fuzzing_config.md#timeout) is hit, or the user manually stops 
 ### `testAllContracts`
 - **Type**: Boolean
 - **Description**: Determines whether all contracts should be tested (including dynamically deployed ones), rather than
-just the contracts specified in the project configuration's [`deploymentOrder`](./fuzzing_config.md#deploymentorder).
+just the contracts specified in the project configuration's [`fuzzing.targetContracts`](./fuzzing_config.md#targetcontracts).
 - **Default**: `false`
 
 ### `traceAll`:
