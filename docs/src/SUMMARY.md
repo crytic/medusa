@@ -21,6 +21,9 @@
 - [completion](./cli/completion.md)
 
 # Writing Tests
+- [Testing Overview](./testing/overview.md)
+- [The Fuzzing Lifecycle](./testing/fuzzing_lifecycle.md)
+- [Types of Invariants](./testing/invariants.md)
 - [API Overview (WIP)](./api-overview.md)
 - [Testing with `medusa`](./writing-tests.md)
 

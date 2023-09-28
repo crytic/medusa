@@ -60,7 +60,7 @@ For single-contract compilations, this value can be left as `[]`. This, however,
 ### `constructorArgs`
 - **Type**: `{"contractName": {"variableName": _value}}`
 - **Description**: If a contract in the `deploymentOrder` has a constructor that takes in variables, these can be specified here. 
-An example can be found [here](TODO).
+An example can be found [here](#using-constructorargs).
 - **Default**: `{}`
 
 ### `deployerAddress`
@@ -102,3 +102,79 @@ than that of the previous block. Jumping `block.timestamp`time allows medusa to 
 - **Description**: Defines the amount of gas sent with each fuzzer-generated transaction.
 > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
 - **Default**: 12_500_000
+
+## Using `constructorArgs`
+
+There might be use cases where contracts in `targetContracts` have constructors that accept arguments. The `constructorArgs`
+configuration option allows you to specify those arguments. `constructorArgs` is a nested dictionary that maps
+contract name -> variable name -> variable value. Let's look at an example below:
+
+```solidity
+// This contract is used to test deployment of contracts with constructor arguments.
+contract TestContract {
+    struct Abc {
+        uint a;
+        bytes b;
+    }
+
+    uint x;
+    bytes2 y;
+    Abc z;
+
+    constructor(uint _x, bytes2 _y, Abc memory _z) {
+        x = _x;
+        y = _y;
+        z = _z;
+    }
+}
+
+contract DependentOnTestContract {
+    address deployed;
+
+    constructor(address _deployed) {
+        deployed = _deployed;
+    }
+}
+```
+
+In the example above, we have two contracts `TestContract` and `DependentOnTestContract`. You will note that 
+`DependentOnTestContract` requires the deployment of `TestContract` _first_ so that it can accept the address of where
+`TestContract` was deployed. On the other hand, `TestContract` requires `_x`, `_y`, and `_z`. Here is what the
+`constructorArgs` value would look like for the above deployment:
+
+> **Note**: The example below has removed all the other project configuration options outside of `targetContracts` and
+> `constructorArgs`
+
+```json
+{
+  "fuzzing": {
+    "targetContracts": ["TestContract", "DependentOnTestContract"],
+    "constructorArgs": {
+      "TestContract": {
+        "_x": "123456789",
+        "_y": "0x5465",
+        "_z": {
+            "a": "0x4d2",
+            "b": "0x54657374206465706c6f796d656e74207769746820617267756d656e7473"
+        }
+      },
+      "DependentOnTestContract": {
+        "_deployed": "DeployedContract:TestContract"
+      }
+    }
+  }
+}
+```
+
+First, let us look at `targetContracts`. As mentioned in the [documentation for `targetContracts`](#targetcontracts), 
+the order of the contracts in the array determine the order of deployment. This means that `TestContract` will be 
+deployed first, which is what we want.
+
+Now, let us look at `constructorArgs`. `TestContract`'s dictionary specifies the _exact name_ of the constructor argument
+(e.g. `_x` or `_y`) with their associated value. Since `_z` is of type `TestContract.Abc`, `_z` is also a dictionary
+that specifies each field in the `TestContract.Abc` struct. 
+
+For `DependentOnTestContract`, the `_deployed` key has
+a value of `DeployedContract:TestContract`. This tells `medusa` to look for a deployed contract that has the name 
+`TestContract` and provide its address as the value for `_deployed`. Thus, whenever you need a deployed contract's
+address as an argument for another contract, you must follow the format `DeployedContract:<ContractName>`.
