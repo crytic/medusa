@@ -4,8 +4,6 @@ Understanding what medusa is doing under-the-hood significantly aids in understa
 and also in writing fuzz tests. This chapter will walk you through the process of deploying the target contracts,
 generating and executing call sequences, using the corpus, updating coverage, and resetting the blockchain. 
 
-TODO come up with a better intro here
-
 ## Contract deployment
 
 The contract deployment process will deploy each contract specified in the 
@@ -14,8 +12,8 @@ are dynamically deployed during the _construction_ of a target contract are also
 contracts are done by the configurable 
 [`fuzzing.deployerAddress`](../project_configuration/fuzzing_config.md#deployeraddress) address.
 
-We will call the state of the blockchain after all the target contracts are deployed as the **"base state"**. This is
-the state of the blockchain before any transactions have been executed by the fuzzer. Here is what the underlying
+We will call the state of the blockchain after all the target contracts are deployed as the **"initial deployment state"**.
+This is  the state of the blockchain before any transactions have been executed by the fuzzer. Here is what the underlying
 blockchain would look like after the deployment of contracts `A`, `B`, `C` (assuming no other dynamic deployments).
 
 ![Contract Deployment Diagram](../static/contract_deployment.png)
@@ -25,33 +23,19 @@ Now that we have our target contracts deployed, we can start executing call sequ
 ## Call sequence execution
 
 Call sequence execution is the crux of the fuzzing lifecycle. At a high-level, call sequence execution is the **iterative
-process of executing fuzzed transactions on the base state** in hopes of violating (or validating) an invariant.
+process of executing fuzzed transactions on the initial deployment state** in hopes of violating (or validating) an invariant.
 Before continuing, it is important to understand what a call sequence is.
 
 ### Defining a call sequence
 
 A call sequence is an **array of individual transactions**. The length of the array is governed by the
 [`fuzzing.callSequenceLength`](../project_configuration/fuzzing_config.md#callsequencelength) configuration parameter.
-Having a call sequence length of greater than 1 allows for **stateful fuzzing**.
+The fuzzer will maintain EVM state for the duration of a call sequence before [resetting the state](#resetting-the-blockchain).
+Thus, if you have a call sequence length of 10, medusa will execute 10 transactions, maintain state throughout that
+process, and then wipe the EVM state. Having a call sequence length of 1 means that medusa will wipe the state after
+each transaction. This is useful for fuzz testing arithmetic libraries or isolated functions. 
 
-> **Definition**: Stateful fuzzing is the process of maintaining EVM state across multiple fuzzed transactions.
-
-Stateful fuzzing is an incredibly powerful feature because it allows medusa to test your system **end-to-end**. Let's
-take, for example, a staking system where you have the ability to `deposit`, `stake`, `unstake`, and `withdraw`. Because
-medusa can execute an array of transactions, medusa can call [`deposit`, `stake`, `unstake`, `withdraw`] inorder and test the
-whole system in one fell swoop. It is very important to note that medusa was not _forced_ to call those functions in
-sequence. Medusa, over time, will identify that calling deposit allows it to stake tokens and having a staked balance
-allows it to unstake, and so on. 
-
-In contrast, having a call sequence length of 1 is called **stateless fuzzing**.
-
-> **Definition**: Stateless fuzzing is the process of executing a single transaction before resetting the EVM state.
-
-Stateless fuzzing is useful for arithmetic libraries or isolated functions where state does not need to be maintained
-across transactions. Stateless fuzzing, although faster, is not useful for larger systems that have many code paths with
-nuanced and complex invariants.
-
-Now that we know what a call sequence is, let us look at how medusa generates a call sequence.
+Now that you know what a call sequence is, let's discuss how to generate a call sequence.
 
 ### Generating a call sequence
 
@@ -146,5 +130,5 @@ the different types of invariants and what an invariant failure means in the [ne
 ## Resetting the blockchain
 
 The final step in the fuzzing lifecycle is resetting the blockchain. Resetting the blockchain is as simple as reverting
-to the "base state" of the blockchain. Once we reset back to the "base state", we can now generate and execute
+to the "initial deployment state" of the blockchain. Once we reset back to the "initial deployment state", we can now generate and execute
 another call sequence!

@@ -24,6 +24,8 @@
 - [Testing Overview](./testing/overview.md)
 - [The Fuzzing Lifecycle](./testing/fuzzing_lifecycle.md)
 - [Types of Invariants](./testing/invariants.md)
+- [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
+- [Writing System-Level Invariants](./testing/writing-system-level-invariants.md)
 - [API Overview (WIP)](./api-overview.md)
 - [Testing with `medusa`](./writing-tests.md)
 
