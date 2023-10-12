@@ -71,8 +71,7 @@ When enabled, if an assertion test encounters a `revert` or `require` error, the
 `Our solution` ([open-corpus-report-if-greater-than-0](https://github.com/brainycodelab/medusa-fork/tree/open-corpus-report-if-greater-than-0) Branch): We updated the gohtml template used to generate the coverage reports to render an already open coverage report accordion if the coverage is greater than 0%.
 
 ```html
-{{/* Output a collapsible header/container for each source*/}} {{if not
-$linesCoveredPercentInt}}
+{{if not $linesCoveredPercentInt}}
 <button class="collapsible">
   {{/*The progress bar's color is set from HSL values (hue 0-100 is
   red->orange->yellow->green)*/}}
