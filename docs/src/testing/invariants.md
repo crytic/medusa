@@ -21,9 +21,6 @@ A function-level invariant can be defined as follows:
 Let's take the following function from a smart contract:
 ```solidity
 function deposit(uint256 amount) public {
-    // Ensure depositor is registered with the system
-    require(_isRegistered(msg.sender));
-    
     // Make sure that the total deposited amount does not exceed the limit
     require(totalDeposited + amount <= MAX_DEPOSIT_AMOUNT);
     
@@ -39,11 +36,10 @@ function deposit(uint256 amount) public {
 ```
 
 The `deposit` function has the following function-level invariants:
-1. `msg.sender` must be registered to deposit tokens
-2. The `usdc` token balance of `msg.sender` must decrease by `amount`.
-3. The `usdc` token balance of `address(this)` must increase by `amount`.
-4. The `balances[msg.sender]` should increase by `amount`.
-5. The `totalDeposited` value should increase by `amount`. 
+1. The `usdc` token balance of `msg.sender` must decrease by `amount`.
+2. The `usdc` token balance of `address(this)` must increase by `amount`.
+3. The `balances[msg.sender]` should increase by `amount`.
+4. The `totalDeposited` value should increase by `amount`. 
 
 Note that there other properties that can also be tested for but the above should highlight what a function-level
 invariant is. In general, function-level invariants can be identified by assessing what must be true _before_ the execution

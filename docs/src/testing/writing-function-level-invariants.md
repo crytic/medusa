@@ -60,7 +60,7 @@ Notice that we bounded the `_amount`  variable to be less than the amount of `us
 type of bounding is very common when writing fuzz tests. Bounding allows you to only test values that are reasonable.
 If `address(this)` doesn't have enough tokens, it does not make sense to try and call the `deposit` function. Additionally,
 although we only tested one of the function-level invariants from the [previous chapter](./invariants.md), 
-writing the remaining would follow the same pattern as the one written above.
+writing the remaining would follow a similar pattern as the one written above.
 
 ## Running a function-level test with medusa
 
