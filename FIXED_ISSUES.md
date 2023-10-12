@@ -112,17 +112,17 @@ Also, currently, javascript is used to conditionally show each coverage report c
 
 ```js
 // Add event listeners for collapsible sections to collapse/expand on click.
-const collapsibleHeaders = document.getElementsByClassName('collapsible');
+const collapsibleHeaders = document.getElementsByClassName("collapsible");
 let i;
 for (i = 0; i < collapsibleHeaders.length; i++) {
-  collapsibleHeaders[i].addEventListener('click', function () {
-    this.classList.toggle('collapsible-active');
+  collapsibleHeaders[i].addEventListener("click", function () {
+    this.classList.toggle("collapsible-active");
     const collapsibleContainer = this.nextElementSibling;
     if (collapsibleContainer.style.maxHeight) {
       collapsibleContainer.style.maxHeight = null;
     } else {
       collapsibleContainer.style.maxHeight =
-        collapsibleContainer.scrollHeight + 'px';
+        collapsibleContainer.scrollHeight + "px";
     }
   });
 }
@@ -141,18 +141,18 @@ We've simplified this by only using javascript where necessary:
 
 ```js
 // Add event listeners for collapsible sections to collapse/expand on click.
-const collapsibleHeaders = document.getElementsByClassName('collapsible');
+const collapsibleHeaders = document.getElementsByClassName("collapsible");
 let i;
 for (i = 0; i < collapsibleHeaders.length; i++) {
-  collapsibleHeaders[i].addEventListener('click', function () {
-    this.classList.toggle('collapsible-active');
+  collapsibleHeaders[i].addEventListener("click", function () {
+    this.classList.toggle("collapsible-active");
   });
 }
 
 // If there's only one item and that item has 0% coverage, expand it by default.
 if (
   collapsibleHeaders.length === 1 &&
-  !collapsibleHeaders.className.contains('collapsible-active')
+  !collapsibleHeaders.className.contains("collapsible-active")
 ) {
   collapsibleHeaders[0].click();
 }
