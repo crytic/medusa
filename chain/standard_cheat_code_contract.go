@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -339,12 +340,19 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// We entered the scope we expect to revert, obtain a reference to the call frame
 				revertCallFrame := tracer.CurrentCallFrame()
 
-				if revertCallFrame.vmOp == vm.REVERT && string(revertCallFrame.vmReturnData) == inputs[0].(string) {
+				// Get the revert error string
+				revertString := abiutils.GetSolidityRevertErrorString(tracer.results.executionResult.Err, tracer.results.executionResult.ReturnData)
+
+				expectedRevertString := inputs[0].(string)
+
+				// Check that the call reverted and that an error string present to the provided error string was supplied
+				if revertCallFrame.vmOp == vm.REVERT && revertString != nil && expectedRevertString == *revertString {
 					// got expected revert, proceed
 					tracer.results.executionResult.Err = nil
 					tracer.results.executionResult.ReturnData = nil
 				} else {
-					// expected a revert but got none, so throw an error
+					// expected a revert with the provided error string but got none, so throw an error
+					logging.GlobalLogger.Error("expectRevert: Expected a revert with error string '", expectedRevertString, "' but got none")
 					tracer.results.executionResult.Err = vm.ErrExecutionReverted
 					uintType, _ := abi.NewType("uint256", "", nil)
 					panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{

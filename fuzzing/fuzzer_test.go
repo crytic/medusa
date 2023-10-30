@@ -205,7 +205,6 @@ func TestChainBehaviour(t *testing.T) {
 // TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
 func TestCheatCodes(t *testing.T) {
 	filePaths := []string{
-		"testdata/contracts/cheat_codes/vm/expect_revert.sol",
 		"testdata/contracts/cheat_codes/utils/addr.sol",
 		"testdata/contracts/cheat_codes/utils/to_string.sol",
 		"testdata/contracts/cheat_codes/utils/sign.sol",
@@ -213,6 +212,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
+		"testdata/contracts/cheat_codes/vm/expect_revert.sol",
 		"testdata/contracts/cheat_codes/vm/difficulty.sol",
 		"testdata/contracts/cheat_codes/vm/etch.sol",
 		"testdata/contracts/cheat_codes/vm/fee.sol",

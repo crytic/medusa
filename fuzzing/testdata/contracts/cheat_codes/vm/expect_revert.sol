@@ -5,7 +5,6 @@ pragma solidity ^0.8.0;
 interface CheatCodes {
     function expectRevert() external;
     function expectRevert(string memory) external;
-    function difficulty(uint256) external;
 }
 
 contract BankContract {
@@ -21,8 +20,9 @@ contract TestContract {
         BankContract bank = new BankContract();
 
         cheats.expectRevert();
-//        cheats.difficulty(7);
-//        bank.send(1);
+        bank.send(0);
+
+        cheats.expectRevert("amount must be greater than 0");
         bank.send(0);
     }
 }
