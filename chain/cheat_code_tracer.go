@@ -3,6 +3,7 @@ package chain
 import (
 	"github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 )
@@ -65,6 +66,9 @@ type cheatCodeTracerCallFrame struct {
 }
 
 type cheatCodeTracerResults struct {
+	// executionResult describes the results for the most recently concluded transaction
+	executionResult *core.ExecutionResult
+
 	// onChainRevertHooks describes hooks which are to be executed when the chain reverts.
 	onChainRevertHooks types.GenericHookFuncs
 }
@@ -104,6 +108,7 @@ func (t *cheatCodeTracer) CaptureTxStart(gasLimit uint64) {
 	t.callDepth = 0
 	t.callFrames = make([]*cheatCodeTracerCallFrame, 0)
 	t.results = &cheatCodeTracerResults{
+		executionResult:    nil,
 		onChainRevertHooks: nil,
 	}
 }
@@ -125,6 +130,14 @@ func (t *cheatCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 
 // CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	if t.results.executionResult == nil {
+		t.results.executionResult = &core.ExecutionResult{
+			UsedGas:    gasUsed,
+			Err:        err,
+			ReturnData: output,
+		}
+	}
+
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
@@ -165,6 +178,12 @@ func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	t.results.executionResult = &core.ExecutionResult{
+		UsedGas:    gasUsed,
+		Err:        err,
+		ReturnData: output,
+	}
+
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
@@ -213,4 +232,5 @@ func (t *cheatCodeTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64
 func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Add our revert operations we collected for this transaction.
 	results.OnRevertHookFuncs = append(results.OnRevertHookFuncs, t.results.onChainRevertHooks...)
+	results.ExecutionResult = t.results.executionResult
 }

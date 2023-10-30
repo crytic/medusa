@@ -4,10 +4,13 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 	"math/big"
 	"os/exec"
 	"strconv"
@@ -267,6 +270,108 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
 				cheatCodeCallerFrame.vmScope.Contract.CallerAddress = original
 			})
+			return nil, nil
+		},
+	)
+
+	// expectRevert(): If the next non-cheatcode call does not revert, then expectRevert will
+	contract.addMethod(
+		"expectRevert", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// so when it enters the next frame in its scope, we trigger expectRevert
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			expectRevertHook := func() {
+				// We entered the scope we expect to revert, obtain a reference to the call frame
+				revertCallFrame := tracer.CurrentCallFrame()
+
+				if revertCallFrame.vmOp == vm.REVERT {
+					// got expected revert, proceed
+					tracer.results.executionResult.Err = nil
+					tracer.results.executionResult.ReturnData = nil
+				} else {
+					logger.Error("expectRevert: Expected a revert but got none")
+
+					// expected a revert but got none, so throw an error
+					tracer.results.executionResult.Err = vm.ErrExecutionReverted
+					uintType, _ := abi.NewType("uint256", "", nil)
+					panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
+						{Name: "", Type: uintType, Indexed: false},
+					}, abi.Arguments{})
+
+					// Initialize return data
+					returnData := panicReturnDataAbi.ID
+
+					// Append the encountered assertion failure error code to the return data
+					panicCode := uint256.MustFromBig(big.NewInt(1))
+					var panicCodeBytes = make([]byte, 32)
+					panicCode.WriteToSlice(panicCodeBytes)
+					returnData = append(returnData, panicCodeBytes...)
+
+					tracer.results.executionResult.ReturnData = returnData
+				}
+			}
+
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				expectRevertFrame := tracer.CurrentCallFrame()
+
+				//TODO: Ensure the call is not a cheatcode call, if call is a cheatcode call,
+				// Push the expectRevertHook to the next call frame
+				expectRevertFrame.onFrameExitRestoreHooks.Push(expectRevertHook)
+			})
+
+			return nil, nil
+		},
+	)
+
+	// expectRevert(string): If the next non-cheatcode call does not revert with the expected revert message, then expectRevert will
+	contract.addMethod(
+		"expectRevert", abi.Arguments{{Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// so when it enters the next frame in its scope, we trigger expectRevert
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			expectRevertHook := func() {
+				// We entered the scope we expect to revert, obtain a reference to the call frame
+				revertCallFrame := tracer.CurrentCallFrame()
+
+				if revertCallFrame.vmOp == vm.REVERT && string(revertCallFrame.vmReturnData) == inputs[0].(string) {
+					// got expected revert, proceed
+					tracer.results.executionResult.Err = nil
+					tracer.results.executionResult.ReturnData = nil
+				} else {
+					// expected a revert but got none, so throw an error
+					tracer.results.executionResult.Err = vm.ErrExecutionReverted
+					uintType, _ := abi.NewType("uint256", "", nil)
+					panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
+						{Name: "", Type: uintType, Indexed: false},
+					}, abi.Arguments{})
+
+					// Initialize return data
+					returnData := panicReturnDataAbi.ID
+
+					// Append the encountered assertion failure error code to the return data
+					panicCode := uint256.MustFromBig(big.NewInt(1))
+					var panicCodeBytes = make([]byte, 32)
+					panicCode.WriteToSlice(panicCodeBytes)
+					returnData = append(returnData, panicCodeBytes...)
+
+					tracer.results.executionResult.ReturnData = returnData
+				}
+			}
+
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				expectRevertFrame := tracer.CurrentCallFrame()
+
+				//TODO: Ensure the call is not a cheatcode call, if call is a cheatcode call,
+				// Push the expectRevertHook to the next call frame
+				expectRevertFrame.onFrameExitRestoreHooks.Push(expectRevertHook)
+			})
+
 			return nil, nil
 		},
 	)
