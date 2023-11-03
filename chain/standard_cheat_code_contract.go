@@ -279,13 +279,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	contract.addMethod(
 		"expectRevert", abi.Arguments{}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
-			// so when it enters the next frame in its scope, we trigger expectRevert
-			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame := tracer.CurrentCallFrame()
 
-			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
-
-			expectRevertHook := func() {
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
 				// We entered the scope we expect to revert, obtain a reference to the call frame
 				revertCallFrame := tracer.CurrentCallFrame()
 
@@ -294,6 +290,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					tracer.results.executionResult.Err = nil
 					tracer.results.executionResult.ReturnData = nil
 				} else {
+					logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
 					logger.Error("expectRevert: Expected a revert but got none")
 
 					// expected a revert but got none, so throw an error
@@ -314,14 +312,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 					tracer.results.executionResult.ReturnData = returnData
 				}
-			}
-
-			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
-				expectRevertFrame := tracer.CurrentCallFrame()
-
-				//TODO: Ensure the call is not a cheatcode call, if call is a cheatcode call,
-				// Push the expectRevertHook to the next call frame
-				expectRevertFrame.onFrameExitRestoreHooks.Push(expectRevertHook)
 			})
 
 			return nil, nil
@@ -334,15 +324,16 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
 			// so when it enters the next frame in its scope, we trigger expectRevert
-			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame := tracer.CurrentCallFrame()
 
-			expectRevertHook := func() {
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
 				// We entered the scope we expect to revert, obtain a reference to the call frame
 				revertCallFrame := tracer.CurrentCallFrame()
 
 				// Get the revert error string
 				revertString := abiutils.GetSolidityRevertErrorString(tracer.results.executionResult.Err, tracer.results.executionResult.ReturnData)
 
+				// Get the provided expected error string
 				expectedRevertString := inputs[0].(string)
 
 				// Check that the call reverted and that an error string present to the provided error string was supplied
@@ -370,14 +361,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 					tracer.results.executionResult.ReturnData = returnData
 				}
-			}
-
-			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
-				expectRevertFrame := tracer.CurrentCallFrame()
-
-				//TODO: Ensure the call is not a cheatcode call, if call is a cheatcode call,
-				// Push the expectRevertHook to the next call frame
-				expectRevertFrame.onFrameExitRestoreHooks.Push(expectRevertHook)
 			})
 
 			return nil, nil

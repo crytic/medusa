@@ -178,10 +178,12 @@ func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 
 // CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
 func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	t.results.executionResult = &core.ExecutionResult{
-		UsedGas:    gasUsed,
-		Err:        err,
-		ReturnData: output,
+	if t.results.executionResult == nil {
+		t.results.executionResult = &core.ExecutionResult{
+			UsedGas:    gasUsed,
+			Err:        err,
+			ReturnData: output,
+		}
 	}
 
 	// Execute all current call frame exit hooks
