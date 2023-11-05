@@ -23,7 +23,7 @@ contract TestContract {
         // Ensure it works when a cheatcode call is immediately after it
         cheats.expectRevert();
         cheats.difficulty(7);
-        bank.send(1);
+        bank.send(0);
 
         cheats.expectRevert("amount must be greater than 0");
         bank.send(0);

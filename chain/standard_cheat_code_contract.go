@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/holiman/uint256"
 	"math/big"
 	"os/exec"
 	"strconv"
@@ -279,38 +278,47 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	contract.addMethod(
 		"expectRevert", abi.Arguments{}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			cheatCodeCallerFrame := tracer.CurrentCallFrame()
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+			// Initialize a sub logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			// Initialize a flag to know whether there was a callframe after the current one
+			flag := 0
+
+			var expectRevertHook func()
+			expectRevertHook = func() {
 				// We entered the scope we expect to revert, obtain a reference to the call frame
 				revertCallFrame := tracer.CurrentCallFrame()
+
+				// if current call frame is a cheatcode, propagate hook to next callframe
+				if revertCallFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
+					return
+				}
 
 				if revertCallFrame.vmOp == vm.REVERT {
 					// got expected revert, proceed
 					tracer.results.executionResult.Err = nil
 					tracer.results.executionResult.ReturnData = nil
 				} else {
-					logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
-
 					logger.Error("expectRevert: Expected a revert but got none")
+					tracer.ThrowAssertionError()
+				}
+			}
 
-					// expected a revert but got none, so throw an error
-					tracer.results.executionResult.Err = vm.ErrExecutionReverted
-					uintType, _ := abi.NewType("uint256", "", nil)
-					panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-						{Name: "", Type: uintType, Indexed: false},
-					}, abi.Arguments{})
+			// Update the flag if the next frame enters
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				flag = 1
+			})
 
-					// Initialize return data
-					returnData := panicReturnDataAbi.ID
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
-					// Append the encountered assertion failure error code to the return data
-					panicCode := uint256.MustFromBig(big.NewInt(1))
-					var panicCodeBytes = make([]byte, 32)
-					panicCode.WriteToSlice(panicCodeBytes)
-					returnData = append(returnData, panicCodeBytes...)
-
-					tracer.results.executionResult.ReturnData = returnData
+			// ensure the revert hook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if flag == 0 {
+					logger.Error("expectRevert: Expected a revert but got none")
+					tracer.ThrowAssertionError()
 				}
 			})
 
@@ -324,42 +332,60 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
 			// so when it enters the next frame in its scope, we trigger expectRevert
-			cheatCodeCallerFrame := tracer.CurrentCallFrame()
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+			// Initialize a sub logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			// Initialize a flag to know whether there was a callframe after the current one
+			flag := 0
+
+			var expectRevertHook func()
+			expectRevertHook = func() {
 				// We entered the scope we expect to revert, obtain a reference to the call frame
 				revertCallFrame := tracer.CurrentCallFrame()
 
+				// if current call frame is a cheatcode, propagate hook to next callframe
+				if revertCallFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
+					return
+				}
+
 				// Get the revert error string
-				revertString := abiutils.GetSolidityRevertErrorString(tracer.results.executionResult.Err, tracer.results.executionResult.ReturnData)
+				revertString := abiutils.GetSolidityRevertErrorString(revertCallFrame.vmErr, revertCallFrame.vmReturnData)
 
 				// Get the provided expected error string
 				expectedRevertString := inputs[0].(string)
 
 				// Check that the call reverted and that an error string present to the provided error string was supplied
 				if revertCallFrame.vmOp == vm.REVERT && revertString != nil && expectedRevertString == *revertString {
-					// got expected revert, proceed
+					// got expected revert, clear out error and proceed
 					tracer.results.executionResult.Err = nil
 					tracer.results.executionResult.ReturnData = nil
 				} else {
-					// expected a revert with the provided error string but got none, so throw an error
-					logging.GlobalLogger.Error("expectRevert: Expected a revert with error string '", expectedRevertString, "' but got none")
-					tracer.results.executionResult.Err = vm.ErrExecutionReverted
-					uintType, _ := abi.NewType("uint256", "", nil)
-					panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-						{Name: "", Type: uintType, Indexed: false},
-					}, abi.Arguments{})
+					if revertCallFrame.vmOp != vm.REVERT {
+						logger.Error("expectRevert: Expected a revert but got none")
+					} else {
+						logger.Error("expectRevert: Revert error string did not match expected error string")
+					}
+					tracer.ThrowAssertionError()
+				}
+			}
 
-					// Initialize return data
-					returnData := panicReturnDataAbi.ID
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
-					// Append the encountered assertion failure error code to the return data
-					panicCode := uint256.MustFromBig(big.NewInt(1))
-					var panicCodeBytes = make([]byte, 32)
-					panicCode.WriteToSlice(panicCodeBytes)
-					returnData = append(returnData, panicCodeBytes...)
+			// Update the flag if the next frame enters
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				flag = 1
+			})
 
-					tracer.results.executionResult.ReturnData = returnData
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
+
+			// ensure the revert hook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if flag == 0 {
+					logger.Error("expectRevert: Expected a revert but got none")
+					tracer.ThrowAssertionError()
 				}
 			})
 
