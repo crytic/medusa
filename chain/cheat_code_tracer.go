@@ -2,11 +2,10 @@ package chain
 
 import (
 	"github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/holiman/uint256"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 )
 
@@ -241,19 +240,16 @@ func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.Messag
 func (t *cheatCodeTracer) ThrowAssertionError() {
 	t.results.executionResult.Err = vm.ErrExecutionReverted
 
-	uintType, _ := abi.NewType("uint256", "", nil)
-	panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-		{Name: "", Type: uintType, Indexed: false},
-	}, abi.Arguments{})
-
-	// Initialize return data
-	returnData := panicReturnDataAbi.ID
+	// Initialize return data with the panic code selector
+	returnData := crypto.Keccak256([]byte("Panic(uint256)"))[:4]
 
 	// Append the encountered assertion failure error code to the return data
-	panicCode := uint256.MustFromBig(big.NewInt(1))
-	var panicCodeBytes = make([]byte, 32)
-	panicCode.WriteToSlice(panicCodeBytes)
+	panicCode := big.NewInt(1).Bytes()
+	var panicCodeBytes = make([]byte, 32-len(panicCode))
+
+	panicCodeBytes = append(panicCodeBytes, panicCode...)
 	returnData = append(returnData, panicCodeBytes...)
 
+	// Override the tracer's return data
 	t.results.executionResult.ReturnData = returnData
 }
