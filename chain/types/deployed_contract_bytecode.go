@@ -16,9 +16,9 @@ type DeployedContractBytecodeChange struct {
 	// Destroyed are true.
 	Creation bool
 
-	// Dynamic indicates whether the contract deployment was a dynamic deployment. It is false by default and is true
-	// if you enter a call frame due to a contract creation.
-	Dynamic bool
+	// DynamicCreation indicates whether the change made was a _dynamic_ contract creation. This cannot be true if
+	// Creation is false.
+	DynamicCreation bool
 
 	// SelfDestructed indicates whether the change made was due to a self-destruct instruction being executed. This
 	// cannot be true if Creation is true.
