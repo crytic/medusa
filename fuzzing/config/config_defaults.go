@@ -53,7 +53,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TransactionGasLimit:    12_500_000,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
-				StopOnFailedContractMatching: true,
+				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
