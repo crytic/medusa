@@ -93,6 +93,10 @@ type ContractDeploymentsAddedEvent struct {
 
 	// Contract defines information for the contract which was deployed to the Chain.
 	Contract *types.DeployedContractBytecode
+
+	// DynamicDeployment describes whether this contract deployment was dynamic (e.g. `c = new MyContract()`) or was
+	// because of a traditional transaction
+	DynamicDeployment bool
 }
 
 // ContractDeploymentsRemovedEvent describes an event where a contract has become unavailable on the TestChain, either
