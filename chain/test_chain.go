@@ -856,8 +856,9 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 				// this execution result is being committed to chain.
 				if deploymentChange.Creation {
 					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:    t,
-						Contract: deploymentChange.Contract,
+						Chain:             t,
+						Contract:          deploymentChange.Contract,
+						DynamicDeployment: deploymentChange.DynamicCreation,
 					})
 				} else if deploymentChange.Destroyed {
 					err = t.Events.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
@@ -887,8 +888,9 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 					})
 				} else if deploymentChange.Destroyed {
 					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:    t,
-						Contract: deploymentChange.Contract,
+						Chain:             t,
+						Contract:          deploymentChange.Contract,
+						DynamicDeployment: deploymentChange.DynamicCreation,
 					})
 				}
 				if err != nil {

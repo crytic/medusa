@@ -152,6 +152,11 @@ func (fw *FuzzerWorker) getNewCorpusCallSequenceWeight() *big.Int {
 // onChainContractDeploymentAddedEvent is the event callback used when the chain detects a new contract deployment.
 // It attempts bytecode matching and updates the list of deployed contracts the worker should use for fuzz testing.
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) error {
+	// Do not track the deployed contract if the contract deployment was a dynamic one and testAllContracts is false
+	if !fw.fuzzer.config.Fuzzing.Testing.TestAllContracts && event.DynamicDeployment {
+		return nil
+	}
+
 	// Add the contract address to our value set so our generator can use it in calls.
 	fw.valueSet.AddAddress(event.Contract.Address)
 

@@ -74,9 +74,10 @@ func (t *testChainDeploymentsTracer) CaptureStart(env *vm.EVM, from common.Addre
 				InitBytecode:    input,
 				RuntimeBytecode: nil,
 			},
-			Creation:       true,
-			SelfDestructed: false,
-			Destroyed:      false,
+			Creation:        true,
+			DynamicCreation: false,
+			SelfDestructed:  false,
+			Destroyed:       false,
 		})
 	}
 }
@@ -118,9 +119,10 @@ func (t *testChainDeploymentsTracer) CaptureEnter(typ vm.OpCode, from common.Add
 				InitBytecode:    input,
 				RuntimeBytecode: nil,
 			},
-			Creation:       true,
-			SelfDestructed: false,
-			Destroyed:      false,
+			Creation:        true,
+			DynamicCreation: true,
+			SelfDestructed:  false,
+			Destroyed:       false,
 		})
 	}
 }
@@ -158,9 +160,10 @@ func (t *testChainDeploymentsTracer) CaptureState(pc uint64, op vm.OpCode, gas, 
 				InitBytecode:    nil,
 				RuntimeBytecode: t.evm.StateDB.GetCode(scope.Contract.Address()),
 			},
-			Creation:       false,
-			SelfDestructed: true,
-			Destroyed:      t.selfDestructDestroysCode,
+			Creation:        false,
+			DynamicCreation: false,
+			SelfDestructed:  true,
+			Destroyed:       t.selfDestructDestroysCode,
 		})
 	}
 }
