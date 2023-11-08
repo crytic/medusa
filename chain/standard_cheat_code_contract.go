@@ -70,10 +70,20 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
-			original := tracer.evm.Context.Time
-			tracer.evm.Context.Time = inputs[0].(*big.Int).Uint64()
+			originalTime := tracer.evm.Context.Time
+
+			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
+			newTime := inputs[0].(*big.Int)
+			_, uint64Max := utils.GetIntegerConstraints(false, 64)
+			if newTime.Cmp(uint64Max) > 0 {
+				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
+			}
+
+			// Set the time
+			tracer.evm.Context.Time = newTime.Uint64()
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Time = original
+				// Reset the time
+				tracer.evm.Context.Time = originalTime
 			})
 			return nil, nil
 		},
