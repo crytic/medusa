@@ -68,6 +68,9 @@
         .collapsible-active:after {
             content: "\2212";
         }
+        .collapsible-active + .collapsible-container {
+            max-height: none;
+        }
         .collapsible-container {
             margin-bottom: 5px;
             max-height: 0;
@@ -150,12 +153,21 @@
         {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
 
         {{/* Output a collapsible header/container for each source*/}}
-        <button class="collapsible">
-            {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
-            <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
-            <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
-            <span>{{relativePath $sourceFile.Path}}</span>
-        </button>
+        {{if not $linesCoveredPercentInt}}
+            <button class="collapsible">
+                {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+                <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
+                <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
+                <span>{{relativePath $sourceFile.Path}}</span>
+            </button>
+        {{else}}
+            <button class="collapsible collapsible-active">
+                {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+                <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
+                <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
+                <span>{{relativePath $sourceFile.Path}}</span>
+            </button>
+        {{end}}
         <div class="collapsible-container">
             <div class="collapsible-container-content">
             <hr />
@@ -214,17 +226,12 @@
     for (i = 0; i < collapsibleHeaders.length; i++) {
         collapsibleHeaders[i].addEventListener("click", function() {
             this.classList.toggle("collapsible-active");
-            const collapsibleContainer = this.nextElementSibling;
-            if (collapsibleContainer.style.maxHeight){
-                collapsibleContainer.style.maxHeight = null;
-            } else {
-                collapsibleContainer.style.maxHeight = collapsibleContainer.scrollHeight + "px";
-            }
+
         });
     }
 
-    // If there's only one item, expand it by default.
-    if (collapsibleHeaders.length === 1) {
+    // If there's only one item and that item has 0% coverage, expand it by default.
+    if (collapsibleHeaders.length === 1 && !collapsibleHeaders.className.contains("collapsible-active")) {
         collapsibleHeaders[0].click();
     }
 </script>
