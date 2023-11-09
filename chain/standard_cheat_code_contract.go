@@ -17,6 +17,9 @@ import (
 // StandardCheatcodeContractAddress is the address for the standard cheatcode contract
 var StandardCheatcodeContractAddress = common.HexToAddress("0x7109709ECfa91a80626fF3989D68f67F5b1DD12D")
 
+// MaxUint64 holds the max value an uint64 can take
+var _, MaxUint64 = utils.GetIntegerConstraints(false, 64)
+
 // getStandardCheatCodeContract obtains a CheatCodeContract which implements common cheat codes.
 // Returns the precompiled contract, or an error if one occurs.
 func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, error) {
@@ -67,13 +70,22 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 	// Warp: Sets VM timestamp
 	contract.addMethod(
-		"warp", abi.Arguments{{Type: typeUint64}}, abi.Arguments{},
+		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
-			original := tracer.evm.Context.Time
-			tracer.evm.Context.Time = inputs[0].(uint64)
+			originalTime := tracer.evm.Context.Time
+
+			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
+			newTime := inputs[0].(*big.Int)
+			if newTime.Cmp(MaxUint64) > 0 {
+				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
+			}
+
+			// Set the time
+			tracer.evm.Context.Time = newTime.Uint64()
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Time = original
+				// Reset the time
+				tracer.evm.Context.Time = originalTime
 			})
 			return nil, nil
 		},
