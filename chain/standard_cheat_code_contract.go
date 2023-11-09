@@ -298,7 +298,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 
 				if revertCallFrame.vmOp == vm.REVERT {
-					// got expected revert, proceed
+					// got expected revert, erase error and proceed
 					tracer.results.executionResult.Err = nil
 					tracer.results.executionResult.ReturnData = nil
 				} else {
