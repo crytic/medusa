@@ -17,6 +17,9 @@ import (
 // StandardCheatcodeContractAddress is the address for the standard cheatcode contract
 var StandardCheatcodeContractAddress = common.HexToAddress("0x7109709ECfa91a80626fF3989D68f67F5b1DD12D")
 
+// MaxUint64 holds the max value an uint64 can take
+var _, MaxUint64 = utils.GetIntegerConstraints(false, 64)
+
 // getStandardCheatCodeContract obtains a CheatCodeContract which implements common cheat codes.
 // Returns the precompiled contract, or an error if one occurs.
 func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, error) {
@@ -74,8 +77,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
 			newTime := inputs[0].(*big.Int)
-			_, uint64Max := utils.GetIntegerConstraints(false, 64)
-			if newTime.Cmp(uint64Max) > 0 {
+			if newTime.Cmp(MaxUint64) > 0 {
 				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
 			}
 
