@@ -1,11 +1,12 @@
 package chain
 
 import (
+	"fmt"
 	"github.com/crytic/medusa/chain/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 )
 
@@ -236,20 +237,30 @@ func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.Messag
 	results.ExecutionResult = t.results.executionResult
 }
 
-// ThrowAssertionError is used to cause an assertion failure from within a cheatcode
+// ThrowAssertionError is used to trigger an assertion failure from within a cheatcode
 func (t *cheatCodeTracer) ThrowAssertionError() {
+	// Define ABI types
+	uintType, _ := abi.NewType("uint256", "", nil)
+
+	// Create Panic ABI method
+	panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
+		{Name: "", Type: uintType, Indexed: false},
+	}, abi.Arguments{})
+
+	// Set panic code to 1 which represents an assertion failure
+	panicCode := big.NewInt(1)
+
+	// Pack the values into ABI encoded data
+	packedData, err := panicReturnDataAbi.Inputs.Pack(panicCode)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// Add selector to the packed data
+	selector := panicReturnDataAbi.ID
+	returnData := append(selector, packedData...)
+
+	// Override the tracer's return error and data
 	t.results.executionResult.Err = vm.ErrExecutionReverted
-
-	// Initialize return data with the panic code selector
-	returnData := crypto.Keccak256([]byte("Panic(uint256)"))[:4]
-
-	// Append the encountered assertion failure error code to the return data
-	panicCode := big.NewInt(1).Bytes()
-	var panicCodeBytes = make([]byte, 32-len(panicCode))
-
-	panicCodeBytes = append(panicCodeBytes, panicCode...)
-	returnData = append(returnData, panicCodeBytes...)
-
-	// Override the tracer's return data
 	t.results.executionResult.ReturnData = returnData
 }
