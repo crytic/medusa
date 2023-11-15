@@ -284,7 +284,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
 
 			// Initialize a flag to know whether there was a callframe after the current one
-			flag := 0
+			enteredNewCallFrame := false
 
 			var expectRevertHook func()
 			expectRevertHook = func() {
@@ -297,6 +297,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallFrame {
+					enteredNewCallFrame = true
+				}
+
 				if revertCallFrame.vmOp == vm.REVERT {
 					// got expected revert, erase error and proceed
 					tracer.results.executionResult.Err = nil
@@ -307,16 +312,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 			}
 
-			// Update the flag if the next frame enters
-			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
-				flag = 1
-			})
-
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
 			// ensure the revert hook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if flag == 0 {
+				if !enteredNewCallFrame {
 					logger.Error("expectRevert: Expected a revert but got none")
 					tracer.ThrowAssertionError()
 				}
@@ -338,7 +338,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
 
 			// Initialize a flag to know whether there was a callframe after the current one
-			flag := 0
+			enteredNewCallFrame := false
 
 			var expectRevertHook func()
 			expectRevertHook = func() {
@@ -349,6 +349,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				if revertCallFrame.vmScope == nil {
 					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 					return
+				}
+
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallFrame {
+					enteredNewCallFrame = true
 				}
 
 				// Get the revert error string
@@ -374,16 +379,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
-			// Update the flag if the next frame enters
-			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
-				flag = 1
-			})
-
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
 			// ensure the revert hook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if flag == 0 {
+				if !enteredNewCallFrame {
 					logger.Error("expectRevert: Expected a revert but got none")
 					tracer.ThrowAssertionError()
 				}
