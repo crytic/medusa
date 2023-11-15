@@ -3,6 +3,7 @@ package chain
 import (
 	"fmt"
 	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -248,7 +249,7 @@ func (t *cheatCodeTracer) ThrowAssertionError() {
 	}, abi.Arguments{})
 
 	// Set panic code to 1 which represents an assertion failure
-	panicCode := big.NewInt(1)
+	panicCode := big.NewInt(abiutils.PanicCodeAssertFailed)
 
 	// Pack the values into ABI encoded data
 	packedData, err := panicReturnDataAbi.Inputs.Pack(panicCode)
