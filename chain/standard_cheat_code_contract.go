@@ -379,8 +379,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
 
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectRevertHook)
-
 			// ensure the revert hook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
 				if !enteredNewCallframe {

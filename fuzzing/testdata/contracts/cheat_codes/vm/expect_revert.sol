@@ -27,5 +27,8 @@ contract TestContract {
 
         cheats.expectRevert("amount must be greater than 0");
         bank.send(0);
+
+        cheats.expectRevert("amount must be greater than 0");
+        bank.send(0);
     }
 }
