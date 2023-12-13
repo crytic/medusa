@@ -1,10 +1,11 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"math/rand"
+
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ShrinkingValueMutator represents a ValueMutator used to shrink function inputs and call arguments.
@@ -96,7 +97,9 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.ShrinkValueProbability {
 		// Mutate the data for our desired number of rounds
+
 		input := bytesShrinkingMethods[g.randomProvider.Intn(len(bytesShrinkingMethods))](g, b)
+
 		return input
 	}
 	return b
@@ -181,6 +184,10 @@ var stringShrinkingMethods = []func(*ShrinkingValueMutator, string) string{
 		// Otherwise, remove a random character.
 		i := g.randomProvider.Intn(len(s))
 		return s[:i] + s[i+1:]
+	},
+	// ???
+	func(g *ShrinkingValueMutator, s string) string {
+		return ""
 	},
 }
 

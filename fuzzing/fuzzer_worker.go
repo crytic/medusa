@@ -388,17 +388,20 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	return validShrunkSequence, nil
 }
 
-func (fw *FuzzerWorker) shrinkParam(callSequence calls.CallSequence) {
-	i := fw.randomProvider.Intn(len(callSequence))
-	abiValuesMsgData := callSequence[i].Call.DataAbiValues
-	for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-		mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
-		abiValuesMsgData.InputValues[j] = mutatedInput
-	}
+func (fw *FuzzerWorker) shrinkParam(callSequence *calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(*callSequence))
+	abiValuesMsgData := (*callSequence)[i].Call.DataAbiValues
+	j := fw.randomProvider.Intn(len(abiValuesMsgData.InputValues))
+	// for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+	mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+	(*abiValuesMsgData).InputValues[j] = mutatedInput
+	// }
+	(*callSequence)[i].Call.DataAbiValues = abiValuesMsgData
 }
-func (fw *FuzzerWorker) shorten(callSequence calls.CallSequence) {
-	i := fw.randomProvider.Intn(len(callSequence))
-	callSequence = append(callSequence[:i], callSequence[i+1:]...)
+
+func (fw *FuzzerWorker) shorten(callSequence *calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(*callSequence))
+	*callSequence = append((*callSequence)[:i], (*callSequence)[i+1:]...)
 }
 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
@@ -411,7 +414,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	optimizedSequence := callSequence
 
 	// First try to remove any calls we can. We go from start to end to avoid index shifting.
-	for i := 0; i < 5000; /* TODO add shrink limit config */ {
+	for i := 0; i < 5000; i++ /* TODO add shrink limit config */ {
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return nil, nil
@@ -424,24 +427,21 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 
 		coinToss := fw.randomProvider.Int() % 2
-		if coinToss == 0 {
-			fw.shrinkParam(possibleShrunkSequence)
+		if coinToss == 0 || len(possibleShrunkSequence) == 1 {
+			fw.shrinkParam(&possibleShrunkSequence)
 		} else {
-			fw.shorten(possibleShrunkSequence)
+			fw.shorten(&possibleShrunkSequence)
 		}
 		// Test the shrunken sequence.
 		validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
 		if err != nil {
 			return nil, err
 		}
-
 		// If this current sequence satisfied our conditions, set it as our optimized sequence.
 		if validShrunkSequence {
 			optimizedSequence = possibleShrunkSequence
-		} else {
-			// We didn't remove an item at this index, so we'll iterate to the next one.
-			i++
 		}
+
 	}
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.
