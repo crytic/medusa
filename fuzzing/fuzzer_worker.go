@@ -391,12 +391,10 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 func (fw *FuzzerWorker) shrinkParam(callSequence *calls.CallSequence) {
 	i := fw.randomProvider.Intn(len(*callSequence))
 	abiValuesMsgData := (*callSequence)[i].Call.DataAbiValues
-	j := fw.randomProvider.Intn(len(abiValuesMsgData.InputValues))
-	// for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-	mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
-	(*abiValuesMsgData).InputValues[j] = mutatedInput
-	// }
-	(*callSequence)[i].Call.DataAbiValues = abiValuesMsgData
+	for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+		mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+		abiValuesMsgData.InputValues[j] = mutatedInput
+	}
 }
 
 func (fw *FuzzerWorker) shorten(callSequence *calls.CallSequence) {
