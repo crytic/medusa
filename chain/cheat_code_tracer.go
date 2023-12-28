@@ -237,7 +237,7 @@ func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.Messag
 	results.ExecutionResult = t.results.executionResult
 }
 
-// ThrowAssertionError is used to cause an assertion failure from within a cheatcode
+// ThrowAssertionError is used to trigger an assertion failure from within a cheatcode
 func (t *cheatCodeTracer) ThrowAssertionError() {
 	//// Initialize return data with the panic code selector
 	//returnData := crypto.Keccak256([]byte("Panic(uint256)"))[:4]
