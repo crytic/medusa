@@ -135,6 +135,7 @@ func (t *cheatCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 func (t *cheatCodeTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
+
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
 	exitingCallFrame.onTopFrameExitRestoreHooks.Execute(false, true)
 
@@ -182,6 +183,10 @@ func (t *cheatCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
+
+	exitingCallFrame.vmReturnData = output
+	exitingCallFrame.vmErr = err
+
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
 
 	parentCallFrame := t.callFrames[t.callDepth-1]
