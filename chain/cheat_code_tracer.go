@@ -239,21 +239,6 @@ func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.Messag
 
 // ThrowAssertionError is used to trigger an assertion failure from within a cheatcode
 func (t *cheatCodeTracer) ThrowAssertionError() {
-	//// Initialize return data with the panic code selector
-	//returnData := crypto.Keccak256([]byte("Panic(uint256)"))[:4]
-	//
-	//// Append the encountered assertion failure error code to the return data
-	//panicCode := big.NewInt(1).Bytes()
-	//
-	//var panicCodeBytes = make([]byte, 32-len(panicCode))
-	//panicCodeBytes = append(panicCodeBytes, panicCode...)
-	//
-	//returnData = append(returnData, panicCodeBytes...)
-	//
-	//// Override the tracer's return data
-	//t.results.executionResult.ReturnData = returnData
-	//t.results.executionResult.Err = vm.ErrExecutionReverted
-
 	// Define ABI types
 	uintType, _ := abi.NewType("uint256", "", nil)
 
