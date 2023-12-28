@@ -319,8 +319,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 				if !isCorrectAddress || !isCorrectCallData {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
-
-					// expected a call but got none, so throw an error
 					tracer.ThrowAssertionError()
 				}
 			}
@@ -331,7 +329,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
 				if flag == 0 {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
-
 					tracer.ThrowAssertionError()
 				}
 			})
@@ -476,7 +473,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
 				if flag == 0 {
-					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata and value but got none")
+					logger.Error("expectCall: Expected a call but got none")
 					tracer.ThrowAssertionError()
 				}
 			})
@@ -494,7 +491,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// Get provided inputs
 			expectedAddress := inputs[0].(common.Address)
 			expectedValue := inputs[1].(*big.Int)
-			expectedCalldata := inputs[1].([]byte)
+			expectedCalldata := inputs[2].([]byte)
 			expectedCount := inputs[2].(uint64)
 
 			// Initialize a flag to know whether the hook has run
