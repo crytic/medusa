@@ -169,3 +169,30 @@ And using CSS in its place to display coverage report content
   max-height: none;
 }
 ```
+
+### 3. Medusa fails silently when provided an invalid CLI flag ([Issue 230](https://github.com/crytic/medusa/issues/230))
+
+`The problem`: When provided an invalid CLI flag, medusa fails but doesn't print any error message explaining what went wrong.
+
+`Our solution` ([throw-error-on-invalid-cli-flag](https://github.com/brainycodelab/medusa-fork/tree/throw-error-on-invalid-cli-flag) Branch): We set the `SilenceErrors` flag on the fuzz cobra command to false. This way, whenever an invalid flag is provided, the user gets an error message.
+
+```go
+// fuzzCmd represents the command provider for fuzzing
+var fuzzCmd = &cobra.Command{
+	Use:               "fuzz",
+	Short:             "Starts a fuzzing campaign",
+	Long:              `Starts a fuzzing campaign`,
+	Args:              cmdValidateFuzzArgs,
+	ValidArgsFunction: cmdValidFuzzArgs,
+	RunE:              cmdRunFuzz,
+	SilenceUsage:      true,
+	SilenceErrors:     false,
+}
+```
+
+Error message on providing an invalid cli flag:
+
+```bash
+$ medusa fuzz --invalid-option
+Error: unknown flag: --invalid-option
+```
