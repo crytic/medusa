@@ -285,11 +285,19 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// Initialize a sub logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
 
-			expectCallHook := func() {
+			var expectCallHook func()
+
+			expectCallHook = func() {
 				flag = 1
 
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
+
+				// Ensure the current callframe is not a cheatcode
+				if callFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+					return
+				}
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -348,6 +356,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
 
+				if callFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+					return
+				}
+
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
 				callData := callFrame.vmScope.Contract.Input
@@ -395,11 +408,19 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// Initialize a sub logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
 
-			expectCallHook := func() {
+			var expectCallHook func()
+
+			expectCallHook = func() {
 				flag = 1
 
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
+
+				// Ensure the current callframe is not a cheatcode
+				if callFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+					return
+				}
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -410,9 +431,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				callAddress := callFrame.vmScope.Contract.Address()
 				callValue := callFrame.vmScope.Contract.Value()
 				callData := callFrame.vmScope.Contract.Input
-
-				fmt.Println("Expected Value: ", expectedValue)
-				fmt.Println("Actual value: ", callValue)
 
 				if expectedAddress != callAddress || !bytes.Equal(expectedCalldata, callData) || expectedValue.Cmp(callValue) != 0 {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata and value but got none")
@@ -462,6 +480,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			expectCallHook = func() {
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
+
+				// Ensure the current callframe is not a cheatcode
+				if callFrame.vmScope == nil {
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+					return
+				}
 
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
