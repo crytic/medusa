@@ -280,7 +280,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
 			// Initialize a flag to know whether there was a callframe after the current one
-			enteredNewCallFrame := false
+			enteredNewCallframe := false
 
 			// Initialize a sub logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -297,8 +297,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
-				// Update flag
-				enteredNewCallFrame = true
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallframe {
+					enteredNewCallframe = true
+				}
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -328,7 +330,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if !enteredNewCallFrame {
+				if !enteredNewCallframe {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
 					tracer.ThrowAssertionError()
 				}
@@ -350,7 +352,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			expectedCount := inputs[2].(uint64)
 
 			// Initialize a flag to know whether the hook has run
-			enteredNewCallFrame := false
+			enteredNewCallframe := false
 
 			// Initialize a sub-logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -369,8 +371,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
-				// Update flag
-				enteredNewCallFrame = true
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallframe {
+					enteredNewCallframe = true
+				}
 
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
@@ -402,7 +406,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if (!enteredNewCallFrame && expectedCount != 0) || expectedCount != count {
+				if (!enteredNewCallframe && expectedCount != 0) || expectedCount != count {
 					logger.Error("expectCall: Number of calls is not equal to expected count")
 					tracer.ThrowAssertionError()
 				}
@@ -436,8 +440,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
-				// Update flag
-				enteredNewCallframe = true
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallframe {
+					enteredNewCallframe = true
+				}
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -495,7 +501,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			expectedCount := inputs[3].(uint64)
 
 			// Initialize a flag to know whether the hook has run
-			enteredNewCallFrame := false
+			enteredNewCallframe := false
 
 			// Initialize a sub-logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -515,8 +521,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
-				// Update flag
-				enteredNewCallFrame = true
+				// Update flag if not already updated to indicate that a new callframe was entered
+				if !enteredNewCallframe {
+					enteredNewCallframe = true
+				}
 
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
@@ -550,7 +558,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if (!enteredNewCallFrame && expectedCount != 0) || expectedCount != count {
+				if (!enteredNewCallframe && expectedCount != 0) || expectedCount != count {
 					logger.Error("expectCall: Number of calls is not equal to expected count")
 					tracer.ThrowAssertionError()
 				}
