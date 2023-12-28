@@ -728,6 +728,8 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 
 	// For every tracer we have, we call upon them to set their results for this transaction now.
 	t.transactionTracerRouter.CaptureTxEndSetAdditionalResults(messageResult)
+
+	// Check if an error was set by a cheatcode, if so break the fuzzing process
 	panicCode := abiutils.GetSolidityPanicCode(messageResult.ExecutionResult.Err, messageResult.ExecutionResult.ReturnData, true)
 	if panicCode != nil && panicCode.Cmp(big.NewInt(abiutils.PanicCodeAssertFailed)) == 0 {
 		return fmt.Errorf("an unexpected error occurred")
