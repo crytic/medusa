@@ -237,7 +237,7 @@ func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.Messag
 	results.ExecutionResult = t.results.executionResult
 }
 
-// ThrowAssertionError is used to throw an assertion failure from within a cheatcode
+// ThrowAssertionError is used to cause an assertion failure from within a cheatcode
 func (t *cheatCodeTracer) ThrowAssertionError() {
 	t.results.executionResult.Err = vm.ErrExecutionReverted
 
