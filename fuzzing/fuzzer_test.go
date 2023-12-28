@@ -209,6 +209,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/to_string.sol",
 		"testdata/contracts/cheat_codes/utils/sign.sol",
 		"testdata/contracts/cheat_codes/utils/parse.sol",
+		"testdata/contracts/cheat_codes/vm/expect_call.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
@@ -247,6 +248,7 @@ func TestCheatCodes(t *testing.T) {
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+				config.Fuzzing.Testing.StopOnFailedTest = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -260,7 +262,7 @@ func TestCheatCodes(t *testing.T) {
 	}
 }
 
-// TestConsoleLog tests the console.log precompile contract by logging a variety of different primitive types and
+// Test'.'eLog tests the console.log precompile contract by logging a variety of different primitive types and
 // then failing. The execution trace for the failing call sequence should hold the various logs.
 func TestConsoleLog(t *testing.T) {
 	// These are the logs that should show up in the execution trace

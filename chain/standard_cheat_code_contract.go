@@ -1,9 +1,11 @@
 package chain
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -267,6 +269,232 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
 				cheatCodeCallerFrame.vmScope.Contract.CallerAddress = original
 			})
+			return nil, nil
+		},
+	)
+
+	// expectCall(address where, bytes data): Expect a call to the specified address and with the specified calldata
+	contract.addMethod(
+		"expectCall", abi.Arguments{{Type: typeAddress}, {Type: typeBytes}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			// Initialize a flag to know whether there was a callframe after the current one
+			flag := 0
+
+			// Initialize a sub logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			expectCallHook := func() {
+				flag = 1
+
+				// We entered the scope we expect to make the call, obtain a reference to the call frame
+				callFrame := tracer.CurrentCallFrame()
+
+				// Get provided inputs
+				expectedAddress := inputs[0].(common.Address)
+				expectedCalldata := inputs[1].([]byte)
+
+				// Get the callframe data we need
+				callAddress := callFrame.vmScope.Contract.Address()
+				callData := callFrame.vmScope.Contract.Input
+
+				if expectedAddress != callAddress || !bytes.Equal(expectedCalldata, callData) {
+					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
+
+					// expected a call but got none, so throw an error
+					tracer.ThrowAssertionError()
+				}
+			}
+
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+
+			// ensure the expectCallHook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if flag == 0 {
+					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
+
+					tracer.ThrowAssertionError()
+				}
+			})
+
+			return nil, nil
+		},
+	)
+
+	// expectCall(address where, bytes data, uint64 count): Expect a call to the specified address, with the specified calldata `count` number of times
+	contract.addMethod(
+		"expectCall", abi.Arguments{{Type: typeAddress}, {Type: typeBytes}, {Type: typeUint64}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			// Get provided inputs
+			expectedAddress := inputs[0].(common.Address)
+			expectedCalldata := inputs[1].([]byte)
+			expectedCount := inputs[2].(uint64)
+
+			// Initialize a flag to know whether the hook has run
+			flag := 0
+
+			// Initialize a sub-logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			// Initialize a count variable to keep track of the number of times the call was encountered
+			var count uint64 = 0
+
+			var expectCallHook func()
+
+			expectCallHook = func() {
+				// We entered the scope we expect to make the call, obtain a reference to the call frame
+				callFrame := tracer.CurrentCallFrame()
+
+				// Get the callframe data we need
+				callAddress := callFrame.vmScope.Contract.Address()
+				callData := callFrame.vmScope.Contract.Input
+
+				if expectedAddress == callAddress && bytes.Equal(expectedCalldata, callData) {
+					count++
+
+					if expectedCount == count {
+						return
+					}
+
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+				}
+			}
+
+			// Set the flag to 1 in the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+				flag = 1
+			})
+
+			// Attach the expectCallHook to the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+
+			// ensure the expectCallHook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if (flag == 0 && expectedCount != 0) || expectedCount != count {
+					logger.Error("expectCall: Number of calls is not equal to expected count")
+					tracer.ThrowAssertionError()
+				}
+			})
+
+			return nil, nil
+		},
+	)
+
+	// expectCall(address where, uint256 value, bytes data): Expect a call to the specified address, with the specified calldata and value
+	contract.addMethod(
+		"expectCall", abi.Arguments{{Type: typeAddress}, {Type: typeUint256}, {Type: typeBytes}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			// Initialize a flag to know whether there was a callframe after the current one
+			flag := 0
+
+			// Initialize a sub logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			expectCallHook := func() {
+				flag = 1
+
+				// We entered the scope we expect to make the call, obtain a reference to the call frame
+				callFrame := tracer.CurrentCallFrame()
+
+				// Get provided inputs
+				expectedAddress := inputs[0].(common.Address)
+				expectedValue := inputs[1].(*big.Int)
+				expectedCalldata := inputs[2].([]byte)
+
+				// Get the callframe data we need
+				callAddress := callFrame.vmScope.Contract.Address()
+				callValue := callFrame.vmScope.Contract.Value()
+				callData := callFrame.vmScope.Contract.Input
+
+				fmt.Println("Expected Value: ", expectedValue)
+				fmt.Println("Actual value: ", callValue)
+
+				if expectedAddress != callAddress || !bytes.Equal(expectedCalldata, callData) || expectedValue.Cmp(callValue) != 0 {
+					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata and value but got none")
+
+					// expected a call but got none, so throw an error
+					tracer.ThrowAssertionError()
+				}
+			}
+
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+
+			// ensure the expectCallHook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if flag == 0 {
+					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata and value but got none")
+					tracer.ThrowAssertionError()
+				}
+			})
+
+			return nil, nil
+		},
+	)
+
+	// expectCall(address where, uint256 value, bytes data, uint64 count): Expect a call to the specified address, with the specified calldata and value, `count` number of times
+	contract.addMethod(
+		"expectCall", abi.Arguments{{Type: typeAddress}, {Type: typeUint256}, {Type: typeBytes}, {Type: typeUint64}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			// Get provided inputs
+			expectedAddress := inputs[0].(common.Address)
+			expectedValue := inputs[1].(*big.Int)
+			expectedCalldata := inputs[1].([]byte)
+			expectedCount := inputs[2].(uint64)
+
+			// Initialize a flag to know whether the hook has run
+			flag := 0
+
+			// Initialize a sub-logger
+			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+			// Initialize a count variable to keep track of the number of times the call was encountered
+			var count uint64 = 0
+
+			var expectCallHook func()
+
+			expectCallHook = func() {
+				// We entered the scope we expect to make the call, obtain a reference to the call frame
+				callFrame := tracer.CurrentCallFrame()
+
+				// Get the callframe data we need
+				callAddress := callFrame.vmScope.Contract.Address()
+				callData := callFrame.vmScope.Contract.Input
+				callValue := callFrame.vmScope.Contract.Value()
+
+				if expectedAddress == callAddress && bytes.Equal(expectedCalldata, callData) && expectedValue.Cmp(callValue) != 0 {
+					count++
+
+					if expectedCount == count {
+						return
+					}
+
+					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+				}
+			}
+
+			// Set the flag to 1 in the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+				flag = 1
+			})
+
+			// Attach the expectCallHook to the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
+
+			// ensure the expectCallHook was executed
+			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+				if (flag == 0 && expectedCount != 0) || expectedCount != count {
+					logger.Error("expectCall: Number of calls is not equal to expected count")
+					tracer.ThrowAssertionError()
+				}
+			})
+
 			return nil, nil
 		},
 	)
