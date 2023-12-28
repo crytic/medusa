@@ -288,8 +288,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			var expectCallHook func()
 
 			expectCallHook = func() {
-				flag = 1
-
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
 
@@ -322,6 +320,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					tracer.ThrowAssertionError()
 				}
 			}
+
+			// Set the flag to 1 in the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+				flag = 1
+			})
 
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
@@ -428,8 +431,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			var expectCallHook func()
 
 			expectCallHook = func() {
-				flag = 1
-
 				// We entered the scope we expect to make the call, obtain a reference to the call frame
 				callFrame := tracer.CurrentCallFrame()
 
@@ -467,6 +468,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					tracer.ThrowAssertionError()
 				}
 			}
+
+			// Set the flag to 1 in the next callframe
+			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
+				flag = 1
+			})
 
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
