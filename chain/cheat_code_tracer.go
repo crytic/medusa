@@ -1,7 +1,6 @@
 package chain
 
 import (
-	"fmt"
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -254,7 +253,7 @@ func (t *cheatCodeTracer) ThrowAssertionError() {
 	// Pack the values into ABI encoded data
 	packedData, err := panicReturnDataAbi.Inputs.Pack(panicCode)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 
 	// Add selector to the packed data
