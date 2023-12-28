@@ -38,19 +38,27 @@ contract TestContract {
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
         Bank bank = new Bank();
 
-//        cheats.expectCall(address(token), abi.encodeCall(token.transfer, (to, amount)));
-        // make the call we expect
-//        token.transfer(to, amount);
+        // Expect a call to bank.transfer with specific calldata
+        cheats.expectCall(address(bank), abi.encodeCall(bank.transfer, (to, amount)));
+        bank.transfer(to, amount);
 
-//        cheats.expectCall(address(token), abi.encodeCall(token.transfer, (to, amount)), 4);
-//        token.transfer(to, amount);
-//        token.transfer(to, amount);
-//        token.transfer(to, amount);
-//        token.transfer(to, amount);
+        // Expect a call to bank.transfer with any calldata, 2 times
+        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector), 2);
+        bank.transfer(to, amount);
+        bank.transfer(to, amount);
 
-        cheats.expectCall(address(bank), value, abi.encodeCall(bank.deposit, ()));
-        bank.deposit{value: value}();
+        // Expect a call to bank.transfer with specific calldata, 4 times
+        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector, to, amount), 4);
+        bank.transfer(to, amount);
+        bank.transfer(to, amount);
+        bank.transfer(to, amount);
+        bank.transfer(to, amount);
 
+//        // Expect a call to bank.deposit with specific value and calldata
+//        cheats.expectCall(address(bank), value, abi.encodeCall(bank.deposit, ()));
+//        bank.deposit{value: value}();
+//
+//        // Expect a call to bank.deposit with specific value and calldata, 5 times
 //        cheats.expectCall(address(bank), value, abi.encodeCall(bank.deposit, ()), 5);
 //        bank.deposit{value: value}();
 //        bank.deposit{value: value}();

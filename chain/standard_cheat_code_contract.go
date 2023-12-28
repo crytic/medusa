@@ -307,7 +307,17 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				callAddress := callFrame.vmScope.Contract.Address()
 				callData := callFrame.vmScope.Contract.Input
 
-				if expectedAddress != callAddress || !bytes.Equal(expectedCalldata, callData) {
+				isCorrectAddress := expectedAddress == callAddress
+				var isCorrectCallData bool
+
+				// If length of calldata is 4, only compare selector else compare entire calldata
+				if len(expectedCalldata) == 4 {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData[:4])
+				} else {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData)
+				}
+
+				if !isCorrectAddress || !isCorrectCallData {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
 
 					// expected a call but got none, so throw an error
@@ -365,7 +375,17 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				callAddress := callFrame.vmScope.Contract.Address()
 				callData := callFrame.vmScope.Contract.Input
 
-				if expectedAddress == callAddress && bytes.Equal(expectedCalldata, callData) {
+				isCorrectAddress := expectedAddress == callAddress
+				var isCorrectCallData bool
+
+				// If length of calldata is 4, only compare selector else compare entire calldata
+				if len(expectedCalldata) == 4 {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData[:4])
+				} else {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData)
+				}
+
+				if isCorrectAddress && isCorrectCallData {
 					count++
 
 					if expectedCount == count {
@@ -432,7 +452,18 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				callValue := callFrame.vmScope.Contract.Value()
 				callData := callFrame.vmScope.Contract.Input
 
-				if expectedAddress != callAddress || !bytes.Equal(expectedCalldata, callData) || expectedValue.Cmp(callValue) != 0 {
+				isCorrectAddress := expectedAddress == callAddress
+				isCorrectValue := expectedValue.Cmp(callValue) != 0
+				var isCorrectCallData bool
+
+				// If length of calldata is 4, only compare selector else compare entire calldata
+				if len(expectedCalldata) == 4 {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData[:4])
+				} else {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData)
+				}
+
+				if !isCorrectAddress || !isCorrectCallData || isCorrectValue {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata and value but got none")
 
 					// expected a call but got none, so throw an error
@@ -492,7 +523,18 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				callData := callFrame.vmScope.Contract.Input
 				callValue := callFrame.vmScope.Contract.Value()
 
-				if expectedAddress == callAddress && bytes.Equal(expectedCalldata, callData) && expectedValue.Cmp(callValue) != 0 {
+				isCorrectAddress := expectedAddress == callAddress
+				isCorrectValue := expectedValue.Cmp(callValue) != 0
+				var isCorrectCallData bool
+
+				// If length of calldata is 4, only compare selector else compare entire calldata
+				if len(expectedCalldata) == 4 {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData[:4])
+				} else {
+					isCorrectCallData = bytes.Equal(expectedCalldata, callData)
+				}
+
+				if isCorrectAddress && isCorrectValue && isCorrectCallData {
 					count++
 
 					if expectedCount == count {
