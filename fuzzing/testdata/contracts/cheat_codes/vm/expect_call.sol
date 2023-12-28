@@ -57,7 +57,7 @@ contract TestContract {
         bank.transfer(to, amount);
 
         // Expect a call to bank.transfer with any calldata, 2 times
-        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector, to), 2);
+        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector, to, amount), 2);
         bank.transfer(to, amount);
         bank.transfer(to, amount);
 
