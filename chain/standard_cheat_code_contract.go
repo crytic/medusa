@@ -280,7 +280,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
 			// Initialize a flag to know whether there was a callframe after the current one
-			flag := 0
+			enteredNewCallFrame := false
 
 			// Initialize a sub logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -296,6 +296,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 					return
 				}
+
+				// Update flag
+				enteredNewCallFrame = true
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -321,16 +324,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 			}
 
-			// Set the flag to 1 in the next callframe
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
-				flag = 1
-			})
-
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if flag == 0 {
+				if !enteredNewCallFrame {
 					logger.Error("expectCall: Expected a call to the provided address, with the provided calldata but got none")
 					tracer.ThrowAssertionError()
 				}
@@ -352,7 +350,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			expectedCount := inputs[2].(uint64)
 
 			// Initialize a flag to know whether the hook has run
-			flag := 0
+			enteredNewCallFrame := false
 
 			// Initialize a sub-logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -370,6 +368,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 					return
 				}
+
+				// Update flag
+				enteredNewCallFrame = true
 
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
@@ -396,17 +397,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 			}
 
-			// Set the flag to 1 in the next callframe
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
-				flag = 1
-			})
-
 			// Attach the expectCallHook to the next callframe
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if (flag == 0 && expectedCount != 0) || expectedCount != count {
+				if (!enteredNewCallFrame && expectedCount != 0) || expectedCount != count {
 					logger.Error("expectCall: Number of calls is not equal to expected count")
 					tracer.ThrowAssertionError()
 				}
@@ -423,7 +419,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
 			// Initialize a flag to know whether there was a callframe after the current one
-			flag := 0
+			enteredNewCallframe := false
 
 			// Initialize a sub logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -439,6 +435,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 					return
 				}
+
+				// Update flag
+				enteredNewCallframe = true
 
 				// Get provided inputs
 				expectedAddress := inputs[0].(common.Address)
@@ -469,16 +468,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 			}
 
-			// Set the flag to 1 in the next callframe
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
-				flag = 1
-			})
-
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if flag == 0 {
+				if !enteredNewCallframe {
 					logger.Error("expectCall: Expected a call but got none")
 					tracer.ThrowAssertionError()
 				}
@@ -498,10 +492,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			expectedAddress := inputs[0].(common.Address)
 			expectedValue := inputs[1].(*big.Int)
 			expectedCalldata := inputs[2].([]byte)
-			expectedCount := inputs[2].(uint64)
+			expectedCount := inputs[3].(uint64)
 
 			// Initialize a flag to know whether the hook has run
-			flag := 0
+			enteredNewCallFrame := false
 
 			// Initialize a sub-logger
 			logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
@@ -521,13 +515,16 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
+				// Update flag
+				enteredNewCallFrame = true
+
 				// Get the callframe data we need
 				callAddress := callFrame.vmScope.Contract.Address()
 				callData := callFrame.vmScope.Contract.Input
 				callValue := callFrame.vmScope.Contract.Value()
 
 				isCorrectAddress := expectedAddress == callAddress
-				isCorrectValue := expectedValue.Cmp(callValue) != 0
+				isCorrectValue := expectedValue.Cmp(callValue) == 0
 				var isCorrectCallData bool
 
 				// If length of calldata is 4, only compare selector else compare entire calldata
@@ -548,17 +545,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 			}
 
-			// Set the flag to 1 in the next callframe
-			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(func() {
-				flag = 1
-			})
-
 			// Attach the expectCallHook to the next callframe
 			cheatCodeCallerFrame.onNextFrameExitRestoreHooks.Push(expectCallHook)
 
 			// ensure the expectCallHook was executed
 			cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
-				if (flag == 0 && expectedCount != 0) || expectedCount != count {
+				if (!enteredNewCallFrame && expectedCount != 0) || expectedCount != count {
 					logger.Error("expectCall: Number of calls is not equal to expected count")
 					tracer.ThrowAssertionError()
 				}

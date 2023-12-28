@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 interface CheatCodes {
+    function deal(address, uint256) external;
     function expectCall(address where, bytes calldata data) external;
 
     function expectCall(
@@ -33,7 +34,6 @@ contract Bank {
     );
 
     function deposit(uint256 amount) external payable {
-        assert(false);
         emit Deposit(msg.value);
     }
 
@@ -57,7 +57,7 @@ contract TestContract {
         bank.transfer(to, amount);
 
         // Expect a call to bank.transfer with any calldata, 2 times
-        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector, to, amount), 2);
+        cheats.expectCall(address(bank), abi.encodeWithSelector(bank.transfer.selector, to), 2);
         bank.transfer(to, amount);
         bank.transfer(to, amount);
 
@@ -68,16 +68,23 @@ contract TestContract {
         bank.transfer(to, amount);
         bank.transfer(to, amount);
 
-        //        // Expect a call to bank.deposit with specific value and calldata
-//        cheats.expectCall(address(bank), 3, abi.encodeCall(bank.deposit, (3)));
-//        bank.deposit{value: value}(value);
+        // Expect a call to bank.deposit with specific value and calldata
+        cheats.expectCall(address(bank), 3, abi.encodeCall(bank.deposit, (3)));
+        // This increases the contract balance so the transfer will be successful
+        cheats.deal(address(this), 300);
+        bank.deposit{value: 3}(3);
 
-//        // Expect a call to bank.deposit with specific value and calldata, 5 times
-//        cheats.expectCall(address(bank), value, abi.encodeCall(bank.deposit, ()), 5);
-//        bank.deposit{value: value}();
-//        bank.deposit{value: value}();
-//        bank.deposit{value: value}();
-//        bank.deposit{value: value}();
-//        bank.deposit{value: value}();
+        // Expect a call to bank.deposit with specific value and calldata, 5 times
+        cheats.expectCall(address(bank), 3, abi.encodeCall(bank.deposit, (3)), 5);
+        cheats.deal(address(this), 4);
+        bank.deposit{value: 3}(3);
+        cheats.deal(address(this), 4);
+        bank.deposit{value: 3}(3);
+        cheats.deal(address(this), 4);
+        bank.deposit{value: 3}(3);
+        cheats.deal(address(this), 4);
+        bank.deposit{value: 3}(3);
+        cheats.deal(address(this), 4);
+        bank.deposit{value: 3}(3);
     }
 }
