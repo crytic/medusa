@@ -2,8 +2,10 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"math/big"
 	"math/rand"
+	"strings"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -228,14 +230,59 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
-		// If we deployed the contract, also enumerate property tests and state changing methods.
-		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-			if !method.IsConstant() {
-				// Any non-constant method should be tracked as a state changing method.
-				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+		// Check if functions should be filtered based on the configuration
+		if len(fw.fuzzer.config.Fuzzing.Testing.FilterFunctions) > 0 && !fw.fuzzer.config.Fuzzing.Testing.FilterBlacklist {
+			for _, filterFunction := range fw.fuzzer.config.Fuzzing.Testing.FilterFunctions {
+				contractNameAndMethodSignature := strings.Split(filterFunction, ".")
+				contractName := contractNameAndMethodSignature[0]
+				methodSignature := contractNameAndMethodSignature[1]
+
+				if contractName == contractDefinition.Name() {
+					for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+						if method.Sig == methodSignature && !method.IsConstant() {
+							// Any non-constant method should be tracked as a state changing method.
+							fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
+						}
+					}
+				}
+			}
+		} else {
+			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+				if !method.IsConstant() {
+					// Only add method to list of state changing methods if not present in blacklist
+					if fw.methodNotInBlacklist(contractDefinition.Name(), method.Sig) {
+						fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
+					}
+				}
 			}
 		}
 	}
+}
+
+// checkAndAppendStateChangingMethod checks if a method should be considered as
+// a state changing method and appends it to the list if applicable.
+func (fw *FuzzerWorker) appendStateChangingMethod(contractAddress common.Address, contractDefinition *fuzzerTypes.
+	Contract, method abi.Method) {
+	fw.stateChangingMethods = append(fw.stateChangingMethods,
+		fuzzerTypes.DeployedContractMethod{
+			Address:  contractAddress,
+			Contract: contractDefinition,
+			Method:   method,
+		},
+	)
+}
+
+// methodNotInBlacklist checks if a method is not present in the blacklist.
+func (fw *FuzzerWorker) methodNotInBlacklist(contractName, methodSignature string) bool {
+	if len(fw.fuzzer.config.Fuzzing.Testing.FilterFunctions) > 0 {
+		for _, filterFunction := range fw.fuzzer.config.Fuzzing.Testing.FilterFunctions {
+			contractNameAndMethodSignature := strings.Split(filterFunction, ".")
+			if contractNameAndMethodSignature[0] == contractName && contractNameAndMethodSignature[1] == methodSignature {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
