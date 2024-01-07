@@ -57,6 +57,8 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
+				FilterBlacklist:              true,
+				FilterFunctions:              []string{},
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         false,
 					TestViewMethods: false,

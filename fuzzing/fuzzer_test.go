@@ -146,6 +146,54 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
+// TestFilterBlacklistTrue runs a test to ensure that FilterBlacklist works as expected when set to true
+func TestFilterBlacklistTrue(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_filter_functions.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.Testing.StopOnFailedTest = true
+			config.Fuzzing.Testing.PropertyTesting.Enabled = true
+
+			config.Fuzzing.Testing.FilterBlacklist = true
+			config.Fuzzing.Testing.FilterFunctions = []string{"TestContract.reset1()", "TestContract.reset2()"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed property tests. We expect one.
+			assert.EqualValues(f.t, 1, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Expected a failure from a property test.")
+		},
+	})
+}
+
+// TestFilterBlacklistFalse runs a test to ensure that FilterBlacklist works as expected when set to false
+func TestFilterBlacklistFalse(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_filter_functions.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.Testing.StopOnFailedTest = true
+			config.Fuzzing.Testing.PropertyTesting.Enabled = true
+
+			config.Fuzzing.Testing.FilterBlacklist = false
+			config.Fuzzing.Testing.FilterFunctions = []string{"TestContract.f(uint256)", "TestContract.g(uint256)", "TestContract.h(uint256)", "TestContract.i()"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed property tests. We expect one.
+			assert.EqualValues(f.t, 1, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)), "Expected a failure from a property test.")
+		},
+	})
+}
+
 // TestOptimizationMode runs a test to ensure that optimization mode works as expected
 func TestOptimizationMode(t *testing.T) {
 	filePaths := []string{

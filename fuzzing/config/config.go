@@ -107,6 +107,12 @@ type TestingConfig struct {
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
 
+	// FilterFunctions describes and array of function signatures that should not be called (if FilterBlacklist is set to true) or the only functions that are to be called during a fuzzing campaign (if FilterBlacklist is set to false).
+	FilterFunctions []string `json:"filterFunctions"`
+
+	// FilterBlacklist describes whether the listed filter functions are to be whitelisted or blacklisted.
+	FilterBlacklist bool `json:"filterBlacklist"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 
@@ -286,6 +292,11 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
 		return errors.New("project configuration must specify only a well-formed deployer address")
+	}
+
+	// Verify that list of functions to be whitelisted is present if filterBlacklist is set to false
+	if !p.Fuzzing.Testing.FilterBlacklist && (len(p.Fuzzing.Testing.FilterFunctions) == 0) {
+		return errors.New("functions to be whitelisted must be specified if filterBlacklist is set to false")
 	}
 
 	// Verify property testing fields.
