@@ -282,7 +282,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			return nil, nil
 		},
 	)
-	
+
 	// snapshot: Takes a snapshot of the current state of the evm and returns the id associated with the snapshot
 	contract.addMethod(
 		"snapshot", abi.Arguments{}, abi.Arguments{{Type: typeUint256}},
