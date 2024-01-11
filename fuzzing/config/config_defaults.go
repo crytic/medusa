@@ -62,6 +62,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					TestViewMethods: false,
 					AssertionModes: AssertionModesConfig{
 						FailOnAssertion: true,
+						FailOnRevert:    false,
 					},
 				},
 				PropertyTesting: PropertyTestConfig{
