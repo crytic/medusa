@@ -123,6 +123,36 @@ func TestAssertionsNotRequire(t *testing.T) {
 	})
 }
 
+// TestAssertionFailOnRevertConfig runs a test to ensure that a revert failure causes a test to fail if the FailOnRevert config is set to true
+func TestAssertionFailOnRevertConfig(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_fail_on_revert.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+
+			// enable assertion checking mode only
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+			// enabling fail on revert
+			config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnRevert = true
+
+			// to ensure all tests fail before fuzzer stops
+			config.Fuzzing.Testing.StopOnFailedTest = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, true)
+			assert.EqualValues(t, 4, len(f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)))
+		},
+	})
+}
+
 // TestAssertionsAndProperties runs a test to property testing and assertion testing can both run in parallel.
 // This test does not stop on first failure and expects a failure from each after timeout.
 func TestAssertionsAndProperties(t *testing.T) {
