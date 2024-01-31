@@ -6,6 +6,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"time"
@@ -21,10 +22,11 @@ func main() {
 			case <-ticker.C:
 				filename := "heap" + strconv.FormatInt(int64(i), 10) + ".prof"
 				f, _ := utils.CreateFile("pprof", filename)
+				defer f.Close()
+				runtime.GC()
 				if err := pprof.WriteHeapProfile(f); err != nil {
 					os.Exit(1)
 				}
-
 			}
 		}
 	}()
