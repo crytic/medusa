@@ -8,23 +8,26 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"time"
 )
 
 func main() {
 	// Write heap profile to file every minute
 	go func() {
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(5 * time.Second)
+		i := 0
 		for {
 			select {
 			case <-ticker.C:
-				filename := "heap.prof"
+				filename := "heap" + strconv.FormatInt(int64(i), 10) + ".prof"
 				f, _ := utils.CreateFile("pprof", filename)
 				defer f.Close()
 				runtime.GC()
 				if err := pprof.WriteHeapProfile(f); err != nil {
 					os.Exit(1)
 				}
+				i = i + 1
 			}
 		}
 	}()
