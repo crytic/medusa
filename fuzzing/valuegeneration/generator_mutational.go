@@ -1,6 +1,7 @@
 package valuegeneration
 
 import (
+	"fmt"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
@@ -383,6 +384,7 @@ func (g *MutationalValueGenerator) MutateAddress(addr common.Address) common.Add
 	if randomGeneratorDecision < g.config.MutateAddressProbability {
 		return g.RandomValueGenerator.GenerateAddress()
 	}
+	fmt.Printf("Mutate Address: Returning generator as is")
 	return addr
 }
 
@@ -485,5 +487,6 @@ func (g *MutationalValueGenerator) MutateInteger(i *big.Int, signed bool, bitLen
 			return g.mutateIntegerInternal(i, signed, bitLength)
 		}
 	}
+	fmt.Printf("MutateInteger: did not mutate integer: %v", i)
 	return i
 }

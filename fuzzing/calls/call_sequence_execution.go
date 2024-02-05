@@ -41,9 +41,11 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		if err != nil {
 			return callSequenceExecuted, err
 		}
+		fmt.Printf("ExecuteCallSequenceIteratively: fetched a new call sequence elemtn: %v", callSequenceElement)
 
 		// If we are at the end of our sequence, break out of our execution loop.
 		if callSequenceElement == nil {
+			fmt.Printf("ExecuteCallSequenceIteratively: Finished call sequence")
 			break
 		}
 
@@ -58,6 +60,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 				if err != nil {
 					return callSequenceExecuted, err
 				}
+				fmt.Printf("ExecuteCallSequenceIteratively: commited pending block")
 			}
 
 			// If we have no pending block to add a tx containing our call to, we must create one.
@@ -81,10 +84,12 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 				if err != nil {
 					return callSequenceExecuted, err
 				}
+				fmt.Printf("ExecuteCallSequenceIteratively: created pending block with parameters")
 			}
 
 			// Try to add our transaction to this block.
 			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage())
+			fmt.Printf("ExecuteCallSequenceIteratively: added txn to pending block")
 			if err != nil {
 				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
 				// If there are other transactions in the block, this makes sense. The block is "full".
@@ -98,6 +103,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 					if err != nil {
 						return callSequenceExecuted, err
 					}
+					fmt.Printf("ExecuteCallSequenceIteratively: committed pending block bc OOG")
 					continue
 				}
 
@@ -113,7 +119,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 
 			// Add to our executed call sequence
 			callSequenceExecuted = append(callSequenceExecuted, callSequenceElement)
-
+			fmt.Printf("ExecuteCallSequenceIteratively: add executed txn to callSequenceExecuted slice")
 			// We added our call to the block as a transaction. Call our step function with the update and check
 			// if it returned an error.
 			if executionCheckFunc != nil {
@@ -121,20 +127,23 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 				if err != nil {
 					return callSequenceExecuted, err
 				}
-
+				fmt.Printf("ExecuteCallSequenceIteratively: successfully called executionCheckFunc")
 				// If post-execution check requested we break execution, break out of our "retry loop"
 				if execCheckFuncRequestedBreak {
+					fmt.Printf("ExecuteCallSequenceIteratively: executionCheckFunc wants to break")
 					break
 				}
 			}
 
 			// We didn't encounter an error, so we were successful in adding this transaction. Break out of this
 			// inner "retry loop" and move onto processing the next element in the outer loop.
+			fmt.Printf("ExecuteCallSequenceIteratively: successfully added the txn, breaking")
 			break
 		}
 
 		// If post-execution check requested we break execution, break out of our "execute next call sequence loop"
 		if execCheckFuncRequestedBreak {
+			fmt.Printf("ExecuteCallSequenceIteratively: execCheckFuncRequestedBreak requested break")
 			break
 		}
 	}
@@ -145,6 +154,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		if err != nil {
 			return callSequenceExecuted, err
 		}
+		fmt.Printf("ExecuteCallSequenceIteratively: successfully commited pending bl")
 	}
 	return callSequenceExecuted, nil
 }

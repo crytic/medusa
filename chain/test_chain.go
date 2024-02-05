@@ -681,6 +681,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns the constructed block, or an error if one occurred.
 func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
+	fmt.Printf("PendingBlockAddTx: Adding txn to pending block")
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
@@ -694,6 +695,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 
 	// Create a tx from our msg, for hashing/receipt purposes
 	tx := utils.MessageToTransaction(message)
+	fmt.Printf("PendingBlockAddTx: Converted msg to txn")
 
 	// Create a new context to be used in the EVM environment
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
@@ -705,6 +707,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
+	fmt.Printf("PendingBlockAddTx: Create new EVM context")
 
 	// Apply our transaction
 	var usedGas uint64
@@ -715,6 +718,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
+	fmt.Printf("PendingBlockAddTx: Successfully executed txn")
 
 	// Create our message result
 	messageResult := &chainTypes.MessageResults{
@@ -727,6 +731,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 
 	// For every tracer we have, we call upon them to set their results for this transaction now.
 	t.transactionTracerRouter.CaptureTxEndSetAdditionalResults(messageResult)
+	fmt.Printf("PendingBlockAddTx: Successfully captured txn results via tracer")
 
 	// Write state changes to database.
 	// NOTE: If this completes without an error, we know we didn't hit the block gas limit or other errors, so we are
@@ -756,6 +761,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
 	t.pendingBlock.MessageResults = append(t.pendingBlock.MessageResults, messageResult)
+	fmt.Printf("PendingBlockAddTx: Add txn to block and result to message results")
 
 	// Emit our contract change events for this message
 	err = t.emitContractChangeEvents(false, messageResult)

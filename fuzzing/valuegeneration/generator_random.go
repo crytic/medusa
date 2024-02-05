@@ -1,6 +1,7 @@
 package valuegeneration
 
 import (
+	"fmt"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
@@ -48,6 +49,7 @@ func (g *RandomValueGenerator) GenerateAddress() common.Address {
 	// Generate random bytes of the address length, then convert it to an address.
 	addressBytes := make([]byte, common.AddressLength)
 	g.randomProvider.Read(addressBytes)
+	fmt.Printf("GenerateAddress: generated address: %v", addressBytes)
 	return common.BytesToAddress(addressBytes)
 }
 

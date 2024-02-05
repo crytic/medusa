@@ -253,17 +253,20 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	}()
 
 	// Initialize a new sequence within our sequence generator.
+	fmt.Printf("Initializing new call sequence")
 	var isNewSequence bool
 	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
 		return nil, nil, err
 	}
+	fmt.Printf("Done initializing a new call sequence")
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		fmt.Printf("FetchElementFunc: Popping a new sequence element")
 		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
@@ -274,6 +277,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
 		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		fmt.Printf("executionCheckFunc: Successfully updated coverage")
 		if err != nil {
 			return true, err
 		}
@@ -282,6 +286,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// this call sequence.
 		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
 			newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
+			fmt.Printf("executionCheckFunc: Successfully ran a call sequence test func")
 			if err != nil {
 				return true, err
 			}
@@ -290,7 +295,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
-
+		fmt.Printf("executionCheckFunc: Successfully tested a call in a call sequence")
+		
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil
@@ -524,6 +530,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer, true, false)
 		}
+		fmt.Printf("Created new test chain for worker")
 		return nil
 	})
 
@@ -543,6 +550,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
+	fmt.Printf("New worker startup count")
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
@@ -565,12 +573,14 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence is starting: %v", err)
 		}
+		fmt.Printf("About to start a new call sequence")
 
 		// Test a new sequence
 		callSequence, shrinkVerifiers, err := fw.testNextCallSequence()
 		if err != nil {
 			return false, err
 		}
+		fmt.Printf("Ended test of a call sequence")
 
 		// If we have any requests to shrink call sequences, do so now.
 		for _, shrinkVerifier := range shrinkVerifiers {

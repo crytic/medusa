@@ -191,14 +191,17 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.baseSequence = make(calls.CallSequence, g.worker.fuzzer.config.Fuzzing.CallSequenceLength)
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
+	fmt.Printf("Base sequence created")
 
 	// Check if there are any previously une-xecuted corpus call sequences. If there are, the fuzzer should execute
 	// those first.
+	fmt.Printf("Retrieving new unexecuted call sequence")
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
 	if unexecutedSequence != nil {
 		g.baseSequence = *unexecutedSequence
 		return false, nil
 	}
+	fmt.Printf("Retrieved new unexecuted call sequence")
 
 	// We'll decide whether to create a new call sequence or mutating existing corpus call sequences. Any entries we
 	// leave as nil will be populated by a newly generated call prior to being fetched from this provider.
@@ -206,6 +209,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	// If this provider has no corpus mutation methods or corpus call sequences, we return a call sequence with
 	// nil elements to signal that we want an entirely new sequence.
 	if g.mutationStrategyChooser.ChoiceCount() == 0 || g.worker.fuzzer.corpus.ActiveMutableSequenceCount() == 0 {
+		fmt.Printf("No corpus mutation method or corpus call sequences, need to generate brand new call sequence")
 		return true, nil
 	}
 
@@ -213,7 +217,9 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	if g.worker.randomProvider.Float32() > g.config.NewSequenceProbability {
 		// Get a random mutator function.
 		corpusMutationFunc, err := g.mutationStrategyChooser.Choose()
+		fmt.Printf("Chose a corpus mutation function")
 		if err != nil {
+			fmt.Printf("Could not retrieve a corpus mutation func")
 			return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error obtaining a mutation method: %v", err)
 		}
 
@@ -248,6 +254,7 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("PopSequenceElement: Successfully generated new element")
 	} else {
 		// We have an element, if our generator set a post-call modify for this function, execute it now to modify
 		// our call prior to return. This allows mutations to be applied on a per-call time frame, rather than
@@ -257,11 +264,13 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 			if err != nil {
 				return nil, err
 			}
+			fmt.Printf("PopSequenceElement: Successfully called prefetchModifyFunc")
 		}
 	}
 
 	// Update the element with the current nonce for the associated chain.
 	element.Call.FillFromTestChainProperties(g.worker.chain)
+	fmt.Printf("PopSequenceElement: Successfully filled from test chain properties")
 
 	// Update our base sequence, advance our position, and return the processed element from this round.
 	g.baseSequence[g.fetchIndex] = element
@@ -273,8 +282,10 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
+	fmt.Printf("generateNewElement: generating new element")
 	// Verify we have state changing methods to call
 	if len(g.worker.stateChangingMethods) == 0 {
+		fmt.Printf("generateNewElement: no state changing methods")
 		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
 	}
 
@@ -288,6 +299,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		// Create our fuzzed parameters.
 		input := selectedMethod.Method.Inputs[i]
 		args[i] = valuegeneration.GenerateAbiValue(g.config.ValueGenerator, &input.Type)
+		fmt.Printf("generateNewElement: generated new abi value at idx: %v", i)
 	}
 
 	// If this is a payable function, generate value to send
@@ -304,6 +316,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		Method:      &selectedMethod.Method,
 		InputValues: args,
 	})
+	fmt.Printf("generateNewElement: created new call message with abi values")
 
 	// Determine our delay values for this element
 	blockNumberDelay := uint64(0)
@@ -314,6 +327,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	if g.worker.fuzzer.config.Fuzzing.MaxBlockTimestampDelay > 0 {
 		blockTimestampDelay = g.config.ValueGenerator.GenerateInteger(false, 64).Uint64() % (g.worker.fuzzer.config.Fuzzing.MaxBlockTimestampDelay + 1)
 	}
+	fmt.Printf("generateNewElement: have block number and block timestamp delay: %v and %v", blockNumberDelay, blockTimestampDelay)
 
 	// For each block we jump, we need a unique time stamp for chain semantics, so if our block number jump is too small,
 	// while our timestamp jump is larger, we cap it.
@@ -326,6 +340,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	}
 
 	// Return our call sequence element.
+	fmt.Printf("generateNewElement: generated new element now calling NewCallsequenceElement")
 	return calls.NewCallSequenceElement(selectedMethod.Contract, msg, blockNumberDelay, blockTimestampDelay), nil
 }
 
@@ -333,16 +348,18 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 // whose head is based off of an existing corpus call sequence.
 // Returns an error if one occurs.
 func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	fmt.Printf("Running callSeqGenFuncCorpusHead")
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncCorpusHead: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
 	}
 
 	// Determine a random position to slice the call sequence.
 	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
-
+	fmt.Printf("callSeqGenFuncCorpusHead: We have a sequence")
 	return nil
 }
 
@@ -350,9 +367,11 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 // whose tail is based off of an existing corpus call sequence.
 // Returns an error if one occurs.
 func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	fmt.Printf("Running callSeqGenFuncCorpusTail")
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncCorpusTail: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
 	}
 
@@ -360,6 +379,7 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	targetLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	copy(sequence[len(sequence)-targetLength:], corpusSequence[len(corpusSequence)-targetLength:])
+	fmt.Printf("callSeqGenFuncCorpusTail: We have a sequence")
 
 	return nil
 }
@@ -369,13 +389,16 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 // respectively sliced and joined together.
 // Returns an error if one occurs.
 func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	fmt.Printf("Running callSeqGenFuncSpliceAtRandom")
 	// Obtain two corpus call sequence entries
 	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncSpliceAtRandom 1: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain head corpus call sequence for splice-at-random corpus mutation: %v", err)
 	}
 	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncSpliceAtRandom 2: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
 	}
 
@@ -392,6 +415,7 @@ func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequ
 
 	// Copy the tail of the second corpus sequence to our destination sequence (after the head sequence portion).
 	copy(sequence[headSequenceLength:], tailSequence[len(tailSequence)-tailSequenceLength:])
+	fmt.Printf("callSeqGenFuncSpliceAtRandom: We have a sequence")
 
 	return nil
 }
@@ -401,13 +425,16 @@ func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequ
 // taken and interleaved (each element of one sequence will be followed by an element of the other).
 // Returns an error if one occurs.
 func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	fmt.Printf("Running callSeqGenFuncInterleaveAtRandom")
 	// Obtain two corpus call sequence entries
 	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncInterleaveAtRandom 1: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
 	}
 	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
+		fmt.Printf("callSeqGenFuncInterleaveAtRandom 2: Received error when choosing a call sequence from the corpus")
 		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
 	}
 
@@ -435,6 +462,7 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 			destIndex++
 		}
 	}
+	fmt.Printf("callSeqGenFuncInterleaveAtRandom: We have a sequence")
 	return nil
 }
 
@@ -442,8 +470,10 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 // to a call sequence element, prior to it being fetched.
 // Returns an error if one occurs.
 func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, element *calls.CallSequenceElement) error {
+	fmt.Printf("Running prefetchModifyCallFuncMutate")
 	// If this element has no ABI value based call data, exit early.
 	if element.Call == nil || element.Call.DataAbiValues == nil {
+		fmt.Printf("prefetchModifyCallFuncMutate: No abi value based call data, exit early")
 		return nil
 	}
 
@@ -452,9 +482,11 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
 		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
 		if err != nil {
+			fmt.Printf("prefetchModifyCallFuncMutate: failure during abi value mutation at index %v", i)
 			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}
+	fmt.Printf("prefetchModifyCallFuncMutate: mutation complete")
 	return nil
 }

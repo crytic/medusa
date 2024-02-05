@@ -82,11 +82,13 @@ func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T
 func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	// If we have no choices or 0 total weight, return nil.
 	if len(c.choices) == 0 || c.totalWeight.Cmp(big.NewInt(0)) == 0 {
+		fmt.Printf("No weight or no choices so throwing error")
 		return nil, fmt.Errorf("could not return a weighted random choice because no choices exist with non-zero weights")
 	}
 
 	// Acquire our lock during the duration of this method.
 	c.randomProviderLock.Lock()
+	fmt.Printf("Choose: Acquired lock")
 	defer c.randomProviderLock.Unlock()
 
 	// We'll want to randomly select a position in our total weight that will determine which item to return.
@@ -95,6 +97,7 @@ func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	var selectedWeightPosition *big.Int
 	if c.totalWeight.IsInt64() && unsafe.Sizeof(0) == 64 {
 		selectedWeightPosition = big.NewInt(int64(c.randomProvider.Intn(int(c.totalWeight.Int64()))))
+		fmt.Printf("Retrieved selectedWeightPosition by default")
 	} else {
 		// Next we'll determine how many bits/bytes are needed to represent our random value
 		bitLength := c.totalWeight.BitLen()
@@ -119,12 +122,14 @@ func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 		//  modulus division to wrap around. This isn't fully uniform in distribution, we should consider revisiting this.
 		selectedWeightPosition = new(big.Int).SetBytes(randomData)
 		selectedWeightPosition = new(big.Int).Mod(selectedWeightPosition, c.totalWeight)
+		fmt.Printf("Retrieved selectedWeightPosition")
 	}
 
 	// Loop for each item
 	for _, choice := range c.choices {
 		// If our selected weight position is in range for this item, return it
 		if selectedWeightPosition.Cmp(choice.weight) < 0 {
+			fmt.Printf("Retrieved selectedWeightPosition within range")
 			return &choice.Data, nil
 		}
 
