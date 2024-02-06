@@ -12,8 +12,6 @@ import (
 	"golang.org/x/exp/maps"
 	"math/big"
 	"math/rand"
-	"os"
-	"runtime/trace"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -245,9 +243,6 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
-	f, _ := os.Create("trace.out")
-	trace.Start(f)
-	defer trace.Stop()
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
