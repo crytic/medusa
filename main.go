@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"strconv"
 	"time"
 )
@@ -31,6 +32,10 @@ func main() {
 			}
 		}
 	}()
+	
+	f, _ := os.Create("trace.out")
+	trace.Start(f)
+	defer trace.Stop()
 
 	// Have an HTTP endpoint for listening
 	go func() {
