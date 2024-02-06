@@ -534,7 +534,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer, true, false)
 		}
-		fmt.Printf("Created new test chain for worker")
+		//fmt.Printf("Created new test chain for worker")
 		return nil
 	})
 
@@ -554,7 +554,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
-	fmt.Printf("New worker startup count")
+	//fmt.Printf("New worker startup count")
 
 	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
@@ -577,14 +577,14 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence is starting: %v", err)
 		}
-		fmt.Printf("About to start a new call sequence")
+		//fmt.Printf("About to start a new call sequence")
 
 		// Test a new sequence
 		callSequence, shrinkVerifiers, err := fw.testNextCallSequence()
 		if err != nil {
 			return false, err
 		}
-		fmt.Printf("Ended test of a call sequence")
+		//fmt.Printf("Ended test of a call sequence")
 
 		// If we have any requests to shrink call sequences, do so now.
 		for _, shrinkVerifier := range shrinkVerifiers {
