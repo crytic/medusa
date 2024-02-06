@@ -1,7 +1,6 @@
 package calls
 
 import (
-	"fmt"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
@@ -108,7 +107,7 @@ func NewCallMessageWithAbiValueData(from common.Address, to *common.Address, non
 		if err != nil {
 			logging.GlobalLogger.Panic("Failed to pack call message ABI values", err)
 		}
-		fmt.Printf("NewCallMessageWithAbiValueData: Packed abi data")
+		//fmt.Printf("NewCallMessageWithAbiValueData: Packed abi data")
 	}
 
 	// Construct and return a new message from our given parameters.

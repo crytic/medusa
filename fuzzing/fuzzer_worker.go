@@ -2,9 +2,6 @@ package fuzzing
 
 import (
 	"fmt"
-	"math/big"
-	"math/rand"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -13,6 +10,10 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
+	"math/big"
+	"math/rand"
+	"os"
+	"runtime/trace"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -244,6 +245,9 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+	f, _ := os.Create("trace.out")
+	trace.Start(f)
+	defer trace.Stop()
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
@@ -253,20 +257,20 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	}()
 
 	// Initialize a new sequence within our sequence generator.
-	fmt.Printf("Initializing new call sequence")
+	//fmt.Printf("Initializing new call sequence")
 	var isNewSequence bool
 	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Printf("Done initializing a new call sequence")
+	//fmt.Printf("Done initializing a new call sequence")
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
-		fmt.Printf("FetchElementFunc: Popping a new sequence element")
+		//fmt.Printf("FetchElementFunc: Popping a new sequence element")
 		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
@@ -277,7 +281,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
 		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
-		fmt.Printf("executionCheckFunc: Successfully updated coverage")
+		//fmt.Printf("executionCheckFunc: Successfully updated coverage")
 		if err != nil {
 			return true, err
 		}
@@ -286,7 +290,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// this call sequence.
 		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
 			newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
-			fmt.Printf("executionCheckFunc: Successfully ran a call sequence test func")
+			//fmt.Printf("executionCheckFunc: Successfully ran a call sequence test func")
 			if err != nil {
 				return true, err
 			}
@@ -295,8 +299,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
-		fmt.Printf("executionCheckFunc: Successfully tested a call in a call sequence")
-		
+		//fmt.Printf("executionCheckFunc: Successfully tested a call in a call sequence")
+
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil

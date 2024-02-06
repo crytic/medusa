@@ -175,7 +175,7 @@ func NewCallSequenceElement(contract *fuzzingTypes.Contract, call *CallMessage, 
 		ChainReference:      nil,
 		ExecutionTrace:      nil,
 	}
-	fmt.Printf("NewCallSequenceElement: created")
+	//fmt.Printf("NewCallSequenceElement: created")
 	return callSequenceElement
 }
 

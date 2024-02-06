@@ -134,17 +134,17 @@ func (c *Corpus) ActiveMutableSequenceCount() int {
 func (c *Corpus) RandomMutationTargetSequence() (calls.CallSequence, error) {
 	// If we didn't initialize a chooser, return an error
 	if c.mutationTargetSequenceChooser == nil {
-		fmt.Printf("No mutation target sequence chooser error")
+		//fmt.Printf("No mutation target sequence chooser error")
 		return nil, fmt.Errorf("corpus could not return a random call sequence because the corpus was not initialized")
 	}
 
 	// Pick a random call sequence, then clone it before returning it, so the original is untainted.
 	seq, err := c.mutationTargetSequenceChooser.Choose()
 	if seq == nil || err != nil {
-		fmt.Printf("Seq is nil or got error while choosing target sequence")
+		//fmt.Printf("Seq is nil or got error while choosing target sequence")
 		return nil, err
 	}
-	fmt.Printf("We have a sequence!")
+	//fmt.Printf("We have a sequence!")
 	return seq.Clone()
 }
 
@@ -428,7 +428,7 @@ func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	// Prior to thread locking, if we have no un-executed call sequences, quit.
 	// This is a speed optimization, as thread locking on a central component affects performance.
 	if len(c.unexecutedCallSequences) == 0 {
-		fmt.Printf("No unexecuted call sequences found")
+		//fmt.Printf("No unexecuted call sequences found")
 		return nil
 	}
 
@@ -439,7 +439,7 @@ func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	// Check that we have an item now that the thread is locked. This must be performed again as an item could've
 	// been removed between time of check (the prior exit condition) and time of use (thread locked operations).
 	if len(c.unexecutedCallSequences) == 0 {
-		fmt.Printf("No unexecuted call sequences found after locking")
+		//fmt.Printf("No unexecuted call sequences found after locking")
 		return nil
 	}
 
@@ -447,7 +447,7 @@ func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	firstSequence := c.unexecutedCallSequences[0]
 	c.unexecutedCallSequences = c.unexecutedCallSequences[1:]
 
-	fmt.Printf("Found unexecuted call sequence")
+	//fmt.Printf("Found unexecuted call sequence")
 	// Return the first sequence
 	return &firstSequence
 }
