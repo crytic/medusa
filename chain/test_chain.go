@@ -183,7 +183,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
-		Buffer:                  make([]byte, 100_000_000),
+		Buffer:                  make([]byte, 200_000_000),
 	}
 
 	// Add our internal tracers to this chain.
