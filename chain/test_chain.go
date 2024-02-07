@@ -202,6 +202,10 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	return chain, nil
 }
 
+func (t *TestChain) Close() {
+	t.keyValueStore = nil
+}
+
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
 // but does not perform any other API-related changes such as adding additional tracers the original had. Additionally,
 // this does not clone pending blocks. The provided method, if non-nil, is used as callback to provide an intermediate
