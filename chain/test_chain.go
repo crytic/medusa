@@ -77,6 +77,8 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	Buffer []byte
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -181,6 +183,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
+		Buffer:                  make([]byte, 100_000_000),
 	}
 
 	// Add our internal tracers to this chain.
