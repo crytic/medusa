@@ -210,6 +210,9 @@ func (t *TestChain) Close() {
 	t.vmConfigExtensions = nil
 	t.callTracerRouter = nil
 	t.transactionTracerRouter = nil
+	t.state = nil
+	t.stateDatabase = nil
+	
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
