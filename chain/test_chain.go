@@ -203,9 +203,19 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 }
 
 func (t *TestChain) Close() {
+	// Nil key value store
+	t.keyValueStore.Close()
 	t.keyValueStore = nil
+
+	// Close db
+	t.db.Close()
+	t.db = nil
+
+	// Nil chain config
+	t.chainConfig.ShanghaiTime = nil
 	t.chainConfig = nil
 	t.testChainConfig = nil
+
 	t.genesisDefinition = nil
 	t.vmConfigExtensions = nil
 	t.callTracerRouter = nil
@@ -215,7 +225,6 @@ func (t *TestChain) Close() {
 	t.blocks = nil
 	t.pendingBlock = nil
 	t.BlockGasLimit = 0
-	t.db = nil
 
 }
 
