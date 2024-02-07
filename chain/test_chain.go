@@ -183,7 +183,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
-		Buffer:                  make([]byte, 150_000_000),
+		Buffer:                  make([]byte, 100_000_000),
 	}
 
 	// Add our internal tracers to this chain.
@@ -215,6 +215,8 @@ func (t *TestChain) Close() {
 	t.blocks = nil
 	t.pendingBlock = nil
 	t.BlockGasLimit = 0
+	t.db = nil
+
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
