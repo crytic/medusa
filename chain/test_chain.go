@@ -212,7 +212,9 @@ func (t *TestChain) Close() {
 	t.transactionTracerRouter = nil
 	t.state = nil
 	t.stateDatabase = nil
-	
+	t.blocks = nil
+	t.pendingBlock = nil
+	t.BlockGasLimit = 0
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
