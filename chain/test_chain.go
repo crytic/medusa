@@ -206,6 +206,8 @@ func (t *TestChain) Close() {
 	t.keyValueStore = nil
 	t.chainConfig = nil
 	t.testChainConfig = nil
+	t.genesisDefinition = nil
+	t.vmConfigExtensions = nil
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
