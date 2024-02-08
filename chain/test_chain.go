@@ -110,7 +110,8 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
-		//Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
+		// Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
+		Alloc:      make(core.GenesisAlloc, 0), // cloned to avoid concurrent access issues across cloned chains
 		Number:     0,
 		GasUsed:    0,
 		ParentHash: common.Hash{},
