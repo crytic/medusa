@@ -162,7 +162,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 
 	// Create our state database over-top our database.
 	stateDatabase := state.NewDatabaseWithConfig(db, &trie.Config{
-		Cache: 256, // this is important in keeping the database performant, so it does not need to fetch repetitively.
+		Cache: 0, // this is important in keeping the database performant, so it does not need to fetch repetitively.
 	})
 
 	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
