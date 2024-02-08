@@ -69,13 +69,15 @@ func getCheatCodeProviders() (*cheatCodeTracer, []*CheatCodeContract, error) {
 	}
 
 	// Obtain the console.log pre-compile
-	consoleCheatCodeContract, err := getConsoleLogCheatCodeContract(tracer)
+	/*consoleCheatCodeContract, err := getConsoleLogCheatCodeContract(tracer)
 	if err != nil {
 		return nil, nil, err
-	}
+	}*/
 
 	// Return the tracer and precompiles
-	return tracer, []*CheatCodeContract{stdCheatCodeContract, consoleCheatCodeContract}, nil
+	//return tracer, []*CheatCodeContract{stdCheatCodeContract, consoleCheatCodeContract}, nil
+	return tracer, []*CheatCodeContract{stdCheatCodeContract}, nil
+
 }
 
 // newCheatCodeContract returns a new precompiledContract which uses the attached cheatCodeTracer for execution
