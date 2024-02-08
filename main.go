@@ -21,7 +21,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				filename := "heap" + strconv.FormatInt(int64(i), 10) + ".prof"
+				filename := "heap" + strconv.FormatInt(int64(i)%3, 10) + ".prof"
 				f, _ := utils.CreateFile("pprof", filename)
 				defer f.Close()
 				runtime.GC()
@@ -32,7 +32,7 @@ func main() {
 			}
 		}
 	}()
-	
+
 	f, _ := os.Create("trace.out")
 	trace.Start(f)
 	defer trace.Stop()

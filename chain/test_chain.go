@@ -190,7 +190,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer, true, true)
-		// cheatTracer.bindToChain(chain)
+		cheatTracer.bindToChain(chain)
 	}
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
