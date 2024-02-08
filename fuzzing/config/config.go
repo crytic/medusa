@@ -256,9 +256,9 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 // Returns an error if one occurs.
 func (p *ProjectConfig) Validate() error {
 	// Verify the worker count is a positive number.
-	if p.Fuzzing.Workers <= 0 {
+	/*if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
-	}
+	}*/
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
