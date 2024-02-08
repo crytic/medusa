@@ -130,23 +130,24 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
 
 	// Obtain our cheatcode providers
-	cheatTracer, cheatContracts, err := getCheatCodeProviders()
-	if err != nil {
-		return nil, err
-	}
+	/*
+		cheatTracer, cheatContracts, err := getCheatCodeProviders()
+		if err != nil {
+			return nil, err
+		}*/
 
 	// Add all cheat code contract addresses to the genesis config. This is done because cheat codes are implemented
 	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
 	// newer solidity versions perform code size checks prior to external calls.
 	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
-		for _, cheatContract := range cheatContracts {
+		/*for _, cheatContract := range cheatContracts {
 			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
 				Balance: big.NewInt(0),
 				Code:    []byte{0xFF},
 			}
 			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
-		}
+		}*/
 	}
 
 	// Create an in-memory database
@@ -188,10 +189,10 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 
 	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
-	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+	/*if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer, true, true)
 		cheatTracer.bindToChain(chain)
-	}
+	}*/
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
 	stateDB, err := chain.StateAfterBlockNumber(0)
