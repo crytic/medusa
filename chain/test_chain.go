@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
 
@@ -110,8 +111,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
-		// Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
-		Alloc:      make(core.GenesisAlloc, 0), // cloned to avoid concurrent access issues across cloned chains
+		Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
 		Number:     0,
 		GasUsed:    0,
 		ParentHash: common.Hash{},
