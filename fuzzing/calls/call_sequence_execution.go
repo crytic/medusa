@@ -112,10 +112,10 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			}
 
 			// Update our chain reference for this element.
-			callSequenceElement.ChainReference = &CallSequenceElementChainReference{
+			/*callSequenceElement.ChainReference = &CallSequenceElementChainReference{
 				Block:            chain.PendingBlock(),
 				TransactionIndex: len(chain.PendingBlock().Messages) - 1,
-			}
+			}*/
 
 			// Add to our executed call sequence
 			callSequenceExecuted = append(callSequenceExecuted, callSequenceElement)

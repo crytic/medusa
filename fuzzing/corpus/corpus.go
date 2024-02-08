@@ -383,6 +383,9 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	// Obtain our coverage maps for our last call.
 	lastCall := callSequence[len(callSequence)-1]
 	lastCallChainReference := lastCall.ChainReference
+	if lastCallChainReference == nil {
+		return nil
+	}
 	lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
 	lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
 
