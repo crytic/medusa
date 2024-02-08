@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
 
@@ -78,7 +77,7 @@ type TestChain struct {
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
 
-	Buffer []byte
+	//Buffer []byte
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -111,7 +110,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		Difficulty: common.Big0,
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
-		Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
+		//Alloc:      maps.Clone(genesisAlloc), // cloned to avoid concurrent access issues across cloned chains
 		Number:     0,
 		GasUsed:    0,
 		ParentHash: common.Hash{},
@@ -183,7 +182,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
-		Buffer:                  make([]byte, 100_000_000),
+		//Buffer:                  make([]byte, 50_000_000),
 	}
 
 	// Add our internal tracers to this chain.
