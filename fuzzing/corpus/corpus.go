@@ -380,6 +380,11 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 		return nil
 	}
 
+	// TODO: Remove me
+	if true {
+		return nil
+	}
+
 	// Obtain our coverage maps for our last call.
 	lastCall := callSequence[len(callSequence)-1]
 	lastCallChainReference := lastCall.ChainReference

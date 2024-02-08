@@ -191,6 +191,10 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.baseSequence = make(calls.CallSequence, g.worker.fuzzer.config.Fuzzing.CallSequenceLength)
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
+	// TODO: REmove me
+	if true {
+		return true, nil
+	}
 	//fmt.Printf("Base sequence created")
 
 	// Check if there are any previously une-xecuted corpus call sequences. If there are, the fuzzer should execute
