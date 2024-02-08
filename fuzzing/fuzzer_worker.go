@@ -250,83 +250,87 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
 	}()
-
-	// Initialize a new sequence within our sequence generator.
-	//fmt.Printf("Initializing new call sequence")
-	var isNewSequence bool
-	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
-	if err != nil {
-		return nil, nil, err
-	}
-	//fmt.Printf("Done initializing a new call sequence")
-
-	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
-	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
-	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
-		//fmt.Printf("FetchElementFunc: Popping a new sequence element")
-		return fw.sequenceGenerator.PopSequenceElement()
-	}
-
-	// Our "post execution check function" method will check coverage and call all testing functions. If one returns a
-	// request for a shrunk call sequence, we exit our call sequence execution immediately to go fulfill the shrink
-	// request.
-	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-		// Check for updates to coverage and corpus.
-		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
-		//fmt.Printf("executionCheckFunc: Successfully updated coverage")
+	/*
+		// Initialize a new sequence within our sequence generator.
+		//fmt.Printf("Initializing new call sequence")
+		var isNewSequence bool
+		isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 		if err != nil {
-			return true, err
+			return nil, nil, err
+		}
+		//fmt.Printf("Done initializing a new call sequence")
+
+		// Define our shrink requests we'll collect during execution.
+		shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
+
+		// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
+		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+			//fmt.Printf("FetchElementFunc: Popping a new sequence element")
+			return fw.sequenceGenerator.PopSequenceElement()
 		}
 
-		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
-		// this call sequence.
-		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
-			newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
-			//fmt.Printf("executionCheckFunc: Successfully ran a call sequence test func")
+		// Our "post execution check function" method will check coverage and call all testing functions. If one returns a
+		// request for a shrunk call sequence, we exit our call sequence execution immediately to go fulfill the shrink
+		// request.
+		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
+			// Check for updates to coverage and corpus.
+			// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+			err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+			//fmt.Printf("executionCheckFunc: Successfully updated coverage")
 			if err != nil {
 				return true, err
 			}
-			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
+
+			// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
+			// this call sequence.
+			for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
+				newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
+				//fmt.Printf("executionCheckFunc: Successfully ran a call sequence test func")
+				if err != nil {
+					return true, err
+				}
+				shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
+			}
+
+			// Update our metrics
+			fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
+			//fmt.Printf("executionCheckFunc: Successfully tested a call in a call sequence")
+
+			// If our fuzzer context is done, exit out immediately without results.
+			if utils.CheckContextDone(fw.fuzzer.ctx) {
+				return true, nil
+			}
+
+			// If we have shrink requests, it means we violated a test, so we quit at this point
+			return len(shrinkCallSequenceRequests) > 0, nil
 		}
 
-		// Update our metrics
-		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
-		//fmt.Printf("executionCheckFunc: Successfully tested a call in a call sequence")
+		// Execute our call sequence.
+		testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
-		// If our fuzzer context is done, exit out immediately without results.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
-			return true, nil
+		// If we encountered an error, report it.
+		if err != nil {
+			return nil, nil, err
 		}
-
-		// If we have shrink requests, it means we violated a test, so we quit at this point
-		return len(shrinkCallSequenceRequests) > 0, nil
-	}
-
-	// Execute our call sequence.
-	testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
-
-	// If we encountered an error, report it.
-	if err != nil {
-		return nil, nil, err
-	}
-
+	*/
 	// If our fuzzer context is done, exit out immediately without results.
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
 		return nil, nil, nil
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
-	if !isNewSequence {
-		for _, shrinkRequest := range shrinkCallSequenceRequests {
-			shrinkRequest.RecordResultInCorpus = false
+	/*
+		if !isNewSequence {
+			for _, shrinkRequest := range shrinkCallSequenceRequests {
+				shrinkRequest.RecordResultInCorpus = false
+			}
 		}
-	}
-
+	*/
 	// Return our results accordingly.
-	return testedCallSequence, shrinkCallSequenceRequests, nil
+	//return testedCallSequence, shrinkCallSequenceRequests, nil
+	return nil, shrinkCallSequenceRequests, nil
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
