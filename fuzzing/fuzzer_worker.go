@@ -532,6 +532,9 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		return false, err
 	}
 
+	// Defer the closing of the test chain object
+	defer fw.chain.Close()
+
 	// Emit an event indicating the worker has setup its chain.
 	err = fw.Events.FuzzerWorkerChainSetup.Publish(FuzzerWorkerChainSetupEvent{
 		Worker: fw,

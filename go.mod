@@ -70,4 +70,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20230811005223-cee04520a2f9
+replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20240209160711-dfded09070ca
