@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
 	"math/big"
 	"os"
-
-	"github.com/crytic/medusa/compilation"
-	"github.com/crytic/medusa/utils"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -208,6 +207,9 @@ type LoggingConfig struct {
 	// LogDirectory describes what directory log files should be outputted in/ LogDirectory being a non-empty string is
 	// equivalent to enabling file logging.
 	LogDirectory string `json:"logDirectory"`
+
+	// NoColor indicates whether or not log messages should be displayed with colored formatting.
+	NoColor bool `json:"noColor"`
 }
 
 // ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now

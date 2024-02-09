@@ -88,10 +88,15 @@ type Fuzzer struct {
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
-	// Create the global logger and add stdout as an unstructured, colored output stream
+	// Disable colors if requested
+	if config.Logging.NoColor {
+		colors.DisableColor()
+	}
+
+	// Create the global logger and add stdout as an unstructured output stream
 	// Note that we are not using the project config's log level because we have not validated it yet
-	logging.GlobalLogger = logging.NewLogger(zerolog.InfoLevel)
-	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, true)
+	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
+	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
 
 	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
 	if config.Logging.LogDirectory != "" {
@@ -184,7 +189,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
-
 	return fuzzer, nil
 }
 
@@ -327,7 +331,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
-// definitions, as well as those added by Fuzzer.AddCompilationTargets. The target contracts is defined by
+// definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,

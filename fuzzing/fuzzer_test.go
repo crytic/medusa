@@ -238,11 +238,13 @@ func TestCheatCodes(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 
-				// Some tests require full sequence + revert to test fully
+				// some tests require full sequence + revert to test fully
 				config.Fuzzing.Workers = 3
 				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
+
+				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
@@ -263,8 +265,8 @@ func TestConsoleLog(t *testing.T) {
 	// These are the logs that should show up in the execution trace
 	expectedLogs := []string{
 		"2",
-		"68656c6c6f20776f726c64",
-		"62797465",
+		"hello world",
+		"byte",
 		"i is 2",
 		"% bool is true, addr is 0x0000000000000000000000000000000000000000, u is 100",
 	}
@@ -425,6 +427,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 				config.Fuzzing.Testing.StopOnNoTests = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.TestAllContracts = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Subscribe to any mined block events globally. When receiving them, check contract changes for a

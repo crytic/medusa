@@ -55,7 +55,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TransactionGasLimit:    12_500_000,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
-				StopOnFailedContractMatching: true,
+				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
@@ -85,6 +85,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",
+			NoColor:      false,
 		},
 	}
 
