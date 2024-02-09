@@ -77,8 +77,6 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
-
-	//Buffer []byte
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -130,24 +128,23 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
 
 	// Obtain our cheatcode providers
-	/*
-		cheatTracer, cheatContracts, err := getCheatCodeProviders()
-		if err != nil {
-			return nil, err
-		}*/
+	cheatTracer, cheatContracts, err := getCheatCodeProviders()
+	if err != nil {
+		return nil, err
+	}
 
 	// Add all cheat code contract addresses to the genesis config. This is done because cheat codes are implemented
 	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
 	// newer solidity versions perform code size checks prior to external calls.
 	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
-		/*for _, cheatContract := range cheatContracts {
+		for _, cheatContract := range cheatContracts {
 			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
 				Balance: big.NewInt(0),
 				Code:    []byte{0xFF},
 			}
 			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
-		}*/
+		}
 	}
 
 	// Create an in-memory database
@@ -189,10 +186,10 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 
 	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
-	/*if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer, true, true)
 		cheatTracer.bindToChain(chain)
-	}*/
+	}
 
 	// Obtain the state for the genesis block and set it as the chain's current state.
 	stateDB, err := chain.StateAfterBlockNumber(0)
@@ -203,7 +200,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	return chain, nil
 }
 
-func (t *TestChain) Close() {
+/*func (t *TestChain) Close() {
 	// Nil key value store
 	t.keyValueStore.Close()
 	t.keyValueStore = nil
@@ -226,8 +223,7 @@ func (t *TestChain) Close() {
 	t.blocks = nil
 	t.pendingBlock = nil
 	t.BlockGasLimit = 0
-
-}
+}*/
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
 // but does not perform any other API-related changes such as adding additional tracers the original had. Additionally,
