@@ -265,8 +265,8 @@ func TestConsoleLog(t *testing.T) {
 	// These are the logs that should show up in the execution trace
 	expectedLogs := []string{
 		"2",
-		"hello world",
-		"byte",
+		"68656c6c6f20776f726c64", // This is "hello world" in hex
+		"62797465",               // This is "byte" in hex
 		"i is 2",
 		"% bool is true, addr is 0x0000000000000000000000000000000000000000, u is 100",
 	}
