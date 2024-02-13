@@ -199,6 +199,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	return chain, nil
 }
 
+// Close will release any objects from the TestChain that must be _explicitly_ released. Currently, the one object that
+// must be explicitly released is the stateDB trie's underlying cache. This cache, if not released, prevents the TestChain
+// object from being freed by the garbage collector and causes a severe memory leak.
+func (t *TestChain) Close() {
+	// Reset the state DB's cache
+	t.stateDatabase.TrieDB().ResetCache()
+}
+
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
 // but does not perform any other API-related changes such as adding additional tracers the original had. Additionally,
 // this does not clone pending blocks. The provided method, if non-nil, is used as callback to provide an intermediate
