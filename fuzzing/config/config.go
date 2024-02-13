@@ -132,6 +132,9 @@ type AssertionTestingConfig struct {
 // AssertionModesConfig describes the configuration options for the various modes that can be enabled for assertion
 // testing
 type AssertionModesConfig struct {
+	// FailOnRevert describes whether a revert should be treated as a failing case
+	FailOnRevert bool `json:"failOnRevert"`
+
 	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
 	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
 

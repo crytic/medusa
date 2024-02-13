@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/exp/slices"
 	"sync"
 )
@@ -70,6 +71,13 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.
 	lastExecutionResult := lastCall.ChainReference.MessageResults().ExecutionResult
+
+	// Check for revert or require failures if FailOnRevert is set to true
+	if t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnRevert {
+		if lastExecutionResult.Err == vm.ErrExecutionReverted {
+			return &methodId, true, nil
+		}
+	}
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
 	failure := false
 	if panicCode != nil {

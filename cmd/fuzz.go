@@ -22,7 +22,7 @@ var fuzzCmd = &cobra.Command{
 	ValidArgsFunction: cmdValidFuzzArgs,
 	RunE:              cmdRunFuzz,
 	SilenceUsage:      true,
-	SilenceErrors:     true,
+	SilenceErrors:     false,
 }
 
 func init() {
