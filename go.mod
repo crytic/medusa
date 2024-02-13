@@ -13,10 +13,10 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/crypto v0.14.0
+	golang.org/x/crypto v0.19.0
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
-	golang.org/x/net v0.14.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/net v0.21.0
+	golang.org/x/sys v0.17.0
 )
 
 require (
@@ -64,7 +64,7 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
