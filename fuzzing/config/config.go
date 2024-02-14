@@ -63,6 +63,9 @@ type FuzzingConfig struct {
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
 
+	// ContractStartingBalance describes the starting balance that should be allocated to deployed contracts
+	ContractStartingBalance uint64 `json:"contractStartingBalance"`
+	
 	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
 	// compared to the previous.
 	MaxBlockNumberDelay uint64 `json:"blockNumberDelayMax"`
