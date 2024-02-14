@@ -426,6 +426,33 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 	}
 }
 
+// TestDeployedContractStartingBalance runs tests to ensure deployed contracts can be given a starting balance.
+func TestDeployedContractStartingBalance(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/deployments/starting_balance.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.DeploymentOrder = []string{"DeployedContractStartingBalance"}
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.ContractStartingBalance = 3_000
+				config.Fuzzing.TestLimit = 1_000
+				config.Fuzzing.Testing.StopOnFailedContractMatching = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for any failed tests
+				assertFailedTestsExpected(f, false)
+			},
+		})
+	}
+}
+
 // TestExecutionTraces runs tests to ensure that execution traces capture information
 // regarding assertion failures, revert reasons, etc.
 func TestExecutionTraces(t *testing.T) {
