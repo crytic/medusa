@@ -396,10 +396,40 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
 					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
 				}
+				// Obtain deployed contract address
+				contractAddress := block.MessageResults[0].Receipt.ContractAddress
 
+				if fuzzer.config.Fuzzing.ContractStartingBalance > 0 {
+					// Create a new call message to give the contract starting balance
+					msg = calls.NewCallMessage(fuzzer.deployer, &contractAddress, 0, big.NewInt(int64(fuzzer.config.Fuzzing.ContractStartingBalance)), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, nil)
+					msg.FillFromTestChainProperties(testChain)
+
+					// Create a new pending block we'll commit to chain
+					block, err = testChain.PendingBlockCreate()
+					if err != nil {
+						return err
+					}
+
+					// Add transaction to the block
+					err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+					if err != nil {
+						return err
+					}
+
+					// Commit the pending block to the chain, so it becomes the new head.
+					err = testChain.PendingBlockCommit()
+					if err != nil {
+						return err
+					}
+
+					// Ensure our transaction succeeded
+					if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+						return fmt.Errorf("tx to increase contract balance returned a failed status: %v. Do you have a receive function in your contract? ", block.MessageResults[0].ExecutionResult.Err)
+					}
+				}
 				// Record our deployed contract so the next config-specified constructor args can reference this
 				// contract by name.
-				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
+				deployedContractAddr[contractName] = contractAddress
 
 				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
 				// inner loop to process the next contract to deploy in the outer loop.
