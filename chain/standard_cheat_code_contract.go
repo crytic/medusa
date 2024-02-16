@@ -452,7 +452,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Use a fixed array and copy the data over
 			var bArray [32]byte
-			copy(bArray[:], bSlice[:32])
+			copy(bArray[:], bSlice)
 
 			return []any{bArray}, nil
 		},
