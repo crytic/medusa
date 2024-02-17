@@ -36,6 +36,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			WorkerResetLimit:   50,
 			Timeout:            0,
 			TestLimit:          0,
+			ShrinkLimit:        5_000,
 			CallSequenceLength: 100,
 			DeploymentOrder:    []string{},
 			ConstructorArgs:    map[string]map[string]any{},
