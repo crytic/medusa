@@ -41,7 +41,6 @@ type FuzzingConfig struct {
 	TestLimit uint64 `json:"testLimit"`
 
 	// ShrinkLimit describes a threshold for the iterations (call sequence tests) which shrinking should perform.
-	// This value must be greater than zero.
 	ShrinkLimit uint64 `json:"shrinkLimit"`
 
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
