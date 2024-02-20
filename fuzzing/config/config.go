@@ -280,30 +280,30 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
-		return errors.New("worker count must be a positive number")
+		return errors.New("project configuration must specify a positive number for the worker count")
 	}
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("call sequence length must be a positive number")
+		return errors.New("project configuration must specify a positive number for the transaction sequence lengt")
 	}
 
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
-		return errors.New("worker reset limit must be a positive number")
+		return errors.New("project configuration must specify a positive number for the worker reset limit")
 	}
 
 	// Verify timeout
 	if p.Fuzzing.Timeout < 0 {
-		return errors.New("timeout must be a positive number")
+		return errors.New("project configuration must specify a positive number for the timeout")
 	}
 
 	// Verify gas limits are appropriate
 	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
-		return errors.New("project config must specify a block gas limit which is not less than the transaction gas limit")
+		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
 	}
 	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project config must specify a block and transaction gas limit which are non-zero")
+		return errors.New("project configuration must specify a block and transaction gas limit which are non-zero")
 	}
 
 	// Log warning if max block delay is zero
@@ -321,12 +321,12 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that senders are well-formed addresses
 	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
-		return errors.New("sender address(es) must be well-formed")
+		return errors.New("project configuration must specify only well-formed sender address(es)")
 	}
 
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
-		return errors.New("deployer address must be well-formed")
+		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
 	// Ensure that the log level is a valid one

@@ -421,8 +421,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("%v was specified in the target contracts (see fuzzing.targetContracts in the "+
-				"project config or the --target-contracts CLI flag) but was not found in the compilation artifacts", contractName)
+			return fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
 	return nil
