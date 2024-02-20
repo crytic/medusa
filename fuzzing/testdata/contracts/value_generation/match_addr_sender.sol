@@ -8,7 +8,7 @@ contract TestContract {
         sender = msg.sender;
     }
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: a should not be sender's address who set it.
         return a != sender;
     }

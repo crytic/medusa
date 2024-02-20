@@ -6,7 +6,7 @@ contract TestContractChild {
         assert(false);
     }
 
-    function fuzz_failing_property_test_method_child() public view returns (bool) {
+    function property_failing_property_test_method_child() public view returns (bool) {
         return false;
     }
 }
@@ -22,7 +22,7 @@ contract TestContract {
         assert(false);
     }
 
-    function fuzz_failing_property_test_method() public view returns (bool) {
+    function property_failing_property_test_method() public view returns (bool) {
         return false;
     }
 }

@@ -24,7 +24,7 @@ contract GenerateAllTypes {
         s = "";
     }
 
-    function fuzz_never_fail() public view returns (bool) {
+    function property_never_fail() public view returns (bool) {
         // ASSERTION: never fail, to keep testing value generation
         return true;
     }
