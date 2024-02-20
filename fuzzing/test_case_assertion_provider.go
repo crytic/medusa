@@ -5,7 +5,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"sync"

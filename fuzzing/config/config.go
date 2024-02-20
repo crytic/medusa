@@ -280,26 +280,22 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
-		return errors.New("worker count must be a positive number (update fuzzing.workers in the project config " +
-			"or use the --workers CLI flag)")
+		return errors.New("worker count must be a positive number")
 	}
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("call sequence length must be a positive number (update fuzzing.callSequenceLength in " +
-			"the project config or use the --seq-len CLI flag)")
+		return errors.New("call sequence length must be a positive number")
 	}
 
 	// Verify the worker reset limit is a positive number
 	if p.Fuzzing.WorkerResetLimit <= 0 {
-		return errors.New("worker reset limit must be a positive number (update fuzzing.workerResetLimit in the " +
-			"project config)")
+		return errors.New("worker reset limit must be a positive number")
 	}
 
 	// Verify timeout
 	if p.Fuzzing.Timeout < 0 {
-		return errors.New("timeout must be a positive number (update fuzzing.timeout in the project config or " +
-			"use the --timeout CLI flag)")
+		return errors.New("timeout must be a positive number")
 	}
 
 	// Verify gas limits are appropriate
@@ -325,14 +321,12 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that senders are well-formed addresses
 	if _, err := utils.HexStringsToAddresses(p.Fuzzing.SenderAddresses); err != nil {
-		return errors.New("sender address(es) must be well-formed (update fuzzing.senderAddresses in the project " +
-			"config or use the --senders CLI flag)")
+		return errors.New("sender address(es) must be well-formed")
 	}
 
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
-		return errors.New("deployer address must be well-formed (update fuzzing.deployerAddress in the project " +
-			"config or use the --deployer CLI flag)")
+		return errors.New("deployer address must be well-formed")
 	}
 
 	// Ensure that the log level is a valid one
