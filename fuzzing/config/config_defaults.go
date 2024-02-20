@@ -4,6 +4,7 @@ import (
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/rs/zerolog"
+	"math/big"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -32,15 +33,16 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
-			Workers:            10,
-			WorkerResetLimit:   50,
-			Timeout:            0,
-			TestLimit:          0,
-			CallSequenceLength: 100,
-			DeploymentOrder:    []string{},
-			ConstructorArgs:    map[string]map[string]any{},
-			CorpusDirectory:    "",
-			CoverageEnabled:    true,
+			Workers:                 10,
+			WorkerResetLimit:        50,
+			Timeout:                 0,
+			TestLimit:               0,
+			CallSequenceLength:      100,
+			TargetContracts:         []string{},
+			TargetContractsBalances: []*big.Int{},
+			ConstructorArgs:         map[string]map[string]any{},
+			CorpusDirectory:         "",
+			CoverageEnabled:         true,
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -58,20 +60,20 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				TestAllContracts:             false,
 				TraceAll:                     false,
 				AssertionTesting: AssertionTestingConfig{
-					Enabled:         false,
+					Enabled:         true,
 					TestViewMethods: false,
-					AssertionModes: AssertionModesConfig{
+					PanicCodeConfig: PanicCodeConfig{
 						FailOnAssertion: true,
 					},
 				},
-				PropertyTesting: PropertyTestConfig{
+				PropertyTesting: PropertyTestingConfig{
 					Enabled: true,
 					TestPrefixes: []string{
-						"fuzz_",
+						"property_",
 					},
 				},
 				OptimizationTesting: OptimizationTestingConfig{
-					Enabled: false,
+					Enabled: true,
 					TestPrefixes: []string{
 						"optimize_",
 					},

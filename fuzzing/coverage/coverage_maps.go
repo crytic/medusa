@@ -2,7 +2,6 @@ package coverage
 
 import (
 	"bytes"
-	"fmt"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -373,5 +372,8 @@ func (cm *CoverageMapBytecodeData) setCoveredAt(codeSize int, pc uint64) (bool, 
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.executedFlags))
+
+	// Since it is possible that the program counter is larger than the code size (e.g., malformed bytecode), we will
+	// simply return false with no error
+	return false, nil
 }

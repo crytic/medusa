@@ -3,14 +3,20 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"os"
-
 	"github.com/crytic/medusa/chain/config"
-	"github.com/rs/zerolog"
-
 	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/rs/zerolog"
+	"math/big"
+	"os"
 )
+
+// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
+// templates defined below. They should be preserved for re-use in case we change our structures.
+//go:generate go get github.com/fjl/gencodec
+//go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
 
 type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
@@ -50,10 +56,15 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	// DeploymentOrder determines the order in which the contracts should be deployed
-	DeploymentOrder []string `json:"deploymentOrder"`
+	// TargetContracts are the target contracts for fuzz testing
+	TargetContracts []string `json:"targetContracts"`
 
-	// Constructor arguments for contracts deployment. It is available only in init mode
+	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
+	// TargetContracts
+	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+
+	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
+	// configuration
 	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
 
 	// DeployerAddress describe the account address to be used to deploy contracts.
@@ -85,6 +96,13 @@ type FuzzingConfig struct {
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
+// fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
+// have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
+// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
+type fuzzingConfigMarshaling struct {
+	TargetContractsBalances []*hexutil.Big
+}
+
 // TestingConfig describes the configuration options used for testing
 type TestingConfig struct {
 	// StopOnFailedTest describes whether the fuzzing.Fuzzer should stop after detecting the first failed test.
@@ -111,7 +129,7 @@ type TestingConfig struct {
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 
 	// PropertyTesting describes the configuration used for property testing.
-	PropertyTesting PropertyTestConfig `json:"propertyTesting"`
+	PropertyTesting PropertyTestingConfig `json:"propertyTesting"`
 
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
@@ -125,13 +143,12 @@ type AssertionTestingConfig struct {
 	// TestViewMethods dictates whether constant/pure/view methods should be tested.
 	TestViewMethods bool `json:"testViewMethods"`
 
-	// AssertionModes describes the various panic codes that can be enabled and be treated as a "failing case"
-	AssertionModes AssertionModesConfig `json:"assertionModes"`
+	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
+	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`
 }
 
-// AssertionModesConfig describes the configuration options for the various modes that can be enabled for assertion
-// testing
-type AssertionModesConfig struct {
+// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a failing assertion test
+type PanicCodeConfig struct {
 	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
 	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
 
@@ -163,8 +180,8 @@ type AssertionModesConfig struct {
 	FailOnCallUninitializedVariable bool `json:"failOnCallUninitializedVariable"`
 }
 
-// PropertyTestConfig describes the configuration options used for property testing
-type PropertyTestConfig struct {
+// PropertyTestingConfig describes the configuration options used for property testing
+type PropertyTestingConfig struct {
 	// Enabled describes whether testing is enabled.
 	Enabled bool `json:"enabled"`
 
@@ -255,6 +272,12 @@ func (p *ProjectConfig) WriteToFile(path string) error {
 // Validate validates that the ProjectConfig meets certain requirements.
 // Returns an error if one occurs.
 func (p *ProjectConfig) Validate() error {
+	// Create logger instance if global logger is available
+	logger := logging.NewLogger(zerolog.Disabled)
+	if logging.GlobalLogger != nil {
+		logger = logging.GlobalLogger.NewSubLogger("module", "fuzzer config")
+	}
+
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
@@ -262,7 +285,7 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence length")
+		return errors.New("project configuration must specify a positive number for the transaction sequence lengt")
 	}
 
 	// Verify the worker reset limit is a positive number
@@ -270,12 +293,30 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the worker reset limit")
 	}
 
+	// Verify timeout
+	if p.Fuzzing.Timeout < 0 {
+		return errors.New("project configuration must specify a positive number for the timeout")
+	}
+
 	// Verify gas limits are appropriate
 	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
 		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
 	}
 	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a block and transaction gas limit which is non-zero")
+		return errors.New("project configuration must specify a block and transaction gas limit which are non-zero")
+	}
+
+	// Log warning if max block delay is zero
+	if p.Fuzzing.MaxBlockNumberDelay == 0 {
+		logger.Warn("The maximum block number delay is set to zero. Please be aware that transactions will " +
+			"always be fit in the same block until the block gas limit is reached and that the block number will always " +
+			"increment by one.")
+	}
+
+	// Log warning if max timestamp delay is zero
+	if p.Fuzzing.MaxBlockTimestampDelay == 0 {
+		logger.Warn("The maximum timestamp delay is set to zero. Please be aware that block time jumps will " +
+			"always be exactly one.")
 	}
 
 	// Verify that senders are well-formed addresses
@@ -288,17 +329,10 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
-	// Verify property testing fields.
-	if p.Fuzzing.Testing.PropertyTesting.Enabled {
-		// Test prefixes must be supplied if property testing is enabled.
-		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
-			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
-		}
-	}
-
 	// Ensure that the log level is a valid one
-	if _, err := zerolog.ParseLevel(p.Logging.Level.String()); err != nil {
-		return err
+	level, err := zerolog.ParseLevel(p.Logging.Level.String())
+	if err != nil || level == zerolog.FatalLevel {
+		return errors.New("project config must specify a valid log level (trace, debug, info, warn, error, or panic)")
 	}
 
 	return nil
