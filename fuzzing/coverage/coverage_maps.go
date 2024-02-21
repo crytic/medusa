@@ -344,10 +344,9 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 		return true, nil
 	}
 
-	// Update each byte which represents a position in the bytecode which was covered. We ignore any size
-	// differences as init bytecode can have arbitrary length arguments appended.
+	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
-	for i := 0; i < len(cm.executedFlags) || i < len(coverageMap.executedFlags); i++ {
+	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
 		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
 			cm.executedFlags[i] = 1
 			changed = true
