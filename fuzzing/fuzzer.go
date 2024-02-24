@@ -661,9 +661,7 @@ func (f *Fuzzer) Start() error {
 		f.logger.Info(
 			colors.Bold, "corpus: ", colors.Reset,
 			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
-			"valid seqs: ", colors.Bold, corpusActiveSequences, colors.Reset, ", ",
-			"invalid seqs: ", colors.Bold, corpusTotalSequences-corpusActiveSequences, colors.Reset, ", ",
-			"total seqs: ", colors.Bold, corpusTotalSequences, colors.Reset,
+			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
 		)
 	}
 
