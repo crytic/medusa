@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/cmd/exitcodes"
 	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"os/signal"
@@ -159,6 +160,11 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 
 	// Start the fuzzing process with our cancellable context.
 	err = fuzzer.Start()
+
+	// If we have no error and failed test cases, we'll want to return a special exit code
+	if err == nil && len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
+		return exitcodes.NewErrorWithExitCode(err, exitcodes.ExitCodeTestFailed)
+	}
 
 	return err
 }
