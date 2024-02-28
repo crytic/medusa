@@ -189,6 +189,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			if callAbiValues != nil {
 				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
 				if sequenceInvalidError != nil {
+					sequenceInvalidError = fmt.Errorf("error resolving method in contract '%v': %v", currentSequenceElement.Contract.Name(), sequenceInvalidError)
 					return nil, nil
 				}
 			}
@@ -236,7 +237,9 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 // Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
 // (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
-func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) error {
+// Returns the active number of corpus items, total number of corpus items, or an error if one occurred. If an error
+// is returned, then the corpus counts returned will always be zero.
+func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) (int, int, error) {
 	// Acquire our call sequences lock during the duration of this method.
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
@@ -273,7 +276,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+		return 0, 0, fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 
 	// Set our coverage maps to those collected when replaying all blocks when cloning.
@@ -283,7 +286,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return err
+				return 0, 0, err
 			}
 		}
 	}
@@ -292,18 +295,22 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	// are added to the corpus for mutations, re-execution, etc.
 	err = c.initializeSequences(c.mutableSequenceFiles, testChain, deployedContracts, true)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	err = c.initializeSequences(c.immutableSequenceFiles, testChain, deployedContracts, false)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	return nil
+	// Calculate corpus health metrics
+	corpusSequencesTotal := len(c.mutableSequenceFiles.files) + len(c.immutableSequenceFiles.files) + len(c.testResultSequenceFiles.files)
+	corpusSequencesActive := len(c.unexecutedCallSequences)
+
+	return corpusSequencesActive, corpusSequencesTotal, nil
 }
 
 // addCallSequence adds a call sequence to the corpus in a given corpus directory.

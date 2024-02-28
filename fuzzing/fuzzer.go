@@ -513,8 +513,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	// Define a flag that indicates whether we have not cancelled o
 	working := !utils.CheckContextDone(f.ctx)
 
-	// Log that we are about to create the workers and start fuzzing
-	f.logger.Info("Creating ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers...")
+	// Create workers and start fuzzing.
 	var err error
 	for err == nil && working {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
@@ -617,6 +616,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set up the corpus
+	f.logger.Info("Initializing corpus")
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		f.logger.Error("Failed to create the corpus", err)
@@ -640,6 +640,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
+	f.logger.Info("Setting up base chain")
 	err = f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		f.logger.Error("Failed to initialize the test chain", err)
@@ -647,11 +648,25 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
+	var corpusActiveSequences, corpusTotalSequences int
+	f.logger.Info("Initializing and validating corpus call sequences")
+	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
 	}
+
+	// Log corpus health statistics, if we have any existing sequences.
+	if corpusTotalSequences > 0 {
+		f.logger.Info(
+			colors.Bold, "corpus: ", colors.Reset,
+			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
+			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
+		)
+	}
+
+	// Log the start of our fuzzing campaign.
+	f.logger.Info("Fuzzing with ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers")
 
 	// Start our printing loop now that we're about to begin fuzzing.
 	go f.printMetricsLoop()
