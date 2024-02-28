@@ -37,6 +37,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			WorkerResetLimit:        50,
 			Timeout:                 0,
 			TestLimit:               0,
+			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
 			TargetContractsBalances: []*big.Int{},

@@ -192,7 +192,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
 
-	// Check if there are any previously une-xecuted corpus call sequences. If there are, the fuzzer should execute
+	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
 	// those first.
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
 	if unexecutedSequence != nil {

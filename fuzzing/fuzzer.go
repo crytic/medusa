@@ -749,6 +749,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
 		workerStartupCount := f.metrics.WorkerStartupCount()
+		workersShrinking := f.metrics.WorkersShrinkingCount()
 
 		// Calculate time elapsed since the last update
 		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
@@ -767,6 +768,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
+			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		}
