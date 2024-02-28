@@ -293,15 +293,21 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 
 	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. Valid sequences
 	// are added to the corpus for mutations, re-execution, etc.
+	//
+	// The order of initializations here is important, as it determines the order of "unexecuted sequences" to replay
+	// when the fuzzer's worker starts up. We want to replay test results first, so that other corpus items
+	// do not trigger the same test failures instead.
+	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
+	if err != nil {
+		return 0, 0, err
+	}
+
 	err = c.initializeSequences(c.mutableSequenceFiles, testChain, deployedContracts, true)
 	if err != nil {
 		return 0, 0, err
 	}
+
 	err = c.initializeSequences(c.immutableSequenceFiles, testChain, deployedContracts, false)
-	if err != nil {
-		return 0, 0, err
-	}
-	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
 	if err != nil {
 		return 0, 0, err
 	}

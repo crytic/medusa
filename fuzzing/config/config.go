@@ -38,13 +38,16 @@ type FuzzingConfig struct {
 	// so that memory from its underlying chain is freed.
 	WorkerResetLimit int `json:"workerResetLimit"`
 
-	// Timeout describes a time in seconds for which the fuzzing operation should run. Providing negative or zero value
-	// will result in no timeout.
+	// Timeout describes a time threshold in seconds for which the fuzzing operation should run. Providing negative or
+	// zero value will result in no timeout.
 	Timeout int `json:"timeout"`
 
 	// TestLimit describes a threshold for the number of transactions to test, after which it will exit. This number
 	// must be non-negative. A zero value indicates the test limit should not be enforced.
 	TestLimit uint64 `json:"testLimit"`
+
+	// ShrinkLimit describes a threshold for the iterations (call sequence tests) which shrinking should perform.
+	ShrinkLimit uint64 `json:"shrinkLimit"`
 
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
