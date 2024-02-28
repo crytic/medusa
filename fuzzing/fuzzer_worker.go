@@ -468,6 +468,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
+				shrinkIteration++
 				if err != nil {
 					return nil, err
 				}
@@ -476,7 +477,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 				if validShrunkSequence {
 					optimizedSequence = possibleShrunkSequence
 				}
-				shrinkIteration++
 			}
 		}
 		fw.workerMetrics().shrinking = false
