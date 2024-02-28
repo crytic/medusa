@@ -205,7 +205,17 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	if cse.Contract == nil {
 		return nil, nil
 	}
-	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
+
+	// If we have a method resolved, return it.
+	if cse.Call != nil && cse.Call.DataAbiValues != nil {
+		if cse.Call.DataAbiValues.Method != nil {
+			return cse.Call.DataAbiValues.Method, nil
+		}
+	}
+
+	// Try to resolve the method by ID from the call data.
+	method, err := cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
+	return method, err
 }
 
 // String returns a displayable string representing the CallSequenceElement.
