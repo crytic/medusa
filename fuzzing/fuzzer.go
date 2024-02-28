@@ -3,6 +3,10 @@ package fuzzing
 import (
 	"context"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
 	"math/big"
 	"math/rand"
 	"os"
@@ -13,11 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/crytic/medusa/fuzzing/coverage"
-	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
-	"github.com/rs/zerolog"
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -93,7 +92,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if config.Logging.NoColor {
 		colors.DisableColor()
 	}
+
 	// Create the global logger and add stdout as an unstructured output stream
+	// Note that we are not using the project config's log level because we have not validated it yet
 	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
 	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
 
@@ -110,15 +111,18 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		logging.GlobalLogger.AddWriter(file, logging.UNSTRUCTURED, false)
 	}
 
-	// Get the fuzzer's custom sub-logger
-	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
-
 	// Validate our provided config
 	err := config.Validate()
 	if err != nil {
-		logger.Error("Invalid configuration", err)
+		logging.GlobalLogger.Error("Invalid configuration", err)
 		return nil, err
 	}
+
+	// Update the log level of the global logger now
+	logging.GlobalLogger.SetLevel(config.Logging.Level)
+
+	// Get the fuzzer's custom sub-logger
+	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
 
 	// Parse the senders addresses from our account config.
 	senders, err := utils.HexStringsToAddresses(config.Fuzzing.SenderAddresses)
@@ -330,19 +334,20 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) error {
-	// Verify contract deployment order is not empty. If it's empty, but we only have one contract definition,
-	// we can infer the deployment order. Otherwise, we report an error.
-	if len(fuzzer.config.Fuzzing.DeploymentOrder) == 0 {
+	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
+	// we can infer the target contracts. Otherwise, we report an error.
+	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
 		if len(fuzzer.contractDefinitions) == 1 {
-			fuzzer.config.Fuzzing.DeploymentOrder = []string{fuzzer.contractDefinitions[0].Name()}
+			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("you must specify a contract deployment order within your project configuration")
+			return fmt.Errorf("missing target contracts (update fuzzing.targetContracts in the project config " +
+				"or use the --target-contracts CLI flag)")
 		}
 	}
 
 	// Loop for all contracts to deploy
 	deployedContractAddr := make(map[string]common.Address)
-	for _, contractName := range fuzzer.config.Fuzzing.DeploymentOrder {
+	for i, contractName := range fuzzer.config.Fuzzing.TargetContracts {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
@@ -368,9 +373,15 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
 				}
 
+				// If our project config has a non-zero balance for this target contract, retrieve it
+				contractBalance := big.NewInt(0)
+				if len(fuzzer.config.Fuzzing.TargetContractsBalances) > i {
+					contractBalance = new(big.Int).Set(fuzzer.config.Fuzzing.TargetContractsBalances[i])
+				}
+
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
 				// gas limit rather than use tx gas limit)
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, big.NewInt(0), fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, contractBalance, fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
 				msg.FillFromTestChainProperties(testChain)
 
 				// Create a new pending block we'll commit to chain
@@ -410,7 +421,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("DeploymentOrder specified a contract name which was not found in the compilation: %v\n", contractName)
+			return fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
 	return nil

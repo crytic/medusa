@@ -195,14 +195,19 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []a
 
 	// If we could not correctly obtain the unpacked arguments in a nice display string (due to not having a resolved
 	// contract or method definition, or failure to unpack), we display as raw data in the worst case.
-	if outputArgumentsDisplayText == nil {
+	// TODO: Fix if return data is empty len byte array
+	if outputArgumentsDisplayText == nil && len(callFrame.ReturnData) > 0 {
 		temp := fmt.Sprintf("return_data=%v", hex.EncodeToString(callFrame.ReturnData))
 		outputArgumentsDisplayText = &temp
 	}
 
 	// Wrap our return message and output it at the end.
 	if callFrame.ReturnError == nil {
-		elements = append(elements, colors.GreenBold, fmt.Sprintf("[return (%v)]", *outputArgumentsDisplayText), colors.Reset, "\n")
+		if outputArgumentsDisplayText != nil {
+			elements = append(elements, colors.GreenBold, fmt.Sprintf("[return (%v)]", *outputArgumentsDisplayText), colors.Reset, "\n")
+		} else {
+			elements = append(elements, colors.GreenBold, "[return]", colors.Reset, "\n")
+		}
 		return elements
 	}
 

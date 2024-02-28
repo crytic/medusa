@@ -6,7 +6,7 @@ contract TestContract {
         s = value;
     }
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: s should not be the MAGIC_STRING
         return keccak256(abi.encodePacked((s))) != keccak256(abi.encodePacked((MAGIC_STRING)));
     }

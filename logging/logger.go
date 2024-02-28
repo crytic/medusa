@@ -5,7 +5,6 @@ import (
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -57,11 +56,11 @@ type StructuredLogInfo map[string]any
 func NewLogger(level zerolog.Level) *Logger {
 	return &Logger{
 		level:                    level,
-		structuredLogger:         zerolog.New(os.Stdout).Level(zerolog.Disabled),
+		structuredLogger:         zerolog.New(nil).Level(level),
 		structuredWriters:        make([]io.Writer, 0),
-		unstructuredLogger:       zerolog.New(os.Stdout).Level(zerolog.Disabled),
+		unstructuredLogger:       zerolog.New(nil).Level(level),
 		unstructuredWriters:      make([]io.Writer, 0),
-		unstructuredColorLogger:  zerolog.New(os.Stdout).Level(zerolog.Disabled),
+		unstructuredColorLogger:  zerolog.New(nil).Level(level),
 		unstructuredColorWriters: make([]io.Writer, 0),
 	}
 }
@@ -206,6 +205,7 @@ func (l *Logger) SetLevel(level zerolog.Level) {
 	l.structuredLogger = l.structuredLogger.Level(level)
 	l.unstructuredColorLogger = l.unstructuredColorLogger.Level(level)
 	l.unstructuredLogger = l.unstructuredLogger.Level(level)
+
 }
 
 // Trace is a wrapper function that will log a trace event

@@ -21,9 +21,9 @@ func TestFuzzerHooks(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_immediate.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
@@ -76,18 +76,18 @@ func TestAssertionMode(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAssertion = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAllocateTooMuchMemory = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnArithmeticUnderflow = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnCallUninitializedVariable = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnEnumTypeConversionOutOfBounds = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnDivideByZero = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
+				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAssertion = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnAllocateTooMuchMemory = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnArithmeticUnderflow = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnCallUninitializedVariable = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnEnumTypeConversionOutOfBounds = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnDivideByZero = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnIncorrectStorageAccess = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnOutOfBoundsArrayAccess = true
-				config.Fuzzing.Testing.AssertionTesting.AssertionModes.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -107,10 +107,10 @@ func TestAssertionsNotRequire(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_not_require.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -129,11 +129,10 @@ func TestAssertionsAndProperties(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_and_property_test.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = false
-			config.Fuzzing.Testing.PropertyTesting.Enabled = true
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -155,11 +154,10 @@ func TestOptimizationMode(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 10_000 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
-				config.Fuzzing.Testing.OptimizationTesting.Enabled = true
-				config.Fuzzing.TestLimit = 10_000 // this test should expose a failure quickly.
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -168,11 +166,10 @@ func TestOptimizationMode(t *testing.T) {
 
 				// Check the value found for optimization test
 				var testCases = f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
-				switch v := testCases[0].(type) {
-				case *OptimizationTestCase:
-					assert.EqualValues(t, v.Value().Cmp(big.NewInt(4241)), 0)
-				default:
-					t.Errorf("invalid test case found %T", v)
+				for _, testCase := range testCases {
+					if optimizationTestCase, ok := testCase.(*OptimizationTestCase); ok {
+						assert.EqualValues(t, optimizationTestCase.Value().Cmp(big.NewInt(4241)), 0)
+					}
 				}
 			},
 		})
@@ -185,11 +182,13 @@ func TestChainBehaviour(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/chain/tx_out_of_gas.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.Workers = 1
 			config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength) // we just need a few oog txs to test
 			config.Fuzzing.Timeout = 10                                          // to be safe, we set a 10s timeout
 			config.Fuzzing.TransactionGasLimit = 500000                          // we set this low, so contract execution runs out of gas earlier.
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -237,7 +236,7 @@ func TestCheatCodes(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
 
 				// some tests require full sequence + revert to test fully
 				config.Fuzzing.Workers = 3
@@ -266,8 +265,8 @@ func TestConsoleLog(t *testing.T) {
 	// These are the logs that should show up in the execution trace
 	expectedLogs := []string{
 		"2",
-		"hello world",
-		"byte",
+		"68656c6c6f20776f726c64", // This is "hello world" in hex
+		"62797465",               // This is "byte" in hex
 		"i is 2",
 		"% bool is true, addr is 0x0000000000000000000000000000000000000000, u is 100",
 	}
@@ -279,11 +278,10 @@ func TestConsoleLog(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.TestLimit = 10000
-				// enable assertion testing only
-				config.Fuzzing.Testing.PropertyTesting.Enabled = true
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -326,10 +324,12 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
+				config.Fuzzing.TargetContracts = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.StopOnFailedContractMatching = true
 				config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -347,10 +347,12 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/inner_deployment_on_construction.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
+			config.Fuzzing.TargetContracts = []string{"InnerDeploymentFactory"}
 			config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
 			config.Fuzzing.Testing.StopOnFailedContractMatching = true
 			config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -368,8 +370,33 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/internal_library.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestInternalLibrary"}
+			config.Fuzzing.TargetContracts = []string{"TestInternalLibrary"}
 			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+func TestDeploymentsWithPayableConstructors(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
+			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
+			config.Fuzzing.TestLimit = 1 // this should happen immediately
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -395,9 +422,11 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"InnerDeploymentFactory"}
+				config.Fuzzing.TargetContracts = []string{"InnerDeploymentFactory"}
 				config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.StopOnNoTests = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.TestAllContracts = true
 			},
 			method: func(f *fuzzerTestContext) {
@@ -442,9 +471,9 @@ func TestExecutionTraces(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -482,12 +511,11 @@ func TestTestingScope(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: "testdata/contracts/deployments/testing_scope.sol",
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.TestLimit = 1_000 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.TestAllContracts = testingAllContracts
 				config.Fuzzing.Testing.StopOnFailedTest = false
-				config.Fuzzing.Testing.AssertionTesting.Enabled = true
-				config.Fuzzing.Testing.PropertyTesting.Enabled = true
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -517,7 +545,7 @@ func TestDeploymentsWithArgs(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"DeploymentWithArgs", "Dependent"}
+			config.Fuzzing.TargetContracts = []string{"DeploymentWithArgs", "Dependent"}
 			config.Fuzzing.ConstructorArgs = map[string]map[string]any{
 				"DeploymentWithArgs": {
 					"_x": "123456789",
@@ -533,6 +561,8 @@ func TestDeploymentsWithArgs(t *testing.T) {
 			}
 			config.Fuzzing.Testing.StopOnFailedTest = false
 			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -550,8 +580,10 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/value_generation/generate_all_types.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"GenerateAllTypes"}
+			config.Fuzzing.TargetContracts = []string{"GenerateAllTypes"}
 			config.Fuzzing.TestLimit = 10_000
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -583,7 +615,9 @@ func TestValueGenerationSolving(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -639,8 +673,9 @@ func TestASTValueExtraction(t *testing.T) {
 		filePath: "testdata/contracts/value_generation/ast_value_extraction.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TestLimit = 1 // stop immediately to simply see what values were mined.
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -674,9 +709,11 @@ func TestVMCorrectness(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -693,7 +730,7 @@ func TestVMCorrectness(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_number_increasing.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
 		},
@@ -712,7 +749,7 @@ func TestVMCorrectness(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/vm_tests/block_hash_store_check.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 1_000          // this test should expose a failure quickly.
 			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
@@ -737,8 +774,10 @@ func TestCorpusReplayability(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/value_generation/match_uints_xy.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.CorpusDirectory = "corpus"
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
@@ -776,14 +815,16 @@ func TestCorpusReplayability(t *testing.T) {
 	})
 }
 
-// TestDeploymentOrderWithCoverage will ensure that changing the deployment order does not lead to the same coverage
-// This is also proof that changing the order changes the addresses of the contracts leading to the coverage not being
-// useful.
+// TestDeploymentOrderWithCoverage will ensure that changing the order of deployment for the target contracts does not
+// lead to the same coverage. This is also proof that changing the order changes the addresses of the contracts leading
+// to the coverage not being useful.
 func TestDeploymentOrderWithCoverage(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deployment_order.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"InheritedFirstContract", "InheritedSecondContract"}
+			config.Fuzzing.TargetContracts = []string{"InheritedFirstContract", "InheritedSecondContract"}
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
@@ -806,8 +847,8 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 				return nil
 			})
 
-			// Update the deployment order
-			f.fuzzer.config.Fuzzing.DeploymentOrder = []string{"InheritedSecondContract", "InheritedFirstContract"}
+			// Update the order of target contracts
+			f.fuzzer.config.Fuzzing.TargetContracts = []string{"InheritedSecondContract", "InheritedFirstContract"}
 
 			// Note that the fuzzer won't spin up any workers or fuzz anything. We just want to test that the coverage
 			// maps don't populate due to deployment order changes
