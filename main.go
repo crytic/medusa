@@ -13,7 +13,7 @@ func main() {
 
 	// If we have a special (non-zero/success) error code, then exit with it.
 	exitCode := exitcodes.GetErrorExitCode(err)
-	if exitCode != 0 {
+	if exitCode != exitcodes.ExitCodeSuccess {
 		fmt.Println(err.Error())
 		os.Exit(exitCode)
 	}
