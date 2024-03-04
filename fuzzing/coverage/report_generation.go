@@ -62,9 +62,9 @@ func exportCoverageReport(sourceAnalysis *SourceAnalysis, outputPath string) err
 			// Determine our precision string
 			formatStr := "%." + strconv.Itoa(decimals) + "f"
 
-			// If no lines are active and none are covered, show 100% coverage
+			// If no lines are active and none are covered, show 0% coverage
 			if x == 0 && y == 0 {
-				return fmt.Sprintf(formatStr, float64(100))
+				return fmt.Sprintf(formatStr, float64(0))
 			}
 			return fmt.Sprintf(formatStr, (float64(x)/float64(y))*100)
 		},

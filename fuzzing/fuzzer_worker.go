@@ -315,8 +315,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
 	if !isNewSequence {
-		for _, shrinkRequest := range shrinkCallSequenceRequests {
-			shrinkRequest.RecordResultInCorpus = false
+		for i := 0; i < len(shrinkCallSequenceRequests); i++ {
+			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
 		}
 	}
 
@@ -391,73 +391,95 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
 // calls which can be removed, and values which can be minimized, while continuing to satisfy the provided shrink
 // verifier.
+//
+// This function should *always* be called if there are shrink requests, and should always report a result,
+// even if it is the original sequence provided.
+//
 // Returns a call sequence that was optimized to include as little calls as possible to trigger the
 // expected conditions, or an error if one occurred.
 func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
 	// Define a variable to track our most optimized sequence across all optimization iterations.
 	optimizedSequence := callSequence
 
-	// First try to remove any calls we can. We go from start to end to avoid index shifting.
-	for i := 0; i < len(optimizedSequence); {
-		// If our fuzzer context is done, exit out immediately without results.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
-			return nil, nil
-		}
-
-		// Recreate our current optimized sequence without the item at this index
-		possibleShrunkSequence, err := optimizedSequence.Clone()
-		if err != nil {
-			return nil, err
-		}
-		possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
-
-		// Test the shrunken sequence.
-		validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
-		if err != nil {
-			return nil, err
-		}
-
-		// If this current sequence satisfied our conditions, set it as our optimized sequence.
-		if validShrunkSequence {
-			optimizedSequence = possibleShrunkSequence
-		} else {
-			// We didn't remove an item at this index, so we'll iterate to the next one.
-			i++
-		}
+	// Obtain our shrink limits and begin shrinking.
+	shrinkIteration := uint64(0)
+	shrinkLimit := fw.fuzzer.config.Fuzzing.ShrinkLimit
+	shrinkingEnded := func() bool {
+		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.ctx)
 	}
-
-	// Next try to shrink our values of every transaction a given number of rounds.
-	for i := 0; i < len(optimizedSequence); i++ {
-		for optimizationRound := 0; optimizationRound < 200; optimizationRound++ {
-			// If our fuzzer context is done, exit out immediately without results.
-			if utils.CheckContextDone(fw.fuzzer.ctx) {
-				return nil, nil
-			}
-
-			// Clone the optimized sequence.
-			possibleShrunkSequence, _ := optimizedSequence.Clone()
-
-			// Loop for each argument in the currently indexed call to mutate it.
-			abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
-			for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-				mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+	if shrinkLimit > 0 {
+		// The first pass of shrinking is greedy towards trying to remove any unnecessary calls.
+		// For each call in the sequence, the following removal strategies are used:
+		// 1) Plain removal (lower block/time gap between surrounding blocks, maintain properties of max delay)
+		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
+		// At worst, this costs `2 * len(callSequence)` shrink iterations.
+		fw.workerMetrics().shrinking = true
+		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
+			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
+				// Recreate our current optimized sequence without the item at this index
+				possibleShrunkSequence, err := optimizedSequence.Clone()
+				removedCall := possibleShrunkSequence[i]
 				if err != nil {
-					return nil, fmt.Errorf("error when shrinking call sequence input argument: %v", err)
+					return nil, err
 				}
-				abiValuesMsgData.InputValues[j] = mutatedInput
-			}
+				possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
 
-			// Test the shrunken sequence.
-			validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
-			if err != nil {
-				return nil, err
-			}
+				// Exercise the next removal strategy for this call.
+				if removalStrategy == 0 {
+					// Case 1: Plain removal.
+				} else if removalStrategy == 1 {
+					// Case 2: Add block/time delay to previous call.
+					if i > 0 {
+						possibleShrunkSequence[i-1].BlockNumberDelay += removedCall.BlockNumberDelay
+						possibleShrunkSequence[i-1].BlockTimestampDelay += removedCall.BlockTimestampDelay
+					}
+				}
 
-			// If this current sequence satisfied our conditions, set it as our optimized sequence.
-			if validShrunkSequence {
-				optimizedSequence = possibleShrunkSequence
+				// Test the shrunken sequence.
+				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
+				shrinkIteration++
+				if err != nil {
+					return nil, err
+				}
+
+				// If the current sequence satisfied our conditions, set it as our optimized sequence.
+				if validShrunkSequence {
+					optimizedSequence = possibleShrunkSequence
+				}
 			}
 		}
+
+		// The second pass of shrinking attempts to shrink values for each call in our call sequence.
+		// This is performed exhaustively in a round-robin fashion for each call, until the shrink limit is hit.
+		for !shrinkingEnded() {
+			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
+				// Clone the optimized sequence.
+				possibleShrunkSequence, _ := optimizedSequence.Clone()
+
+				// Loop for each argument in the currently indexed call to mutate it.
+				abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
+				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+					if err != nil {
+						return nil, fmt.Errorf("error when shrinking call sequence input argument: %v", err)
+					}
+					abiValuesMsgData.InputValues[j] = mutatedInput
+				}
+
+				// Test the shrunken sequence.
+				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
+				shrinkIteration++
+				if err != nil {
+					return nil, err
+				}
+
+				// If this current sequence satisfied our conditions, set it as our optimized sequence.
+				if validShrunkSequence {
+					optimizedSequence = possibleShrunkSequence
+				}
+			}
+		}
+		fw.workerMetrics().shrinking = false
 	}
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.

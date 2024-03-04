@@ -21,8 +21,8 @@ func addFuzzFlags() error {
 	// Config file
 	fuzzCmd.Flags().String("config", "", "path to config file")
 
-	// Target
-	fuzzCmd.Flags().String("target", "", TargetFlagDescription)
+	// Compilation Target
+	fuzzCmd.Flags().String("compilation-target", "", TargetFlagDescription)
 
 	// Number of workers
 	fuzzCmd.Flags().Int("workers", 0,
@@ -40,14 +40,13 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().Int("seq-len", 0,
 		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.CallSequenceLength))
 
-	// Deployment order
-	fuzzCmd.Flags().StringSlice("deployment-order", []string{},
-		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.DeploymentOrder))
+	// Target contracts
+	fuzzCmd.Flags().StringSlice("target-contracts", []string{},
+		fmt.Sprintf("target contracts for fuzz testing (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.TargetContracts))
 
 	// Corpus directory
-	// TODO: Update description when we add "coverage reports" feature
 	fuzzCmd.Flags().String("corpus-dir", "",
-		fmt.Sprintf("directory path for corpus items (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
+		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},
@@ -56,14 +55,6 @@ func addFuzzFlags() error {
 	// Deployer address
 	fuzzCmd.Flags().String("deployer", "",
 		"account address used to deploy contracts")
-
-	// Assertion mode
-	fuzzCmd.Flags().Bool("assertion-mode", false,
-		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.AssertionTesting.Enabled))
-
-	// Optimization mode
-	fuzzCmd.Flags().Bool("optimization-mode", false,
-		fmt.Sprintf("enable optimization mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.OptimizationTesting.Enabled))
 
 	// Trace all
 	fuzzCmd.Flags().Bool("trace-all", false,
@@ -79,10 +70,10 @@ func addFuzzFlags() error {
 func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
 	var err error
 
-	// If --target was used
-	if cmd.Flags().Changed("target") {
+	// If --compilation-target was used
+	if cmd.Flags().Changed("compilation-target") {
 		// Get the new target
-		newTarget, err := cmd.Flags().GetString("target")
+		newTarget, err := cmd.Flags().GetString("compilation-target")
 		if err != nil {
 			return err
 		}
@@ -125,9 +116,9 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update deployment order
-	if cmd.Flags().Changed("deployment-order") {
-		projectConfig.Fuzzing.DeploymentOrder, err = cmd.Flags().GetStringSlice("deployment-order")
+	// Update target contracts
+	if cmd.Flags().Changed("target-contracts") {
+		projectConfig.Fuzzing.TargetContracts, err = cmd.Flags().GetStringSlice("target-contracts")
 		if err != nil {
 			return err
 		}
@@ -152,22 +143,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	// Update deployer address
 	if cmd.Flags().Changed("deployer") {
 		projectConfig.Fuzzing.DeployerAddress, err = cmd.Flags().GetString("deployer")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Update assertion mode enablement
-	if cmd.Flags().Changed("assertion-mode") {
-		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.Flags().GetBool("assertion-mode")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Update optimization mode enablement
-	if cmd.Flags().Changed("optimization-mode") {
-		projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled, err = cmd.Flags().GetBool("optimization-mode")
 		if err != nil {
 			return err
 		}

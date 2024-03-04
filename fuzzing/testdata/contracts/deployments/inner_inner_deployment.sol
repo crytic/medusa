@@ -2,7 +2,7 @@
 // deployed, a method can be used to deploy an InnerInnerDeployment. We verify we can violate an invariant
 // in a two-layer deep dynamic deployment.
 contract InnerInnerDeployment {
-    function fuzz_inner_inner_deployment() public view returns (bool) {
+    function property_inner_inner_deployment() public view returns (bool) {
         // ASSERTION: Fail immediately.
         return false;
     }

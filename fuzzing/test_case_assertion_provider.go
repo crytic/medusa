@@ -5,7 +5,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"sync"
@@ -49,6 +49,16 @@ func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
 	if utils.IsSetupHook(method) {
 		return false
 	}
+	// Do not test optimization tests
+	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
+		return false
+	}
+
+	// Do not test property tests
+	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
+		return false
+	}
+
 	// Only test constant methods (pure/view) if we are configured to.
 	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
@@ -78,7 +88,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
 	failure := false
 	if panicCode != nil {
-		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig)
 	}
 
 	return &methodId, failure, nil
@@ -92,8 +102,8 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
-		// If we're not testing all contracts, verify the current contract is one we specified in our deployment order.
-		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.DeploymentOrder, contract.Name()) {
+		// If we're not testing all contracts, verify the current contract is one we specified in our target contracts
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
 			continue
 		}
 
@@ -246,7 +256,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 // code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
 // panic if it is provided a panic code that is not defined in the abiutils package.
 // TODO: This is a terrible design and a future PR should be made to maintain assertion and panic logic correctly
-func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
+func encounteredAssertionFailure(panicCode uint64, conf config.PanicCodeConfig) bool {
 	// Switch on panic code
 	switch panicCode {
 	case abiutils.PanicCodeCompilerInserted:

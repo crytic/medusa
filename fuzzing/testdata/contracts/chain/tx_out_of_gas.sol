@@ -10,7 +10,7 @@ contract TestContract {
         }
     }
 
-    function fuzz_never_apply_state_when_oog() public view returns (bool) {
+    function property_never_apply_state_when_oog() public view returns (bool) {
         // ASSERTION: this state should never be applied, as our out of gas error should revert changes.
         return x == 0;
     }

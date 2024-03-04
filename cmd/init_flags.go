@@ -10,18 +10,18 @@ func addInitFlags() error {
 	// Output path for configuration
 	initCmd.Flags().String("out", "", "output path for the new project configuration file")
 
-	// Target file / directory
-	initCmd.Flags().String("target", "", TargetFlagDescription)
+	// Target file / directory for compilation
+	initCmd.Flags().String("compilation-target", "", TargetFlagDescription)
 
 	return nil
 }
 
 // updateProjectConfigWithInitFlags will update the given projectConfig with any CLI arguments that were provided to the init command
 func updateProjectConfigWithInitFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
-	// If --target was used
-	if cmd.Flags().Changed("target") {
+	// If --compilation-target was used
+	if cmd.Flags().Changed("compilation-target") {
 		// Get the new target
-		newTarget, err := cmd.Flags().GetString("target")
+		newTarget, err := cmd.Flags().GetString("compilation-target")
 		if err != nil {
 			return err
 		}

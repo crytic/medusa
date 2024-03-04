@@ -5,11 +5,10 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 	"math/big"
-	"strings"
 	"sync"
 )
 
@@ -47,6 +46,11 @@ type propertyTestCaseProviderWorkerState struct {
 
 // attachPropertyTestCaseProvider attaches a new PropertyTestCaseProvider to the Fuzzer and returns it.
 func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
+	// If there are no testing prefixes, then there is no reason to attach a test case provider and subscribe to events
+	if len(fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
+		return nil
+	}
+
 	// Create a test case provider
 	t := &PropertyTestCaseProvider{
 		fuzzer: fuzzer,
@@ -60,20 +64,6 @@ func attachPropertyTestCaseProvider(fuzzer *Fuzzer) *PropertyTestCaseProvider {
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
 	return t
-}
-
-// isPropertyTest check whether the method is a property test given potential naming prefixes it must conform to
-// and its underlying input/output arguments.
-func (t *PropertyTestCaseProvider) isPropertyTest(method abi.Method) bool {
-	// Loop through all enabled prefixes to find a match
-	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.PropertyTesting.TestPrefixes {
-		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // checkPropertyTestFailed executes a given property test method to see if it returns a failed status. This is used to
@@ -143,14 +133,14 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 
 	// Create a test case for every property test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
-		// If we're not testing all contracts, verify the current contract is one we specified in our deployment order.
-		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.DeploymentOrder, contract.Name()) {
+		// If we're not testing all contracts, verify the current contract is one we specified in our target contracts.
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
 			continue
 		}
 
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is a property test method
-			if !t.isPropertyTest(method) {
+			if !utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
 				continue
 			}
 
