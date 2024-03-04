@@ -5,6 +5,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
 	"sync"
@@ -44,6 +45,10 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 // isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
 // Returns true if this target should be tested, false otherwise.
 func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
+	// Don't register setup hook as a test case
+	if utils.IsSetupHook(method) {
+		return false
+	}
 	// Only test constant methods (pure/view) if we are configured to.
 	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
