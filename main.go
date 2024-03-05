@@ -11,10 +11,17 @@ func main() {
 	// Run our root CLI command, which contains all underlying command logic and will handle parsing/invocation.
 	err := cmd.Execute()
 
-	// If we have a special (non-zero/success) error code, then exit with it.
-	exitCode := exitcodes.GetErrorExitCode(err)
+	// Obtain the actual error and exit code from the error, if any.
+	var exitCode int
+	err, exitCode = exitcodes.GetInnerErrorAndExitCode(err)
+
+	// If we have an error, print it.
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// If we have a non-success exit code, exit with it.
 	if exitCode != exitcodes.ExitCodeSuccess {
-		fmt.Println(err.Error())
 		os.Exit(exitCode)
 	}
 }
