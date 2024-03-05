@@ -22,7 +22,7 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 10
@@ -54,7 +54,7 @@ jobs:
 
       - name: Compress (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: tar -czvf medusa.tar.gz medusa
+        run: tar -czvf medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz medusa
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -62,14 +62,14 @@ jobs:
 
       - name: Compress (Windows)
         if: runner.os == 'Windows'
-        run: tar -czvf medusa.tar.gz medusa.exe
+        run: tar -czvf medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz medusa.exe
 
       - name: Upload artifact on merge to master
         if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v3
         with:
-          name: medusa-${{ runner.os }}
-          path: medusa.tar.gz
+          name: medusa-${{ runner.os }}-${{ runner.arch }}
+          path: medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz
 
   lint:
     runs-on: ubuntu-latest
@@ -110,7 +110,7 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
