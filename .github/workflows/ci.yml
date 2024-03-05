@@ -110,7 +110,7 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
