@@ -1,6 +1,8 @@
 package executiontracer
 
 import (
+	"math/big"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/common"
@@ -8,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/exp/slices"
-	"math/big"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
@@ -118,6 +119,12 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 				callFrame.ToContractName = toContract.Name()
 				callFrame.ToContractAbi = &toContract.CompiledContract().Abi
 				t.resolveCallFrameConstructorArgs(callFrame, toContract)
+
+				// If this is a contract creation, set the code address to the address of the contract we just deployed.
+				if callFrame.IsContractCreation() {
+					callFrame.CodeContractName = toContract.Name()
+					callFrame.CodeContractAbi = &toContract.CompiledContract().Abi
+				}
 			}
 		}
 	}

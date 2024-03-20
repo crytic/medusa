@@ -3,10 +3,6 @@ package fuzzing
 import (
 	"context"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/coverage"
-	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
-	"github.com/rs/zerolog"
 	"math/big"
 	"math/rand"
 	"os"
@@ -17,6 +13,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -367,7 +368,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 					args = decoded
 				}
 
-				// Constructor our deployment message/tx data field
+				// Construct our deployment message/tx data field
 				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 				if err != nil {
 					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
@@ -405,7 +406,22 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) erro
 
 				// Ensure our transaction succeeded
 				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+					// Create a call sequence element to represent the failed contract deployment tx
+					cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
+					cse.ChainReference = &calls.CallSequenceElementChainReference{
+						Block:            block,
+						TransactionIndex: len(block.Messages) - 1,
+					}
+					// Replay the execution trace for the failed contract deployment tx
+					err = cse.AttachExecutionTrace(testChain, fuzzer.contractDefinitions)
+					if err != nil {
+						fuzzer.logger.Warn("Failed to attach execution trace to failed contract deployment tx: ", err)
+					}
+					if cse.ExecutionTrace == nil {
+						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err)
+					}
+
+					return fmt.Errorf("contract deployment tx returned a failed status: %v\n %s", block.MessageResults[0].ExecutionResult.Err, cse.ExecutionTrace.Log().String())
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this
