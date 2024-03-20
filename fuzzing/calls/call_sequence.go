@@ -3,6 +3,8 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
+
 	"github.com/crytic/medusa/chain"
 	chainTypes "github.com/crytic/medusa/chain/types"
 	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -13,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"strconv"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
@@ -230,7 +231,7 @@ func (cse *CallSequenceElement) String() string {
 	method, err := cse.Method()
 	methodName := "<unresolved method>"
 	if err == nil && method != nil {
-		methodName = method.Name
+		methodName = method.Sig
 	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
