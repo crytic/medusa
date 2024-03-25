@@ -2,15 +2,16 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"math/big"
+	"math/rand"
+	"testing"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-	"math/rand"
-	"testing"
 
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
@@ -461,7 +462,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 func TestExecutionTraces(t *testing.T) {
 	expectedMessagesPerTest := map[string][]string{
 		"testdata/contracts/execution_tracing/call_and_deployment_args.sol": {"Hello from deployment args!", "Hello from call args!"},
-		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(true)"},
+		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(bool)(true)"},
 		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!", "Hello from library event args!"},
 		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
 		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},
