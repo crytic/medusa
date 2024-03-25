@@ -2,14 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
-	"math/big"
-	"sync"
 )
 
 // PropertyTestCaseProvider is a provider for on-chain property tests.
@@ -100,7 +101,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 
 	// If our property test method call failed, we flag a failed test.
 	if executionResult.Failed() {
-		return true, nil, nil
+		return true, executionTrace, nil
 	}
 
 	// Decode our ABI outputs
