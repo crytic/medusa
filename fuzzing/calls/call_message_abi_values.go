@@ -6,6 +6,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // CallMessageDataAbiValues describes a CallMessage Data field which is represented by ABI input argument values.
@@ -22,7 +23,16 @@ type CallMessageDataAbiValues struct {
 
 	// methodName stores the name of Method when decoding from JSON. The Method will be resolved using this internal
 	// reference when Resolve is called.
+	//
+	// TODO: Note, this field is deprecated and should be removed after methodSignature is adopted for some time.
+	//  This will help transition old corpuses in the meantime.
 	methodName string
+
+	// methodSignature stores the function prototype which is used to calculate the method ID. This is human-readable,
+	// and easily editable, so it is used in favor of the method ID derived from it.
+	//
+	// The Method will be resolved using this internal reference when Resolve is called.
+	methodSignature string
 
 	// encodedInputValues stores the raw encoded input values when decoding from JSON. The actual InputValues will be
 	// decoded using this and the resolved Method once Resolve is called.
@@ -32,7 +42,8 @@ type CallMessageDataAbiValues struct {
 // callMessageDataAbiValuesMarshal is used as an internal struct to represent JSON serialized data for
 // CallMessageDataAbiValues.
 type callMessageDataAbiValuesMarshal struct {
-	MethodName         string `json:"methodName"`
+	MethodName         string `json:"methodName,omitempty"`
+	MethodSignature    string `json:"methodSignature"`
 	EncodedInputValues []any  `json:"inputValues"`
 }
 
@@ -43,6 +54,7 @@ func (m *CallMessageDataAbiValues) Clone() (*CallMessageDataAbiValues, error) {
 		Method:             m.Method,
 		InputValues:        nil, // set lower
 		methodName:         m.methodName,
+		methodSignature:    m.methodSignature,
 		encodedInputValues: m.encodedInputValues,
 	}
 
@@ -65,17 +77,32 @@ func (m *CallMessageDataAbiValues) Clone() (*CallMessageDataAbiValues, error) {
 // Resolve takes a previously unmarshalled CallMessageDataAbiValues and resolves all internal data needed for it to be
 // used at runtime by resolving the abi.Method it references from the provided contract ABI.
 func (d *CallMessageDataAbiValues) Resolve(contractAbi abi.ABI) error {
-	// Try to resolve the method from our contract ABI.
-	if resolvedMethod, ok := contractAbi.Methods[d.methodName]; ok {
-		d.Method = &resolvedMethod
-	} else {
-		return fmt.Errorf("could not resolve method '%v' from the given contract ABI", d.methodName)
+	// If we have a method signature, try to resolve it by calculating a method ID from this.
+	d.Method = nil
+	if d.methodSignature != "" {
+		methodId := crypto.Keccak256([]byte(d.methodSignature))[:4]
+		if resolvedMethod, err := contractAbi.MethodById(methodId); err == nil {
+			d.Method = resolvedMethod
+		} else {
+			return fmt.Errorf("could not resolve method signature '%v'", d.methodSignature)
+		}
 	}
+
+	// TODO: Deprecated old way of resolving methods. This is left for compatibility with old corpuses, but should be
+	//  removed at a later date in favor of methodSignature resolution. It resolves a method by name if it has not been.
+	if d.Method == nil {
+		if resolvedMethod, ok := contractAbi.Methods[d.methodName]; ok {
+			d.Method = &resolvedMethod
+		} else {
+			return fmt.Errorf("could not resolve method name '%v'", d.methodName)
+		}
+	}
+	d.methodSignature = d.Method.Sig
 
 	// Now that we've resolved the method, decode our encoded input values.
 	decodedArguments, err := valuegeneration.DecodeJSONArgumentsFromSlice(d.Method.Inputs, d.encodedInputValues, make(map[string]common.Address))
 	if err != nil {
-		return err
+		return fmt.Errorf("error decoding arguments for method '%v': %v", d.methodSignature, err)
 	}
 
 	// If we've decoded arguments successfully, set them and clear our encoded arguments as they're no longer needed.
@@ -132,7 +159,7 @@ func (d *CallMessageDataAbiValues) MarshalJSON() ([]byte, error) {
 
 	// Now create our outer struct and marshal all the data and return it.
 	marshalData := callMessageDataAbiValuesMarshal{
-		MethodName:         d.Method.Name,
+		MethodSignature:    d.Method.Sig,
 		EncodedInputValues: inputValuesEncoded,
 	}
 	return json.Marshal(marshalData)
@@ -150,6 +177,7 @@ func (d *CallMessageDataAbiValues) UnmarshalJSON(b []byte) error {
 
 	// Set our data in our actual structure now
 	d.methodName = marshalData.MethodName
+	d.methodSignature = marshalData.MethodSignature
 	d.encodedInputValues = marshalData.EncodedInputValues
 	return nil
 }

@@ -19,6 +19,9 @@ type fuzzerWorkerMetrics struct {
 
 	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
 	workerStartupCount *big.Int
+
+	// shrinking indicates whether the fuzzer worker is currently shrinking.
+	shrinking bool
 }
 
 // newFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
@@ -62,4 +65,15 @@ func (m *FuzzerMetrics) WorkerStartupCount() *big.Int {
 		workerStartupCount.Add(workerStartupCount, workerMetrics.workerStartupCount)
 	}
 	return workerStartupCount
+}
+
+// WorkersShrinkingCount returns the amount of workers currently performing shrinking operations.
+func (m *FuzzerMetrics) WorkersShrinkingCount() uint64 {
+	shrinkingCount := uint64(0)
+	for _, workerMetrics := range m.workerMetrics {
+		if workerMetrics.shrinking {
+			shrinkingCount++
+		}
+	}
+	return shrinkingCount
 }

@@ -6,7 +6,7 @@ contract InnerDeployment {
         x = 7;
     }
 
-    function fuzz_inner_deployment() public view returns (bool) {
+    function property_inner_deployment() public view returns (bool) {
         // ASSERTION: Fail immediately.
         return false;
     }
