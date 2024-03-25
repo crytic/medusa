@@ -11,10 +11,10 @@ interface CheatCodes {
     function revertTo(uint256) external returns (bool);
 }
 
-    struct Storage {
-        uint slot0;
-        uint slot1;
-    }
+struct Storage {
+    uint slot0;
+    uint slot1;
+}
 
 contract TestContract {
     Storage store;
@@ -31,21 +31,25 @@ contract TestContract {
         timestamp = block.timestamp;
         cheats.deal(address(this), 5 ether);
 
-        uint256 snapshot = cheats.snapshot(); // saves the state
+        // Save state
+        uint256 snapshot = cheats.snapshot();
 
-        // let's change the state
+        // Change state
         store.slot0 = 300;
         store.slot1 = 400;
         cheats.deal(address(this), 500 ether);
-        cheats.warp(12345); // block.timestamp = 12345
+        cheats.warp(12345);
 
+        // Assert that state has been changed
         assert(store.slot0 == 300);
         assert(store.slot1 == 400);
         assert(address(this).balance == 500 ether);
         assert(block.timestamp == 12345);
 
-        cheats.revertTo(snapshot); // restores the state
+        // Revert to snapshot
+        cheats.revertTo(snapshot);
 
+        // Ensure state has been reset
         assert(store.slot0 == 10);
         assert(store.slot1 == 20);
         assert(address(this).balance == 5 ether);
