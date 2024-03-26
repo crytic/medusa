@@ -283,6 +283,27 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// snapshot: Takes a snapshot of the current state of the evm and returns the id associated with the snapshot
+	contract.addMethod(
+		"snapshot", abi.Arguments{}, abi.Arguments{{Type: typeUint256}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			snapshotID := tracer.evm.StateDB.Snapshot()
+
+			return []any{snapshotID}, nil
+		},
+	)
+
+	// revertTo(uint256): Revert the state of the evm to a previous snapshot. Takes the snapshot id to revert to.
+	contract.addMethod(
+		"revertTo", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeBool}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			snapshotID := inputs[0].(*big.Int)
+			tracer.evm.StateDB.RevertToSnapshot(int(snapshotID.Int64()))
+
+			return []any{true}, nil
+		},
+	)
+
 	// FFI: Run arbitrary command on base OS
 	contract.addMethod(
 		"ffi", abi.Arguments{{Type: typeStringSlice}}, abi.Arguments{{Type: typeBytes}},
