@@ -3,6 +3,7 @@ package calls
 import (
 	"fmt"
 	"github.com/crytic/medusa/chain"
+	"math/big"
 )
 
 // ExecuteCallSequenceFetchElementFunc describes a function that is called to obtain the next call sequence element to
@@ -53,6 +54,74 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		// If we encounter an error on an empty block, we throw the error as there is nothing more we can do.
 		for {
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
+			// Get our contract setup hook
+			contractSetupHook := callSequenceElement.Contract.SetupHook()
+
+			// Call setup hook for contract if it exists.
+			if contractSetupHook != nil {
+				// Create a call targeting our setup hook
+				msg := NewCallMessageWithAbiValueData(contractSetupHook.DeployerAddress, callSequenceElement.Call.To, 0, big.NewInt(0), callSequenceElement.Call.GasLimit, nil, nil, nil, &CallMessageDataAbiValues{
+					Method:      &contractSetupHook.Method,
+					InputValues: nil,
+				})
+				msg.FillFromTestChainProperties(chain)
+
+				// Execute the call
+				// If we have no pending block to add a tx containing our call to, we must create one.
+				if chain.PendingBlock() == nil {
+					// The minimum step between blocks must be 1 in block number and timestamp, so we ensure this is the
+					// case.
+					numberDelay := callSequenceElement.BlockNumberDelay
+					timeDelay := callSequenceElement.BlockTimestampDelay
+					if numberDelay == 0 {
+						numberDelay = 1
+					}
+					if timeDelay == 0 {
+						timeDelay = 1
+					}
+
+					// Each timestamp/block number must be unique as well, so we cannot jump more block numbers than time.
+					if numberDelay > timeDelay {
+						numberDelay = timeDelay
+					}
+					_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
+					if err != nil {
+						return callSequenceExecuted, err
+					}
+				}
+
+				// Try to add our transaction to this block.
+				err = chain.PendingBlockAddTx(msg.ToCoreMessage())
+				if err != nil {
+					// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
+					// If there are other transactions in the block, this makes sense. The block is "full".
+					// In that case, we commit the pending block without this tx, and create a new pending block to add
+					// our tx to, and iterate to try and add it again.
+					// TODO: This should also check the condition that this is a block gas error specifically. For now, we
+					//  simply assume it is and try processing in an empty block (if that fails, that error will be
+					//  returned).
+					if len(chain.PendingBlock().Messages) > 0 {
+						err := chain.PendingBlockCommit()
+						if err != nil {
+							return callSequenceExecuted, err
+						}
+						continue
+					}
+
+					// If there are no transactions in our block, and we failed to add this one, return the error
+					return callSequenceExecuted, err
+				}
+
+				setupCallSequenceElement := NewCallSequenceElement(callSequenceElement.Contract, msg, callSequenceElement.BlockNumberDelay, callSequenceElement.BlockTimestampDelay)
+				setupCallSequenceElement.ChainReference = &CallSequenceElementChainReference{
+					Block:            chain.PendingBlock(),
+					TransactionIndex: len(chain.PendingBlock().Messages) - 1,
+				}
+
+				// Register the call in our call sequence so it gets registered in coverage.
+				callSequenceExecuted = append(callSequenceExecuted, setupCallSequenceElement)
+			}
+
 			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
 				err := chain.PendingBlockCommit()
 				if err != nil {
@@ -84,6 +153,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			}
 
 			// Try to add our transaction to this block.
+			callSequenceElement.Call.FillFromTestChainProperties(chain)
 			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage())
 			if err != nil {
 				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.

@@ -2,10 +2,21 @@ package contracts
 
 import (
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Contracts describes an array of contracts
 type Contracts []*Contract
+
+// ContractSetupHook describes a contract setup hook
+type ContractSetupHook struct {
+	// Method represents the setup function
+	Method abi.Method
+
+	// DeployerAddress represents the fuzzer's deployer address, to be used when calling the setup hook.
+	DeployerAddress common.Address
+}
 
 // MatchBytecode takes init and/or runtime bytecode and attempts to match it to a contract definition in the
 // current list of contracts. It returns the contract definition if found. Otherwise, it returns nil.
@@ -35,15 +46,19 @@ type Contract struct {
 
 	// compilation describes the compilation which contains the compiledContract.
 	compilation *types.Compilation
+
+	// setupHook describes the contract's setup hook, if it exists.
+	setupHook *ContractSetupHook
 }
 
 // NewContract returns a new Contract instance with the provided information.
-func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation) *Contract {
+func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation, setupHook *ContractSetupHook) *Contract {
 	return &Contract{
 		name:             name,
 		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
 		compilation:      compilation,
+		setupHook:        setupHook,
 	}
 }
 
@@ -65,4 +80,9 @@ func (c *Contract) CompiledContract() *types.CompiledContract {
 // Compilation returns the compilation which contains the CompiledContract.
 func (c *Contract) Compilation() *types.Compilation {
 	return c.compilation
+}
+
+// SetupHook returns the contract's setup hook, if exists.
+func (c *Contract) SetupHook() *ContractSetupHook {
+	return c.setupHook
 }

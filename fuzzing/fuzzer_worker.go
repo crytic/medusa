@@ -230,7 +230,7 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-			if !method.IsConstant() {
+			if !method.IsConstant() && method.Name != "setUp" {
 				// Any non-constant method should be tracked as a state changing method.
 				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
 			}

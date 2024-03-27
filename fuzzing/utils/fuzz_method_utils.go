@@ -8,6 +8,10 @@ import (
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func IsOptimizationTest(method abi.Method, prefixes []string) bool {
+	// Don't register setup hook as a test case
+	if IsSetupHook(method) {
+		return false
+	}
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(method.Name, prefix) {
@@ -23,6 +27,10 @@ func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func IsPropertyTest(method abi.Method, prefixes []string) bool {
+	// Don't register setup hook as a test case
+	if IsSetupHook(method) {
+		return false
+	}
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		// The property test must simply have the right prefix and take no inputs
@@ -31,4 +39,9 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+// IsSetupHook checks whether the method is a setup hook
+func IsSetupHook(method abi.Method) bool {
+	return method.Name == "setUp"
 }

@@ -45,6 +45,10 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 // isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
 // Returns true if this target should be tested, false otherwise.
 func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
+	// Don't register setup hook as a test case
+	if utils.IsSetupHook(method) {
+		return false
+	}
 	// Do not test optimization tests
 	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
 		return false
