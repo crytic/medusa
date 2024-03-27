@@ -17,21 +17,25 @@ func NewErrorWithExitCode(err error, exitCode int) *ErrorWithExitCode {
 
 // Error returns the error message string, implementing the `error` interface.
 func (e *ErrorWithExitCode) Error() string {
+	if e.err == nil {
+		return ""
+	}
 	return e.err.Error()
 }
 
-// GetErrorExitCode checks the given exit code that the application should exit with, if this error is bubbled to
-// the top-level. This will be 0 for a nil error, 1 for a generic error, or arbitrary if the error is of type
+// GetInnerErrorAndExitCode checks the given exit code that the application should exit with, if this error is bubbled
+// to the top-level. This will be 0 for a nil error, 1 for a generic error, or arbitrary if the error is of type
 // ErrorWithExitCode.
-// Returns the exit code associated with the error.
-func GetErrorExitCode(err error) int {
+// Returns the error (or inner error if it is an ErrorWithExitCode error type), along with the exit code associated
+// with the error.
+func GetInnerErrorAndExitCode(err error) (error, int) {
 	// If we have no error, return 0, if we have a generic error, return 1, if we have a custom error code, unwrap
 	// and return it.
 	if err == nil {
-		return ExitCodeSuccess
+		return nil, ExitCodeSuccess
 	} else if unwrappedErr, ok := err.(*ErrorWithExitCode); ok {
-		return unwrappedErr.exitCode
+		return unwrappedErr.err, unwrappedErr.exitCode
 	} else {
-		return ExitCodeGeneralError
+		return err, ExitCodeGeneralError
 	}
 }
