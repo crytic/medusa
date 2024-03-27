@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -35,7 +36,7 @@ func TestFuzzerHooks(t *testing.T) {
 				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
-			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
