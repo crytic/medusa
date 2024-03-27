@@ -16,7 +16,7 @@ func main() {
 	err, exitCode = exitcodes.GetInnerErrorAndExitCode(err)
 
 	// If we have an error, print it.
-	if err != nil {
+	if err != nil && exitCode != exitcodes.ExitCodeFuzzerError {
 		fmt.Println(err)
 	}
 

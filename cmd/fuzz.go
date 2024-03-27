@@ -145,9 +145,9 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create our fuzzing
-	fuzzer, err := fuzzing.NewFuzzer(*projectConfig)
-	if err != nil {
-		return err
+	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
+	if fuzzErr != nil {
+		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeFuzzerError)
 	}
 
 	// Stop our fuzzing on keyboard interrupts
@@ -159,7 +159,10 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Start the fuzzing process with our cancellable context.
-	err = fuzzer.Start()
+	fuzzErr = fuzzer.Start()
+	if fuzzErr != nil {
+		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeFuzzerError)
+	}
 
 	// If we have no error and failed test cases, we'll want to return a special exit code
 	if err == nil && len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
