@@ -29,7 +29,7 @@ contract TestContract {
         }
     }
 
-    function fuzz_solve_me() public view returns (bool) {
+    function property_solve_me() public view returns (bool) {
         // ASSERTION: The fuzzer should be able to fail this test case and solve all challenges.
         return index < 7;
     }

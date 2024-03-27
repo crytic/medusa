@@ -15,7 +15,7 @@ contract InheritedFirstContract is FirstContract {
         y = value + 9;
     }
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: x should never be 10 at the same time y is 80
         return !(x == 10 && y == 80);
     }
@@ -41,7 +41,7 @@ contract InheritedSecondContract is SecondContract {
         c = value + 7;
     }
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: a should never be 10 at the same time b is 80 at the same time c is 14
         return !(a == 10 && b == 80 && c == 14);
     }

@@ -12,7 +12,7 @@ contract TestContract {
         y = value;
     }
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: x and y should not equal the exact addresses below.
         return !(x == address(0x12345) && y == address(7));
     }

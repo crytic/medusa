@@ -10,7 +10,7 @@ contract TestContract {
         // This method does nothing but is left exposed so it can be called by the fuzzer to advance block.number
     }
 
-    function fuzz_increase_block_number_by_10() public view returns (bool) {
+    function property_increase_block_number_by_10() public view returns (bool) {
         // ASSERTION: block number should never increase more than 10 (we expect failure)
         return !(block.number - startingBlockNumber >= 10);
     }
