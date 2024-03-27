@@ -343,22 +343,6 @@ func chainStructuredLogInfoErrorsAndMsgs(structuredLog *zerolog.Event, unstructu
 	// First, we need to create a formatted error string for unstructured output
 	var errStr string
 	for _, err := range errs {
-		// To make the formatting a little nicer, we will add a tab after each new line in the error so that
-		// errors can be better differentiated on unstructured channels
-		lines := make([]string, 0)
-		for i, line := range strings.Split(err.Error(), "\n") {
-			// Add a tab to the line only after the first new line in the error message
-			if i != 0 {
-				line = "\t" + line
-			}
-			lines = append(lines, line)
-		}
-
-		// Update the error string to be based on the tabbed lines array
-		if len(lines) > 0 {
-			err = fmt.Errorf("%v", strings.Join(lines, "\n"))
-		}
-
 		// Append a bullet point and the formatted error to the error string
 		errStr += "\n" + colors.BULLET_POINT + " " + err.Error()
 	}
