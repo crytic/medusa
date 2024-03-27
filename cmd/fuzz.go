@@ -165,9 +165,9 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// If we have no error and failed test cases, we'll want to return a special exit code
-	if err == nil && len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
-		return exitcodes.NewErrorWithExitCode(err, exitcodes.ExitCodeTestFailed)
+	if fuzzErr == nil && len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
+		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeTestFailed)
 	}
 
-	return err
+	return fuzzErr
 }
