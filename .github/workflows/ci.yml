@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
   pull_request:
     branches:
       - master
@@ -23,6 +25,9 @@ jobs:
     strategy:
       matrix:
         environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+    permissions:
+      contents: read
+      id-token: write
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 10
@@ -47,6 +52,8 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: "^1.18.1"
+          # disable caching during release (tag) builds
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
@@ -64,12 +71,54 @@ jobs:
         if: runner.os == 'Windows'
         run: tar -czvf medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz medusa.exe
 
-      - name: Upload artifact on merge to master
-        if: github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v3
+      - name: Rename for release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          [ ! -f medusa-Linux-X64.tar.gz ] || mv medusa-Linux-X64.tar.gz medusa-linux-x64.tar.gz
+          [ ! -f medusa-macOS-X64.tar.gz ] || mv medusa-macOS-X64.tar.gz medusa-mac-x64.tar.gz
+          [ ! -f medusa-macOS-ARM64.tar.gz ] || mv medusa-macOS-ARM64.tar.gz medusa-mac-arm64.tar.gz
+          [ ! -f medusa-Windows-X64.tar.gz ] || mv medusa-Windows-X64.tar.gz medusa-win-x64.tar.gz
+
+      - name: Sign artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        with:
+          inputs: ./medusa-*.tar.gz
+
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/master' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+        uses: actions/upload-artifact@v4
         with:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
-          path: medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz
+          path: |
+            ./medusa-*.tar.gz
+            ./medusa-*.tar.gz.sigstore
+
+  release:
+    needs: [build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: medusa-*
+          merge-multiple: true
+
+      - name: Create GitHub release and upload binaries
+        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        with:
+          draft: true
+          name: "${{ github.ref_name }}"
+          files: |
+            ./medusa-*.tar.gz
+            ./medusa-*.tar.gz.sigstore
 
   lint:
     runs-on: ubuntu-latest
@@ -165,7 +214,7 @@ jobs:
         run: go test ./...
 
   all-checks:
-    needs: [lint, test, build]
+    needs: [lint, test, build, release]
 
     runs-on: ubuntu-latest
 
