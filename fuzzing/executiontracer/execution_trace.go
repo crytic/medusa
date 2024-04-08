@@ -3,6 +3,9 @@ package executiontracer
 import (
 	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
@@ -12,8 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"regexp"
-	"strings"
 )
 
 // ExecutionTrace contains information recorded by an ExecutionTracer. It contains information about each call
@@ -77,7 +78,7 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 		} else {
 			method, err = callFrame.CodeContractAbi.MethodById(callFrame.InputData)
 			if err == nil {
-				methodName = method.Name
+				methodName = method.Sig
 			}
 		}
 	}
