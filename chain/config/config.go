@@ -29,7 +29,8 @@ type CheatCodeConfig struct {
 func (t *TestChainConfig) GetVMConfigExtensions() *vm.ConfigExtensions {
 	// Obtain our cheat code precompiled contracts.
 	return &vm.ConfigExtensions{
-		OverrideCodeSizeCheck: t.CodeSizeCheckDisabled,
-		AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
+		OverrideCodeSizeCheck:    t.CodeSizeCheckDisabled,
+		AdditionalPrecompiles:    make(map[common.Address]vm.PrecompiledContract),
+		ContractAddressOverrides: make(map[common.Hash]common.Address),
 	}
 }

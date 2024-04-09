@@ -81,8 +81,9 @@ type TestChain struct {
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
-// If a nil config is provided, a default one is used.
-func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+// If a nil config is provided, a default one is used. In addition, a mapping of contract address overrides is provided
+// in case contracts needs to be deployed to deterministic addresses.
+func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig, contractAddressOverrides map[common.Hash]common.Address) (*TestChain, error) {
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -145,6 +146,11 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 			}
 			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
 		}
+	}
+
+	// If a mapping of contract address overrides is provided, update the vm config extensions
+	if len(contractAddressOverrides) > 0 {
+		vmConfigExtensions.ContractAddressOverrides = contractAddressOverrides
 	}
 
 	// Create an in-memory database
@@ -214,7 +220,7 @@ func (t *TestChain) Close() {
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
 	// Create a new chain with the same genesis definition and config
-	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig)
+	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig, nil)
 	if err != nil {
 		return nil, err
 	}

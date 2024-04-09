@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
@@ -61,6 +62,10 @@ type FuzzingConfig struct {
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
+
+	// PredeployedContracts are contracts that can be deterministically deployed at a specific address. It maps the
+	// contract name to the deployment address
+	PredeployedContracts map[string]string `json:"predeployedContracts"`
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
@@ -332,6 +337,13 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
+	// Verify that addresses of predeployed contracts are well-formed
+	for _, addr := range p.Fuzzing.PredeployedContracts {
+		if _, err := utils.HexStringToAddress(addr); err != nil {
+			return fmt.Errorf("project configuration must specify only well-formed predeployed contract addresses: %v", addr)
+		}
+	}
+	
 	// Ensure that the log level is a valid one
 	level, err := zerolog.ParseLevel(p.Logging.Level.String())
 	if err != nil || level == zerolog.FatalLevel {
