@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
   pull_request:
     branches:
       - master
@@ -22,7 +24,10 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+    permissions:
+      contents: read
+      id-token: write
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 10
@@ -44,9 +49,11 @@ jobs:
           printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: "^1.18.1"
+          # disable caching during release (tag) builds
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
@@ -54,7 +61,7 @@ jobs:
 
       - name: Compress (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: tar -czvf medusa.tar.gz medusa
+        run: tar -czvf medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz medusa
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -62,14 +69,56 @@ jobs:
 
       - name: Compress (Windows)
         if: runner.os == 'Windows'
-        run: tar -czvf medusa.tar.gz medusa.exe
+        run: tar -czvf medusa-${{ runner.os }}-${{ runner.arch }}.tar.gz medusa.exe
 
-      - name: Upload artifact on merge to master
-        if: github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v3
+      - name: Rename for release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          [ ! -f medusa-Linux-X64.tar.gz ] || mv medusa-Linux-X64.tar.gz medusa-linux-x64.tar.gz
+          [ ! -f medusa-macOS-X64.tar.gz ] || mv medusa-macOS-X64.tar.gz medusa-mac-x64.tar.gz
+          [ ! -f medusa-macOS-ARM64.tar.gz ] || mv medusa-macOS-ARM64.tar.gz medusa-mac-arm64.tar.gz
+          [ ! -f medusa-Windows-X64.tar.gz ] || mv medusa-Windows-X64.tar.gz medusa-win-x64.tar.gz
+
+      - name: Sign artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
         with:
-          name: medusa-${{ runner.os }}
-          path: medusa.tar.gz
+          inputs: ./medusa-*.tar.gz
+
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/master' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: medusa-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ./medusa-*.tar.gz
+            ./medusa-*.tar.gz.sigstore
+
+  release:
+    needs: [build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: medusa-*
+          merge-multiple: true
+
+      - name: Create GitHub release and upload binaries
+        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        with:
+          draft: true
+          name: "${{ github.ref_name }}"
+          files: |
+            ./medusa-*.tar.gz
+            ./medusa-*.tar.gz.sigstore
 
   lint:
     runs-on: ubuntu-latest
@@ -78,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: "^1.18.1"
 
@@ -110,13 +159,17 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
@@ -142,11 +195,11 @@ jobs:
           npm config set cache "$DIR\\npm-cache" --global
           echo "::endgroup::"
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: "^1.18.1"
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: 18.15
 
@@ -155,7 +208,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir setuptools solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select crytic-compile
 
       - name: Install solc
         run: |
@@ -165,9 +218,14 @@ jobs:
         run: go test ./...
 
   all-checks:
-    needs: [lint, test, build]
+    if: always()
+    needs: [lint, test, build, release]
 
     runs-on: ubuntu-latest
 
     steps:
-      - run: true
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
+        with:
+          allowed-skips: release
+          jobs: ${{ toJSON(needs) }}
