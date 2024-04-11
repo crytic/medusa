@@ -220,7 +220,7 @@ func (t *TestChain) Close() {
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
 	// Create a new chain with the same genesis definition and config
-	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig, nil)
+	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig, t.vmConfigExtensions.ContractAddressOverrides)
 	if err != nil {
 		return nil, err
 	}

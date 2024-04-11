@@ -376,7 +376,6 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	for contractName, _ := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
-
 	}
 
 	deployedContractAddr := make(map[string]common.Address)
