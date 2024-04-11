@@ -5,10 +5,10 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/core"
+	"golang.org/x/exp/slices"
 	"math/big"
-	"strings"
 	"sync"
 )
 
@@ -45,6 +45,11 @@ type optimizationTestCaseProviderWorkerState struct {
 
 // attachOptimizationTestCaseProvider attaches a new OptimizationTestCaseProvider to the Fuzzer and returns it.
 func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCaseProvider {
+	// If there are no testing prefixes, then there is no reason to attach a test case provider and subscribe to events
+	if len(fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) == 0 {
+		return nil
+	}
+
 	// Create a test case provider
 	t := &OptimizationTestCaseProvider{
 		fuzzer: fuzzer,
@@ -58,21 +63,6 @@ func attachOptimizationTestCaseProvider(fuzzer *Fuzzer) *OptimizationTestCasePro
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
 	return t
-}
-
-// isOptimizationTest check whether the method is an optimization test given potential naming prefixes it must conform to
-// and its underlying input/output arguments.
-func (t *OptimizationTestCaseProvider) isOptimizationTest(method abi.Method) bool {
-	// Loop through all enabled prefixes to find a match
-	for _, prefix := range t.fuzzer.Config().Fuzzing.Testing.OptimizationTesting.TestPrefixes {
-		if strings.HasPrefix(method.Name, prefix) {
-			// An optimization test must take no inputs and return an int256
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.IntTy && method.Outputs[0].Type.Size == 256 {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // runOptimizationTest executes a given optimization test method (w/ an optional execution trace) and returns the return value
@@ -141,9 +131,14 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 
 	// Create a test case for every optimization test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
+		// If we're not testing all contracts, verify the current contract is one we specified in our target contracts
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
+			continue
+		}
+
 		for _, method := range contract.CompiledContract().Abi.Methods {
 			// Verify this method is an optimization test method
-			if !t.isOptimizationTest(method) {
+			if !utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
 				continue
 			}
 			// Create local variables to avoid pointer types in the loop being overridden.

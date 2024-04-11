@@ -49,7 +49,7 @@ contract TestContract {
         lastBlockNumber = block.number;
     }
 
-    function fuzz_violate_block_hash_continuity() public view returns (bool) {
+    function property_violate_block_hash_continuity() public view returns (bool) {
         // ASSERTION: we fail if our blockHash works as expected so our fuzzer will catch it.
         return !failedTest;
     }

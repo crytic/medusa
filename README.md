@@ -45,20 +45,20 @@ You can then fetch the latest binaries for your platform from our [GitHub Releas
 Although we recommend users run `medusa` in a configuration file driven format for more customizability, you can also run `medusa` through the CLI directly.
 We provide instructions for both below.
 
-We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for Echidna. `medusa` supports Echidna-like property testing with config-defined function prefixes (default: `fuzz_`) and assertion testing using Solidity `assert(...)` statements.
+We recommend you familiarize yourself with writing [assertion](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/basic/assertion-checking.md) and [property](https://github.com/crytic/building-secure-contracts/blob/master/program-analysis/echidna/introduction/how-to-test-a-property.md) tests for Echidna. `medusa` supports Echidna-like property testing and function optimization with config-defined function prefixes (default: `property_` and `optimize_`, respectively) and assertion testing using Solidity `assert(...)` statements.
 
 ### Command-line only
 
 You can use the following command to run `medusa` against a contract:
 
 ```console
-medusa fuzz --target contract.sol --deployment-order ContractName
+medusa fuzz --compilation-target contract.sol --target-contracts ContractName
 ```
 
 Where:
 
-- `--target` specifies the path `crytic-compile` should use to compile contracts
-- `--deployment-order` specifies comma-separated names of contracts to be deployed for testing.
+- `--compilation-target` specifies the path `crytic-compile` should use to compile contracts
+- `--target-contracts` specifies comma-separated names of contracts to be deployed for testing.
 
 **Note:** Check out the [command-line interface](https://github.com/crytic/medusa/wiki/Command-Line-Interface) wiki page, or run `medusa --help` for more information.
 
@@ -74,7 +74,7 @@ medusa init
 This will create a `medusa.json` in your current folder. There are two required fields that should be set correctly:
 
 - Set your `"target"` under `"compilation"` to point to the file/directory which `crytic-compile` should use to build your contracts.
-- Put the names of any contracts you wish to deploy and run tests against in the `"deploymentOrder"` field. This must be non-empty.
+- Put the names of any contracts you wish to deploy and run tests against in the `"targetContracts"` field. This must be non-empty.
 
 After you have a configuration in place, you can execute:
 

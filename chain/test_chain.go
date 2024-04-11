@@ -199,6 +199,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	return chain, nil
 }
 
+// Close will release any objects from the TestChain that must be _explicitly_ released. Currently, the one object that
+// must be explicitly released is the stateDB trie's underlying cache. This cache, if not released, prevents the TestChain
+// object from being freed by the garbage collector and causes a severe memory leak.
+func (t *TestChain) Close() {
+	// Reset the state DB's cache
+	t.stateDatabase.TrieDB().ResetCache()
+}
+
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
 // but does not perform any other API-related changes such as adding additional tracers the original had. Additionally,
 // this does not clone pending blocks. The provided method, if non-nil, is used as callback to provide an intermediate
@@ -856,8 +864,9 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 				// this execution result is being committed to chain.
 				if deploymentChange.Creation {
 					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:    t,
-						Contract: deploymentChange.Contract,
+						Chain:             t,
+						Contract:          deploymentChange.Contract,
+						DynamicDeployment: deploymentChange.DynamicCreation,
 					})
 				} else if deploymentChange.Destroyed {
 					err = t.Events.ContractDeploymentRemovedEventEmitter.Publish(ContractDeploymentsRemovedEvent{
@@ -887,8 +896,9 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 					})
 				} else if deploymentChange.Destroyed {
 					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:    t,
-						Contract: deploymentChange.Contract,
+						Chain:             t,
+						Contract:          deploymentChange.Contract,
+						DynamicDeployment: deploymentChange.DynamicCreation,
 					})
 				}
 				if err != nil {
