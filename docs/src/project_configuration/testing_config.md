@@ -12,7 +12,7 @@ We will go over each subcomponent one-by-one:
 
 ### `stopOnFailedTest`
 - **Type**: Boolean
-- **Description**: Determines whether the fuzzer should stop execution after the first _failed_ test. If `false`, medusa
+- **Description**: Determines whether the fuzzer should stop execution after the first _failed_ test. If `false`, `medusa`
 will continue fuzzing until either the [`testLimit`](./fuzzing_config.md#testlimit) is hit, the [`timeout`](./fuzzing_config.md#timeout)
 is hit, or the user manually stops execution.
 - **Default**: `true`
@@ -33,13 +33,13 @@ contract MyContract {
   }
 }
 ```
-- **Default**: `true`
+- **Default**: `false`
 
 ### `stopOnNoTests`
 - **Type**: Boolean
 - **Description**: Determines whether the fuzzer should stop execution if no tests are found
 (property tests, assertion tests, optimization tests, or custom API-level tests). If `false` and no tests are found,
-medusa will continue fuzzing until either the [`testLimit`](./fuzzing_config.md#testlimit) is hit, 
+`medusa` will continue fuzzing until either the [`testLimit`](./fuzzing_config.md#testlimit) is hit, 
 the [`timeout`](./fuzzing_config.md#timeout) is hit, or the user manually stops execution.
 - **Default**: `true`
 
@@ -69,7 +69,7 @@ that triggered a test failure.
 > update the fuzzer's behavior.
 - **Default**: `false`
 
-### `assertionModes`
+### `panicCodeConfig`
 - **Type**: Struct
 - **Description**: This struct describes the various types of EVM-level panics that should be considered a "failing case".
 By default, only an `assert(false)` is considered a failing case. However, these configuration options would allow a user

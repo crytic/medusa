@@ -5,17 +5,19 @@ The `fuzz` command will initiate a fuzzing campaign:
 medusa fuzz [flags]
 ```
 
+## Supported Flags
+
 ### `--config`
 The `--config` flag allows you to specify the path for your [project configuration](../project_configuration/overview.md)
-file. If the `--config` flag is not used, medusa will look for a [`medusa.json`](../static/medusa.json) file in the 
+file. If the `--config` flag is not used, `medusa` will look for a [`medusa.json`](../static/medusa.json) file in the 
 current working directory.
 ```shell
 # Set config file path
 medusa fuzz --out myConfig.json
 ```
 
-### `--target`
-The `--target` flag allows you to specify the compilation target. If you are using `crytic-compile`, please review the
+### `--compilation-target`
+The `--compilation-target` flag allows you to specify the compilation target. If you are using `crytic-compile`, please review the
 warning [here](../project_configuration/compilation_config.md#target) about changing the compilation target.
 ```shell
 # Set compilation target
@@ -71,15 +73,15 @@ medusa fuzz --corpus-dir corpus
 ```
 
 ### `--senders`
-The `--senders` flag allows you to update medusa's senders (equivalent to
+The `--senders` flag allows you to update `medusa`'s senders (equivalent to
 [`fuzzing.senderAddresses`](../project_configuration/fuzzing_config.md#senderaddresses))
 ```shell
 # Set sender addresses
-medusa fuzz --senders "0x10000,0x20000,0x30000"
+medusa fuzz --senders "0x50000,0x60000,0x70000"
 ```
 
 ### `--deployer`
-The `--deployer` flag allows you to update medusa's contract deployer (equivalent to
+The `--deployer` flag allows you to update `medusa`'s contract deployer (equivalent to
 [`fuzzing.deployerAddress`](../project_configuration/fuzzing_config.md#deployeraddress))
 ```shell
 # Set deployer address

@@ -20,13 +20,13 @@ freeing memory. After resetting, the worker will be re-created and continue proc
 ### `timeout`
 - **Type**: Integer
 - **Description**: The number of seconds before the fuzzing campaign should be terminated. If a zero value is provided,
-the timeout will not be enforced. The timeout begins counting after compilation succeeds and the fuzzing campaign has started.
+the timeout will not be enforced. The timeout begins after compilation succeeds and the fuzzing campaign has started.
 - **Default**: 0 seconds
 
 ### `testLimit`
-- **Type**: Unsigned Integer
+- **Type**: Integer
 - **Description**: The number of function calls to make before the fuzzing campaign should be terminated. If a zero value
-is provided, no call limit will be enforced.
+is provided, no test limit will be enforced.
 - **Default**: 0 calls
 
 ### `callSequenceLength`
@@ -37,7 +37,7 @@ properties. After every `callSequenceLength` function calls, the blockchain is r
 
 ### `coverageEnabled`
 - **Type**: Boolean
-- **Description**: Whether coverage-increasing call sequences should be saved in the corpus for the fuzzer to mutate/re-use.
+- **Description**: Whether coverage-increasing call sequences should be saved for the fuzzer to mutate/re-use.
 Enabling coverage allows for improved code exploration.
 - **Default**: `true`
 
@@ -50,16 +50,26 @@ can then be re-used/mutated by the fuzzer during the next fuzzing campaign.
 
 ### `targetContracts`
 - **Type**: [String] (e.g. `[FirstContract, SecondContract, ThirdContract]`)
-- **Description**: The list of contracts that will be deployed on the blockchain and then targeted for fuzzing by medusa.
+- **Description**: The list of contracts that will be deployed on the blockchain and then targeted for fuzzing by `medusa`.
 For single-contract compilations, this value can be left as `[]`. This, however, is rare since most projects are multi-contract compilations. 
 > 🚩 Note that the order specified in the array is the _order_ in which the contracts are deployed to the blockchain. 
 > Thus, if you have a `corpusDirectory` set up, and you change the order of the contracts in the array, the corpus may no
-> longer work since the contract addresses of the target contracts will change.
+> longer work since the contract addresses of the target contracts will change. This may render the entire corpus useless.
+- **Default**: `[]`
+
+### `targetContractBalances`
+- **Type**: [Base-16 Integers] (e.g. `[0x123, 0x456, 0x789]`)
+- **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract 
+is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
+has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is
+`[0, 0x1, 0]`, then `B` will have a starting balance of 1 wei and `A` and `C` will have zero wei. Note that the wei-value
+has to be hex-encoded and _cannot_ have leading zeros. For an improved user-experience, the balances may be encoded as base-10
+format strings in the future.
 - **Default**: `[]`
 
 ### `constructorArgs`
 - **Type**: `{"contractName": {"variableName": _value}}`
-- **Description**: If a contract in the `deploymentOrder` has a constructor that takes in variables, these can be specified here. 
+- **Description**: If a contract in the `targetContracts` has a `constructor` that takes in variables, these can be specified here. 
 An example can be found [here](#using-constructorargs).
 - **Default**: `{}`
 
@@ -67,41 +77,40 @@ An example can be found [here](#using-constructorargs).
 - **Type**: Address
 - **Description**: The address used to deploy contracts on startup, represented as a hex string.
 > 🚩 Changing this address may render entries in the corpus invalid since the addresses of the target contracts will change.
-> It is recommended to clear your corpus when doing so.
 - **Default**: `0x30000`
 
 ### `senderAddresses`
 - **Type**: [Address]
 - **Description**: Defines the account addresses used to send function calls to deployed contracts in the fuzzing campaign.
 > 🚩 Changing these addresses may render entries in the corpus invalid since the sender(s) of corpus transactions may no
-> longer be valid. It is recommended to clear your corpus when doing so.
+> longer be valid.
 - **Default**: `[0x10000, 0x20000, 0x30000]`
 
 ### `blockNumberDelayMax`
 - **Type**: Integer
 - **Description**: Defines the maximum block number jump the fuzzer should make between test transactions. The fuzzer 
 will use this value to make the next block's `block.number` between `[1, blockNumberDelayMax]` more than that of the previous
-block. Jumping `block.number` allows medusa to enter code paths that require a given number of blocks to pass.
-- **Default**: 60_480
+block. Jumping `block.number` allows `medusa` to enter code paths that require a given number of blocks to pass.
+- **Default**: `60_480`
 
 ### `blockTimestampDelayMax`
 - **Type**: Integer
 - **Description**: The number of the maximum block timestamp jump the fuzzer should make between test transactions. 
 The fuzzer will use this value to make the next block's `block.timestamp` between `[1, blockTimestampDelayMax]` more 
-than that of the previous block. Jumping `block.timestamp`time allows medusa to enter code paths that require a given amount of time to pass.
-- **Default**: 604_800
+than that of the previous block. Jumping `block.timestamp`time allows `medusa` to enter code paths that require a given amount of time to pass.
+- **Default**: `604_800`
 
 ### `blockGasLimit`
 - **Type**: Integer
 - **Description**: The maximum amount of gas a block's transactions can use in total (thus defining max transactions per block).
 > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
-- **Default**: 125_000_000
+- **Default**: `125_000_000`
 
 ### `transactionGasLimit`
 - **Type**: Integer
 - **Description**: Defines the amount of gas sent with each fuzzer-generated transaction.
 > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
-- **Default**: 12_500_000
+- **Default**: `12_500_000`
 
 ## Using `constructorArgs`
 

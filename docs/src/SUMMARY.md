@@ -11,6 +11,7 @@
 - [Configuration Overview](project_configuration/overview.md)
 - [Fuzzing Configuration](project_configuration/fuzzing_config.md)
 - [Testing Configuration](project_configuration/testing_config.md)
+- [Chain Configuration](project_configuration/chain_config.md)
 - [Compilation Configuration](project_configuration/compilation_config.md)
 - [Logging Configuration](project_configuration/logging_config.md)
 

@@ -40,7 +40,8 @@ empty will lead to the compilation artifacts being stored in `crytic-export/`.
 #### `args`
 - **Type**: [String]
 - **Description**: Refers to any additional args that one may want to provide to `crytic-compile`. Run `crytic-compile --help`
-to view all of its supported flags.
+to view all of its supported flags. For example, if you would like to specify `--compile-force-framework foundry`, the
+`args` value will be `"args": ["--compile-force-framework", "foundry"]`.  
 > 🚩 The `--export-format` and `--export-dir` are already used during compilation with `crytic-compile`. 
 > Re-using these flags in `args` will cause the compilation to fail.
 
