@@ -1,31 +1,26 @@
 # Testing Overview
-Medusa is a smart contract fuzzer that supports three main testing modes:
 
-- **Property testing:** Checks if certain properties of the contract hold true under all possible inputs.
-- **Assertion testing:** Verifies that specific assertions within the contract hold true during execution.
-- **Optimization testing:** Attempts to maximize the return value of a given function.
+This chapter discusses the overarching goal of smart contract fuzzing.
 
-## Writing Tests
+Traditional fuzz testing (e.g. with [`AFL`](https://lcamtuf.coredump.cx/afl/)) aims to generally explore a binary by providing
+random inputs in an effort to identify new system states or crash the program (please note that this is a pretty crude generalization).
+This model, however, does not translate to the smart contract ecosystem since you cannot cause a smart contract to "crash". 
+A transaction that reverts, for example, is not equivalent to a binary crashing or panicking. 
 
-- **Property tests:** Functions prefixed with a specified prefix (e.g., `fuzz_`) that take no arguments and return a boolean indicating success.
-- **Assertion tests:** Functions that contain `assert` statements or cause the EVM to panic.
-- **Optimization tests:** Functions prefixed with a specified prefix (e.g., `optimize_`) that take no arguments and return an integer.
+Thus, with smart contracts, we have to change the fuzzing paradigm. When you hear of "fuzzing smart contracts", you are
+not trying to crash the program but, instead, you are trying to validate the **invariants** of the program. 
 
-## Running Tests
+> **Definition**: An invariant is a property that remains unchanged after one or more operations are applied to it.
 
-Medusa can be run with one or more testing modes enabled via command-line flags or a configuration file.
+More generally, an invariant is a "truth" about some system. For smart contracts, this can take many faces.
+1. **Mathematical invariants**: `a + b = b + a`. The commutative property is an invariant and any Solidity math library 
+should uphold this property.
+2. **ERC20 tokens**: The sum of all user balances should never exceed the total supply of the token.
+3. **Automated market maker (e.g. Uniswap)**: `xy = k`. The constant-product formula is an invariant that maintains the
+economic guarantees of AMMs such as Uniswap.
 
-## Results
+> **Definition**: Smart contract fuzzing uses random sequences of transactions to test the invariants of the smart contract system.
 
-Medusa reports the results of its testing campaign, including:
+Before we explore how to identify, write, and test invariants, it is beneficial to understand how smart contract fuzzing
+works under-the-hood.
 
-- Failed property tests and the call sequences that caused them.
-- Failed assertions and the call sequences that caused them.
-- The maximum return value achieved in optimization tests and the call sequence that produced it.
-
-## Benefits
-
-- Comprehensive testing through multiple modes.
-- Parallel execution for faster results.
-- Customizable testing framework.
-- User-friendly CLI and configuration file format.

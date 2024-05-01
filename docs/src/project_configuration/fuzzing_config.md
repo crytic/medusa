@@ -58,11 +58,11 @@ For single-contract compilations, this value can be left as `[]`. This, however,
 - **Default**: `[]`
 
 ### `targetContractBalances`
-- **Type**: [Base-16 Integers] (e.g. `[0x123, 0x456, 0x789]`)
+- **Type**: [Base-16 Strings] (e.g. `[0x123, 0x456, 0x789]`)
 - **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract 
 is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
 has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is
-`[0, 0x1, 0]`, then `B` will have a starting balance of 1 wei and `A` and `C` will have zero wei. Note that the wei-value
+`["0", "0xff", "0"]`, then `B` will have a starting balance of 255 wei and `A` and `C` will have zero wei. Note that the wei-value
 has to be hex-encoded and _cannot_ have leading zeros. For an improved user-experience, the balances may be encoded as base-10
 format strings in the future.
 - **Default**: `[]`
