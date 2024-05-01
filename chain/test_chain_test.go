@@ -75,7 +75,7 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	}
 
 	// Create a test chain with a default test chain configuration
-	chain, err := NewTestChain(genesisAlloc, nil, nil)
+	chain, err := NewTestChain(genesisAlloc, nil)
 
 	assert.NoError(t, err)
 
@@ -619,7 +619,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil, nil)
+		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

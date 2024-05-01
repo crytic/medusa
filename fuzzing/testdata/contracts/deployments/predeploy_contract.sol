@@ -5,10 +5,9 @@ contract PredeployContract {
 }
 
 contract TestContract {
-    PredeployContract predeploy = PredeployContract(address(0x123));
+    PredeployContract predeploy = PredeployContract(address(0x1234));
 
     function testPredeploy() public {
         predeploy.triggerFailure();
-        assert(false);
     }
 }

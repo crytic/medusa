@@ -67,6 +67,7 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, author *commo
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
+	// TODO: This needs to be fixed
 	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}

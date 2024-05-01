@@ -335,7 +335,11 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 				// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
 				// requested address
 				initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
-				contractAddressOverrides[initBytecodeHash], _ = utils.HexStringToAddress(addrStr)
+				contractAddr, err := utils.HexStringToAddress(addrStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid address provided for a predeployed contract: %v", contract.Name())
+				}
+				contractAddressOverrides[initBytecodeHash] = contractAddr
 				found = true
 				break
 			}
@@ -347,8 +351,11 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		}
 	}
 
+	// Update the test chain config with the contract address overrides
+	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
+
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
-	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig, contractAddressOverrides)
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
