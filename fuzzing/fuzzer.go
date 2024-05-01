@@ -373,8 +373,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("missing target contracts (update fuzzing.targetContracts in the project config " +
-				"or use the --target-contracts CLI flag)"), nil
+			return fmt.Errorf("missing target contracts"), nil
 		}
 	}
 
@@ -382,6 +381,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 	contractsToDeploy := make([]string, 0)
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	for contractName, _ := range fuzzer.config.Fuzzing.PredeployedContracts {
+		// If the same contract is in both target contracts and predeployed contracts, throw an error
+		if slices.Contains(contractsToDeploy, contractName) {
+			return fmt.Errorf("same contract cannot be in target contracts and predeployed contracts: %v", contractName), nil
+		}
 		contractsToDeploy = append(contractsToDeploy, contractName)
 	}
 

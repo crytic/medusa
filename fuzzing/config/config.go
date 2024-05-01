@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
@@ -340,10 +339,10 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that addresses of predeployed contracts are well-formed
 	for _, addr := range p.Fuzzing.PredeployedContracts {
 		if _, err := utils.HexStringToAddress(addr); err != nil {
-			return fmt.Errorf("project configuration must specify only well-formed predeployed contract addresses: %v", addr)
+			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
 		}
 	}
-	
+
 	// Ensure that the log level is a valid one
 	level, err := zerolog.ParseLevel(p.Logging.Level.String())
 	if err != nil || level == zerolog.FatalLevel {
