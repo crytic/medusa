@@ -380,7 +380,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 	// Concatenate the predeployed contracts and target contracts
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	contractsToDeploy := make([]string, 0)
-	for contractName, _ := range fuzzer.config.Fuzzing.PredeployedContracts {
+	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
 	}
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
