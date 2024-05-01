@@ -377,16 +377,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 		}
 	}
 
-	// Concatenate the target contracts and the predeployed contracts
+	// Concatenate the predeployed contracts and target contracts
+	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	contractsToDeploy := make([]string, 0)
-	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	for contractName, _ := range fuzzer.config.Fuzzing.PredeployedContracts {
-		// If the same contract is in both target contracts and predeployed contracts, throw an error
-		if slices.Contains(contractsToDeploy, contractName) {
-			return fmt.Errorf("same contract cannot be in target contracts and predeployed contracts: %v", contractName), nil
-		}
 		contractsToDeploy = append(contractsToDeploy, contractName)
 	}
+	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 
 	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
