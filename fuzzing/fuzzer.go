@@ -326,7 +326,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	}
 
 	// Identify which contracts need to be predeployed to a deterministic address by iterating across the mapping
-	contractAddressOverrides := make(map[common.Hash]common.Address, 0)
+	contractAddressOverrides := make(map[common.Hash]common.Address, len(f.config.Fuzzing.PredeployedContracts))
 	for contractName, addrStr := range f.config.Fuzzing.PredeployedContracts {
 		found := false
 		// Try to find the associated compilation artifact
@@ -379,6 +379,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 
 	// Concatenate the predeployed contracts and target contracts
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
+	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
