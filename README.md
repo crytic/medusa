@@ -29,8 +29,6 @@ cd docs
 mdbook serve
 ```
 
-The documentation will now open on http://localhost:3000.
-
 ## Contributing
 
 For information about how to contribute to this project, check out the [CONTRIBUTING](./CONTRIBUTING.md) guidelines.
