@@ -108,10 +108,11 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 
 			// If the call was made to the console log precompile address, let's retrieve the log and format it
 			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
-				// First, attempt to do string formatting if the first element is a string and has a percent sign in it
+				// First, attempt to do string formatting if the first element is a string, has a percent sign in it,
+				// and there is at least one argument provided for formatting.
 				exp := regexp.MustCompile(`%`)
 				stringInput, isString := inputValues[0].(string)
-				if isString && exp.MatchString(stringInput) {
+				if isString && exp.MatchString(stringInput) && len(inputValues) > 1 {
 					// Format the string and add it to the list of logs
 					consoleLogString = fmt.Sprintf(inputValues[0].(string), inputValues[1:]...)
 				} else {
