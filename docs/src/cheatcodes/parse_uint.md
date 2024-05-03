@@ -1,9 +1,11 @@
 # `parseUint`
 
 ## Description
+
 The `parseUint` cheatcode will parse the input string into a uint256
 
 ## Example
+
 ```solidity
 contract TestContract {
     uint x = 123;
@@ -22,6 +24,7 @@ contract TestContract {
 ```
 
 ## Function Signature
+
 ```solidity
 function parseUint(string calldata) external returns (uint256);
 ```

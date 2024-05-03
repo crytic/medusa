@@ -1,12 +1,14 @@
 # `snapshot` and `revertTo`
 
 ## Description
+
 The `snapshot` cheatcode will take a snapshot of the current state of the blockchain and return an identifier for the
 snapshot.
 
-On the flipside, the `revertTo` cheatcode will revert the EVM state back based on the provided identifier. 
+On the flipside, the `revertTo` cheatcode will revert the EVM state back based on the provided identifier.
 
 ## Example
+
 ```solidity
 interface CheatCodes {
     function warp(uint256) external;

@@ -26,30 +26,30 @@ A rudimentary description of the objects/providers and their roles are explained
 
 - `TestChain`: This is a fake chain that operates on fake block structures created for the purpose of testing. Rather than operating on `types.Transaction` (which requires signing), it operates on `core.Message`s, which are derived from transactions and simply allow you to set the `sender` field. It is responsible for:
 
-    - Maintaining state of the chain (blocks, transactions in them, results/receipts)
-    - Providing methods to create blocks, add transactions to them, commit them to chain, revert to previous block numbers.
-    - Allowing spoofing of block number and timestamp (commiting block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
-    - Provides methods to add tracers such as `evm.Logger` (standard go-ethereum tracers) or extend them with an additional interface (`TestChainTracer`) to also store any captured traced information in the execution results. This allows you to trace EVM execution for certain conditions, store results, and query them at a later time for testing.
+  - Maintaining state of the chain (blocks, transactions in them, results/receipts)
+  - Providing methods to create blocks, add transactions to them, commit them to chain, revert to previous block numbers.
+  - Allowing spoofing of block number and timestamp (commiting block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
+  - Provides methods to add tracers such as `evm.Logger` (standard go-ethereum tracers) or extend them with an additional interface (`TestChainTracer`) to also store any captured traced information in the execution results. This allows you to trace EVM execution for certain conditions, store results, and query them at a later time for testing.
 
 - `Fuzzer`: This is the main provider for the fuzzing process. It takes a `ProjectConfig` and is responsible for:
 
-    - Housing data shared between the `FuzzerWorker`s such as contract definitions, a `ValueSet` derived from compilation to use in value generation, the reference to `Corpus`, the `CoverageMaps` representing all coverage achieved, as well as maintaining `TestCase`s registered to it and printing their results.
-    - Compiling the targets defined by the project config and setting up state.
-    - Provides methods to start/stop the fuzzing process, add additional compilation targets, access the initial value set prior to fuzzing start, access corpus, config, register new test cases and report them finished.
-    - Starts the fuzzing process by creating a "base" `TestChain`, deploys compiled contracts, replays all corpus sequences to measure existing coverage from previous fuzzing campaign, then spawns as many `FuzzerWorker`s as configured on their own goroutines ("threads") and passes them the "base" `TestChain` (which they clone) to begin the fuzzing operation.
-        - Respawns `FuzzerWorker`s when they hit a config-defined reset limit for the amount of transaction sequences they should process before destroying themselves and freeing memory.
-        - Maintains the context for when fuzzing should stop, which all workers track.
+  - Housing data shared between the `FuzzerWorker`s such as contract definitions, a `ValueSet` derived from compilation to use in value generation, the reference to `Corpus`, the `CoverageMaps` representing all coverage achieved, as well as maintaining `TestCase`s registered to it and printing their results.
+  - Compiling the targets defined by the project config and setting up state.
+  - Provides methods to start/stop the fuzzing process, add additional compilation targets, access the initial value set prior to fuzzing start, access corpus, config, register new test cases and report them finished.
+  - Starts the fuzzing process by creating a "base" `TestChain`, deploys compiled contracts, replays all corpus sequences to measure existing coverage from previous fuzzing campaign, then spawns as many `FuzzerWorker`s as configured on their own goroutines ("threads") and passes them the "base" `TestChain` (which they clone) to begin the fuzzing operation.
+    - Respawns `FuzzerWorker`s when they hit a config-defined reset limit for the amount of transaction sequences they should process before destroying themselves and freeing memory.
+    - Maintains the context for when fuzzing should stop, which all workers track.
 
 - `FuzzerWorker`: This describes an object spawned by the `Fuzzer` with a given "base" `TestChain` with target contracts already deployed, ready to be fuzzed. It clones this chain, then is called upon to begin creating fuzz transactions. It is responsible for:
-    - Maintaining a reference to the parent `Fuzzer` for any shared information between it and other workers (`Corpus`, total `CoverageMaps`, contract definitions to match deployment's bytecode, etc)
-    - Maintaining its own `TestChain` to run fuzzed transaction sequences.
-    - Maintaining its own `ValueSet` which derives from the `Fuzzer`'s `ValueSet` (populated by compilation or user-provided values through API), as each `FuzzerWorker` may populate its `ValueSet` with different runtime values depending on their own chain state.
-    - Spawning a `ValueGenerator` which uses the `ValueSet`, to generate values used to construct fuzzed transaction sequences.
-    - Most importantly, it continuously:
-        - Generates `CallSequence`s (a series of transactions), plays them on its `TestChain`, records the results of in each `CallSequenceElement`, and calls abstract/hookable "test functions" to indicate they should perform post-tx tests (for which they can return requests for a shrunk test sequence).
-        - Updates the total `CoverageMaps` and `Corpus` with the current `CallSequence` if the most recent call increased coverage.
-        - Processes any shrink requests from the previous step (shrink requests can define arbitrary criteria for shrinking).
-    - Eventually, hits the config-defined reset limit for how many sequences it should process, and destroys itself to free all memory, expecting the `Fuzzer` to respawn another in its place.
+  - Maintaining a reference to the parent `Fuzzer` for any shared information between it and other workers (`Corpus`, total `CoverageMaps`, contract definitions to match deployment's bytecode, etc)
+  - Maintaining its own `TestChain` to run fuzzed transaction sequences.
+  - Maintaining its own `ValueSet` which derives from the `Fuzzer`'s `ValueSet` (populated by compilation or user-provided values through API), as each `FuzzerWorker` may populate its `ValueSet` with different runtime values depending on their own chain state.
+  - Spawning a `ValueGenerator` which uses the `ValueSet`, to generate values used to construct fuzzed transaction sequences.
+  - Most importantly, it continuously:
+    - Generates `CallSequence`s (a series of transactions), plays them on its `TestChain`, records the results of in each `CallSequenceElement`, and calls abstract/hookable "test functions" to indicate they should perform post-tx tests (for which they can return requests for a shrunk test sequence).
+    - Updates the total `CoverageMaps` and `Corpus` with the current `CallSequence` if the most recent call increased coverage.
+    - Processes any shrink requests from the previous step (shrink requests can define arbitrary criteria for shrinking).
+  - Eventually, hits the config-defined reset limit for how many sequences it should process, and destroys itself to free all memory, expecting the `Fuzzer` to respawn another in its place.
 
 ## Creating a project configuration
 
@@ -153,7 +153,7 @@ The `Fuzzer` maintains hooks for some of its functionality under `Fuzzer.Hooks.*
 
 - `TestChainSetupFunc`: This method is used to set up a chain's initial state before fuzzing. By default, this method deploys all contracts compiled and marked for deployment in the `ProjectConfig` provided to the `Fuzzer`. It only deploys contracts if they have no constructor arguments. This can be replaced with your own method to do custom deployments.
 
-    - **Note**: We do not recommend replacing this for now, as the `Contract` definitions may not be known to the `Fuzzer`. Additionally, `SenderAddresses` and `DeployerAddress` are the only addresses funded at genesis. This will be updated at a later time.
+  - **Note**: We do not recommend replacing this for now, as the `Contract` definitions may not be known to the `Fuzzer`. Additionally, `SenderAddresses` and `DeployerAddress` are the only addresses funded at genesis. This will be updated at a later time.
 
 - `CallSequenceTestFuncs`: This is a list of functions which are called after each `FuzzerWorker` executed another call in its current `CallSequence`. It takes the `FuzzerWorker` and `CallSequence` as input, and is expected to return a list of `ShinkRequest`s if some interesting result was found and we wish for the `FuzzerWorker` to shrink the sequence. You can add a function here as part of custom post-call testing methodology to check if some property was violated, then request a shrunken sequence for it with arbitrary criteria to verify the shrunk sequence satisfies your requirements (e.g. violating the same property again).
 

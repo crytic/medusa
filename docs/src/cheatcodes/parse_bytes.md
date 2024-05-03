@@ -1,9 +1,11 @@
 # `parseBytes`
 
 ## Description
+
 The `parseBytes` cheatcode will parse the input string into bytes
 
 ## Example
+
 ```solidity
 contract TestContract {
     uint x = 123;
@@ -22,6 +24,7 @@ contract TestContract {
 ```
 
 ## Function Signature
+
 ```solidity
 function parseBytes(string calldata) external returns (bytes memory);
 ```

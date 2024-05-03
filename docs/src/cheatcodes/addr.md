@@ -1,9 +1,11 @@
 # `addr`
 
 ## Description
+
 The `addr` cheatcode will compute the address for a given private key.
 
 ## Example
+
 ```solidity
 // Obtain our cheat code contract reference.
 IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
@@ -16,6 +18,7 @@ assert(result == addrOne);
 ```
 
 ## Function Signature
+
 ```solidity
 function addr(uint256 privateKey) external returns (address);
 ```

@@ -2,6 +2,7 @@
 
 `medusa`'s project configuration provides extensive and granular control over the execution of the fuzzer. The project
 configuration is a `.json` file that is broken down into five core components.
+
 - [Fuzzing Configuration](./fuzzing_config.md): The fuzzing configuration dictates the parameters with which the fuzzer will execute.
 - [Testing Configuration](./testing_config.md): The testing configuration dictates how and what `medusa` should fuzz test.
 - [Chain Configuration](./chain_config.md): The chain configuration dictates how `medusa`'s underlying blockchain should be configured.
@@ -19,15 +20,15 @@ incredible level of flexibility on how the fuzzer should run but this comes with
 of what configuration options control what feature. Outlined below is a list of configuration options that we recommend
 you become familiar with and change before starting to fuzz test.
 
-> **Note:** Having an [example project configuration file](../static/medusa.json) open will aid in visualizing which 
+> **Note:** Having an [example project configuration file](../static/medusa.json) open will aid in visualizing which
 > configuration options to change.
 
 ### `fuzzing.targetContracts`
 
 Updating this configuration option is **required**! The `targetContracts` configuration option tells `medusa` which contracts
 to fuzz test. You can specify one or more contracts for this option which is why it accepts an array
-of strings. Let's say you have a fuzz testing contract called `TestStakingContract` that you want to test. 
-Then, you would set the value of `targetContracts` to `["TestStakingContract"]`. 
+of strings. Let's say you have a fuzz testing contract called `TestStakingContract` that you want to test.
+Then, you would set the value of `targetContracts` to `["TestStakingContract"]`.
 You can learn more about this option [here](./fuzzing_config.md#targetcontracts).
 
 ### `fuzzing.testLimit`
@@ -46,7 +47,3 @@ will also hold [coverage reports](TODO) which is a valuable tool for debugging a
 `corpusDirectory`'s value to "corpus". This will create a `corpus/` directory in the same directory as the `medusa.json`
 file.
 You can learn more about this option [here](./fuzzing_config.md#corpusdirectory).
-
-
-
-

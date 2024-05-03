@@ -4,6 +4,7 @@ There are three main ways to install `medusa` at the moment. The first is using 
 building from source, or installing a precompiled binary.
 
 If you have any difficulty with installing `medusa`, please [open an issue](https://github.com/crytic/medusa/issues) on GitHub.
+
 ## Installing with Homebrew
 
 Note that using Homebrew is only viable (and recommended) for macOS and Linux users. For Windows users, you must
@@ -16,6 +17,7 @@ Installation instructions for Homebrew can be found [here](https://brew.sh/).
 ### Install `medusa`
 
 Run the following command to install `medusa`:
+
 ```shell
 brew install medusa
 ```
@@ -25,14 +27,16 @@ brew install medusa
 ### Prerequisites
 
 Before downloading `medusa`, you will need to download Golang and `crytic-compile`.
+
 - Installation instructions for Golang can be found [here](https://go.dev/doc/install)
 - Installation instructions for `crytic-compile` can be found [here](https://github.com/crytic/crytic-compile#installation)
-    - Note that `crytic-compile` requires a Python environment. Installation instructions for Python can be found
-      [here](https://www.python.org/downloads/).
+  - Note that `crytic-compile` requires a Python environment. Installation instructions for Python can be found
+    [here](https://www.python.org/downloads/).
 
 ### Build `medusa`
 
 Run the following commands to build `medusa` (this should work on all OSes):
+
 ```shell
 # Clone the repository
 git clone https://github.com/crytic/medusa
@@ -51,9 +55,9 @@ recommend using the Windows GUI).
 
 The precompiled binaries can be downloaded on `medusa`'s [GitHub releases page](https://github.com/crytic/medusa/releases).
 
-> **_NOTE:_**  macOS may set the [quarantine extended attribute](https://superuser.com/questions/28384/what-should-i-do-about-com-apple-quarantine)
+> **_NOTE:_** macOS may set the [quarantine extended attribute](https://superuser.com/questions/28384/what-should-i-do-about-com-apple-quarantine)
 > on the downloaded zip file. To remove this attribute, run the following command:
-> ```sudo xattr -rd com.apple.quarantine <my_file.tar.gz>```.
+> `sudo xattr -rd com.apple.quarantine <my_file.tar.gz>`.
 
 Once installed, you will need to unzip the file and move the binary to somewhere in your `$PATH`. Please review the instructions
 [here](https://zwbetz.com/how-to-add-a-binary-to-your-path-on-macos-linux-windows/) (if you are a Windows user, we

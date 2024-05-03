@@ -1,9 +1,11 @@
 # `store`
 
 ## Description
+
 The `store` cheatcode will store `value` in storage slot `slot` for `account`
 
 ## Example
+
 ```solidity
 contract TestContract {
     uint x = 123;
@@ -19,6 +21,7 @@ contract TestContract {
 ```
 
 ## Function Signature
+
 ```solidity
 function store(address account, bytes32 slot, bytes32 value) external;
 ```

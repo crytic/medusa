@@ -11,11 +11,7 @@
     "targetContractsBalances": ["0xfffffffffffffffffffffffffffffff"],
     "constructorArgs": {},
     "deployerAddress": "0x30000",
-    "senderAddresses": [
-      "0x10000",
-      "0x20000",
-      "0x30000"
-    ],
+    "senderAddresses": ["0x10000", "0x20000", "0x30000"],
     "blockNumberDelayMax": 60480,
     "blockTimestampDelayMax": 604800,
     "blockGasLimit": 125000000,
@@ -44,15 +40,11 @@
       },
       "propertyTesting": {
         "enabled": true,
-        "testPrefixes": [
-          "property_"
-        ]
+        "testPrefixes": ["property_"]
       },
       "optimizationTesting": {
         "enabled": true,
-        "testPrefixes": [
-          "optimize_"
-        ]
+        "testPrefixes": ["optimize_"]
       }
     },
     "chainConfig": {

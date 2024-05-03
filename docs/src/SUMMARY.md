@@ -8,6 +8,7 @@
 - [First Steps](./getting_started/first_steps.md)
 
 # Project Configuration
+
 - [Configuration Overview](project_configuration/overview.md)
 - [Fuzzing Configuration](project_configuration/fuzzing_config.md)
 - [Testing Configuration](project_configuration/testing_config.md)
@@ -16,12 +17,14 @@
 - [Logging Configuration](project_configuration/logging_config.md)
 
 # Command Line Interface (CLI)
+
 - [CLI Overview](./cli/overview.md)
 - [init](./cli/init.md)
 - [fuzz](./cli/fuzz.md)
 - [completion](./cli/completion.md)
 
 # Writing Tests
+
 - [Testing Overview](./testing/overview.md)
 - [The Fuzzing Lifecycle](./testing/fuzzing_lifecycle.md)
 - [Types of Invariants](./testing/invariants.md)
@@ -30,6 +33,7 @@
 - [Coverage Reports (WIP)](./testing/coverage_reports.md)
 
 # API
+
 - [API Overview (WIP)](api/api_overview.md)
 
 # Appendices

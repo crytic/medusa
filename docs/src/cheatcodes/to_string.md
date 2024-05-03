@@ -1,11 +1,13 @@
 # `toString`
 
 ## Description
-The `toString` cheatcodes aid in converting primitive Solidity types into strings. Similar to 
-[Foundry's behavior](https://book.getfoundry.sh/cheatcodes/to-string?highlight=toStr#description), bytes are converted 
+
+The `toString` cheatcodes aid in converting primitive Solidity types into strings. Similar to
+[Foundry's behavior](https://book.getfoundry.sh/cheatcodes/to-string?highlight=toStr#description), bytes are converted
 to a hex-encoded string with `0x` prefixed.
 
 ## Example
+
 ```solidity
 contract TestContract {
     IStdCheats cheats;
@@ -71,6 +73,7 @@ contract TestContract {
 ```
 
 ## Function Signatures
+
 ```solidity
 function toString(address) external returns (string memory);
 function toString(bool) external returns (string memory);

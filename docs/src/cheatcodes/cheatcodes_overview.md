@@ -29,13 +29,13 @@ interface StdCheats {
 
     // Sets the block.coinbase
     function coinbase(address) external;
-    
+
     // Loads a storage slot from an address
     function load(address account, bytes32 slot) external returns (bytes32);
 
     // Stores a value to an address' storage slot
     function store(address account, bytes32 slot, bytes32 value) external;
-    
+
     // Sets the *next* call's msg.sender to be the input address
     function prank(address) external;
 
@@ -47,7 +47,7 @@ interface StdCheats {
 
     // Sets an address' code
     function etch(address who, bytes calldata code) external;
-    
+
     // Signs data
     function sign(uint256 privateKey, bytes32 digest)
         external
@@ -55,7 +55,7 @@ interface StdCheats {
 
     // Computes address for a given private key
     function addr(uint256 privateKey) external returns (address);
-    
+
     // Gets the nonce of an account
     function getNonce(address account) external returns (uint64);
 
@@ -65,13 +65,13 @@ interface StdCheats {
 
     // Performs a foreign function call via terminal
     function ffi(string[] calldata) external returns (bytes memory);
-    
+
     // Take a snapshot of the current state of the EVM
     function snapshot() external returns (uint256);
-    
+
     // Revert state back to a snapshot
     function revertTo(uint256) external returns (bool);
-    
+
     // Convert Solidity types to strings
     function toString(address) external returns(string memory);
     function toString(bytes calldata) external returns(string memory);
@@ -79,7 +79,7 @@ interface StdCheats {
     function toString(bool) external returns(string memory);
     function toString(uint256) external returns(string memory);
     function toString(int256) external returns(string memory);
-    
+
     // Convert strings into Solidity types
     function parseBytes(string memory) external returns(bytes memory);
     function parseBytes32(string memory) external returns(bytes32);
@@ -91,6 +91,7 @@ interface StdCheats {
 ```
 
 # Using cheatcodes
+
 Below is an example snippet of how you would import the cheatcode interface into your project and use it.
 
 ```solidity
@@ -101,15 +102,15 @@ import "./IStdCheats.sol";
 contract MyContract {
     // Set up reference to cheatcode contract
     IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-    
+
     // This is a test function that will set the msg.sender's nonce to the provided input argument
     function testFunc(uint256 _x) public {
         // Ensure that the input argument is greater than msg.sender's current nonce
         require(_x > cheats.getNonce(msg.sender));
-        
+
         // Set sender's nonce
         cheats.setNonce(msg.sender, x);
-        
+
         // Assert that the nonce has been correctly updated
         assert(cheats.getNonce(msg.sender) == x);
     }
