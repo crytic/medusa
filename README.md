@@ -19,7 +19,7 @@ It provides parallelized fuzz testing of smart contracts through CLI, or its Go 
 
 ## Documentation
 
-To learn more about how to install and use `medusa`, please refer to our [documentation](./docs/src/README.md).
+To learn more about how to install and use `medusa`, please refer to our [documentation](./docs/src/SUMMARY.md).
 
 For a better viewing experience, we recommend you install [mdbook](https://rust-lang.github.io/mdBook/guide/installation.html)
 and then running the following steps from medusa's source directory:
