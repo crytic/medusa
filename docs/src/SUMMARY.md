@@ -44,6 +44,7 @@
   - [load](./cheatcodes/load.md)
   - [etch](./cheatcodes/etch.md)
   - [deal](./cheatcodes/deal.md)
+  - [snapshot](./cheatcodes/snapshot.md)
   - [getNonce](./cheatcodes/get_nonce.md)
   - [setNonce](./cheatcodes/set_nonce.md)
   - [coinbase](./cheatcodes/coinbase.md)

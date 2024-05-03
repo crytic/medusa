@@ -65,7 +65,13 @@ interface StdCheats {
 
     // Performs a foreign function call via terminal
     function ffi(string[] calldata) external returns (bytes memory);
-
+    
+    // Take a snapshot of the current state of the EVM
+    function snapshot() external returns (uint256);
+    
+    // Revert state back to a snapshot
+    function revertTo(uint256) external returns (bool);
+    
     // Convert Solidity types to strings
     function toString(address) external returns(string memory);
     function toString(bytes calldata) external returns(string memory);
