@@ -26,13 +26,15 @@
 - [The Fuzzing Lifecycle](./testing/fuzzing_lifecycle.md)
 - [Types of Invariants](./testing/invariants.md)
 - [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
-- [Writing System-Level Invariants](./testing/writing-system-level-invariants.md)
-- [API Overview (WIP)](./api-overview.md)
-- [Testing with `medusa`](./writing-tests.md)
+- [Writing System-Level Invariants (WIP)](./testing/writing-system-level-invariants.md)
+- [Coverage Reports (WIP)](./testing/coverage_reports.md)
+
+# API
+- [API Overview (WIP)](api/api_overview.md)
 
 # Appendices
 
-- [Cheatcodes](./cheatcodes_overview.md)
+- [Cheatcodes](cheatcodes/cheatcodes_overview.md)
   - [warp](./cheatcodes/warp.md)
   - [roll](./cheatcodes/roll.md)
   - [fee](./cheatcodes/fee.md)
