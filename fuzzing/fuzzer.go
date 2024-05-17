@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -86,6 +87,10 @@ type Fuzzer struct {
 
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
+
+	// Counts how many tests passed or not during the fuzzing test
+	numTestsPassed int
+	numTestsFailed int
 }
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
@@ -263,9 +268,19 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 	// Otherwise now mark the test case as finished.
 	f.testCasesFinished[testCase.ID()] = testCase
 
+	//We count how many failed tests happened
+	if testCase.Status() == TestCaseStatusFailed {
+		f.numTestsFailed++
+	}
+
+	if testCase.Status() == TestCaseStatusPassed {
+		f.numTestsPassed++
+	}
+
 	// We only log here if we're not configured to stop on the first test failure. This is because the fuzzer prints
 	// results on exit, so we avoid duplicate messages.
 	if !f.config.Fuzzing.Testing.StopOnFailedTest {
+
 		f.logger.Info(testCase.LogMessage().Elements()...)
 	}
 
@@ -787,6 +802,9 @@ func (f *Fuzzer) printMetricsLoop() {
 		memoryUsedMB := memStats.Alloc / 1024 / 1024
 		memoryTotalMB := memStats.Sys / 1024 / 1024
 
+		// Calculate total tests
+		totalTests := f.numTestsPassed + f.numTestsFailed
+
 		// Print a metrics update
 		logBuffer := logging.NewLogBuffer()
 		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
@@ -794,6 +812,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		logBuffer.Append(", failed: ", colors.Bold, fmt.Sprintf("%d/%d", f.numTestsFailed, totalTests), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
 			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
