@@ -2,7 +2,6 @@ package coverage
 
 import (
 	"bytes"
-	"fmt"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -345,10 +344,9 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 		return true, nil
 	}
 
-	// Update each byte which represents a position in the bytecode which was covered. We ignore any size
-	// differences as init bytecode can have arbitrary length arguments appended.
+	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
-	for i := 0; i < len(cm.executedFlags) || i < len(coverageMap.executedFlags); i++ {
+	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
 		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
 			cm.executedFlags[i] = 1
 			changed = true
@@ -373,5 +371,8 @@ func (cm *CoverageMapBytecodeData) setCoveredAt(codeSize int, pc uint64) (bool, 
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("tried to set coverage map out of bounds (pc: %d, code size %d)", pc, len(cm.executedFlags))
+
+	// Since it is possible that the program counter is larger than the code size (e.g., malformed bytecode), we will
+	// simply return false with no error
+	return false, nil
 }

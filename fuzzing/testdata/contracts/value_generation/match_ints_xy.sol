@@ -12,7 +12,7 @@ contract TestContract {
     }
 
 
-    function fuzz_never_specific_values() public view returns (bool) {
+    function property_never_specific_values() public view returns (bool) {
         // ASSERTION: x should never be -10 at the same time y is -62
         return !(x == -10 && y == -62);
     }

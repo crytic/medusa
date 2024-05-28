@@ -28,6 +28,12 @@ func (l *LogBuffer) Elements() []any {
 
 // String provides the non-colorized string representation of the LogBuffer
 func (l LogBuffer) String() string {
-	_, msg, _, _ := buildMsgs(l.elements)
+	_, msg, _, _ := buildMsgs(l.elements...)
+	return msg
+}
+
+// ColorString provides the colorized string representation of the LogBuffer
+func (l LogBuffer) ColorString() string {
+	msg, _, _, _ := buildMsgs(l.elements...)
 	return msg
 }
