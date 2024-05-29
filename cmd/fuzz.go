@@ -146,6 +146,10 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if !projectConfig.Fuzzing.CoverageEnabled {
+		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
+	}
+
 	// Create our fuzzing
 	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
