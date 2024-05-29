@@ -75,8 +75,6 @@ contract MyContract {
 
 - **Type**: Boolean
 - **Description**: Whether `pure` / `view` functions should be tested for assertion failures.
-  > 🚩 Fuzzing `pure` and `view` functions is not currently implemented. Thus, enabling this option to `true` does not
-  > update the fuzzer's behavior.
 - **Default**: `false`
 
 ### `panicCodeConfig`
