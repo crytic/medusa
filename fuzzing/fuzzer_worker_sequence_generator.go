@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -245,7 +246,7 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 	// If it is nil, we generate an entirely new call. Otherwise, we apply pre-execution modifications.
 	var err error
 	if element == nil {
-		element, err = g.generateNewElement()
+		element, err = g.generateNewElement(false)
 		if err != nil {
 			return nil, err
 		}
@@ -270,20 +271,52 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 	return element, nil
 }
 
-// generateNewElement generates a new call sequence element which targets a method in a contract
-// deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
-// Returns the call sequence element, or an error if one was encountered.
-func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
+func (g *CallSequenceGenerator) selectPureMethod() (*contracts.DeployedContractMethod, error) {
+	if len(g.worker.pureMethods) == 0 {
+		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no pure methods to call")
+	}
+	// Select a random pure method
+	selectedMethod := g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
+
+	return &selectedMethod, nil
+}
+
+func (g *CallSequenceGenerator) selectAnyMethod() (*contracts.DeployedContractMethod, error) {
 	// Verify we have state changing methods to call if we are not testing view/pure methods.
 	if len(g.worker.stateChangingMethods) == 0 && !g.worker.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
 		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
 	}
-	// Select a random method and sender
+
+	// Select a random method
 	selectedMethod, err := g.worker.methodChooser.Choose()
 	if err != nil {
 		return nil, err
 	}
+	return selectedMethod, nil
+}
 
+// generateNewElement generates a new call sequence element which targets a method of a contract
+// deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
+// Returns the call sequence element, or an error if one was encountered.
+func (g *CallSequenceGenerator) generateNewElement(pure bool) (*calls.CallSequenceElement, error) {
+	// Verify we have state changing methods to call if we are not testing view/pure methods.
+	if len(g.worker.stateChangingMethods) == 0 && !g.worker.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
+	}
+	// Select a random method
+	var selectedMethod *contracts.DeployedContractMethod
+	var err error
+
+	if pure {
+		selectedMethod, err = g.selectPureMethod()
+	} else {
+		selectedMethod, err = g.selectAnyMethod()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Select a random sender
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
