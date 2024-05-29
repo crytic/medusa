@@ -28,7 +28,7 @@ contract TestInternalLibrary {
         return a + b;
     }
 
-    function fuzz_library_linking_broken() public view returns (bool) {
+    function property_library_linking_broken() public view returns (bool) {
         // ASSERTION: We should always be able to compute correctly.
         return !failedTest;
     }

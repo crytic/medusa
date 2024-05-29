@@ -2,11 +2,12 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
-	"math/big"
 )
 
 // CallSequenceGenerator generates call sequences iteratively per element, for use in fuzzing campaigns. It is attached
@@ -192,7 +193,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
 
-	// Check if there are any previously une-xecuted corpus call sequences. If there are, the fuzzer should execute
+	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
 	// those first.
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
 	if unexecutedSequence != nil {
@@ -336,10 +337,10 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+		return fmt.Errorf("could not obtain corpus call sequence for head mutation: %v", err)
 	}
 
-	// Determine a random position to slice the call sequence.
+	// Determine the length of the slice to be copied in the head.
 	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
 

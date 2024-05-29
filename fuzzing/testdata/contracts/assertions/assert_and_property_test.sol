@@ -5,7 +5,7 @@ contract TestContract {
         assert(false);
     }
 
-    function fuzz_failing_property() public view returns (bool) {
+    function property_failing_property() public view returns (bool) {
         // ASSERTION: fail immediately.
         return false;
     }
