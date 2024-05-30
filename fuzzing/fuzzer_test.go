@@ -2,10 +2,11 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
@@ -809,8 +810,16 @@ func TestCorpusReplayability(t *testing.T) {
 			assertCorpusCallSequencesCollected(f, true)
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
-			// Check to see if original and new coverage are the same.
-			assert.True(t, originalCoverage.Equal(newCoverage))
+			// Check to see if original and new coverage are the same (disregarding hit count)
+			successCovIncreased, revertCovIncreased, err := originalCoverage.Update(newCoverage)
+			assert.False(t, successCovIncreased)
+			assert.False(t, revertCovIncreased)
+			assert.NoError(t, err)
+
+			successCovIncreased, revertCovIncreased, err = newCoverage.Update(originalCoverage)
+			assert.False(t, successCovIncreased)
+			assert.False(t, revertCovIncreased)
+			assert.NoError(t, err)
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
 			assert.LessOrEqual(t, f.fuzzer.metrics.SequencesTested().Uint64(), uint64(originalCorpusSequenceCount))
