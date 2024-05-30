@@ -335,7 +335,7 @@ func (cm *CoverageMapBytecodeData) IsCovered(pc int) (bool, uint) {
 	return cm.executedFlags[pc] != 0, cm.executedFlags[pc]
 }
 
-// update creates updates the current CoverageMapBytecodeData with the provided one.
+// update merges the hit count of the current CoverageMapBytecodeData with the provided one.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one was encountered.
 func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) (bool, error) {
 	// If the coverage map execution data provided is nil, exit early
@@ -352,18 +352,18 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
 	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
+		// Only add to the corpus if we haven't seen this coverage before
 		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
 			changed = true
 		}
-		if cm.executedFlags[i] != 0 && coverageMap.executedFlags[i] == 0 {
-			changed = true
-		}
+		// Update the hit count in both maps
 		cm.executedFlags[i] += coverageMap.executedFlags[i]
 		coverageMap.executedFlags[i] += cm.executedFlags[i]
 	}
 	return changed, nil
 }
 
+// copy
 func (cm *CoverageMapBytecodeData) copy(coverageMap *CoverageMapBytecodeData) (bool, error) {
 	// If the coverage map execution data provided is nil, exit early
 	if coverageMap.executedFlags == nil {
@@ -380,9 +380,10 @@ func (cm *CoverageMapBytecodeData) copy(coverageMap *CoverageMapBytecodeData) (b
 	changed := false
 	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
 		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
-			cm.executedFlags[i] = coverageMap.executedFlags[i]
 			changed = true
 		}
+		cm.executedFlags[i] += coverageMap.executedFlags[i]
+		coverageMap.executedFlags[i] = 0
 	}
 	return changed, nil
 }
