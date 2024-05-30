@@ -3,9 +3,10 @@ package coverage
 import (
 	"bytes"
 	"fmt"
+	"sort"
+
 	"github.com/crytic/medusa/compilation/types"
 	"golang.org/x/exp/maps"
-	"sort"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -104,6 +105,12 @@ type SourceLineAnalysis struct {
 
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
+
+	// succHitCount indicates the number of times the source line was executed without reverting.
+	SuccHitCount uint
+
+	// revertHitCount indicates the number of times the source line was executed before reverting.
+	RevertHitCount uint
 }
 
 // AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
@@ -191,7 +198,7 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup []int, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup map[int][]int, contractCoverageData *ContractCoverageMap) error {
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
@@ -213,9 +220,11 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		// Check if the source map element was executed.
 		sourceMapElementCovered := false
 		sourceMapElementCoveredReverted := false
+		succHitCount := uint(0)
+		revertHitCount := uint(0)
 		if contractCoverageData != nil {
-			sourceMapElementCovered = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
-			sourceMapElementCoveredReverted = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			sourceMapElementCovered, succHitCount = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			sourceMapElementCoveredReverted, revertHitCount = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
 		}
 
 		// Obtain the source file this element maps to.
@@ -229,8 +238,13 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 					sourceLine.IsActive = true
 
 					// Set its coverage state
-					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
-					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceMapElementCoveredReverted
+					sourceLine.IsCovered = sourceMapElementCovered
+					// if sourceLine.IsCovered && succHitCount == 0 {
+					// 	panic(sourceLine.RevertHitCount)
+					// }
+					sourceLine.SuccHitCount = succHitCount
+					sourceLine.IsCoveredReverted = sourceMapElementCoveredReverted
+					sourceLine.RevertHitCount = revertHitCount
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.
@@ -304,6 +318,8 @@ func parseSourceLines(sourceCode []byte) []*SourceLineAnalysis {
 			Contents:          sourceCodeLinesBytes[i],
 			IsCovered:         false,
 			IsCoveredReverted: false,
+			SuccHitCount:      0,
+			RevertHitCount:    0,
 		})
 		lineStart = lineEnd
 	}

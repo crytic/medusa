@@ -2,14 +2,15 @@ package corpus
 
 import (
 	"encoding/json"
-	"github.com/crytic/medusa/fuzzing/calls"
-	"github.com/crytic/medusa/utils/testutils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"math/rand"
 	"path/filepath"
 	"testing"
+
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/utils/testutils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 )
 
 // getMockSimpleCorpus creates a mock corpus with numEntries callSequencesByFilePath for testing
@@ -23,7 +24,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	// Add the requested number of entries.
 	numSequences := minSequences + (rand.Int() % (maxSequences - minSequences))
 	for i := 0; i < numSequences; i++ {
-		err := corpus.addCallSequence(corpus.mutableSequenceFiles, getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), true, nil, false)
+		err := corpus.addCallSequence(corpus.candidateSequenceFiles, getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), nil, false)
 		if err != nil {
 			return nil, err
 		}
@@ -100,9 +101,9 @@ func TestCorpusReadWrite(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Ensure that there are the correct number of call sequence files
-		matches, err := filepath.Glob(filepath.Join(corpus.mutableSequenceFiles.path, "*.json"))
+		matches, err := filepath.Glob(filepath.Join(corpus.candidateSequenceFiles.path, "*.json"))
 		assert.NoError(t, err)
-		assert.EqualValues(t, len(corpus.mutableSequenceFiles.files), len(matches))
+		assert.EqualValues(t, len(corpus.candidateSequenceFiles.files), len(matches))
 
 		// Wipe corpus clean so that you can now read it in from disk
 		corpus, err = NewCorpus("corpus")
@@ -124,7 +125,7 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// For each entry, marshal it and then unmarshal the byte array
-		for _, entryFile := range corpus.mutableSequenceFiles.files {
+		for _, entryFile := range corpus.candidateSequenceFiles.files {
 			// Marshal the entry
 			b, err := json.Marshal(entryFile.data)
 			assert.NoError(t, err)
@@ -139,9 +140,9 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 		}
 
 		// Remove all items
-		for i := 0; i < len(corpus.mutableSequenceFiles.files); {
-			corpus.mutableSequenceFiles.removeFile(corpus.mutableSequenceFiles.files[i].fileName)
+		for i := 0; i < len(corpus.candidateSequenceFiles.files); {
+			corpus.candidateSequenceFiles.removeFile(corpus.candidateSequenceFiles.files[i].fileName)
 		}
-		assert.Empty(t, corpus.mutableSequenceFiles.files)
+		assert.Empty(t, corpus.candidateSequenceFiles.files)
 	})
 }

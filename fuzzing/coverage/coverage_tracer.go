@@ -1,11 +1,13 @@
 package coverage
 
 import (
+	"math/big"
+
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
+	"github.com/holiman/uint256"
 )
 
 // coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
@@ -145,17 +147,37 @@ func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
 	// Obtain our call frame state tracking struct
 	callFrameState := t.callFrameStates[t.callDepth]
-
 	// If there is code we're executing, collect coverage.
-	if len(scope.Contract.Code) > 0 {
-		// Obtain our contract coverage map lookup hash.
-		if callFrameState.lookupHash == nil {
-			lookupHash := getContractCoverageMapHash(scope.Contract.Code, callFrameState.create)
-			callFrameState.lookupHash = &lookupHash
+	var pos *uint256.Int
+
+	if op == vm.JUMPI {
+		pos = scope.Stack.Back(0)
+		cond := scope.Stack.Back(1)
+		if !cond.IsZero() {
+			pos = new(uint256.Int).Add(uint256.NewInt(pc), uint256.NewInt(1))
+			// panic(pos)
 		}
+	} else if op == vm.JUMP {
+		pos = scope.Stack.Back(0)
+	} else {
+		return
+	}
+	// Obtain our contract coverage map lookup hash.
+	if callFrameState.lookupHash == nil {
+		// TODO use scope.Contract.CodeHash??
+		lookupHash := getContractCoverageMapHash(scope.Contract.Code, callFrameState.create)
+		callFrameState.lookupHash = &lookupHash
+	}
+	// var uuid big.Int
+
+	// uuid.Xor(scope.Contract.Address().Big(), callFrameState.lookupHash.Big())
+	if pos != nil {
+
+		marker := pc ^ pos.Uint64()
+		logging.GlobalLogger.Info("tracer: pc ", pc, " pos ", pos, "op ", op, " marker", marker)
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), marker)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}

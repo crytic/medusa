@@ -2,9 +2,11 @@ package types
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/logging"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
@@ -150,21 +152,38 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 // GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
 // and the element of the slice represents the instruction offset.
 // Returns the slice lookup, or an error if one occurs.
-func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, error) {
+func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][]int, error) {
 	// Create our resulting lookup
-	indexToOffsetLookup := make([]int, len(s))
-
+	indexToOffsetLookup := make(map[int][]int)
 	// Loop through all byte code
+
+	// for i := 0; i < len(bytecode); i++ {
+	// 	op := bytecode[i]
+	// 	if op == vm.JUMPDEST {
+	// 	}
+	// }
+	var jumpdests []int
+	for i := 0; i < len(bytecode); i++ {
+
+		// Obtain the indexed instruction and add the current offset to our lookup at this index.
+		op := vm.OpCode(bytecode[i])
+		if op == vm.JUMPDEST {
+
+			jumpdests = append(jumpdests, i)
+		}
+	}
 	currentOffset := 0
-	for i := 0; i < len(indexToOffsetLookup); i++ {
+	lastJump := 0
+	for i := 0; i < len(s); i++ {
+
 		// If we're going to read out of bounds, return an error.
 		if currentOffset >= len(bytecode) {
-			return nil, fmt.Errorf("failed to obtain a lookup of instruction indexes to offsets. instruction index: %v, current offset: %v, length: %v", i, currentOffset, len(bytecode))
+			return nil, fmt.Errorf("failed to obtain a lookup of instruction indexes to offsets. current offset: %v, length: %v", currentOffset, len(bytecode))
 		}
 
 		// Obtain the indexed instruction and add the current offset to our lookup at this index.
 		op := vm.OpCode(bytecode[currentOffset])
-		indexToOffsetLookup[i] = currentOffset
+		logging.GlobalLogger.Info("op ", op)
 
 		// Next, calculate the length of data that follows this instruction.
 		operandCount := 0
@@ -176,7 +195,51 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, er
 			}
 		}
 
+		// get list of jumpdest in codesements codeSegment
+		// validJumpdest
+
+		if op == vm.STOP || op == vm.RETURN || op == vm.INVALID || op == vm.SELFDESTRUCT {
+			// lastExecutable = currentOffset + 1
+
+		}
+
+		if op == vm.JUMPI || op == vm.JUMP {
+
+			for j := 0; j < len(jumpdests); j++ {
+				marker := currentOffset ^ jumpdests[j]
+				logging.GlobalLogger.Info("source: pc ", currentOffset, " pos ", jumpdests[j], "marker ", marker)
+
+				if indexToOffsetLookup[currentOffset] == nil {
+					indexToOffsetLookup[currentOffset] = []int{marker}
+				} else {
+					indexToOffsetLookup[currentOffset] = append(indexToOffsetLookup[currentOffset], marker)
+				}
+
+			}
+
+		} else if op == vm.STOP || op == vm.RETURN || op == vm.INVALID || op == vm.SELFDESTRUCT {
+
+		} else if lastJump != 0 {
+			// for j := 0; j < len(jumpdests); j++ {
+			// 	marker := currentOffset ^ jumpdests[j]
+			// 	for k := currentOffset; k > lastJump; k-- {
+			// 		op2 := vm.OpCode(bytecode[k])
+			// 		if op2 == vm.JUMPI || op2 == vm.JUMP {
+			// 			break
+			// 		}
+
+			// 		if indexToOffsetLookup[k] == nil {
+			// 			indexToOffsetLookup[k] = []int{marker}
+			// 		} else {
+			// 			indexToOffsetLookup[k] = append(indexToOffsetLookup[k], marker)
+			// 		}
+			// 	}
+			// }
+		}
+		// indexToOffsetLookup[i] = marker TODO this would be a list of outgoing edges that include this instruction's basic blocks
+
 		// Advance the offset past this instruction and its operands.
+
 		currentOffset += operandCount + 1
 	}
 	return indexToOffsetLookup, nil
