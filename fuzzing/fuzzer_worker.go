@@ -291,6 +291,14 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 
+		// If we reached our transaction threshold, halt
+		callsTested := fw.fuzzer.metrics.CallsTested()
+		testLimit := fw.fuzzer.config.Fuzzing.TestLimit
+		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
+			fw.fuzzer.logger.Info("Transaction test limit reached, halting now...")
+			fw.fuzzer.Stop()
+		}
+
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil
