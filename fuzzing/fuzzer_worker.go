@@ -293,6 +293,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			return true, err
 		}
 
+		fw.mineConstants(currentlyExecutedSequence)
+
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
 		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
@@ -323,9 +325,6 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		return nil, nil, err
 	}
 
-	// Add constants from the executed call sequence to the value set
-	fw.mineConstants()
-
 	// If our fuzzer context is done, exit out immediately without results.
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
 		return nil, nil, nil
@@ -342,31 +341,30 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	return testedCallSequence, shrinkCallSequenceRequests, nil
 }
 
-func (fw *FuzzerWorker) mineConstants() {
-	// TODO: should we exclude state changing or use `testedCallSequence` instead of adding a call?
-	pureSeqElem, err := fw.sequenceGenerator.generateNewElement(false)
-	// Check if we are able to call a pure method
-	if err == nil {
-		pureSeqElem.Call.FillFromTestChainProperties(fw.chain)
-		viewCallSeq := calls.CallSequence{pureSeqElem}
-		lastCall, _ := calls.ExecuteCallSequence(fw.chain, viewCallSeq)
-
-		method, _ := lastCall[0].Method()
-		lastCallChainReference := lastCall[0].ChainReference
-		lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
-		retData := lastMessageResult.ExecutionResult.Return()
-		// Check if there is return data (not reverted)
-		if retData != nil {
-
-			x, err := method.Outputs.Unpack(retData)
-
-			// Do not add to value set if decoding fails
-			if err == nil {
-				fw.valueSet.AddOutputAbiValueToValueSet(method.Outputs, x)
-			}
-
-		}
+func (fw *FuzzerWorker) mineConstants(callSequence calls.CallSequence) {
+	if len(callSequence) == 0 {
+		return
 	}
+
+	lastCall := callSequence[len(callSequence)-1]
+
+	method, _ := lastCall.Method()
+	lastCallChainReference := lastCall.ChainReference
+	lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
+	retData := lastMessageResult.ExecutionResult.Return()
+	// Check if there is return data (not reverted)
+	if retData != nil {
+
+		x, err := method.Outputs.Unpack(retData)
+
+		// Do not add to value set if decoding fails
+		if err == nil {
+			// TODO clear value set after reaching call sequence length (need another value set for this)
+			fw.valueSet.AddOutputAbiValueToValueSet(method.Outputs, x)
+		}
+
+	}
+
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
