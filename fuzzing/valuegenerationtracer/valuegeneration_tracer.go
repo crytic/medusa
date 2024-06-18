@@ -77,9 +77,9 @@ func (v *ValueGenerationTracer) CaptureTxEnd(restGas uint64) {
 
 func (v *ValueGenerationTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	//TODO implement me
+	fmt.Println("Called CaptureStart")
 	v.evm = env
 	v.captureEnteredCallFrame(from, to, input, create, value)
-	return
 	//panic("implement me")
 }
 
@@ -91,6 +91,7 @@ func (v *ValueGenerationTracer) CaptureEnd(output []byte, gasUsed uint64, err er
 
 func (v *ValueGenerationTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	//TODO implement me
+	v.captureEnteredCallFrame(from, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
 }
 
 func (v *ValueGenerationTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
@@ -109,6 +110,7 @@ func newValueGenerationTrace(contracts contracts.Contracts) *ValueGenerationTrac
 // captureEnteredCallFrame is a helper method used when a new call frame is entered to record information about it.
 func (v *ValueGenerationTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
 	// Create our call frame struct to track data for this call frame we entered.
+	fmt.Println("Entered captureEnteredCallFrame")
 	callFrameData := &utils.CallFrame{
 		SenderAddress:       fromAddress,
 		ToAddress:           toAddress,
