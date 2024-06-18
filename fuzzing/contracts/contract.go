@@ -35,15 +35,21 @@ type Contract struct {
 
 	// compilation describes the compilation which contains the compiledContract.
 	compilation *types.Compilation
+
+	// callableMethods describes the public/external functions callable on the contract.
+	callableMethods map[string]bool
 }
 
 // NewContract returns a new Contract instance with the provided information.
+// TODO investigate whether you can just compute the available functions and add them here (probably)
+// TODO implement temporary whitelist/blacklist logic here (if blacklist mode on remove all by default, whitelist enable all by default)
 func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation) *Contract {
 	return &Contract{
 		name:             name,
 		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
 		compilation:      compilation,
+		callableMethods:  make(map[string]bool),
 	}
 }
 
@@ -65,4 +71,17 @@ func (c *Contract) CompiledContract() *types.CompiledContract {
 // Compilation returns the compilation which contains the CompiledContract.
 func (c *Contract) Compilation() *types.Compilation {
 	return c.compilation
+}
+
+// CallableMethods returns the callable methods of the contract.
+func (c *Contract) CallableMethods() map[string]bool { return c.callableMethods }
+
+// WhiteListFunction adds a function to the whitelist.
+func (c *Contract) WhiteListFunction(methodToAdd string) {
+	c.callableMethods[methodToAdd] = true
+}
+
+// BlackListFunction removes a function from the whitelist.
+func (c *Contract) BlackListFunction(methodToRemove string) {
+	c.callableMethods[methodToRemove] = false
 }

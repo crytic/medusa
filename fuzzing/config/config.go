@@ -3,14 +3,15 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
-	"math/big"
-	"os"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -128,11 +129,11 @@ type TestingConfig struct {
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
 
-	// FilterFunctions describes and array of function signatures that should not be called (if FilterBlacklist is set to true) or the only functions that are to be called during a fuzzing campaign (if FilterBlacklist is set to false).
-	FilterFunctions []string `json:"filterFunctions"`
+	// FilterWhitelist describes an array of function signatures that are to be called during a fuzzing campaign (if FilterBlacklist is set to false).
+	FilterWhitelist []string `json:"filterFunctions"`
 
-	// FilterBlacklist describes whether the listed filter functions are to be whitelisted or blacklisted.
-	FilterBlacklist bool `json:"filterBlacklist"`
+	// FilterBlacklist describes an array of function signatures that are NOT to be called during a fuzzing campaign (if FilterBlacklist is set to true).
+	FilterBlacklist []string `json:"filterBlacklist"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
@@ -338,9 +339,9 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify only a well-formed deployer address")
 	}
 
-	// Verify that list of functions to be whitelisted is present if filterBlacklist is set to false
-	if !p.Fuzzing.Testing.FilterBlacklist && (len(p.Fuzzing.Testing.FilterFunctions) == 0) {
-		return errors.New("functions to be whitelisted must be specified if filterBlacklist is set to false")
+	// Verify that whitelists/blacklists are disabled if blacklists/whitelists are enabled, respectively
+	if (len(p.Fuzzing.Testing.FilterBlacklist) != 0) && (len(p.Fuzzing.Testing.FilterWhitelist) != 0) {
+		return errors.New("project configuration must specify only one of blacklist or whitelist at a time")
 	}
 
 	// Verify property testing fields.
@@ -350,7 +351,7 @@ func (p *ProjectConfig) Validate() error {
 			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
 		}
 	}
-  
+
 	// Ensure that the log level is a valid one
 	level, err := zerolog.ParseLevel(p.Logging.Level.String())
 	if err != nil || level == zerolog.FatalLevel {

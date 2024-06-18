@@ -79,6 +79,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	}
 
 	// Create a new worker with the data provided.
+	//@TODO at this point are all the contracts deployed and can we edit stateChangingMethods directly?
 	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
@@ -231,30 +232,30 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// Check if functions should be filtered based on the configuration
-		if len(fw.fuzzer.config.Fuzzing.Testing.FilterFunctions) > 0 && !fw.fuzzer.config.Fuzzing.Testing.FilterBlacklist {
-			for _, filterFunction := range fw.fuzzer.config.Fuzzing.Testing.FilterFunctions {
-				contractNameAndMethodSignature := strings.Split(filterFunction, ".")
-				contractName := contractNameAndMethodSignature[0]
-				methodSignature := contractNameAndMethodSignature[1]
+		if len(fw.fuzzer.config.Fuzzing.Testing.FilterWhitelist) > 0 {
 
-				if contractName == contractDefinition.Name() {
-					for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-						if method.Sig == methodSignature && !method.IsConstant() {
-							// Any non-constant method should be tracked as a state changing method.
-							fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
-						}
-					}
+			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+				//Todo can prob get rid of the isConstant check here
+				if contractDefinition.CallableMethods()[method.Sig] && !method.IsConstant() {
+					// Any whitelisted non-constant method should be tracked as a state changing method.
+					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
+				}
+			}
+		} else if len(fw.fuzzer.config.Fuzzing.Testing.FilterBlacklist) > 0 {
+			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+				if !contractDefinition.CallableMethods()[method.Sig] && !method.IsConstant() {
+					// Only add method to list of state changing methods if not present in blacklist
+					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
 				}
 			}
 		} else {
 			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
 				if !method.IsConstant() {
-					// Only add method to list of state changing methods if not present in blacklist
-					if fw.methodNotInBlacklist(contractDefinition.Name(), method.Sig) {
-						fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
-					}
+					// If white/blacklist functionality isn't present just add non-constant methods
+					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
 				}
 			}
+
 		}
 	}
 }
@@ -273,6 +274,7 @@ func (fw *FuzzerWorker) appendStateChangingMethod(contractAddress common.Address
 }
 
 // methodNotInBlacklist checks if a method is not present in the blacklist.
+// Todo refactor
 func (fw *FuzzerWorker) methodNotInBlacklist(contractName, methodSignature string) bool {
 	if len(fw.fuzzer.config.Fuzzing.Testing.FilterFunctions) > 0 {
 		for _, filterFunction := range fw.fuzzer.config.Fuzzing.Testing.FilterFunctions {
