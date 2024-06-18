@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/valuegenerationtracer"
 	"math/big"
 	"math/rand"
 
@@ -27,6 +28,10 @@ type FuzzerWorker struct {
 	chain *chain.TestChain
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
+
+	// valueGenerationTracer represents the structure that is used for collecting emitted event values and return
+	// values of executed functions in one sequence.
+	valueGenerationTracer *valuegenerationtracer.ValueGenerationTracer
 
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
 	// to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
@@ -277,6 +282,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		if err != nil {
 			return true, err
 		}
+
+		//fw.valueGenerationTracer.GetEventsGenerated()
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
@@ -545,6 +552,12 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer, true, false)
+		}
+
+		if fw.fuzzer.config.Fuzzing.ValueGenerationTracingEnabled {
+			// TODO: Sanan
+			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer()
+			initializedChain.AddTracer(fw.valueGenerationTracer, true, false)
 		}
 		return nil
 	})
