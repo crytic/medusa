@@ -33,17 +33,18 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
-			Workers:                 10,
-			WorkerResetLimit:        50,
-			Timeout:                 0,
-			TestLimit:               0,
-			ShrinkLimit:             5_000,
-			CallSequenceLength:      100,
-			TargetContracts:         []string{},
-			TargetContractsBalances: []*big.Int{},
-			ConstructorArgs:         map[string]map[string]any{},
-			CorpusDirectory:         "",
-			CoverageEnabled:         true,
+			Workers:                       10,
+			WorkerResetLimit:              50,
+			Timeout:                       0,
+			TestLimit:                     0,
+			ShrinkLimit:                   5_000,
+			CallSequenceLength:            100,
+			TargetContracts:               []string{},
+			TargetContractsBalances:       []*big.Int{},
+			ConstructorArgs:               map[string]map[string]any{},
+			CorpusDirectory:               "",
+			CoverageEnabled:               true,
+			ValueGenerationTracingEnabled: true, // Sanan
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
