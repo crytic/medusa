@@ -60,6 +60,39 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
+func TestGetEmittedEvents_ValueGeneration(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/assertions/assert_immediate.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAssertion = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAllocateTooMuchMemory = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnArithmeticUnderflow = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnCallUninitializedVariable = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnEnumTypeConversionOutOfBounds = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnDivideByZero = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
+				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
 // TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
