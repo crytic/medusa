@@ -556,7 +556,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 		if fw.fuzzer.config.Fuzzing.ValueGenerationTracingEnabled {
 			// TODO: Sanan
-			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer()
+			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer(fw.fuzzer.contractDefinitions)
 			initializedChain.AddTracer(fw.valueGenerationTracer, true, false)
 		}
 		return nil
