@@ -2,19 +2,17 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"math/big"
-	"math/rand"
-	"strings"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
+	"math/big"
+	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -232,30 +230,10 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// Check if functions should be filtered based on the configuration
-		if len(fw.fuzzer.config.Fuzzing.Testing.FilterWhitelist) > 0 {
-
-			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-				//Todo can prob get rid of the isConstant check here
-				if contractDefinition.CallableMethods()[method.Sig] && !method.IsConstant() {
-					// Any whitelisted non-constant method should be tracked as a state changing method.
-					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
-				}
+		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
+			if !contractDefinition.CallableMethods()[method.Sig] {
+				fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
 			}
-		} else if len(fw.fuzzer.config.Fuzzing.Testing.FilterBlacklist) > 0 {
-			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-				if !contractDefinition.CallableMethods()[method.Sig] && !method.IsConstant() {
-					// Only add method to list of state changing methods if not present in blacklist
-					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
-				}
-			}
-		} else {
-			for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-				if !method.IsConstant() {
-					// If white/blacklist functionality isn't present just add non-constant methods
-					fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
-				}
-			}
-
 		}
 	}
 }
@@ -271,20 +249,6 @@ func (fw *FuzzerWorker) appendStateChangingMethod(contractAddress common.Address
 			Method:   method,
 		},
 	)
-}
-
-// methodNotInBlacklist checks if a method is not present in the blacklist.
-// Todo refactor
-func (fw *FuzzerWorker) methodNotInBlacklist(contractName, methodSignature string) bool {
-	if len(fw.fuzzer.config.Fuzzing.Testing.FilterFunctions) > 0 {
-		for _, filterFunction := range fw.fuzzer.config.Fuzzing.Testing.FilterFunctions {
-			contractNameAndMethodSignature := strings.Split(filterFunction, ".")
-			if contractNameAndMethodSignature[0] == contractName && contractNameAndMethodSignature[1] == methodSignature {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every

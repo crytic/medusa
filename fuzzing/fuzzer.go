@@ -290,44 +290,41 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
-			//TODO grab the abi and populate whitelisted array here
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Populate black/white list
-				if len(f.config.Fuzzing.Testing.FilterBlacklist) > 0 {
-					//TODO abstract into own function
-					for _, filterFunction := range f.config.Fuzzing.Testing.FilterBlacklist {
-						contractNameAndMethodSig := strings.Split(filterFunction, ".")
-						name := contractNameAndMethodSig[0]
-						methodSig := contractNameAndMethodSig[1]
-						if contractName == name {
-							for _, method := range contract.Abi.Methods {
-								if method.Name == methodSig {
-									if method.IsConstant() {
-										// Warn user non state-changing functions should not be in blacklist
-										f.logger.Warn("non state-changing functions should not be in the blacklist")
-									} else {
-										contractDefinition.BlackListFunction(method.Sig)
-									}
+				for _, filterFunction := range f.config.Fuzzing.Testing.FilterBlacklist {
+					contractNameAndMethodSig := strings.Split(filterFunction, ".")
+					name := contractNameAndMethodSig[0]
+					methodSig := contractNameAndMethodSig[1]
+					if contractName == name {
+						for _, method := range contract.Abi.Methods {
+							if method.Name == methodSig {
+								if method.IsConstant() {
+									// Warn user non state-changing functions should not be in blacklist
+									f.logger.Warn("non state-changing functions should not be in the blacklist")
+								} else {
+									// Add a function to the blacklist
+									contractDefinition.BlackListFunction(method.Sig)
 								}
 							}
 						}
 					}
-				} else if len(f.config.Fuzzing.Testing.FilterWhitelist) > 0 {
 					for _, filterFunction := range f.config.Fuzzing.Testing.FilterWhitelist {
 						contractNameAndMethodSig := strings.Split(filterFunction, ".")
 						name := contractNameAndMethodSig[0]
 						methodSig := contractNameAndMethodSig[1]
 						if contractName == name {
 							for _, method := range contract.Abi.Methods {
-								if method.Name == methodSig {
+								if method.Name != methodSig {
 									if method.IsConstant() {
 										// Warn user non state-changing functions should not be in whitelist
 										f.logger.Warn("non state-changing functions should not be in the whitelist")
 									} else {
-										contractDefinition.WhiteListFunction(method.Sig)
+										// Remove a function from the whitelist
+										contractDefinition.BlackListFunction(method.Sig)
 									}
 								}
 							}

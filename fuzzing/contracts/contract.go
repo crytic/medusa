@@ -41,15 +41,21 @@ type Contract struct {
 }
 
 // NewContract returns a new Contract instance with the provided information.
-// TODO investigate whether you can just compute the available functions and add them here (probably)
-// TODO implement temporary whitelist/blacklist logic here (if blacklist mode on remove all by default, whitelist enable all by default)
 func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation) *Contract {
+	abi := compiledContract.Abi
+	callableMethods := make(map[string]bool)
+	for _, method := range abi.Methods {
+		// Whitelist all functions by default
+		callableMethods[method.Sig] = true
+
+	}
+
 	return &Contract{
 		name:             name,
 		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
 		compilation:      compilation,
-		callableMethods:  make(map[string]bool),
+		callableMethods:  callableMethods,
 	}
 }
 

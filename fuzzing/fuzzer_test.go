@@ -147,18 +147,16 @@ func TestAssertionsAndProperties(t *testing.T) {
 	})
 }
 
-// TestFilterBlacklistTrue runs a test to ensure that FilterBlacklist works as expected when set to true
-func TestFilterBlacklistTrue(t *testing.T) {
+// TestFilterBlacklist runs a test to ensure that FilterBlacklist works as expected when a blacklist is set
+func TestFilterBlacklist(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_filter_functions.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = true
 			config.Fuzzing.Testing.PropertyTesting.Enabled = true
-
-			config.Fuzzing.Testing.FilterBlacklist = true
-			config.Fuzzing.Testing.FilterFunctions = []string{"TestContract.reset1()", "TestContract.reset2()"}
+			config.Fuzzing.Testing.FilterBlacklist = []string{"TestContract.reset1()", "TestContract.reset2()"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -171,18 +169,16 @@ func TestFilterBlacklistTrue(t *testing.T) {
 	})
 }
 
-// TestFilterBlacklistFalse runs a test to ensure that FilterBlacklist works as expected when set to false
-func TestFilterBlacklistFalse(t *testing.T) {
+// TestFilterWhitelist runs a test to ensure that FilterWhitelist works as expected when a whitelist is set
+func TestFilterWhitelist(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_filter_functions.sol",
 		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.DeploymentOrder = []string{"TestContract"}
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = true
 			config.Fuzzing.Testing.PropertyTesting.Enabled = true
-
-			config.Fuzzing.Testing.FilterBlacklist = false
-			config.Fuzzing.Testing.FilterFunctions = []string{"TestContract.f(uint256)", "TestContract.g(uint256)", "TestContract.h(uint256)", "TestContract.i()"}
+			config.Fuzzing.Testing.FilterWhitelist = []string{"TestContract.f(uint256)", "TestContract.g(uint256)", "TestContract.h(uint256)", "TestContract.i()"}
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
