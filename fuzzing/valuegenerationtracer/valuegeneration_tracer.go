@@ -262,16 +262,16 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 
 }
 
-func generateEvents(currentCallFrame *utils.CallFrame) []*abi.Event {
+func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame) []*abi.Event {
 	events := make([]*abi.Event, 0)
 	for _, operation := range currentCallFrame.Operations {
 		if childCallFrame, ok := operation.(*utils.CallFrame); ok {
 			// If this is a call frame being entered, generate information recursively.
-			generateEvents(childCallFrame)
+			t.generateEvents(childCallFrame)
 		} else if eventLog, ok := operation.(*coreTypes.Log); ok {
 			// If an event log was emitted, add a message for it.
 			fmt.Printf("Event Operation: %+v\n", eventLog)
-			events = append(events, getEventsGenerated(currentCallFrame, eventLog))
+			events = append(events, t.getEventsGenerated(currentCallFrame, eventLog))
 			//eventLogs = append(eventLogs, eventLog)
 		}
 	}
@@ -279,20 +279,20 @@ func generateEvents(currentCallFrame *utils.CallFrame) []*abi.Event {
 	return events
 }
 
-func getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) *abi.Event {
+func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) *abi.Event {
 	// Try to unpack our event data
 	//event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
-	event, _ := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
+	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 
-	/*if event == nil {
+	if event == nil {
 		// If we couldn't resolve the event from our immediate contract ABI, it may come from a library.
-		for _, contract := range callFrame.contractDefinitions {
+		for _, contract := range t.contractDefinitions {
 			event, eventInputValues = abiutils.UnpackEventAndValues(&contract.CompiledContract().Abi, eventLog)
 			if event != nil {
 				break
 			}
 		}
-	}*/
+	}
 
 	// If we resolved an event definition and unpacked data.
 	/*if event != nil {
