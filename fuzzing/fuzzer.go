@@ -301,7 +301,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 					methodSig := contractNameAndMethodSig[1]
 					if contractName == name {
 						for _, method := range contract.Abi.Methods {
-							if method.Name == methodSig {
+							if method.Sig == methodSig {
 								if method.IsConstant() {
 									// Warn user non state-changing functions should not be in blacklist
 									f.logger.Warn("non state-changing functions should not be in the blacklist")
@@ -318,7 +318,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 						methodSig := contractNameAndMethodSig[1]
 						if contractName == name {
 							for _, method := range contract.Abi.Methods {
-								if method.Name != methodSig {
+								if method.Sig != methodSig {
 									if method.IsConstant() {
 										// Warn user non state-changing functions should not be in whitelist
 										f.logger.Warn("non state-changing functions should not be in the whitelist")

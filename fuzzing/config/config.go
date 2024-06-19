@@ -130,7 +130,7 @@ type TestingConfig struct {
 	TraceAll bool `json:"traceAll"`
 
 	// FilterWhitelist describes an array of function signatures that are to be called during a fuzzing campaign (if FilterBlacklist is set to false).
-	FilterWhitelist []string `json:"filterFunctions"`
+	FilterWhitelist []string `json:"filterWhitelist"`
 
 	// FilterBlacklist describes an array of function signatures that are NOT to be called during a fuzzing campaign (if FilterBlacklist is set to true).
 	FilterBlacklist []string `json:"filterBlacklist"`

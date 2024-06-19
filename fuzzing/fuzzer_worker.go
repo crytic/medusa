@@ -231,7 +231,7 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// Check if functions should be filtered based on the configuration
 		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-			if !contractDefinition.CallableMethods()[method.Sig] {
+			if contractDefinition.CallableMethods()[method.Sig] {
 				fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
 			}
 		}

@@ -156,6 +156,9 @@ func TestFilterBlacklist(t *testing.T) {
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = true
 			config.Fuzzing.Testing.PropertyTesting.Enabled = true
+			config.Fuzzing.Testing.PropertyTesting.TestPrefixes = []string{"fuzz"}
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.FilterBlacklist = []string{"TestContract.reset1()", "TestContract.reset2()"}
 		},
 		method: func(f *fuzzerTestContext) {
@@ -178,6 +181,9 @@ func TestFilterWhitelist(t *testing.T) {
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = true
 			config.Fuzzing.Testing.PropertyTesting.Enabled = true
+			config.Fuzzing.Testing.PropertyTesting.TestPrefixes = []string{"fuzz"}
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.FilterWhitelist = []string{"TestContract.f(uint256)", "TestContract.g(uint256)", "TestContract.h(uint256)", "TestContract.i()"}
 		},
 		method: func(f *fuzzerTestContext) {
