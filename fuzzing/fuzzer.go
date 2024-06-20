@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"os"
@@ -14,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -807,6 +806,14 @@ func (f *Fuzzer) printMetricsLoop() {
 		lastCallsTested = callsTested
 		lastSequencesTested = sequencesTested
 		lastWorkerStartupCount = workerStartupCount
+
+		// If we reached our transaction threshold, halt
+		testLimit := f.config.Fuzzing.TestLimit
+		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
+			f.logger.Info("Transaction test limit reached, halting now...")
+			f.Stop()
+			break
+		}
 
 		// Sleep some time between print iterations
 		time.Sleep(time.Second * 3)
