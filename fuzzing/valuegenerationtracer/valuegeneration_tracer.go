@@ -6,7 +6,6 @@ import (
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
@@ -19,10 +18,16 @@ import (
 // querying them.
 const valueGenerationTracerResultsKey = "ValueGenerationTracerResults"
 
+type EventInputs struct {
+	EventType  string
+	EventValue any
+}
+
 type ValueGenerationTrace struct {
 	TopLevelCallFrame *utils.CallFrame
 
 	contractDefinitions contracts.Contracts
+	Events              []*EventInputs
 }
 
 // TODO: Sanan
@@ -80,7 +85,6 @@ func (v *ValueGenerationTracer) CaptureTxEnd(restGas uint64) {
 
 func (v *ValueGenerationTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	//TODO implement me
-	fmt.Println("Called CaptureStart")
 	v.evm = env
 	v.captureEnteredCallFrame(from, to, input, create, value)
 	//panic("implement me")
@@ -197,7 +201,6 @@ func (v *ValueGenerationTracer) resolveCallFrameContractDefinitions(callFrame *u
 
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
 func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error) {
-	fmt.Println("Called captureExitedCallFrame")
 	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecodes.
 	if v.currentCallFrame.ToRuntimeBytecode == nil {
 		// As long as this isn't a failed contract creation, we should be able to fetch "to" byte code on exit.
@@ -227,7 +230,6 @@ func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error)
 }
 
 func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	fmt.Println("Called CaptureState")
 	// Execute all "on next capture state" events and clear them.
 	for _, eventHandler := range v.onNextCaptureState {
 		eventHandler()
@@ -257,31 +259,37 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	// Store our tracer results.
 	//results.Receipt.Logs = v.currentCallFrame.Operations
 	//var eventLogs []*coreTypes.Log
-	events := generateEvents(v.trace.TopLevelCallFrame)
+	//events := make([]EventInputs, 0)
+	events := v.trace.Events
+	events = v.trace.generateEvents(v.trace.TopLevelCallFrame, events)
 	results.AdditionalResults[valueGenerationTracerResultsKey] = events
 
 }
 
-func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame) []*abi.Event {
-	events := make([]*abi.Event, 0)
-	for _, operation := range currentCallFrame.Operations {
+func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame, events []*EventInputs) []*EventInputs {
+	//events := make([]*abi.Event, 0)
+	//events := make([]EventInputs, 0)
+	for iter, operation := range currentCallFrame.Operations {
+		fmt.Printf("Iteration: %d\n", iter)
 		if childCallFrame, ok := operation.(*utils.CallFrame); ok {
 			// If this is a call frame being entered, generate information recursively.
-			t.generateEvents(childCallFrame)
+			t.generateEvents(childCallFrame, events)
 		} else if eventLog, ok := operation.(*coreTypes.Log); ok {
 			// If an event log was emitted, add a message for it.
-			fmt.Printf("Event Operation: %+v\n", eventLog)
-			events = append(events, t.getEventsGenerated(currentCallFrame, eventLog))
+			events = append(events, t.getEventsGenerated(currentCallFrame, eventLog)...)
+			//t.getEventsGenerated(currentCallFrame, eventLog)
+			fmt.Printf("Value of events: %v\n", events)
 			//eventLogs = append(eventLogs, eventLog)
 		}
 	}
-
 	return events
 }
 
-func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) *abi.Event {
+func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) []*EventInputs {
 	// Try to unpack our event data
 	//event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
+	//eventData := make(map[string]any)]
+	eventInputs := t.Events
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 
 	if event == nil {
@@ -291,6 +299,18 @@ func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, ev
 			if event != nil {
 				break
 			}
+		}
+	}
+
+	if event != nil {
+		for name, value := range eventInputValues {
+			eventInputTypes := event.Inputs[name].Type
+			eventInput := &EventInputs{
+				eventInputTypes.String(),
+				value,
+			}
+			eventInputs = append(eventInputs, eventInput)
+			fmt.Printf("Event Input Value: %+v\n", value)
 		}
 	}
 
@@ -305,5 +325,5 @@ func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, ev
 	myEventLogData := eventLog.Data
 	fmt.Printf("eventLog.Data: %+v\n", myEventLogData)*/
 
-	return event
+	return eventInputs
 }

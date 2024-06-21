@@ -249,6 +249,9 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+	// Copy the existing ValueSet
+	copyValueSet := fw.ValueSet().Clone()
+
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
@@ -283,7 +286,21 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			return true, err
 		}
 
-		//fw.valueGenerationTracer.GetEventsGenerated()
+		// Add event values to copied ValueSet
+		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		messageResults := lastExecutedSequenceElement.ChainReference.MessageResults()
+		valueGenerationTracerResults := messageResults.AdditionalResults["ValueGenerationTracerResults"]
+
+		if eventInputs, ok := valueGenerationTracerResults.([]*valuegenerationtracer.EventInputs); ok {
+			for _, eventInput := range eventInputs {
+				if intValue, ok := eventInput.EventValue.(*big.Int); ok {
+					copyValueSet.AddInteger(intValue)
+					//fmt.Printf("Event value: %v\n", intValue)
+				}
+			}
+		}
+		// Set valueSet to copied valueSet
+		fw.SetValueSet(copyValueSet)
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
@@ -526,6 +543,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	return optimizedSequence, err
 }
 
+func (fw *FuzzerWorker) SetValueSet(valueSet *valuegeneration.ValueSet) {
+	fw.valueSet = valueSet
+}
+
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
 // and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
@@ -609,6 +630,9 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+
+		// Set valueSet to the one that includes event values
+		//fw.SetValueSet(copyValueSet)
 
 		// If we have any requests to shrink call sequences, do so now.
 		for _, shrinkVerifier := range shrinkVerifiers {
