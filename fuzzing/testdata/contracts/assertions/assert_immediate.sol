@@ -23,10 +23,10 @@ contract TestContract {
     function callingMeFails(uint value) public {
         // Call the external function in AnotherContract.
         anotherContract.externalFunction();
-        uint second_val = 5;
+        uint second_val = 2+12;
 
         emit ValueReceived(value, second_val);
-        emit ValueNonIndexedReceived(1337, 5555);
+        emit ValueNonIndexedReceived(111+111, 444+444);
 
         // ASSERTION: We always fail when you call this function.
         assert(false);
