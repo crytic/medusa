@@ -3,11 +3,12 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"sort"
 
 	chainTypes "github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
@@ -77,6 +78,8 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	BlockNum uint64
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -151,7 +154,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	keyValueStore := memorydb.New()
 	db := rawdb.NewDatabase(keyValueStore)
 
-	// Commit our genesis definition to get a genesis block.
+	// Commit our genesis definition to get a genesis block and write to the stateDB.
 	genesisBlock := genesisDefinition.MustCommit(db)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
@@ -485,6 +488,7 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, e
 // RevertToBlockNumber sets the head of the chain to the block specified by the provided block number and reloads
 // the state from the underlying database.
 func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
+	// fmt.Println("RevertToBlockNumber ", blockNumber)
 	// If our block number references something too new, return an error
 	if blockNumber > t.HeadBlockNumber() {
 		return fmt.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())

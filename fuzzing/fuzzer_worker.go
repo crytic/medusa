@@ -246,11 +246,9 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
-	defer func() {
-		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
-		}
-	}()
+	// defer func() {
+
+	// }()
 
 	// Initialize a new sequence within our sequence generator.
 	var isNewSequence bool
@@ -320,8 +318,14 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		}
 	}
 
+	if fw.coverageTracer.IsInteresting() {
+		fw.fuzzer.logger.Info(fmt.Sprintf("Snapshot old %v new %v", fw.testingBaseBlockNumber, fw.chain.HeadBlockNumber()))
+		fw.chain.BlockNum = fw.chain.HeadBlockNumber()
+	}
+
 	// Return our results accordingly.
-	return testedCallSequence, shrinkCallSequenceRequests, nil
+	// TODO: if defer is left, this should return the err?
+	return testedCallSequence, shrinkCallSequenceRequests, err
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
@@ -592,17 +596,24 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Test a new sequence
-		callSequence, shrinkVerifiers, err := fw.testNextCallSequence()
+		_, _, err = fw.testNextCallSequence()
 		if err != nil {
 			return false, err
 		}
-
-		// If we have any requests to shrink call sequences, do so now.
-		for _, shrinkVerifier := range shrinkVerifiers {
-			_, err = fw.shrinkCallSequence(callSequence, shrinkVerifier)
-			if err != nil {
-				return false, err
-			}
+		// TODO: need to reset the state to fw.testingBaseBlockNumber before shrinking
+		// // If we have any requests to shrink call sequences, do so now.
+		// for _, shrinkVerifier := range shrinkVerifiers {
+		// 	_, err = fw.shrinkCallSequence(callSequence, shrinkVerifier)
+		// 	if err != nil {
+		// 		return false, err
+		// 	}
+		// }
+		if fw.chain.BlockNum > 1 {
+			// fmt.Println("Here")
+			fw.chain.RevertToBlockNumber(fw.chain.BlockNum)
+		} else {
+			// fmt.Println("Here2")
+			fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
 
 		// Emit an event indicating the worker is about to test a new call sequence.

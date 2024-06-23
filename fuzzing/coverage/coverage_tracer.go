@@ -1,16 +1,45 @@
 package coverage
 
 import (
+	"math/big"
+
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
+	"github.com/holiman/uint256"
 )
 
 // coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
 // querying them.
 const coverageTracerResultsKey = "CoverageTracerResults"
+const MAP_SIZE = 4096
+
+// Assuming RW_SKIPPER_PERCT_IDX and RW_SKIPPER_AMT are some predefined constants
+var RW_SKIPPER_PERCT_IDX = uint256.NewInt(100)
+var RW_SKIPPER_AMT = uint256.NewInt(16)
+
+// asU64 converts a big.Int to a uint64
+func asU64(n *uint256.Int) uint64 {
+	return n.Uint64()
+}
+
+func processRwKey(key *uint256.Int) int {
+	if key.Cmp(RW_SKIPPER_PERCT_IDX) > 0 {
+		key.Mod(key, RW_SKIPPER_AMT)
+		key.Add(key, RW_SKIPPER_PERCT_IDX)
+	}
+	return int(asU64(key) % MAP_SIZE)
+}
+
+// u256ToU8 takes a big.Int, performs a right shift by 4 bits, converts to uint64,
+// takes the result modulo 254, and returns it as a uint8.
+func u256ToU8(key *uint256.Int) uint8 {
+	shiftedKey := new(uint256.Int).Rsh(key, 4) // key >> 4
+	asUint64 := shiftedKey.Uint64()            // Convert to uint64
+	result := asUint64 % 254                   // Take modulo 254
+	return uint8(result)                       // Convert to uint8
+}
 
 // GetCoverageTracerResults obtains CoverageMaps stored by a CoverageTracer from message results. This is nil if
 // no CoverageMaps were recorded by a tracer (e.g. CoverageTracer was not attached during this message execution).
@@ -42,6 +71,10 @@ type CoverageTracer struct {
 
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth uint64
+
+	globalWriteMap [MAP_SIZE][4]bool
+
+	interesting bool
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -54,6 +87,10 @@ type coverageTracerCallFrameState struct {
 
 	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
 	lookupHash *common.Hash
+
+	readMap []bool
+
+	writeMap []uint8
 }
 
 // NewCoverageTracer returns a new CoverageTracer.
@@ -65,12 +102,17 @@ func NewCoverageTracer() *CoverageTracer {
 	return tracer
 }
 
+func (t *CoverageTracer) IsInteresting() bool {
+	return t.interesting
+}
+
 // CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
 func (t *CoverageTracer) CaptureTxStart(gasLimit uint64) {
 	// Reset our call frame states
 	t.callDepth = 0
 	t.coverageMaps = NewCoverageMaps()
 	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
+	t.interesting = false
 }
 
 // CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
@@ -83,6 +125,8 @@ func (t *CoverageTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	t.callFrameStates = append(t.callFrameStates, &coverageTracerCallFrameState{
 		create:             create,
 		pendingCoverageMap: NewCoverageMaps(),
+		readMap:            make([]bool, MAP_SIZE),
+		writeMap:           make([]uint8, MAP_SIZE),
 	})
 }
 
@@ -98,6 +142,30 @@ func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 	// Commit all our coverage maps up one call frame.
 	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+
+	interesting := false
+	for i := 0; i < MAP_SIZE; i++ {
+		if t.callFrameStates[t.callDepth].readMap[i] && t.callFrameStates[t.callDepth].writeMap[i] != 0 {
+			category := 0
+			if t.callFrameStates[t.callDepth].writeMap[i] < (2 << 2) {
+				category = 0
+			} else if t.callFrameStates[t.callDepth].writeMap[i] < (2 << 4) {
+				category = 1
+			} else if t.callFrameStates[t.callDepth].writeMap[i] < (2 << 6) {
+				category = 2
+			} else {
+				category = 3
+			}
+			if !t.globalWriteMap[i%MAP_SIZE][category] {
+				interesting = true
+				t.globalWriteMap[i%MAP_SIZE][category] = true
+			}
+		}
+	}
+	if interesting {
+		t.interesting = interesting
+		// logging.GlobalLogger.Info("Interesting read/write pair found")
+	}
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", coverageUpdateErr)
 	}
@@ -152,6 +220,21 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		if callFrameState.lookupHash == nil {
 			lookupHash := getContractCoverageMapHash(scope.Contract.Code, callFrameState.create)
 			callFrameState.lookupHash = &lookupHash
+		}
+		// Is SSTORE operation
+		if op == vm.SSTORE {
+			key := scope.Stack.Back(0)
+			value := scope.Stack.Back(1)
+			// logging.GlobalLogger.Info("SSTORE key: ", key, " value: ", value)
+			callFrameState.writeMap[processRwKey(key)] = u256ToU8(value)
+		}
+
+		if op == vm.SLOAD {
+
+			key := scope.Stack.Back(0)
+			// logging.GlobalLogger.Info("SLOAD key: ", key)
+			callFrameState.readMap[processRwKey(key)] = true
+
 		}
 
 		// Record coverage for this location in our map.
