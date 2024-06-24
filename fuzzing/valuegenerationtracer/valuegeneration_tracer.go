@@ -198,6 +198,36 @@ func (v *ValueGenerationTracer) resolveCallFrameContractDefinitions(callFrame *u
 	}
 }
 
+// getCallFrameReturnValue generates a list of elements describing the return value of the call frame
+func (t *ValueGenerationTracer) getCallFrameReturnValue() string {
+	// Define some strings that represent our current call frame
+	var method *abi.Method
+
+	// Resolve our method definition
+	if t.currentCallFrame.CodeContractAbi != nil {
+		if t.currentCallFrame.IsContractCreation() {
+			method = &t.currentCallFrame.CodeContractAbi.Constructor
+		} else {
+			method, _ = t.currentCallFrame.CodeContractAbi.MethodById(t.currentCallFrame.InputData)
+		}
+	}
+
+	var encodedOutputString string
+	if method != nil {
+		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
+		if t.currentCallFrame.ReturnError == nil {
+			outputValues, err := method.Outputs.Unpack(t.currentCallFrame.ReturnData)
+			if err == nil {
+				encodedOutputString, err = valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues)
+				if err == nil {
+				}
+			}
+		}
+	}
+
+	return encodedOutputString
+}
+
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
 func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error) {
 	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecodes.
