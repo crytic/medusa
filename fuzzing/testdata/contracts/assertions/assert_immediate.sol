@@ -15,14 +15,24 @@ contract TestContract {
     event ValueReceived(uint indexed value, uint second_val);
     event ValueNonIndexedReceived(uint firstval, uint secondval);
 
+    function internalFunction() public returns (string memory) {
+        anotherContract.externalFunction();
+        return "Internal function called";
+    }
+
     // Deploy AnotherContract within the TestContract
     constructor() {
+//        internalFunction();
         anotherContract = new AnotherContract();
     }
 
+
     function callingMeFails(uint value) public {
+        // Call internalFunction()
+        internalFunction();
         // Call the external function in AnotherContract.
         anotherContract.externalFunction();
+
         uint second_val = 2+12;
 
         emit ValueReceived(value, second_val);
@@ -30,5 +40,6 @@ contract TestContract {
 
         // ASSERTION: We always fail when you call this function.
         assert(false);
+
     }
 }
