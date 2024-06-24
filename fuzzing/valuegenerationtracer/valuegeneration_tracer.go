@@ -32,12 +32,6 @@ type ValueGenerationTrace struct {
 
 // TODO: Sanan
 type ValueGenerationTracer struct {
-	// emittedValue describes emitted event values during the execution of the contract.
-	emittedValues []any
-
-	// functionReturnValues indicates the return value of executed functions in one sequence.
-	functionReturnValues []any
-
 	// evm refers to the EVM instance last captured.
 	evm *vm.EVM
 
@@ -61,9 +55,7 @@ func NewValueGenerationTracer(contractDefinitions contracts.Contracts) *ValueGen
 	fmt.Println("Called NewValueGenerationTracer")
 	// TODO: Sanan
 	tracer := &ValueGenerationTracer{
-		contractDefinitions:  contractDefinitions,
-		emittedValues:        make([]any, 0),
-		functionReturnValues: make([]any, 0),
+		contractDefinitions: contractDefinitions,
 	}
 	return tracer
 }
@@ -74,8 +66,6 @@ func (v *ValueGenerationTracer) CaptureTxStart(gasLimit uint64) {
 	v.trace = newValueGenerationTrace(v.contractDefinitions)
 	v.currentCallFrame = nil
 	v.onNextCaptureState = nil
-	v.emittedValues = make([]any, 0)
-	v.functionReturnValues = make([]any, 0)
 }
 
 func (v *ValueGenerationTracer) CaptureTxEnd(restGas uint64) {
