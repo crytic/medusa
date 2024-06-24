@@ -5,7 +5,9 @@ import (
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
@@ -23,11 +25,18 @@ type EventInputs struct {
 	EventValue any
 }
 
+type ReturnData []any
+
+type TransactionOutputValues struct {
+	Events       []*EventInputs
+	ReturnValues ReturnData
+}
+
 type ValueGenerationTrace struct {
 	TopLevelCallFrame *utils.CallFrame
 
-	contractDefinitions contracts.Contracts
-	Events              []*EventInputs
+	contractDefinitions     contracts.Contracts
+	transactionOutputValues TransactionOutputValues
 }
 
 // TODO: Sanan
