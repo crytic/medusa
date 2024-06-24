@@ -289,16 +289,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Add event values to copied ValueSet
 		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		messageResults := lastExecutedSequenceElement.ChainReference.MessageResults()
-		valueGenerationTracerResults := messageResults.AdditionalResults["ValueGenerationTracerResults"]
+		valuegenerationtracer.AddTransactionOutputValuesToValueSet(messageResults, copyValueSet)
 
-		if eventInputs, ok := valueGenerationTracerResults.([]*valuegenerationtracer.EventInputs); ok {
-			for _, eventInput := range eventInputs {
-				if intValue, ok := eventInput.EventValue.(*big.Int); ok {
-					copyValueSet.AddInteger(intValue)
-					//fmt.Printf("Event value: %v\n", intValue)
-				}
-			}
-		}
 		// Set valueSet to copied valueSet
 		fw.valueSet = copyValueSet
 
