@@ -79,8 +79,11 @@ func TestGetEmittedEvents_ValueGeneration(t *testing.T) {
 				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
 				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				//config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.StopOnNoTests = false
+				config.Fuzzing.Workers = 1
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
