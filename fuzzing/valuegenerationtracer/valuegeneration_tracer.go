@@ -262,6 +262,7 @@ func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error)
 }
 
 func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	// TODO: look for RET opcode (for now try getting them from currentCallFrame.ReturnData)
 	// Execute all "on next capture state" events and clear them.
 	for _, eventHandler := range v.onNextCaptureState {
 		eventHandler()
@@ -282,6 +283,42 @@ func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost 
 func (v *ValueGenerationTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	//TODO implement me
 	//panic("implement me")
+}
+
+func AddTransactionOutputValuesToValueSet(results *types.MessageResults, copyValueSet *valuegeneration.ValueSet) {
+	valueGenerationTracerResults := results.AdditionalResults["ValueGenerationTracerResults"]
+
+	if transactionOutputValues, ok := valueGenerationTracerResults.(TransactionOutputValues); ok {
+		eventValues := transactionOutputValues.Events
+		returnValues := transactionOutputValues.ReturnValues
+
+		for _, event := range eventValues {
+			switch v := event.EventValue.(type) {
+			case *big.Int:
+				copyValueSet.AddInteger(v)
+			case common.Address:
+				copyValueSet.AddAddress(v)
+			case string:
+				copyValueSet.AddString(v)
+			case []byte:
+				copyValueSet.AddBytes(v)
+
+			}
+		}
+		for _, returnValue := range returnValues {
+			switch v := returnValue.(type) {
+			case *big.Int:
+				copyValueSet.AddInteger(v)
+			case common.Address:
+				copyValueSet.AddAddress(v)
+			case string:
+				copyValueSet.AddString(v)
+			case []byte:
+				copyValueSet.AddBytes(v)
+
+			}
+		}
+	}
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
