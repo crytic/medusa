@@ -300,7 +300,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			}
 		}
 		// Set valueSet to copied valueSet
-		fw.SetValueSet(copyValueSet)
+		fw.valueSet = copyValueSet
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
@@ -541,10 +541,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		return nil, err
 	}
 	return optimizedSequence, err
-}
-
-func (fw *FuzzerWorker) SetValueSet(valueSet *valuegeneration.ValueSet) {
-	fw.valueSet = valueSet
 }
 
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
