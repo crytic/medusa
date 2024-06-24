@@ -2,17 +2,18 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"math/big"
+	"math/rand"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"math/rand"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -77,7 +78,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	}
 
 	// Create a new worker with the data provided.
-	//@TODO at this point are all the contracts deployed and can we edit stateChangingMethods directly?
 	worker := &FuzzerWorker{
 		workerIndex:          workerIndex,
 		fuzzer:               fuzzer,
@@ -618,7 +618,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			}
 		}
 
-		// Emit an event indicating the worker is about to test a new call sequence.
+		// Emit an event indicating the worker has finished testing a new call sequence and is starting a new one.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
 			Worker: fw,
 		})
