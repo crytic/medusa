@@ -292,9 +292,20 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	//results.Receipt.Logs = v.currentCallFrame.Operations
 	//var eventLogs []*coreTypes.Log
 	//events := make([]EventInputs, 0)
-	events := v.trace.Events
+
+	// Collect generated event and return values of the current transaction
+	events := make([]*EventInputs, 0)
 	events = v.trace.generateEvents(v.trace.TopLevelCallFrame, events)
-	results.AdditionalResults[valueGenerationTracerResultsKey] = events
+	returnValues := v.trace.transactionOutputValues.ReturnValues
+
+	v.trace.transactionOutputValues = TransactionOutputValues{
+		events,
+		returnValues,
+	}
+
+	transactionOutputValues := v.trace.transactionOutputValues
+
+	results.AdditionalResults[valueGenerationTracerResultsKey] = transactionOutputValues
 
 }
 
@@ -321,7 +332,7 @@ func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, ev
 	// Try to unpack our event data
 	//event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 	//eventData := make(map[string]any)]
-	eventInputs := t.Events
+	eventInputs := t.transactionOutputValues.Events
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 
 	if event == nil {
