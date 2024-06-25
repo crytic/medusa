@@ -138,7 +138,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 
 
 
-	if _, err := os.Stat(outputPath); err == nil {
+	if _, err = os.Stat(outputPath); err == nil {
 		// File already exists, prompt user for overwrite
 		fmt.Print("The file already exists. Overwrite? (y/n): ")
 		var response string
