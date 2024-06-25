@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/cmd/exitcodes"
-	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"os/signal"
 	"path/filepath"
+
+	"github.com/crytic/medusa/cmd/exitcodes"
+	"github.com/crytic/medusa/logging/colors"
 
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -23,7 +24,7 @@ var fuzzCmd = &cobra.Command{
 	ValidArgsFunction: cmdValidFuzzArgs,
 	RunE:              cmdRunFuzz,
 	SilenceUsage:      true,
-	SilenceErrors:     true,
+	SilenceErrors:     false,
 }
 
 func init() {

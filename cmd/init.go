@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/crytic/medusa/logging/colors"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -26,7 +27,7 @@ var initCmd = &cobra.Command{
 	ValidArgsFunction: cmdValidInitArgs,
 	RunE:              cmdRunInit,
 	SilenceUsage:      true,
-	SilenceErrors:     true,
+	SilenceErrors:     false,
 }
 
 func init() {

@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
 	"strings"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/spf13/cobra"
 )
@@ -53,7 +54,7 @@ var completionCmd = &cobra.Command{
 	Args:          cmdValidateCompletionArgs,
 	RunE:          cmdRunCompletion,
 	SilenceUsage:  true,
-	SilenceErrors: true,
+	SilenceErrors: false,
 }
 
 func init() {
