@@ -3,6 +3,11 @@ package corpus
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -11,10 +16,6 @@ import (
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"math/big"
-	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
@@ -307,7 +308,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return 0, 0, err
 	}
 
-	err = c.initializeSequences(c.immutableSequenceFiles, testChain, deployedContracts, false)
+	err = c.initializeSequences(c.immutableSequenceFiles, testChain, deployedContracts, true)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -421,7 +422,7 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	} else if revertedCoverageUpdated {
 		// If we did not achieve new successful coverage, but achieved an increase in reverted coverage, save this
 		// sequence for non-mutation purposes.
-		err = c.addCallSequence(c.immutableSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
+		err = c.addCallSequence(c.immutableSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
 			return err
 		}
