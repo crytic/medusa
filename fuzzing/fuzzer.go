@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -244,6 +245,9 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	// Acquire a thread lock to avoid race conditions
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()
+
+	// Display what is being tested
+	f.logger.Info(testCase.LogMessage().Elements()...)
 
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
