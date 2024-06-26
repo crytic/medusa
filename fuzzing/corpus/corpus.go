@@ -225,7 +225,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 				// If the filename is a timestamp as expected, use it as a weight for the mutation chooser.
 				re := regexp.MustCompile("[0-9]+")
 				var weight *big.Int
-				if filename := re.FindAllString(sequenceFileData.fileName, 0); filename != nil {
+				if filename := re.FindAllString(sequenceFileData.fileName, 1); filename != nil {
 					if timestamp, err := strconv.ParseUint(filename[0], 10, 64); err != nil {
 						weight = new(big.Int).SetUint64(timestamp)
 					}
