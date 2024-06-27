@@ -563,8 +563,9 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			initializedChain.AddTracer(fw.coverageTracer, true, false)
 		}
 
-		if fw.fuzzer.config.Fuzzing.ValueGenerationTracingEnabled {
-			// TODO: Sanan
+		// If we enabled experimental value generation, create a tracer to collect interesting values during EVM
+		// execution and connect it to the chain
+		if fw.fuzzer.config.Fuzzing.ExperimentalValueGenerationEnabled {
 			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer(fw.fuzzer.contractDefinitions)
 			initializedChain.AddTracer(fw.valueGenerationTracer, true, false)
 		}

@@ -7,7 +7,7 @@
     "callSequenceLength": 100,
     "corpusDirectory": "",
     "coverageEnabled": true,
-    "valueGenerationTracingEnabled": true,
+    "ExperimentalValueGenerationEnabled": true,
     "targetContracts": [],
     "targetContractsBalances": [],
     "constructorArgs": {},
