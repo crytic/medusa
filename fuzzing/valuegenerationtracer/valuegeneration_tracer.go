@@ -20,17 +20,7 @@ import (
 // querying them.
 const valueGenerationTracerResultsKey = "ValueGenerationTracerResults"
 
-type EventInputs struct {
-	EventType  string
-	EventValue any
-}
-
-type ReturnData []any
-
-type TransactionOutputValues struct {
-	Events       []*EventInputs
-	ReturnValues ReturnData
-}
+type TransactionOutputValues []any
 
 type ValueGenerationTrace struct {
 	TopLevelCallFrame *utils.CallFrame
