@@ -60,6 +60,36 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
+func TestExperimentalValueGeneration_ValueSet(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/assertions/assert_immediate.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 500
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.StopOnNoTests = false
+				config.Fuzzing.Workers = 1
+			},
+			method: func(f *fuzzerTestContext) {
+				baseValueSet := f.fuzzer.baseValueSet
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				valueSet := f.fuzzer.baseValueSet
+
+				assert.EqualValues(t, valueSet, baseValueSet)
+			},
+		})
+	}
+}
 func TestGetEmittedEvents_ValueGeneration(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
