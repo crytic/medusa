@@ -29,8 +29,8 @@ type FuzzerWorker struct {
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
 
-	// valueGenerationTracer represents the structure that is used for collecting emitted event values and return
-	// values of executed functions in one sequence.
+	// valueGenerationTracer represents the structure that is used for collecting "interesting" values during EVM
+	// execution, such as emitted event and return values of executed functions in one sequence.
 	valueGenerationTracer *valuegenerationtracer.ValueGenerationTracer
 
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
@@ -250,7 +250,7 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
 	// Copy the existing ValueSet
-	copyValueSet := fw.ValueSet().Clone()
+	originalValueSet := fw.ValueSet().Clone()
 
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
@@ -258,6 +258,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		if err == nil {
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
+		fw.valueSet = originalValueSet
 	}()
 
 	// Initialize a new sequence within our sequence generator.
@@ -289,10 +290,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Add event values to copied ValueSet
 		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		messageResults := lastExecutedSequenceElement.ChainReference.MessageResults()
-		valuegenerationtracer.AddTransactionOutputValuesToValueSet(messageResults, copyValueSet)
-
-		// Set valueSet to copied valueSet
-		fw.valueSet = copyValueSet
+		valuegenerationtracer.AddTransactionOutputValuesToValueSet(messageResults, fw.valueSet)
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
