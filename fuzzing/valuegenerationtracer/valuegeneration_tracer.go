@@ -189,9 +189,12 @@ func (v *ValueGenerationTracer) resolveCallFrameContractDefinitions(callFrame *u
 }
 
 // getCallFrameReturnValue generates a list of elements describing the return value of the call frame
-func (t *ValueGenerationTracer) getCallFrameReturnValue() string {
+func (t *ValueGenerationTracer) getCallFrameReturnValue() TransactionOutputValues {
 	// Define some strings that represent our current call frame
 	var method *abi.Method
+
+	// Define a slice of any to represent return values of the current call frame
+	var outputValues TransactionOutputValues
 
 	// Resolve our method definition
 	if t.currentCallFrame.CodeContractAbi != nil {
@@ -202,20 +205,15 @@ func (t *ValueGenerationTracer) getCallFrameReturnValue() string {
 		}
 	}
 
-	var encodedOutputString string
 	if method != nil {
 		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
 		if t.currentCallFrame.ReturnError == nil {
-			outputValues, err := method.Outputs.Unpack(t.currentCallFrame.ReturnData)
-			if err == nil {
-				encodedOutputString, err = valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues)
-				if err == nil {
-				}
-			}
+			outputValue, _ := method.Outputs.Unpack(t.currentCallFrame.ReturnData)
+			outputValues = append(outputValues, outputValue)
 		}
 	}
 
-	return encodedOutputString
+	return outputValues
 }
 
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
@@ -245,7 +243,7 @@ func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error)
 	v.currentCallFrame.ReturnError = err
 
 	// Grab return data of the call frame
-	v.trace.transactionOutputValues.ReturnValues = append(v.trace.transactionOutputValues.ReturnValues, v.getCallFrameReturnValue())
+	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.getCallFrameReturnValue())
 
 	// We're exiting the current frame, so set our current call frame to the parent
 	v.currentCallFrame = v.currentCallFrame.ParentCallFrame
@@ -275,40 +273,29 @@ func (v *ValueGenerationTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost 
 	//panic("implement me")
 }
 
-func AddTransactionOutputValuesToValueSet(results *types.MessageResults, copyValueSet *valuegeneration.ValueSet) {
+func AddTransactionOutputValuesToValueSet(results *types.MessageResults, valueSet *valuegeneration.ValueSet) {
 	valueGenerationTracerResults := results.AdditionalResults["ValueGenerationTracerResults"]
 
 	if transactionOutputValues, ok := valueGenerationTracerResults.(TransactionOutputValues); ok {
-		eventValues := transactionOutputValues.Events
-		returnValues := transactionOutputValues.ReturnValues
 
-		for _, event := range eventValues {
-			switch v := event.EventValue.(type) {
+		for _, eventReturnValue := range transactionOutputValues {
+			switch v := eventReturnValue.(type) {
 			case *big.Int:
-				copyValueSet.AddInteger(v)
+				valueSet.AddInteger(v)
 			case common.Address:
-				copyValueSet.AddAddress(v)
+				valueSet.AddAddress(v)
 			case string:
-				copyValueSet.AddString(v)
+				valueSet.AddString(v)
 			case []byte:
-				copyValueSet.AddBytes(v)
-
-			}
-		}
-		for _, returnValue := range returnValues {
-			switch v := returnValue.(type) {
-			case *big.Int:
-				copyValueSet.AddInteger(v)
-			case common.Address:
-				copyValueSet.AddAddress(v)
-			case string:
-				copyValueSet.AddString(v)
-			case []byte:
-				copyValueSet.AddBytes(v)
+				valueSet.AddBytes(v)
+			default:
+				continue
 
 			}
 		}
 	}
+
+	fmt.Printf("ValueSet after modification: %v\n", valueSet)
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
@@ -321,24 +308,16 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	//events := make([]EventInputs, 0)
 
 	// Collect generated event and return values of the current transaction
-	events := make([]*EventInputs, 0)
-	events = v.trace.generateEvents(v.trace.TopLevelCallFrame, events)
-	returnValues := v.trace.transactionOutputValues.ReturnValues
+	eventAndReturnValues := make(TransactionOutputValues, 0)
+	eventAndReturnValues = v.trace.generateEvents(v.trace.TopLevelCallFrame, eventAndReturnValues)
 
-	v.trace.transactionOutputValues = TransactionOutputValues{
-		events,
-		returnValues,
-	}
+	v.trace.transactionOutputValues = eventAndReturnValues
 
-	transactionOutputValues := v.trace.transactionOutputValues
-
-	results.AdditionalResults[valueGenerationTracerResultsKey] = transactionOutputValues
+	results.AdditionalResults[valueGenerationTracerResultsKey] = v.trace.transactionOutputValues
 
 }
 
-func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame, events []*EventInputs) []*EventInputs {
-	//events := make([]*abi.Event, 0)
-	//events := make([]EventInputs, 0)
+func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame, events TransactionOutputValues) TransactionOutputValues {
 	for iter, operation := range currentCallFrame.Operations {
 		fmt.Printf("Iteration: %d\n", iter)
 		if childCallFrame, ok := operation.(*utils.CallFrame); ok {
@@ -355,11 +334,9 @@ func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame,
 	return events
 }
 
-func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) []*EventInputs {
+func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) TransactionOutputValues {
 	// Try to unpack our event data
-	//event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
-	//eventData := make(map[string]any)]
-	eventInputs := t.transactionOutputValues.Events
+	eventInputs := t.transactionOutputValues
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 
 	if event == nil {
@@ -373,27 +350,10 @@ func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, ev
 	}
 
 	if event != nil {
-		for name, value := range eventInputValues {
-			eventInputTypes := event.Inputs[name].Type
-			eventInput := &EventInputs{
-				eventInputTypes.String(),
-				value,
-			}
-			eventInputs = append(eventInputs, eventInput)
-			fmt.Printf("Event Input Value: %+v\n", value)
+		for _, value := range eventInputValues {
+			eventInputs = append(eventInputs, value)
 		}
 	}
-
-	// If we resolved an event definition and unpacked data.
-	/*if event != nil {
-		// Format the values as a comma-separated string
-		encodedEventValuesString, _ := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
-		myEncodedEventValuesString := encodedEventValuesString
-		fmt.Println(myEncodedEventValuesString)
-	}
-
-	myEventLogData := eventLog.Data
-	fmt.Printf("eventLog.Data: %+v\n", myEventLogData)*/
 
 	return eventInputs
 }
