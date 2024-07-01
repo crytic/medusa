@@ -198,11 +198,7 @@ func (t *ValueGenerationTracer) getCallFrameReturnValue() TransactionOutputValue
 
 	// Resolve our method definition
 	if t.currentCallFrame.CodeContractAbi != nil {
-		if t.currentCallFrame.IsContractCreation() {
-			method = &t.currentCallFrame.CodeContractAbi.Constructor
-		} else {
-			method, _ = t.currentCallFrame.CodeContractAbi.MethodById(t.currentCallFrame.InputData)
-		}
+		method, _ = t.currentCallFrame.CodeContractAbi.MethodById(t.currentCallFrame.InputData)
 	}
 
 	if method != nil {

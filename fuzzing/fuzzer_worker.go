@@ -618,9 +618,6 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			return false, err
 		}
 
-		// Set valueSet to the one that includes event values
-		//fw.SetValueSet(copyValueSet)
-
 		// If we have any requests to shrink call sequences, do so now.
 		for _, shrinkVerifier := range shrinkVerifiers {
 			_, err = fw.shrinkCallSequence(callSequence, shrinkVerifier)
