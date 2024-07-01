@@ -278,8 +278,8 @@ func AddTransactionOutputValuesToValueSet(results *types.MessageResults, valueSe
 
 	if transactionOutputValues, ok := valueGenerationTracerResults.(TransactionOutputValues); ok {
 
-		for _, eventReturnValue := range transactionOutputValues {
-			switch v := eventReturnValue.(type) {
+		for _, eventOrReturnValue := range transactionOutputValues {
+			switch v := eventOrReturnValue.(type) {
 			case *big.Int:
 				valueSet.AddInteger(v)
 			case common.Address:
