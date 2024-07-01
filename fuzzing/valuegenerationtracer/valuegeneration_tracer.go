@@ -242,8 +242,10 @@ func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error)
 	v.currentCallFrame.ReturnData = slices.Clone(output)
 	v.currentCallFrame.ReturnError = err
 
-	// Grab return data of the call frame
-	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.getCallFrameReturnValue())
+	if v.currentCallFrame.ReturnError == nil {
+		// Grab return data of the call frame
+		v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.getCallFrameReturnValue())
+	}
 
 	// We're exiting the current frame, so set our current call frame to the parent
 	v.currentCallFrame = v.currentCallFrame.ParentCallFrame
