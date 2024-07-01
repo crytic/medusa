@@ -76,6 +76,7 @@ func TestExperimentalValueGeneration_ValueSet(t *testing.T) {
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.StopOnNoTests = false
 				config.Fuzzing.Workers = 1
+				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
 			},
 			method: func(f *fuzzerTestContext) {
 				baseValueSet := f.fuzzer.baseValueSet

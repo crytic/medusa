@@ -59,8 +59,6 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	ExperimentalValueGenerationEnabled bool `json:"ExperimentalValueGenerationEnabled"`
-
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
@@ -138,6 +136,10 @@ type TestingConfig struct {
 
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
+
+	// ExperimentalValueGenerationEnabled describes the configuration used for testing of collection
+	// and addition of interesting values found during EVM execution to base value set
+	ExperimentalValueGenerationEnabled bool `json:"experimentalValueGenerationEnabled"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing

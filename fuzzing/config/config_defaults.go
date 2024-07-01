@@ -44,7 +44,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ConstructorArgs:                    map[string]map[string]any{},
 			CorpusDirectory:                    "",
 			CoverageEnabled:                    true,
-			ExperimentalValueGenerationEnabled: true, // Sanan
+			ExperimentalValueGenerationEnabled: false,
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
