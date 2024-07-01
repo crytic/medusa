@@ -136,8 +136,6 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-
-
 	if _, err = os.Stat(outputPath); err == nil {
 		// File already exists, prompt user for overwrite
 		fmt.Print("The file already exists. Overwrite? (y/n): ")
@@ -148,7 +146,7 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	
+
 	// Write our project configuration
 	err = projectConfig.WriteToFile(outputPath)
 	if err != nil {
