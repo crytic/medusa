@@ -311,7 +311,7 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	eventAndReturnValues := make(TransactionOutputValues, 0)
 	eventAndReturnValues = v.trace.generateEvents(v.trace.TopLevelCallFrame, eventAndReturnValues)
 
-	v.trace.transactionOutputValues = eventAndReturnValues
+	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, eventAndReturnValues)
 
 	results.AdditionalResults[valueGenerationTracerResultsKey] = v.trace.transactionOutputValues
 
