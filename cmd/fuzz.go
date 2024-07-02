@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/cmd/exitcodes"
-	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"os/signal"
 	"path/filepath"
+
+	"github.com/crytic/medusa/cmd/exitcodes"
+	"github.com/crytic/medusa/logging/colors"
 
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -102,7 +103,8 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	if existenceError == nil {
 		// Try to read the configuration file and throw an error if something goes wrong
 		cmdLogger.Info("Reading the configuration file at: ", colors.Bold, configPath, colors.Reset)
-		projectConfig, err = config.ReadProjectConfigFromFile(configPath)
+		// Use the default compilation platform if the config file doesn't specify one
+		projectConfig, err = config.ReadProjectConfigFromFile(configPath, DefaultCompilationPlatform)
 		if err != nil {
 			cmdLogger.Error("Failed to run the fuzz command", err)
 			return err
@@ -142,6 +144,10 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		cmdLogger.Error("Failed to run the fuzz command", err)
 		return err
+	}
+
+	if !projectConfig.Fuzzing.CoverageEnabled {
+		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
 	}
 
 	// Create our fuzzing
