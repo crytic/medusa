@@ -1,6 +1,7 @@
 package executiontracer
 
 import (
+	"github.com/crytic/medusa/utils"
 	"math/big"
 
 	"github.com/crytic/medusa/chain"
@@ -45,7 +46,7 @@ type ExecutionTracer struct {
 	trace *ExecutionTrace
 
 	// currentCallFrame references the current call frame being traced.
-	currentCallFrame *CallFrame
+	currentCallFrame *utils.CallFrame
 
 	// contractDefinitions represents the contract definitions to match for execution traces.
 	contractDefinitions contracts.Contracts
@@ -90,7 +91,7 @@ func (t *ExecutionTracer) CaptureTxEnd(restGas uint64) {
 
 // resolveConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
 // the call frame provided represents a contract deployment.
-func (t *ExecutionTracer) resolveCallFrameConstructorArgs(callFrame *CallFrame, contract *contracts.Contract) {
+func (t *ExecutionTracer) resolveCallFrameConstructorArgs(callFrame *utils.CallFrame, contract *contracts.Contract) {
 	// If this is a contract creation and the constructor ABI argument data has not yet been resolved, do so now.
 	if callFrame.ConstructorArgsData == nil && callFrame.IsContractCreation() {
 		// We simply slice the compiled bytecode leading the input data off, and we are left with the constructor
@@ -104,7 +105,7 @@ func (t *ExecutionTracer) resolveCallFrameConstructorArgs(callFrame *CallFrame, 
 
 // resolveCallFrameContractDefinitions resolves previously unresolved contract definitions for the To and Code addresses
 // used within the provided call frame.
-func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFrame) {
+func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *utils.CallFrame) {
 	// Try to resolve contract definitions for "to" address
 	if callFrame.ToContractAbi == nil {
 		// Try to resolve definitions from cheat code contracts
@@ -150,7 +151,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 // captureEnteredCallFrame is a helper method used when a new call frame is entered to record information about it.
 func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
 	// Create our call frame struct to track data for this call frame we entered.
-	callFrameData := &CallFrame{
+	callFrameData := &utils.CallFrame{
 		SenderAddress:       fromAddress,
 		ToAddress:           toAddress,
 		ToContractName:      "",

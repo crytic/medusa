@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/valuegenerationtracer"
 	"math/big"
 	"math/rand"
 
@@ -28,6 +29,10 @@ type FuzzerWorker struct {
 	chain *chain.TestChain
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
+
+	// valueGenerationTracer represents the structure that is used for collecting "interesting" values during EVM
+	// execution, such as emitted event and return values of executed functions in one sequence.
+	valueGenerationTracer *valuegenerationtracer.ValueGenerationTracer
 
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
 	// to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
@@ -245,12 +250,16 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+	// Copy the existing ValueSet
+	originalValueSet := fw.ValueSet().Clone()
+
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
 		if err == nil {
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
+		fw.valueSet = originalValueSet
 	}()
 
 	// Initialize a new sequence within our sequence generator.
@@ -278,6 +287,11 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		if err != nil {
 			return true, err
 		}
+
+		// Add event values to copied ValueSet
+		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		messageResults := lastExecutedSequenceElement.ChainReference.MessageResults()
+		valuegenerationtracer.AddTransactionOutputValuesToValueSet(messageResults, fw.valueSet)
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
@@ -553,6 +567,13 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer, true, false)
+		}
+
+		// If we enabled experimental value generation, create a tracer to collect interesting values during EVM
+		// execution and connect it to the chain
+		if fw.fuzzer.config.Fuzzing.ExperimentalValueGenerationEnabled {
+			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer(fw.fuzzer.contractDefinitions)
+			initializedChain.AddTracer(fw.valueGenerationTracer, true, false)
 		}
 		return nil
 	})

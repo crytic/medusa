@@ -136,6 +136,10 @@ type TestingConfig struct {
 
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
+
+	// ExperimentalValueGenerationEnabled describes the configuration used for testing of collection
+	// and addition of interesting values found during EVM execution to base value set
+	ExperimentalValueGenerationEnabled bool `json:"experimentalValueGenerationEnabled"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
