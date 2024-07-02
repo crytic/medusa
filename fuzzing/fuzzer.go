@@ -711,7 +711,10 @@ func (f *Fuzzer) Start() error {
 
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
-		err = fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
+		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
+		if !f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+			err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz and testing view methods is disabled")
+		}
 		f.logger.Error("Failed to start fuzzer", err)
 		return err
 	}

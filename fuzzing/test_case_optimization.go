@@ -48,7 +48,7 @@ func (t *OptimizationTestCase) Name() string {
 	return fmt.Sprintf("Optimization Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// LogMessage obtains a buffer that represents the result of the AssertionTestCase. This buffer can be passed to a logger for
+// LogMessage obtains a buffer that represents the result of the OptimizationTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
