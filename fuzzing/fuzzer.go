@@ -293,6 +293,45 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
+
+				// Populate black/white list
+				for _, filterFunction := range f.config.Fuzzing.Testing.FilterBlacklist {
+					contractNameAndMethodSig := strings.Split(filterFunction, ".")
+					name := contractNameAndMethodSig[0]
+					methodSig := contractNameAndMethodSig[1]
+					if contractName == name {
+						for _, method := range contract.Abi.Methods {
+							if method.Sig == methodSig {
+								if method.IsConstant() {
+									// Warn user non state-changing functions should not be in blacklist
+									f.logger.Warn("non state-changing functions should not be in the blacklist")
+								} else {
+									// Add a function to the blacklist
+									contractDefinition.BlackListFunction(method.Sig)
+								}
+							}
+						}
+					}
+					for _, filterFunction := range f.config.Fuzzing.Testing.FilterWhitelist {
+						contractNameAndMethodSig := strings.Split(filterFunction, ".")
+						name := contractNameAndMethodSig[0]
+						methodSig := contractNameAndMethodSig[1]
+						if contractName == name {
+							for _, method := range contract.Abi.Methods {
+								if method.Sig != methodSig {
+									if method.IsConstant() {
+										// Warn user non state-changing functions should not be in whitelist
+										f.logger.Warn("non state-changing functions should not be in the whitelist")
+									} else {
+										// Remove a function from the whitelist
+										contractDefinition.BlackListFunction(method.Sig)
+									}
+								}
+							}
+						}
+					}
+				}
+
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}

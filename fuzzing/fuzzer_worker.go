@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"math/big"
 	"math/rand"
 
@@ -229,14 +230,26 @@ func (fw *FuzzerWorker) updateStateChangingMethods() {
 
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
-		// If we deployed the contract, also enumerate property tests and state changing methods.
+		// Check if functions should be filtered based on the configuration
 		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-			if !method.IsConstant() {
-				// Any non-constant method should be tracked as a state changing method.
-				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+			if contractDefinition.CallableMethods()[method.Sig] {
+				fw.appendStateChangingMethod(contractAddress, contractDefinition, method)
 			}
 		}
 	}
+}
+
+// checkAndAppendStateChangingMethod checks if a method should be considered as
+// a state changing method and appends it to the list if applicable.
+func (fw *FuzzerWorker) appendStateChangingMethod(contractAddress common.Address, contractDefinition *fuzzerTypes.
+	Contract, method abi.Method) {
+	fw.stateChangingMethods = append(fw.stateChangingMethods,
+		fuzzerTypes.DeployedContractMethod{
+			Address:  contractAddress,
+			Contract: contractDefinition,
+			Method:   method,
+		},
+	)
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
@@ -613,7 +626,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			}
 		}
 
-		// Emit an event indicating the worker is about to test a new call sequence.
+		// Emit an event indicating the worker has finished testing a new call sequence and is starting a new one.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
 			Worker: fw,
 		})

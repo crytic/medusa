@@ -3,14 +3,15 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
-	"math/big"
-	"os"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -127,6 +128,12 @@ type TestingConfig struct {
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
+
+	// FilterWhitelist describes an array of function signatures that are to be called during a fuzzing campaign (if FilterBlacklist is set to false).
+	FilterWhitelist []string `json:"filterWhitelist"`
+
+	// FilterBlacklist describes an array of function signatures that are NOT to be called during a fuzzing campaign (if FilterBlacklist is set to true).
+	FilterBlacklist []string `json:"filterBlacklist"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
@@ -330,6 +337,19 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
 		return errors.New("project configuration must specify only a well-formed deployer address")
+	}
+
+	// Verify that whitelists/blacklists are disabled if blacklists/whitelists are enabled, respectively
+	if (len(p.Fuzzing.Testing.FilterBlacklist) != 0) && (len(p.Fuzzing.Testing.FilterWhitelist) != 0) {
+		return errors.New("project configuration must specify only one of blacklist or whitelist at a time")
+	}
+
+	// Verify property testing fields.
+	if p.Fuzzing.Testing.PropertyTesting.Enabled {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(p.Fuzzing.Testing.PropertyTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+		}
 	}
 
 	// Ensure that the log level is a valid one
