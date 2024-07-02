@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/rand"
 
 	"github.com/crytic/medusa/chain"
@@ -41,7 +42,8 @@ type NewShrinkingValueMutatorFunc func(fuzzer *Fuzzer, valueSet *valuegeneration
 type NewCallSequenceGeneratorConfigFunc func(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error)
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
-type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) error
+// An execution trace can also be returned in case of a deployment error for an improved debugging experience
+type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace)
 
 // CallSequenceTestFunc defines a method called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 // during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
