@@ -3,11 +3,12 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"golang.org/x/exp/maps"
-	"math/big"
-	"sort"
 
 	chainTypes "github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
@@ -695,7 +696,8 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	}
 
 	// Obtain our state root hash prior to execution.
-	previousStateRoot := t.pendingBlock.Header.Root
+	// TODO: this is wrong
+	// previousStateRoot := t.pendingBlock.Header.Root
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
 	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit - t.pendingBlock.Header.GasUsed)
@@ -707,6 +709,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
 
 	// Create our EVM instance.
+	// TODO: add a method that reuses this when we are apply more than 1 tx
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
 		//Debug:            true,
 		Tracer:           t.transactionTracerRouter,
@@ -720,14 +723,14 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
-		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
+		// t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
 
 	// Create our message result
 	messageResult := &chainTypes.MessageResults{
-		PreStateRoot:      previousStateRoot,
-		PostStateRoot:     common.Hash{},
+		// PreStateRoot:      previousStateRoot,
+		PostStateRoot:     common.BytesToHash(receipt.PostState),
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
 		AdditionalResults: make(map[string]any, 0),
@@ -739,15 +742,16 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// Write state changes to database.
 	// NOTE: If this completes without an error, we know we didn't hit the block gas limit or other errors, so we are
 	// safe to update the block header afterwards.
-	root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
-	if err != nil {
-		return fmt.Errorf("test chain state write error: %v", err)
-	}
-	if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
-		// If we encountered an error, reset our state, as we couldn't add the tx.
-		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return fmt.Errorf("test chain trie write error: %v", err)
-	}
+	// root := common.BytesToHash(receipt.PostState)
+	// root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
+	// if err != nil {
+	// 	return fmt.Errorf("test chain state write error: %v", err)
+	// }
+	// if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
+	// 	// If we encountered an error, reset our state, as we couldn't add the tx.
+	// 	t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
+	// 	return fmt.Errorf("test chain trie write error: %v", err)
+	// }
 
 	// Update our gas used in the block header
 	t.pendingBlock.Header.GasUsed += receipt.GasUsed
@@ -758,8 +762,8 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// Update the header's state root hash, as well as our message result's
 	// Note: You could also retrieve the root without committing by using
 	// state.IntermediateRoot(config.IsEIP158(parentBlockNumber)).
-	t.pendingBlock.Header.Root = root
-	messageResult.PostStateRoot = root
+	// t.pendingBlock.Header.Root = root
+	// messageResult.PostStateRoot = root
 
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
@@ -791,7 +795,8 @@ func (t *TestChain) PendingBlockCommit() error {
 	if t.pendingBlock == nil {
 		return fmt.Errorf("could not commit chain's pending block, as no pending block was created")
 	}
-
+	root, _ := t.state.Commit(true)
+	t.pendingBlock.Header.Root = root
 	// Append our new block to our chain.
 	t.blocks = append(t.blocks, t.pendingBlock)
 

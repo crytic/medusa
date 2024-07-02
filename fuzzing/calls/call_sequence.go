@@ -278,7 +278,13 @@ func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, con
 	}
 
 	// Obtain the state prior to executing this transaction.
-	state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
+	// TODO: figure out how to recover this. probably requires replaying the entire block
+	fmt.Println(cse.ChainReference.Block.Header.Number.Uint64())
+	// hash, _ := chain.BlockHashFromNumber(cse.ChainReference.Block.Header.Number.Uint64() - 1)
+	// if err != nil {
+	// 	return fmt.Errorf("")
+	// }
+	state, err := chain.StateAfterBlockNumber(cse.ChainReference.Block.Header.Number.Uint64() - 1)
 	if err != nil {
 		return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
 	}

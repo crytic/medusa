@@ -10,7 +10,7 @@ import (
 // This contains results such as contracts deployed, and other variables tracked by a chain.TestChain.
 type MessageResults struct {
 	// PreStateRoot refers to the state root hash prior to the execution of this transaction.
-	PreStateRoot common.Hash
+	// PreStateRoot common.Hash
 
 	// PostStateRoot refers to the state root hash after the execution of this transaction.
 	PostStateRoot common.Hash
