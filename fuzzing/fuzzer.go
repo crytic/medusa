@@ -246,6 +246,9 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()
 
+	// Display what is being tested
+	f.logger.Info(testCase.LogMessage().Elements()...)
+
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
 }
