@@ -288,7 +288,7 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence lengt")
+		return errors.New("project configuration must specify a positive number for the transaction sequence length")
 	}
 
 	// Verify the worker reset limit is a positive number
