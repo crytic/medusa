@@ -10,7 +10,6 @@ import (
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
@@ -482,12 +481,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 					abiValuesMsgData.InputValues[j] = mutatedInput
 				}
 
-				// Re-encode the ABI values as calldata.
-				abiData, err := abiValuesMsgData.Pack()
-				if err != nil {
-					logging.GlobalLogger.Panic("Failed to pack call message ABI values", err)
-				}
-				possibleShrunkSequence[i].Call.Data = abiData
+				// Re-encode the message's calldata
+				possibleShrunkSequence[i].Call.WithDataAbiValues(abiValuesMsgData)
 
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
