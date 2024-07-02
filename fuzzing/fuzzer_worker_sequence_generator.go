@@ -460,5 +460,8 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}
+	// Re-encode the message's calldata
+	element.Call.WithDataAbiValues(abiValuesMsgData)
+
 	return nil
 }
