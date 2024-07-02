@@ -2,15 +2,16 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"math/big"
-	"strings"
-	"sync"
 )
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
@@ -47,7 +48,7 @@ func (t *OptimizationTestCase) Name() string {
 	return fmt.Sprintf("Optimization Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// LogMessage obtains a buffer that represents the result of the AssertionTestCase. This buffer can be passed to a logger for
+// LogMessage obtains a buffer that represents the result of the OptimizationTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
