@@ -130,6 +130,10 @@ func NewCallMessageWithAbiValueData(from common.Address, to *common.Address, non
 // WithDataAbiValues resets the call message's data and ABI values, ensuring the values are in sync and
 // reusing the other existing fields.
 func (m *CallMessage) WithDataAbiValues(abiData *CallMessageDataAbiValues) {
+	if abiData == nil {
+		logging.GlobalLogger.Panic("Method ABI and data should always be defined")
+	}
+
 	// Pack the ABI value data
 	var data []byte
 	var err error
