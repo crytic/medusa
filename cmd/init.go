@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/crytic/medusa/logging/colors"
 
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -134,6 +135,23 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		cmdLogger.Error("Failed to run the init command", err)
 		return err
+	}
+
+	if _, err = os.Stat(outputPath); err == nil {
+		// Prompt user for overwrite confirmation
+		fmt.Print("The file already exists. Overwrite? (y/n): ")
+		var response string
+		if _, err := fmt.Scan(&response); err != nil {
+			// Handle the error (e.g., log it, return an error)
+			cmdLogger.Error("Failed to scan input", err)
+			return err
+		}
+
+		if response != "y" && response != "Y" {
+			fmt.Println("Operation canceled.")
+			return nil
+		}
+
 	}
 
 	// Write our project configuration
