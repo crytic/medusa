@@ -250,7 +250,10 @@ func TestCheatCodes(t *testing.T) {
 
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {

@@ -3,11 +3,16 @@ package chain
 import (
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/chain/config"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"golang.org/x/exp/maps"
 	"math/big"
 	"sort"
+
+	"github.com/crytic/medusa/chain/config"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/holiman/uint256"
+	"golang.org/x/exp/maps"
 
 	chainTypes "github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
@@ -19,9 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
@@ -34,6 +37,8 @@ type TestChain struct {
 
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
 	pendingBlock *chainTypes.Block
+
+	evm *vm.EVM
 
 	// BlockGasLimit defines the maximum amount of gas that can be consumed by transactions in a block.
 	// Transactions which push the block gas usage beyond this limit will not be added to a block without error.
@@ -64,14 +69,11 @@ type TestChain struct {
 	// This is constructed over the kvstore.
 	db ethdb.Database
 
-	// keyValueStore represents the underlying key-value store used to construct the db.
-	keyValueStore *memorydb.Database
-
-	// callTracerRouter forwards vm.EVMLogger and TestChainTracer calls to any instances added to it. This
+	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
 	callTracerRouter *TestChainTracerRouter
 
-	// transactionTracerRouter forwards vm.EVMLogger and TestChainTracer calls to any instances added to it. This
+	// transactionTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for transaction execution when constructing blocks.
 	transactionTracerRouter *TestChainTracerRouter
 
@@ -89,13 +91,14 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		return nil, err
 	}
 
-	// TODO: go-ethereum doesn't set shanghai start time for THEIR test `ChainConfig` struct.
+	// TODO: go-ethereum doesn't set cancun start time for THEIR test `ChainConfig` struct.
 	//   Note: We have our own `TestChainConfig` definition that is different (second argument in this function).
 	//  We should allow the user to provide a go-ethereum `ChainConfig` to do custom fork selection, inside of our
 	//  `TestChainConfig` definition. Or we should wrap it in our own struct to simplify the options and not pollute
 	//  our overall medusa project config.
-	shanghaiTime := uint64(0)
-	chainConfig.ShanghaiTime = &shanghaiTime
+	cancunTime := uint64(0)
+	chainConfig.ShanghaiTime = &cancunTime
+	chainConfig.CancunTime = &cancunTime
 
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
@@ -127,17 +130,18 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	// Obtain our VM extensions from our config
 	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
 
-	// Obtain our cheatcode providers
-	cheatTracer, cheatContracts, err := getCheatCodeProviders()
-	if err != nil {
-		return nil, err
-	}
-
 	// Add all cheat code contract addresses to the genesis config. This is done because cheat codes are implemented
 	// as pre-compiles, but we still want code to exist at these addresses, because smart contracts compiled with
 	// newer solidity versions perform code size checks prior to external calls.
 	// Additionally, add the pre-compiled cheat code contract to our vm extensions.
+	var cheatTracer *cheatCodeTracer
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
+		// Obtain our cheatcode providers
+		var cheatContracts []*CheatCodeContract
+		cheatTracer, cheatContracts, err = getCheatCodeProviders()
+		if err != nil {
+			return nil, err
+		}
 		for _, cheatContract := range cheatContracts {
 			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
 				Balance: big.NewInt(0),
@@ -148,19 +152,24 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	}
 
 	// Create an in-memory database
-	keyValueStore := memorydb.New()
-	db := rawdb.NewDatabase(keyValueStore)
+	db := rawdb.NewMemoryDatabase()
+	config := &triedb.Config{
+		HashDB: hashdb.Defaults,
+		// PathDB: pathdb.Defaults,
+	}
+	triedb := triedb.NewDatabase(db, config)
+	// TODO	CleanCacheSize: 256,
+	// this is important in keeping the database performant, so it does not need to fetch repetitively.
+	// https://github.com/ethereum/go-ethereum/issues/30099
 
 	// Commit our genesis definition to get a genesis block.
-	genesisBlock := genesisDefinition.MustCommit(db)
+	genesisBlock := genesisDefinition.MustCommit(db, triedb)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	testChainGenesisBlock := chainTypes.NewBlock(genesisBlock.Header())
 
 	// Create our state database over-top our database.
-	stateDatabase := state.NewDatabaseWithConfig(db, &trie.Config{
-		Cache: 256, // this is important in keeping the database performant, so it does not need to fetch repetitively.
-	})
+	stateDatabase := state.NewDatabaseWithConfig(db, config)
 
 	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
 	transactionTracerRouter := NewTestChainTracerRouter()
@@ -172,7 +181,6 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 		BlockGasLimit:           genesisBlock.Header().GasLimit,
 		blocks:                  []*chainTypes.Block{testChainGenesisBlock},
 		pendingBlock:            nil,
-		keyValueStore:           keyValueStore,
 		db:                      db,
 		state:                   nil,
 		stateDatabase:           stateDatabase,
@@ -186,7 +194,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
-		chain.AddTracer(cheatTracer, true, true)
+		chain.AddTracer(cheatTracer.NativeTracer, true, true)
 		cheatTracer.bindToChain(chain)
 	}
 
@@ -195,6 +203,9 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 	if err != nil {
 		return nil, err
 	}
+
+	// Set our state database logger e.g. to monitor OnCodeChange events.
+	stateDB.SetLogger(transactionTracerRouter.NativeTracer.Hooks)
 	chain.state = stateDB
 	return chain, nil
 }
@@ -204,7 +215,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 // object from being freed by the garbage collector and causes a severe memory leak.
 func (t *TestChain) Close() {
 	// Reset the state DB's cache
-	t.stateDatabase.TrieDB().ResetCache()
+	t.stateDatabase.TrieDB().Close()
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
@@ -265,9 +276,9 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 	return targetChain, nil
 }
 
-// AddTracer adds a given vm.EVMLogger or TestChainTracer to the TestChain. If directed, the tracer will be attached
+// AddTracer adds a given tracers.Tracer or TestChainTracer to the TestChain. If directed, the tracer will be attached
 // for transactions and/or non-state changing calls made via CallContract.
-func (t *TestChain) AddTracer(tracer vm.EVMLogger, txs bool, calls bool) {
+func (t *TestChain) AddTracer(tracer *TestChainTracer, txs bool, calls bool) {
 	if txs {
 		t.transactionTracerRouter.AddTracer(tracer)
 	}
@@ -543,18 +554,17 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additionalTracers ...vm.EVMLogger) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state
 	}
 
 	// Obtain our state snapshot to revert any changes after our call
-	snapshot := state.Snapshot()
+	// snapshot := state.Snapshot()
 
 	// Set infinite balance to the fake caller account
-	from := state.GetOrNewStateObject(msg.From)
-	from.SetBalance(math.MaxBig256)
+	state.AddBalance(msg.From, uint256.MustFromBig(math.MaxBig256), tracing.BalanceChangeUnspecified)
 
 	// Create our transaction and block contexts for the vm
 	txContext := core.NewEVMTxContext(msg)
@@ -563,17 +573,21 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
 	// still calling our internal tracers.
 	extendedTracerRouter := NewTestChainTracerRouter()
-	extendedTracerRouter.AddTracer(t.callTracerRouter)
+	extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer)
 	extendedTracerRouter.AddTracers(additionalTracers...)
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
 		//Debug:            true,
-		Tracer:           extendedTracerRouter,
+		Tracer:           extendedTracerRouter.NativeTracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
+	t.evm = evm
 
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), utils.MessageToTransaction(msg), msg.From)
+	}
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
@@ -581,7 +595,7 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
 
 	// Revert to our state snapshot to undo any changes.
-	state.RevertToSnapshot(snapshot)
+	// state.RevertToSnapshot(snapshot)
 
 	return res, err
 }
@@ -695,7 +709,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	}
 
 	// Obtain our state root hash prior to execution.
-	previousStateRoot := t.pendingBlock.Header.Root
+	// previousStateRoot := t.pendingBlock.Header.Root
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
 	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit - t.pendingBlock.Header.GasUsed)
@@ -704,30 +718,41 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	tx := utils.MessageToTransaction(message)
 
 	// Create a new context to be used in the EVM environment
+	// TODO reuse
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
 		//Debug:            true,
-		Tracer:           t.transactionTracerRouter,
+		Tracer:           t.transactionTracerRouter.NativeTracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
+	t.evm = evm
 
+	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))
+
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, message.From)
+	}
 	// Apply our transaction
 	var usedGas uint64
-	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
+
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+		evm.Config.Tracer.OnTxEnd(receipt, err)
+	}
+
 	if err != nil {
 		// If we encountered an error, reset our state, as we couldn't add the tx.
-		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
+		// t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
 
 	// Create our message result
 	messageResult := &chainTypes.MessageResults{
-		PreStateRoot:      previousStateRoot,
-		PostStateRoot:     common.Hash{},
+		// PreStateRoot:      previousStateRoot,
+		PostStateRoot:     common.BytesToHash(receipt.PostState),
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
 		AdditionalResults: make(map[string]any, 0),
@@ -739,15 +764,15 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// Write state changes to database.
 	// NOTE: If this completes without an error, we know we didn't hit the block gas limit or other errors, so we are
 	// safe to update the block header afterwards.
-	root, err := t.state.Commit(t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
-	if err != nil {
-		return fmt.Errorf("test chain state write error: %v", err)
-	}
-	if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
-		// If we encountered an error, reset our state, as we couldn't add the tx.
-		t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-		return fmt.Errorf("test chain trie write error: %v", err)
-	}
+	// root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
+	// if err != nil {
+	// 	return fmt.Errorf("test chain state write error: %v", err)
+	// }
+	// if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
+	// 	// If we encountered an error, reset our state, as we couldn't add the tx.
+	// 	t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
+	// 	return fmt.Errorf("test chain trie write error: %v", err)
+	// }
 
 	// Update our gas used in the block header
 	t.pendingBlock.Header.GasUsed += receipt.GasUsed
@@ -758,8 +783,8 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// Update the header's state root hash, as well as our message result's
 	// Note: You could also retrieve the root without committing by using
 	// state.IntermediateRoot(config.IsEIP158(parentBlockNumber)).
-	t.pendingBlock.Header.Root = root
-	messageResult.PostStateRoot = root
+	// t.pendingBlock.Header.Root = root
+	// messageResult.PostStateRoot = root
 
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
@@ -791,6 +816,20 @@ func (t *TestChain) PendingBlockCommit() error {
 	if t.pendingBlock == nil {
 		return fmt.Errorf("could not commit chain's pending block, as no pending block was created")
 	}
+	// Perform a state commit to obtain the root hash for our block.
+	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true)
+	t.pendingBlock.Header.Root = root
+
+	if err != nil {
+		return err
+	}
+
+	// Committing the state invalidates the cached tries and we need to reload the state.
+	// Otherwise, methods such as FillFromTestChainProperties will not work correctly.
+	t.state, err = state.New(root, t.stateDatabase, nil)
+	if err != nil {
+		return err
+	}
 
 	// Append our new block to our chain.
 	t.blocks = append(t.blocks, t.pendingBlock)
@@ -800,7 +839,7 @@ func (t *TestChain) PendingBlockCommit() error {
 	t.pendingBlock = nil
 
 	// Emit our event for committing a new block as the chain head
-	err := t.Events.PendingBlockCommitted.Publish(PendingBlockCommittedEvent{
+	err = t.Events.PendingBlockCommitted.Publish(PendingBlockCommittedEvent{
 		Chain: t,
 		Block: pendingBlock,
 	})

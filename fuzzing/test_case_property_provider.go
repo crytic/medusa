@@ -89,12 +89,11 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	var executionResult *core.ExecutionResult
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
-		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil, executionTracer)
-		executionTrace = executionTracer.Trace()
+		executionResult, executionTrace, err = executiontracer.CallWithExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions, msg.ToCoreMessage(), nil)
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}
+	fmt.Println("Execution result", executionResult)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to call property test method: %v", err)
 	}
@@ -319,14 +318,25 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 					return shrunkenSequenceFailedTest, err
 				},
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-					// When we're finished shrinking, attach an execution trace to the last call
+					// // When we're finished shrinking, attach an execution trace to the last call
 					if len(shrunkenCallSequence) > 0 {
+						fmt.Println("Attaching execution trace to last call")
+
+						toExecute := shrunkenCallSequence[:len(shrunkenCallSequence)-1]
+						if len(toExecute) > 0 {
+							fmt.Println("Executing shrunken call sequence", toExecute.String())
+							_, err = calls.ExecuteCallSequence(worker.chain, toExecute)
+							if err != nil {
+								panic(err)
+							}
+						}
 						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+						// shrunkenCallSequence.AttachExecutionTraces(worker.chain, worker.fuzzer.ContractDefinitions())
 						if err != nil {
 							return err
 						}
 					}
-
+					fmt.Println(workerPropertyTestMethod.Method.Name, "failed")
 					// Execute the property test a final time, this time obtaining an execution trace
 					shrunkenSequenceFailedTest, executionTrace, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, true)
 					if err != nil {

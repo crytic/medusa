@@ -1,10 +1,15 @@
 package chain
 
 import (
+	"math/big"
+
 	"github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	coretypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 // testChainDeploymentsTracer implements TestChainTracer, capturing information regarding contract deployments and
@@ -15,18 +20,15 @@ type testChainDeploymentsTracer struct {
 	results []types.DeployedContractBytecodeChange
 
 	// callDepth refers to the current EVM depth during tracing.
-	callDepth uint64
+	callDepth int
 
-	// evm refers to the EVM instance last captured.
-	evm *vm.EVM
+	// evm refers to the last tracing.VMContext captured.
+	evmContext *tracing.VMContext
 
 	// pendingCallFrames represents per-call-frame data deployment information being captured by the tracer.
 	// This is committed as each call frame succeeds, so that contract deployments which later encountered an error
 	// and reverted are not considered. The index of each element in the array represents its call frame depth.
 	pendingCallFrames []*testChainDeploymentsTracerCallFrame
-
-	// selfDestructDestroysCode indicates whether the SELFDESTRUCT opcode is configured to remove contract code.
-	selfDestructDestroysCode bool
 }
 
 // testChainDeploymentsTracerCallFrame represents per-call-frame data traced by a testChainDeploymentsTracer.
@@ -36,84 +38,85 @@ type testChainDeploymentsTracerCallFrame struct {
 }
 
 // newTestChainDeploymentsTracer creates a testChainDeploymentsTracer
-func newTestChainDeploymentsTracer() *testChainDeploymentsTracer {
-	tracer := &testChainDeploymentsTracer{
-		selfDestructDestroysCode: true, // TODO: Update this when new EIP is introduced by checking the chain config.
-	}
+func newTestChainDeploymentsTracer() *TestChainTracer {
+	t := &testChainDeploymentsTracer{}
+	tracer := &TestChainTracer{&tracers.Tracer{
+		Hooks: &tracing.Hooks{
+			OnTxStart: t.OnTxStart,
+			// OnTxEnd:   t.OnTxEnd,
+			// OnEnter:      t.OnEnter,
+			// OnExit:       t.OnExit,
+			OnOpcode:     t.OnOpcode,
+			OnCodeChange: t.OnCodeChange,
+		},
+	}, t.CaptureTxEndSetAdditionalResults}
 	return tracer
 }
 
-// CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureTxStart(gasLimit uint64) {
+// CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
+func (t *testChainDeploymentsTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
 	t.callDepth = 0
 	t.results = make([]types.DeployedContractBytecodeChange, 0)
 	t.pendingCallFrames = make([]*testChainDeploymentsTracerCallFrame, 0)
-}
-
-// CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureTxEnd(restGas uint64) {
-
-}
-
-// CaptureStart initializes the tracing operation for the top of a call frame, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	// Store our evm reference
-	t.evm = env
+	t.evmContext = vm
+}
 
+// // OnCodeChange initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
+func (t *testChainDeploymentsTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
 	// Create our call frame struct to track data for this initial entry call frame.
 	callFrameData := &testChainDeploymentsTracerCallFrame{}
 	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
-
-	// If this is a contract creation, record the `to` address as a pending deployment (if it succeeds upon exit,
-	// we commit it).
-	if create {
-		callFrameData.results = append(callFrameData.results, types.DeployedContractBytecodeChange{
-			Contract: &types.DeployedContractBytecode{
-				Address:         to,
-				InitBytecode:    input,
-				RuntimeBytecode: nil,
-			},
-			Creation:        true,
-			DynamicCreation: false,
-			SelfDestructed:  false,
-			Destroyed:       false,
-		})
-	}
+	// TODO check that we aren't double counting dynamic creations
+	t.results = append(t.results, types.DeployedContractBytecodeChange{
+		Contract: &types.DeployedContractBytecode{
+			Address:         a,
+			InitBytecode:    nil,
+			RuntimeBytecode: code,
+		},
+		Creation:        true,
+		DynamicCreation: false,
+		SelfDestructed:  false,
+		Destroyed:       false,
+	})
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	// Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
-	// We had to fetch it upon exit as it does not exist during creation of course.
-	for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
-		if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
-			contractChange.Contract.RuntimeBytecode = t.evm.StateDB.GetCode(contractChange.Contract.Address)
-		}
-	}
+// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	// // Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
+	// // We had to fetch it upon exit as it does not exist during creation of course.
+	// for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
+	// 	if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
+	// 		contractChange.Contract.RuntimeBytecode = t.evmContext.StateDB.GetCode(contractChange.Contract.Address)
+	// 	}
+	// }
 
 	// If we didn't encounter an error in this call frame, we're at the end, so we commit all results.
-	if err == nil {
+	if err == nil && !reverted {
 		t.results = append(t.results, t.pendingCallFrames[t.callDepth].results...)
 	}
 
-	// We're exiting the current frame, so remove our frame data.
-	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
+	// // We're exiting the current frame, so remove our frame data.
+	// t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
 }
 
-// CaptureEnter is called upon entering of the call frame, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+// CaptureEnter is called upon entering of the call frame, as defined by tracers.Tracer.
+func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Increase our call depth now that we're entering a new call frame.
-	t.callDepth++
+	if depth == 0 {
+		return
+	}
+	t.callDepth = depth
 
 	// Create our call frame struct to track data for this initial entry call frame.
-	callFrameData := &testChainDeploymentsTracerCallFrame{}
-	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
+	// callFrameData := &testChainDeploymentsTracerCallFrame{}
+	// t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
 
 	// If this is a contract creation, record the `to` address as a pending deployment (if it succeeds upon exit,
 	// we commit it).
-	if typ == vm.CREATE || typ == vm.CREATE2 {
-		callFrameData.results = append(callFrameData.results, types.DeployedContractBytecodeChange{
+	if typ == byte(vm.CREATE) || typ == byte(vm.CREATE2) {
+		t.results = append(t.results, types.DeployedContractBytecodeChange{
 			Contract: &types.DeployedContractBytecode{
 				Address:         to,
 				InitBytecode:    input,
@@ -127,50 +130,54 @@ func (t *testChainDeploymentsTracer) CaptureEnter(typ vm.OpCode, from common.Add
 	}
 }
 
-// CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
-	// We had to fetch it upon exit as it does not exist during creation of course.
-	for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
-		if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
-			contractChange.Contract.RuntimeBytecode = t.evm.StateDB.GetCode(contractChange.Contract.Address)
-		}
-	}
+// // CaptureExit is called upon exiting of the call frame, as defined by tracers.Tracer.
+// func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+// 	if depth == 0 {
+// 		return
+// 	}
 
-	// If we didn't encounter an error in this call frame, we push our captured data up one frame.
-	if err == nil {
-		t.pendingCallFrames[t.callDepth-1].results = append(t.pendingCallFrames[t.callDepth-1].results, t.pendingCallFrames[t.callDepth].results...)
-	}
+// 	// // Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
+// 	// // We had to fetch it upon exit as it does not exist during creation of course.
+// 	// for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
+// 	// 	if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
+// 	// 		contractChange.Contract.RuntimeBytecode = t.evmContext.StateDB.GetCode(contractChange.Contract.Address)
+// 	// 	}
+// 	// }
 
-	// We're exiting the current frame, so remove our frame data.
-	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
+// 	// If we didn't encounter an error in this call frame, we push our captured data up one frame.
+// 	if err == nil {
+// 		t.pendingCallFrames[t.callDepth-1].results = append(t.pendingCallFrames[t.callDepth-1].results, t.pendingCallFrames[t.callDepth].results...)
+// 	}
 
-	// Decrease our call depth now that we've exited a call frame.
-	t.callDepth--
-}
+// 	// We're exiting the current frame, so remove our frame data.
+// 	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
 
-// CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
+// 	// Decrease our call depth now that we've exited a call frame.
+// 	t.callDepth--
+// 	fmt.Println("OnExit", t.callDepth, depth)
+
+// }
+
+// CaptureState records data from an EVM state update, as defined by tracers.Tracer.
+func (t *testChainDeploymentsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// If we encounter a SELFDESTRUCT operation, record the change to our contract in our results.
-	if op == vm.SELFDESTRUCT {
-		callFrameData := t.pendingCallFrames[t.callDepth]
-		callFrameData.results = append(callFrameData.results, types.DeployedContractBytecodeChange{
+	if op == byte(vm.SELFDESTRUCT) {
+		addr := scope.Address()
+		code := t.evmContext.StateDB.GetCode(addr)
+		t.results = append(t.results, types.DeployedContractBytecodeChange{
 			Contract: &types.DeployedContractBytecode{
-				Address:         scope.Contract.Address(),
+				Address:         addr,
 				InitBytecode:    nil,
-				RuntimeBytecode: t.evm.StateDB.GetCode(scope.Contract.Address()),
+				RuntimeBytecode: code,
 			},
 			Creation:        false,
 			DynamicCreation: false,
 			SelfDestructed:  true,
-			Destroyed:       t.selfDestructDestroysCode,
+			// Check if this is a new contract (not previously deployed and self destructed).
+			// https://github.com/ethereum/go-ethereum/blob/8d42e115b1cae4f09fd02b71c06ec9c85f22ad4f/core/state/statedb.go#L504-L506
+			Destroyed: t.evmContext.ChainConfig.LatestFork(t.evmContext.Time) < forks.Cancun || !t.evmContext.StateDB.Exist(addr),
 		})
 	}
-}
-
-// CaptureFault records an execution fault, as defined by vm.EVMLogger.
-func (t *testChainDeploymentsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

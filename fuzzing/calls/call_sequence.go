@@ -278,13 +278,29 @@ func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, con
 	}
 
 	// Obtain the state prior to executing this transaction.
-	state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
-	if err != nil {
-		return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
-	}
+	// TODO: figure out how to recover this. probably requires replaying the entire block
+	// fmt.Println(cse.ChainReference.Block.Header.Number.Uint64())
+	// fmt.Println("Tracing: ", cse.String())
+	// hash, _ := chain.BlockHashFromNumber(cse.ChainReference.Block.Header.Number.Uint64() - 1)
+	//
+	//	if err != nil {
+	//		return fmt.Errorf("")
+	//	}
+	var err error
+	// state, err := chain.StateAfterBlockNumber(cse.ChainReference.Block.Header.Number.Uint64() - 1)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
+	// }
+	// for idx, msg := range cse.ChainReference.Block.Messages[:len(cse.ChainReference.Block.Messages)-1] {
+	// 	fmt.Println(idx, msg)
+	// 	if _, err := chain.CallContract(msg, state); err != nil {
+	// 		panic(err)
+	// 	}
 
+	// }
 	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), state)
+
+	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
 	}

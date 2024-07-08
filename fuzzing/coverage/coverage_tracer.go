@@ -1,11 +1,16 @@
 package coverage
 
 import (
+	"math/big"
+
+	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	coretypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // coverageTracerResultsKey describes the key to use when storing tracer results in call message results, or when
@@ -31,7 +36,7 @@ func RemoveCoverageTracerResults(messageResults *types.MessageResults) {
 	delete(messageResults.AdditionalResults, coverageTracerResultsKey)
 }
 
-// CoverageTracer implements vm.EVMLogger to collect information such as coverage maps
+// CoverageTracer implements tracers.Tracer to collect information such as coverage maps
 // for fuzzing campaigns from EVM execution traces.
 type CoverageTracer struct {
 	// coverageMaps describes the execution coverage recorded. Call frames which errored are not recorded.
@@ -41,7 +46,12 @@ type CoverageTracer struct {
 	callFrameStates []*coverageTracerCallFrameState
 
 	// callDepth refers to the current EVM depth during tracing.
-	callDepth uint64
+	callDepth int
+
+	evmContext *tracing.VMContext
+
+	// nativeTracer is the underlying tracer used to capture EVM execution.
+	NativeTracer *chain.TestChainTracer
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -62,108 +72,84 @@ func NewCoverageTracer() *CoverageTracer {
 		coverageMaps:    NewCoverageMaps(),
 		callFrameStates: make([]*coverageTracerCallFrameState, 0),
 	}
+	nativeTracer := &tracers.Tracer{
+		Hooks: &tracing.Hooks{
+			OnTxStart: tracer.OnTxStart,
+			OnEnter:   tracer.OnEnter,
+			OnExit:    tracer.OnExit,
+			OnOpcode:  tracer.OnOpcode,
+		},
+	}
+	tracer.NativeTracer = &chain.TestChainTracer{nativeTracer, tracer.CaptureTxEndSetAdditionalResults}
+
 	return tracer
 }
 
-// CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureTxStart(gasLimit uint64) {
+// CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
+func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our call frame states
 	t.callDepth = 0
 	t.coverageMaps = NewCoverageMaps()
 	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
+	t.evmContext = vm
 }
 
-// CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureTxEnd(restGas uint64) {
-}
+// OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
+func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 
-// CaptureStart initializes the tracing operation for the top of a call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	// Create our state tracking struct for this frame.
 	t.callFrameStates = append(t.callFrameStates, &coverageTracerCallFrameState{
-		create:             create,
+		create:             typ == byte(vm.CREATE) || typ == byte(vm.CREATE2),
 		pendingCoverageMap: NewCoverageMaps(),
 	})
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// If we encountered an error in this call frame, mark all coverage as reverted.
+	idx := len(t.callFrameStates) - 1
 	if err != nil {
-		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
+		_, revertCoverageErr := t.callFrameStates[idx].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", revertCoverageErr)
 		}
 	}
 
 	// Commit all our coverage maps up one call frame.
-	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[idx].pendingCoverageMap)
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", coverageUpdateErr)
 	}
 
 	// Pop the state tracking struct for this call frame off the stack.
-	t.callFrameStates = t.callFrameStates[:t.callDepth]
-}
-
-// CaptureEnter is called upon entering of the call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Increase our call depth now that we're entering a new call frame.
-	t.callDepth++
-
-	// Create our state tracking struct for this frame.
-	t.callFrameStates = append(t.callFrameStates, &coverageTracerCallFrameState{
-		create:             typ == vm.CREATE || typ == vm.CREATE2,
-		pendingCoverageMap: NewCoverageMaps(),
-	})
-}
-
-// CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// If we encountered an error in this call frame, mark all coverage as reverted.
-	if err != nil {
-		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
-		if revertCoverageErr != nil {
-			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture exit", revertCoverageErr)
-		}
-	}
-
-	// Commit all our coverage maps up one call frame.
-	_, _, coverageUpdateErr := t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
-	if coverageUpdateErr != nil {
-		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture exit", coverageUpdateErr)
-	}
-
-	// Pop the state tracking struct for this call frame off the stack.
-	t.callFrameStates = t.callFrameStates[:t.callDepth]
+	t.callFrameStates = t.callFrameStates[:idx]
 
 	// Decrease our call depth now that we've exited a call frame.
-	t.callDepth--
 }
 
-// CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
+// CaptureState records data from an EVM state update, as defined by tracers.Tracer.
+func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Obtain our call frame state tracking struct
-	callFrameState := t.callFrameStates[t.callDepth]
+	callFrameState := t.callFrameStates[len(t.callFrameStates)-1]
 
 	// If there is code we're executing, collect coverage.
-	if len(scope.Contract.Code) > 0 {
+	address := scope.Address()
+	code := t.evmContext.StateDB.GetCode(address)
+	codeSize := len(code)
+	if codeSize > 0 {
+
 		// Obtain our contract coverage map lookup hash.
 		if callFrameState.lookupHash == nil {
-			lookupHash := getContractCoverageMapHash(scope.Contract.Code, callFrameState.create)
+			lookupHash := getContractCoverageMapHash(code, callFrameState.create)
 			callFrameState.lookupHash = &lookupHash
 		}
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(address, *callFrameState.lookupHash, codeSize, pc)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
 	}
-}
-
-// CaptureFault records an execution fault, as defined by vm.EVMLogger.
-func (t *CoverageTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

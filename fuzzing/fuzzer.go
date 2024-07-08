@@ -246,6 +246,9 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()
 
+	// Display what is being tested
+	f.logger.Info(testCase.LogMessage().Elements()...)
+
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
 }
@@ -395,7 +398,6 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 				}
 
 				// Add our transaction to the block
-				// Add our transaction to the block
 				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
 				if err != nil {
 					return err, nil
@@ -416,20 +418,18 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-
+					// TODO
+					testChain.RevertToBlockNumber(0)
 					// Replay the execution trace for the failed contract deployment tx
 					err = cse.AttachExecutionTrace(testChain, fuzzer.contractDefinitions)
 
-					// Throw an error if execution tracing threw an error or the trace is nil
+					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
 					if err != nil {
-						return fmt.Errorf("failed to attach execution trace to failed contract deployment tx: %v", err), nil
-					}
-					if cse.ExecutionTrace == nil {
-						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), nil
+						fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx: %v", err)
 					}
 
 					// Return the execution error and the execution trace
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), cse.ExecutionTrace
+					return fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err), cse.ExecutionTrace
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this

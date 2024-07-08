@@ -3,6 +3,11 @@ package corpus
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -11,10 +16,6 @@ import (
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"math/big"
-	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
@@ -258,7 +259,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	// Clone our test chain, adding listeners for contract deployment events from genesis.
 	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
 		// After genesis, prior to adding other blocks, we attach our coverage tracer
-		newChain.AddTracer(coverageTracer, true, false)
+		newChain.AddTracer(coverageTracer.NativeTracer, true, false)
 
 		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
 		// sequences.

@@ -2,14 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
-	"math/big"
-	"sync"
 )
 
 const MIN_INT = "-8000000000000000000000000000000000000000000000000000000000000000"
@@ -86,7 +87,7 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
 		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil, executionTracer)
+		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil, executionTracer.NativeTracer)
 		executionTrace = executionTracer.Trace()
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
@@ -282,7 +283,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 	for optimizationTestMethodId, workerOptimizationTestMethod := range workerState.optimizationTestMethods {
 		// Obtain the test case for this optimization test method
 		t.testCasesLock.Lock()
-		testCase := t.testCases[optimizationTestMethodId]
+		testCase, _ := t.testCases[optimizationTestMethodId]
 		t.testCasesLock.Unlock()
 
 		// Run our optimization test (create a local copy to avoid loop overwriting the method)
@@ -324,6 +325,18 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
 					// When we're finished shrinking, attach an execution trace to the last call
 					if len(shrunkenCallSequence) > 0 {
+
+						err := worker.chain.RevertToBlockNumber(worker.testingBaseBlockNumber)
+						if err != nil {
+							panic(err)
+						}
+						toExecute := shrunkenCallSequence[:len(shrunkenCallSequence)-1]
+						if len(toExecute) > 0 {
+							_, err = calls.ExecuteCallSequence(worker.chain, toExecute)
+							if err != nil {
+								panic(err)
+							}
+						}
 						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
 						if err != nil {
 							return err

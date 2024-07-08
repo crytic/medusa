@@ -1,6 +1,8 @@
 package fuzzing
 
 import (
+	"sync"
+
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -8,7 +10,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
-	"sync"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -225,6 +226,13 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
 				// When we're finished shrinking, attach an execution trace to the last call
 				if len(shrunkenCallSequence) > 0 {
+					toExecute := shrunkenCallSequence[:len(shrunkenCallSequence)-1]
+					if len(toExecute) > 0 {
+						_, err = calls.ExecuteCallSequence(worker.chain, toExecute)
+						if err != nil {
+							panic(err)
+						}
+					}
 					err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
 					if err != nil {
 						return err
