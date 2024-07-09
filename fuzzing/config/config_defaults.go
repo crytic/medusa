@@ -46,8 +46,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
-			HtmlReportFile:     "coverage_report.html",
-			JsonReportFile:     "coverage_report.json",
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
