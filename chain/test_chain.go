@@ -9,7 +9,6 @@ import (
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -598,21 +597,10 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	msgResult, err := core.ApplyMessage(evm, msg, gasPool)
 
 	// Revert to our state snapshot to undo any changes.
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-	}
+	state.RevertToSnapshot(snapshot)
 
-	// Receipt:
-	var root []byte
-	if t.chainConfig.IsByzantium(blockContext.BlockNumber) {
-		t.state.Finalise(true)
-	} else {
-		root = state.IntermediateRoot(t.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
-	}
-
-	// Create a new receipt for the transaction, storing the intermediate root and
-	// gas used by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: msgResult.UsedGas}
+	// HACK: use OnTxEnd to store the execution trace.
+	receipt := &types.Receipt{Type: tx.Type()}
 	if msgResult.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 	} else {
@@ -620,16 +608,6 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = msgResult.UsedGas
-
-	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To == nil {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
-	}
-
-	// Set the receipt logs and create the bloom filter.
-	receipt.Logs = t.state.GetLogs(tx.Hash(), blockContext.BlockNumber.Uint64(), blockContext.GetHash(blockContext.BlockNumber.Uint64()))
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	receipt.TransactionIndex = uint(0)
 
 	if evm.Config.Tracer != nil {
 		if evm.Config.Tracer.OnTxEnd != nil {

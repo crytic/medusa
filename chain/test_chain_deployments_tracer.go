@@ -44,10 +44,10 @@ func newTestChainDeploymentsTracer() *TestChainTracer {
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			// OnTxEnd:   t.OnTxEnd,
-			// OnEnter:      t.OnEnter,
+			OnEnter: t.OnEnter,
 			// OnExit:       t.OnExit,
-			OnOpcode:     t.OnOpcode,
-			OnCodeChange: t.OnCodeChange,
+			OnOpcode: t.OnOpcode,
+			// OnCodeChange: t.OnCodeChange,
 		},
 	}, t.CaptureTxEndSetAdditionalResults}
 	return tracer
@@ -104,9 +104,6 @@ func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed ui
 // CaptureEnter is called upon entering of the call frame, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Increase our call depth now that we're entering a new call frame.
-	if depth == 0 {
-		return
-	}
 	t.callDepth = depth
 
 	// Create our call frame struct to track data for this initial entry call frame.
@@ -123,7 +120,7 @@ func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Ad
 				RuntimeBytecode: nil,
 			},
 			Creation:        true,
-			DynamicCreation: true,
+			DynamicCreation: depth != 0, // If we're not at the top level, this is a dynamic creation.
 			SelfDestructed:  false,
 			Destroyed:       false,
 		})

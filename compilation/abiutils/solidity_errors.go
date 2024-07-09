@@ -90,7 +90,7 @@ func GetSolidityRevertErrorString(returnError error, returnData []byte) *string 
 func GetSolidityCustomRevertError(contractAbi *abi.ABI, returnError error, returnData []byte) (*abi.Error, []any) {
 	// If no ABI was given or a revert was not encountered, no custom error can be extracted, or may exist,
 	// respectively.
-	if returnError != vm.ErrExecutionReverted || contractAbi == nil {
+	if !errors.Is(returnError, vm.ErrExecutionReverted) || contractAbi == nil {
 		return nil, nil
 	}
 
