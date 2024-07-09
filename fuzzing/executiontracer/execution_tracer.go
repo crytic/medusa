@@ -6,6 +6,7 @@ import (
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -23,7 +24,7 @@ import (
 func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
 	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
-
+	defer executionTracer.Close()
 	// Call the contract on our chain with the provided state.
 	executionResult, err := testChain.CallContract(msg, state, executionTracer.NativeTracer)
 	if err != nil {
@@ -31,7 +32,8 @@ func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions cont
 	}
 
 	// Obtain our trace
-	trace := executionTracer.Trace()
+	hash := utils.MessageToTransaction(msg).Hash()
+	trace := executionTracer.GetTrace(hash)
 
 	// Return the trace
 	return executionResult, trace, nil
@@ -48,6 +50,8 @@ type ExecutionTracer struct {
 
 	// trace represents the current execution trace captured by this tracer.
 	trace *ExecutionTrace
+
+	traceMap map[common.Hash]*ExecutionTrace
 
 	// currentCallFrame references the current call frame being traced.
 	currentCallFrame *CallFrame
@@ -72,11 +76,13 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContra
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
 		cheatCodeContracts:  cheatCodeContracts,
+		traceMap:            make(map[common.Hash]*ExecutionTrace),
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: tracer.OnTxStart,
 			OnEnter:   tracer.OnEnter,
+			OnTxEnd:   tracer.OnTxEnd,
 			OnExit:    tracer.OnExit,
 			OnOpcode:  tracer.OnOpcode,
 		},
@@ -85,10 +91,19 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContra
 
 	return tracer
 }
+func (t *ExecutionTracer) Close() {
+	t.traceMap = nil
+}
 
-// Trace returns the currently recording or last recorded execution trace by the tracer.
-func (t *ExecutionTracer) Trace() *ExecutionTrace {
-	return t.trace
+// GetTrace returns the currently recording or last recorded execution trace by the tracer.
+func (t *ExecutionTracer) GetTrace(txHash common.Hash) *ExecutionTrace {
+	if trace, ok := t.traceMap[txHash]; ok {
+		return trace
+	}
+	return nil
+}
+func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
+	t.traceMap[receipt.TxHash] = t.trace
 }
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.

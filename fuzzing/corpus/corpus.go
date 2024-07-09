@@ -210,7 +210,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
+		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc, nil)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
@@ -228,8 +228,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
-		err = testChain.RevertToBlockNumber(baseBlockNumber)
-		if err != nil {
+		if err := testChain.RevertToBlockNumber(baseBlockNumber); err != nil {
 			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
 		}
 	}

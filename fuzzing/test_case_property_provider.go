@@ -9,7 +9,10 @@ import (
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/utils"
+	msgutils "github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"golang.org/x/exp/slices"
 )
 
@@ -93,7 +96,6 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}
-	fmt.Println("Execution result", executionResult)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to call property test method: %v", err)
 	}
@@ -320,23 +322,23 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
 					// // When we're finished shrinking, attach an execution trace to the last call
 					if len(shrunkenCallSequence) > 0 {
-						fmt.Println("Attaching execution trace to last call")
-
-						toExecute := shrunkenCallSequence[:len(shrunkenCallSequence)-1]
-						if len(toExecute) > 0 {
-							fmt.Println("Executing shrunken call sequence", toExecute.String())
-							_, err = calls.ExecuteCallSequence(worker.chain, toExecute)
-							if err != nil {
-								panic(err)
-							}
+						executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
+						defer executionTracer.Close()
+						getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
+							return executionTracer.NativeTracer.Tracer
 						}
-						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+
+						_, err = calls.ExecuteCallSequenceWithTracer(worker.chain, shrunkenCallSequence, getTracerFunc)
+						for _, callSequenceElement := range shrunkenCallSequence {
+							hash := msgutils.MessageToTransaction(callSequenceElement.Call.ToCoreMessage()).Hash()
+							callSequenceElement.ExecutionTrace = executionTracer.GetTrace(hash)
+						}
 						// shrunkenCallSequence.AttachExecutionTraces(worker.chain, worker.fuzzer.ContractDefinitions())
 						if err != nil {
 							return err
 						}
 					}
-					fmt.Println(workerPropertyTestMethod.Method.Name, "failed")
+
 					// Execute the property test a final time, this time obtaining an execution trace
 					shrunkenSequenceFailedTest, executionTrace, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, true)
 					if err != nil {

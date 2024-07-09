@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	msgutils "github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -25,6 +26,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
@@ -35,7 +37,6 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 )
 
@@ -313,18 +314,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// Create our genesis allocations.
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for _, sender := range f.senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}
 
 	// Fund our deployer address in the genesis block
-	genesisAlloc[f.deployer] = core.GenesisAccount{
+	genesisAlloc[f.deployer] = types.Account{
 		Balance: initBalance,
 	}
 
@@ -398,7 +399,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 				}
 
 				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+				err = testChain.PendingBlockAddTx(msg.ToCoreMessage(), nil)
 				if err != nil {
 					return err, nil
 				}
@@ -418,10 +419,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// TODO
+					// TODO determine if this is always the right block num to revert to
 					testChain.RevertToBlockNumber(0)
-					// Replay the execution trace for the failed contract deployment tx
-					err = cse.AttachExecutionTrace(testChain, fuzzer.contractDefinitions)
+					executionTracer := executiontracer.NewExecutionTracer(fuzzer.contractDefinitions, testChain.CheatCodeContracts())
+					defer executionTracer.Close()
+					getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
+						return executionTracer.NativeTracer.Tracer
+					}
+
+					_, err = calls.ExecuteCallSequenceWithTracer(testChain, []*calls.CallSequenceElement{cse}, getTracerFunc)
+					hash := msgutils.MessageToTransaction(cse.Call.ToCoreMessage()).Hash()
+					cse.ExecutionTrace = executionTracer.GetTrace(hash)
 
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
 					if err != nil {

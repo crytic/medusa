@@ -48,8 +48,7 @@ func (c *CompiledContract) IsMatch(initBytecode []byte, runtimeBytecode []byte) 
 			deploymentBytecodeHash := deploymentMetadata.ExtractBytecodeHash()
 			definitionBytecodeHash := definitionMetadata.ExtractBytecodeHash()
 			if deploymentBytecodeHash != nil && definitionBytecodeHash != nil {
-				x := bytes.Equal(deploymentBytecodeHash, definitionBytecodeHash)
-				return x
+				return bytes.Equal(deploymentBytecodeHash, definitionBytecodeHash)
 			}
 		}
 	}

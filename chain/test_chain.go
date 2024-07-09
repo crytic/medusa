@@ -9,6 +9,8 @@ import (
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/holiman/uint256"
@@ -84,7 +86,7 @@ type TestChain struct {
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
 // If a nil config is provided, a default one is used.
-func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -143,7 +145,7 @@ func NewTestChain(genesisAlloc core.GenesisAlloc, testChainConfig *config.TestCh
 			return nil, err
 		}
 		for _, cheatContract := range cheatContracts {
-			genesisDefinition.Alloc[cheatContract.address] = core.GenesisAccount{
+			genesisDefinition.Alloc[cheatContract.address] = types.Account{
 				Balance: big.NewInt(0),
 				Code:    []byte{0xFF},
 			}
@@ -251,7 +253,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		// Now add each transaction/message to it.
 		messages := t.blocks[i].Messages
 		for j := 0; j < len(messages); j++ {
-			err = targetChain.PendingBlockAddTx(messages[j])
+			err = targetChain.PendingBlockAddTx(messages[j], nil)
 			if err != nil {
 				return nil, err
 			}
@@ -561,7 +563,7 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	}
 
 	// Obtain our state snapshot to revert any changes after our call
-	// snapshot := state.Snapshot()
+	snapshot := state.Snapshot()
 
 	// Set infinite balance to the fake caller account
 	state.AddBalance(msg.From, uint256.MustFromBig(math.MaxBig256), tracing.BalanceChangeUnspecified)
@@ -585,19 +587,57 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	})
 	t.evm = evm
 
+	tx := utils.MessageToTransaction(msg)
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
-		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), utils.MessageToTransaction(msg), msg.From)
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 	}
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	// Perform our state transition to obtain the result.
-	res, err := core.NewStateTransition(evm, msg, gasPool).TransitionDb()
+	msgResult, err := core.ApplyMessage(evm, msg, gasPool)
 
 	// Revert to our state snapshot to undo any changes.
-	// state.RevertToSnapshot(snapshot)
+	if err != nil {
+		state.RevertToSnapshot(snapshot)
+	}
 
-	return res, err
+	// Receipt:
+	var root []byte
+	if t.chainConfig.IsByzantium(blockContext.BlockNumber) {
+		t.state.Finalise(true)
+	} else {
+		root = state.IntermediateRoot(t.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
+	}
+
+	// Create a new receipt for the transaction, storing the intermediate root and
+	// gas used by the tx.
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: msgResult.UsedGas}
+	if msgResult.Failed() {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
+	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = msgResult.UsedGas
+
+	// If the transaction created a contract, store the creation address in the receipt.
+	if msg.To == nil {
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+	}
+
+	// Set the receipt logs and create the bloom filter.
+	receipt.Logs = t.state.GetLogs(tx.Hash(), blockContext.BlockNumber.Uint64(), blockContext.GetHash(blockContext.BlockNumber.Uint64()))
+	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.TransactionIndex = uint(0)
+
+	if evm.Config.Tracer != nil {
+		if evm.Config.Tracer.OnTxEnd != nil {
+			evm.Config.Tracer.OnTxEnd(receipt, nil)
+		}
+	}
+
+	return msgResult, err
 }
 
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
@@ -701,15 +741,18 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
 // with relevant execution information. If a pending block was not created, an error is returned.
-// Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
+// Returns an error if one occurred.
+func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) error {
+	if getTracerFn == nil {
+		getTracerFn = func(txIndex int, txHash common.Hash) *tracers.Tracer {
+			return t.transactionTracerRouter.NativeTracer.Tracer
+		}
+	}
+
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
 	}
-
-	// Obtain our state root hash prior to execution.
-	// previousStateRoot := t.pendingBlock.Header.Root
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
 	gasPool := new(core.GasPool).AddGas(t.pendingBlock.Header.GasLimit - t.pendingBlock.Header.GasUsed)
@@ -721,16 +764,24 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message) error {
 	// TODO reuse
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
 
-	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vm.Config{
+	vmConfig := vm.Config{
 		//Debug:            true,
-		Tracer:           t.transactionTracerRouter.NativeTracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
-	})
-	t.evm = evm
+	}
+
+	tracer := getTracerFn(len(t.pendingBlock.Messages), tx.Hash())
+	if tracer != nil {
+		vmConfig.Tracer = tracer.Hooks
+	}
 
 	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))
+
+	// Create our EVM instance.
+	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vmConfig)
+
+	// Set our EVM instance for the test chain in order for cheatcodes to access EVM interpreter's block context.
+	t.evm = evm
 
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
 		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, message.From)
@@ -934,11 +985,11 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 						Contract: deploymentChange.Contract,
 					})
 				} else if deploymentChange.Destroyed {
-					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-						Chain:             t,
-						Contract:          deploymentChange.Contract,
-						DynamicDeployment: deploymentChange.DynamicCreation,
-					})
+					// err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
+					// 	Chain:             t,
+					// 	Contract:          deploymentChange.Contract,
+					// 	DynamicDeployment: deploymentChange.DynamicCreation,
+					// })
 				}
 				if err != nil {
 					return err
