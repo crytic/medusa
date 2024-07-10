@@ -81,6 +81,7 @@ func newCheatCodeTracer() *cheatCodeTracer {
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: tracer.OnTxStart,
+			OnTxEnd:   tracer.OnTxEnd,
 			OnEnter:   tracer.OnEnter,
 			OnExit:    tracer.OnExit,
 			OnOpcode:  tracer.OnOpcode,
@@ -100,7 +101,7 @@ func (t *cheatCodeTracer) bindToChain(chain *TestChain) {
 
 // PreviousCallFrame returns the previous call frame of the current EVM execution, or nil if there is no previous.
 func (t *cheatCodeTracer) PreviousCallFrame() *cheatCodeTracerCallFrame {
-	if len(t.callFrames) < 2 {
+	if len(t.callFrames) < 1 {
 		return nil
 	}
 	return t.callFrames[t.callDepth-1]
@@ -125,8 +126,12 @@ func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 	// Store our evm reference
 	t.evmContext = vm
 }
+func (t *cheatCodeTracer) OnTxEnd(*coretypes.Receipt, error) {
+	// Execute our top frame exit hooks.
+	t.callFrames[0].onTopFrameExitRestoreHooks.Execute(false, true)
+}
 
-// CaptureStart initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
+// OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 
 	isTopLevelFrame := depth == 0
@@ -142,29 +147,27 @@ func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to c
 			onFrameExitRestoreHooks: previousCallFrame.onNextFrameExitRestoreHooks,
 		}
 		previousCallFrame.onNextFrameExitRestoreHooks = nil
-	}
-	t.callFrames = append(t.callFrames, callFrameData)
-
-	// Increase our call depth now that we're entering a new call frame.
-	if !isTopLevelFrame {
+		// Increase our call depth now that we're entering a new call frame.
 		t.callDepth++
 	}
 
+	t.callFrames = append(t.callFrames, callFrameData)
+
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	// Execute all current call frame exit hooks
-	exitingCallFrame := t.callFrames[depth]
+	// Top level does not have a parent.
+	if depth == 0 {
+		return
+	}
+	// Execute frame exit hooks for children.
+	exitingCallFrame := t.callFrames[t.callDepth]
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
-	isTopLevelFrame := depth == 0
-	if isTopLevelFrame {
-		exitingCallFrame.onTopFrameExitRestoreHooks.Execute(false, true)
-	}
-	if !isTopLevelFrame {
-		parentCallFrame := t.callFrames[t.callDepth-1]
-		parentCallFrame.onTopFrameExitRestoreHooks = append(parentCallFrame.onTopFrameExitRestoreHooks, exitingCallFrame.onTopFrameExitRestoreHooks...)
-	}
+
+	parentCallFrame := t.callFrames[t.callDepth-1]
+	parentCallFrame.onTopFrameExitRestoreHooks = append(parentCallFrame.onTopFrameExitRestoreHooks, exitingCallFrame.onTopFrameExitRestoreHooks...)
+
 	// If we didn't encounter an error in this call frame, we push our upward propagating revert events up one frame.
 	if err == nil {
 		// Store these revert hooks in our results.
@@ -175,21 +178,10 @@ func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err e
 	}
 
 	// We're exiting the current frame, so remove our frame data.
-	t.callFrames = t.callFrames[:depth]
+	t.callFrames = t.callFrames[:t.callDepth+1]
 
-	if !isTopLevelFrame {
-		// Decrease our call depth now that we've exited a call frame.
-		t.callDepth--
-
-	}
-}
-
-// CaptureEnter is called upon entering of the call frame, as defined by tracers.Tracer.
-func (t *cheatCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// We haven't updated our call depth yet, so obtain the "previous" call frame (current for now)
-
-	// Note: We do not execute events for "next frame enter" here, as we do not yet have scope information.
-	// Those events are executed when the first EVM instruction is executed in the new scope.
+	// Decrease our call depth now that we've exited a call frame.
+	t.callDepth--
 }
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.

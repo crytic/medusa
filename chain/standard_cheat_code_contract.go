@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
@@ -250,43 +251,47 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	)
 
 	// Prank: Sets the msg.sender within the next EVM call scope created by the caller.
-	// contract.addMethod(
-	// 	"prank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-	// 	func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-	// 		// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
-	// 		// so when it enters the next frame in its scope, we trigger the prank.
-	// 		cheatCodeCallerFrame := tracer.PreviousCallFrame()
-	// 		cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
-	// 			// We entered the scope we want to prank, store the original value, patch, and add a hook to restore it
-	// 			// when this frame is exited.
-	// 			prankCallFrame := tracer.CurrentCallFrame()
-	// 			original := prankCallFrame.vmScope.Caller()
-	// 			prankCallFrame.vmScope.caller = inputs[0].(common.Address)
-	// 			prankCallFrame.onFrameExitRestoreHooks.Push(func() {
-	// 				prankCallFrame.vmScope.caller = original
-	// 			})
-	// 		})
-	// 		return nil, nil
-	// 	},
-	// )
+	contract.addMethod(
+		"prank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// so when it enters the next frame in its scope, we trigger the prank.
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				// We entered the scope we want to prank, store the original value, patch, and add a hook to restore it
+				// when this frame is exited.
+				prankCallFrame := tracer.CurrentCallFrame()
+				// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+				scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
+				original := scopeContext.Caller()
+				scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
+				prankCallFrame.onFrameExitRestoreHooks.Push(func() {
+					scopeContext.Contract.CallerAddress = original
+				})
+			})
+			return nil, nil
+		},
+	)
 
-	// // PrankHere: Sets the msg.sender within caller EVM scope until it is exited.
-	// contract.addMethod(
-	// 	"prankHere", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-	// 	func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-	// 		// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
-	// 		// to disable the cheat code on exit
-	// 		cheatCodeCallerFrame := tracer.PreviousCallFrame()
+	// PrankHere: Sets the msg.sender within caller EVM scope until it is exited.
+	contract.addMethod(
+		"prankHere", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+			// to disable the cheat code on exit
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
-	// 		// Store the original value, patch, and add a hook to restore it when this frame is exited.
-	// 		original := cheatCodeCallerFrame.vmScope.Contract.CallerAddress
-	// 		cheatCodeCallerFrame.vmScope.Contract.CallerAddress = inputs[0].(common.Address)
-	// 		cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
-	// 			cheatCodeCallerFrame.vmScope.Contract.CallerAddress = original
-	// 		})
-	// 		return nil, nil
-	// 	},
-	// )
+			// Store the original value, patch, and add a hook to restore it when this frame is exited.
+			// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+			scopeContext := cheatCodeCallerFrame.vmScope.(*vm.ScopeContext)
+			original := scopeContext.Caller()
+			scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
+			cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
+				scopeContext.Contract.CallerAddress = original
+			})
+			return nil, nil
+		},
+	)
 
 	// snapshot: Takes a snapshot of the current state of the evm and returns the id associated with the snapshot
 	contract.addMethod(
