@@ -51,7 +51,7 @@ type CoverageTracer struct {
 	evmContext *tracing.VMContext
 
 	// nativeTracer is the underlying tracer used to capture EVM execution.
-	NativeTracer *chain.TestChainTracer
+	nativeTracer *chain.TestChainTracer
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -80,9 +80,14 @@ func NewCoverageTracer() *CoverageTracer {
 			OnOpcode:  tracer.OnOpcode,
 		},
 	}
-	tracer.NativeTracer = &chain.TestChainTracer{nativeTracer, tracer.CaptureTxEndSetAdditionalResults}
+	tracer.nativeTracer = &chain.TestChainTracer{nativeTracer, tracer.CaptureTxEndSetAdditionalResults}
 
 	return tracer
+}
+
+// NativeTracer returns the underlying TestChainTracer.
+func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
+	return t.nativeTracer
 }
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
@@ -104,7 +109,7 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 	})
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// If we encountered an error in this call frame, mark all coverage as reverted.
 	idx := len(t.callFrameStates) - 1
@@ -127,7 +132,7 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	// Decrease our call depth now that we've exited a call frame.
 }
 
-// CaptureState records data from an EVM state update, as defined by tracers.Tracer.
+// OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Obtain our call frame state tracking struct
 	callFrameState := t.callFrameStates[len(t.callFrameStates)-1]

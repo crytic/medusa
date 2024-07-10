@@ -508,25 +508,22 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 	}
 
-	// // We have a finalized call sequence, re-execute it, so our current chain state is representative of post-execution.
-	// _, err := calls.ExecuteCallSequence(fw.chain, optimizedSequence)
-	// if err != nil {
-	// 	return nil, err
-	// }
 	var err error
 	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
 	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
 	// test providers choose to attach themselves.
+	// TODO check config in FinishedCallback
 	if fw.fuzzer.config.Fuzzing.Testing.TraceAll {
 		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
 		if err != nil {
 			return nil, err
 		}
 	}
-	fmt.Println("shrinkCallSequence", optimizedSequence.String())
+
+	// TODO should this be in FinishedCallback
 	err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// After we finished shrinking, report our result and return it.
 	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
@@ -566,7 +563,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
 		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 			fw.coverageTracer = coverage.NewCoverageTracer()
-			initializedChain.AddTracer(fw.coverageTracer.NativeTracer, true, false)
+			initializedChain.AddTracer(fw.coverageTracer.NativeTracer(), true, false)
 		}
 		return nil
 	})

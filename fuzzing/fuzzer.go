@@ -419,24 +419,28 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// TODO determine if this is always the right block num to revert to
-					testChain.RevertToBlockNumber(0)
-					executionTracer := executiontracer.NewExecutionTracer(fuzzer.contractDefinitions, testChain.CheatCodeContracts())
-					defer executionTracer.Close()
-					getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-						return executionTracer.NativeTracer.Tracer
-					}
-
-					_, err = calls.ExecuteCallSequenceWithTracer(testChain, []*calls.CallSequenceElement{cse}, getTracerFunc)
-					hash := msgutils.MessageToTransaction(cse.Call.ToCoreMessage()).Hash()
-					cse.ExecutionTrace = executionTracer.GetTrace(hash)
-
+					// Revert to genesis and re-run the failed contract deployment tx.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
+					err = testChain.RevertToBlockNumber(0)
 					if err != nil {
-						fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx: %v", err)
+						fuzzer.logger.Error("failed to reset to genesis block: %v", err)
+					} else {
+						executionTracer := executiontracer.NewExecutionTracer(fuzzer.contractDefinitions, testChain.CheatCodeContracts())
+						defer executionTracer.Close()
+						getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
+							return executionTracer.NativeTracer.Tracer
+						}
+
+						_, err = calls.ExecuteCallSequenceWithTracer(testChain, []*calls.CallSequenceElement{cse}, getTracerFunc)
+						hash := msgutils.MessageToTransaction(cse.Call.ToCoreMessage()).Hash()
+						cse.ExecutionTrace = executionTracer.GetTrace(hash)
+
+						if err != nil {
+							fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx: %v", err)
+						}
 					}
 
-					// Return the execution error and the execution trace
+					// Return the execution error and the execution trace, if possible.
 					return fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err), cse.ExecutionTrace
 				}
 

@@ -24,13 +24,13 @@ type TestChainTracer struct {
 	CaptureTxEndSetAdditionalResults func(results *types.MessageResults)
 }
 
-// TestChainTracerRouter acts as a tracers.Tracer or TestChainTracer splitter, allowing multiple tracers to be used in
+// TestChainTracerRouter acts as a tracers.Tracer, allowing multiple tracers to be used in
 // place of one. When this tracer receives callback, it calls upon its underlying tracers.
 type TestChainTracerRouter struct {
 	// tracers refers to the internally recorded tracers.Tracer instances to route all calls to.
 	tracers      []*TestChainTracer
-	NativeTracer *TestChainTracer
-} // TODO can this be replaced by muxTracer
+	nativeTracer *TestChainTracer
+}
 
 // NewTestChainTracerRouter returns a new TestChainTracerRouter instance with no registered tracers.
 func NewTestChainTracerRouter() *TestChainTracerRouter {
@@ -48,20 +48,22 @@ func NewTestChainTracerRouter() *TestChainTracerRouter {
 			OnCodeChange: tracer.OnCodeChange,
 		},
 	}
-	tracer.NativeTracer = &TestChainTracer{innerTracer, tracer.CaptureTxEndSetAdditionalResults}
+	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
 
 	return tracer
 
 }
+func (t *TestChainTracerRouter) NativeTracer() *TestChainTracer {
+	return t.nativeTracer
+}
 
-// AddTracer adds a tracers.Tracer or TestChainTracer to the TestChainTracerRouter, so all tracers.Tracer relates calls
+// AddTracer adds a TestChainTracer to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded.
 // are forwarded to it.
 func (t *TestChainTracerRouter) AddTracer(tracer *TestChainTracer) {
 	t.AddTracers(tracer)
 }
 
-// AddTracers adds tracers.Tracer implementations to the TestChainTracerRouter so all other method calls are forwarded
-// to  them.
+// AddTracers adds TestChainTracers to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded.
 func (t *TestChainTracerRouter) AddTracers(tracers ...*TestChainTracer) {
 	t.tracers = append(t.tracers, tracers...)
 }

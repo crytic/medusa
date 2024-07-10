@@ -39,18 +39,19 @@ type testChainDeploymentsTracerCallFrame struct {
 
 // newTestChainDeploymentsTracer creates a testChainDeploymentsTracer
 func newTestChainDeploymentsTracer() *TestChainTracer {
-	t := &testChainDeploymentsTracer{}
-	tracer := &TestChainTracer{&tracers.Tracer{
+	tracer := &testChainDeploymentsTracer{}
+	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
+			OnTxStart: tracer.OnTxStart,
 			// OnTxEnd:   t.OnTxEnd,
-			OnEnter: t.OnEnter,
+			OnEnter: tracer.OnEnter,
 			// OnExit:       t.OnExit,
-			OnOpcode: t.OnOpcode,
+			OnOpcode: tracer.OnOpcode,
 			// OnCodeChange: t.OnCodeChange,
 		},
-	}, t.CaptureTxEndSetAdditionalResults}
-	return tracer
+	}
+	return &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
+
 }
 
 // CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
@@ -82,7 +83,7 @@ func (t *testChainDeploymentsTracer) OnCodeChange(a common.Address, prevCodeHash
 	})
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// // Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
 	// // We had to fetch it upon exit as it does not exist during creation of course.
@@ -155,7 +156,7 @@ func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Ad
 
 // }
 
-// CaptureState records data from an EVM state update, as defined by tracers.Tracer.
+// OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// If we encounter a SELFDESTRUCT operation, record the change to our contract in our results.
 	if op == byte(vm.SELFDESTRUCT) {

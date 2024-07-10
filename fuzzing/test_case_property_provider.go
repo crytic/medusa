@@ -333,7 +333,6 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 							hash := msgutils.MessageToTransaction(callSequenceElement.Call.ToCoreMessage()).Hash()
 							callSequenceElement.ExecutionTrace = executionTracer.GetTrace(hash)
 						}
-						// shrunkenCallSequence.AttachExecutionTraces(worker.chain, worker.fuzzer.ContractDefinitions())
 						if err != nil {
 							return err
 						}

@@ -39,7 +39,13 @@ type TestChain struct {
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
 	pendingBlock *chainTypes.Block
 
-	evm *vm.EVM
+	// pendingBlockContext is the BlockContext for the current pending block. This is used by cheatcodes to override the EVM
+	// interpreter's behavior. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
+	pendingBlockContext *vm.BlockContext
+
+	// pendingBlockChainConfig is ChainConfig for the current pending block. This is used by cheatcodes to override the the chain ID.
+	// This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
+	pendingBlockChainConfig *params.ChainConfig
 
 	// BlockGasLimit defines the maximum amount of gas that can be consumed by transactions in a block.
 	// Transactions which push the block gas usage beyond this limit will not be added to a block without error.
@@ -195,7 +201,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	// Add our internal tracers to this chain.
 	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
-		chain.AddTracer(cheatTracer.NativeTracer, true, true)
+		chain.AddTracer(cheatTracer.NativeTracer(), true, true)
 		cheatTracer.bindToChain(chain)
 	}
 
@@ -206,7 +212,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	}
 
 	// Set our state database logger e.g. to monitor OnCodeChange events.
-	stateDB.SetLogger(transactionTracerRouter.NativeTracer.Hooks)
+	stateDB.SetLogger(transactionTracerRouter.NativeTracer().Tracer.Hooks)
 	chain.state = stateDB
 	return chain, nil
 }
@@ -574,17 +580,19 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
 	// still calling our internal tracers.
 	extendedTracerRouter := NewTestChainTracerRouter()
-	extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer)
+	extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer())
 	extendedTracerRouter.AddTracers(additionalTracers...)
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
 		//Debug:            true,
-		Tracer:           extendedTracerRouter.NativeTracer.Hooks,
+		Tracer:           extendedTracerRouter.NativeTracer().Tracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
-	t.evm = evm
+	// Set our block context and chain config in order for cheatcodes to override what EVM interpreter sees.
+	t.pendingBlockContext = &evm.Context
+	t.pendingBlockChainConfig = evm.ChainConfig()
 
 	tx := utils.MessageToTransaction(msg)
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
@@ -723,7 +731,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) error {
 	if getTracerFn == nil {
 		getTracerFn = func(txIndex int, txHash common.Hash) *tracers.Tracer {
-			return t.transactionTracerRouter.NativeTracer.Tracer
+			return t.transactionTracerRouter.NativeTracer().Tracer
 		}
 	}
 
@@ -739,7 +747,6 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 	tx := utils.MessageToTransaction(message)
 
 	// Create a new context to be used in the EVM environment
-	// TODO reuse
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
 
 	vmConfig := vm.Config{
@@ -758,8 +765,9 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vmConfig)
 
-	// Set our EVM instance for the test chain in order for cheatcodes to access EVM interpreter's block context.
-	t.evm = evm
+	// Set our block context and chain config in order for cheatcodes to override what EVM interpreter sees.
+	t.pendingBlockContext = &evm.Context
+	t.pendingBlockChainConfig = evm.ChainConfig()
 
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
 		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, message.From)
@@ -773,14 +781,11 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 	}
 
 	if err != nil {
-		// If we encountered an error, reset our state, as we couldn't add the tx.
-		// t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
 
 	// Create our message result
 	messageResult := &chainTypes.MessageResults{
-		// PreStateRoot:      previousStateRoot,
 		PostStateRoot:     common.BytesToHash(receipt.PostState),
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
@@ -790,31 +795,10 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 	// For every tracer we have, we call upon them to set their results for this transaction now.
 	t.transactionTracerRouter.CaptureTxEndSetAdditionalResults(messageResult)
 
-	// Write state changes to database.
-	// NOTE: If this completes without an error, we know we didn't hit the block gas limit or other errors, so we are
-	// safe to update the block header afterwards.
-	// root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), t.chainConfig.IsEIP158(t.pendingBlock.Header.Number))
-	// if err != nil {
-	// 	return fmt.Errorf("test chain state write error: %v", err)
-	// }
-	// if err := t.state.Database().TrieDB().Commit(root, false); err != nil {
-	// 	// If we encountered an error, reset our state, as we couldn't add the tx.
-	// 	t.state, _ = state.New(t.pendingBlock.Header.Root, t.stateDatabase, nil)
-	// 	return fmt.Errorf("test chain trie write error: %v", err)
-	// }
-
 	// Update our gas used in the block header
 	t.pendingBlock.Header.GasUsed += receipt.GasUsed
-
 	// Update our block's bloom filter
 	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
-
-	// Update the header's state root hash, as well as our message result's
-	// Note: You could also retrieve the root without committing by using
-	// state.IntermediateRoot(config.IsEIP158(parentBlockNumber)).
-	// t.pendingBlock.Header.Root = root
-	// messageResult.PostStateRoot = root
-
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
 	t.pendingBlock.MessageResults = append(t.pendingBlock.MessageResults, messageResult)
@@ -860,6 +844,10 @@ func (t *TestChain) PendingBlockCommit() error {
 		return err
 	}
 
+	// Discard the test chain's reference to the EVM interpreter's block context and chain config.
+	t.pendingBlockContext = nil
+	t.pendingBlockChainConfig = nil
+
 	// Append our new block to our chain.
 	t.blocks = append(t.blocks, t.pendingBlock)
 
@@ -889,6 +877,8 @@ func (t *TestChain) PendingBlockDiscard() error {
 	// Clear our pending block, but keep a copy of it to emit our event
 	pendingBlock := t.pendingBlock
 	t.pendingBlock = nil
+	t.pendingBlockContext = nil
+	t.pendingBlockChainConfig = nil
 
 	// Emit our contract change events for the messages reverted
 	err := t.emitContractChangeEvents(true, pendingBlock.MessageResults...)
@@ -963,11 +953,11 @@ func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*
 						Contract: deploymentChange.Contract,
 					})
 				} else if deploymentChange.Destroyed {
-					// err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
-					// 	Chain:             t,
-					// 	Contract:          deploymentChange.Contract,
-					// 	DynamicDeployment: deploymentChange.DynamicCreation,
-					// })
+					err = t.Events.ContractDeploymentAddedEventEmitter.Publish(ContractDeploymentsAddedEvent{
+						Chain:             t,
+						Contract:          deploymentChange.Contract,
+						DynamicDeployment: deploymentChange.DynamicCreation,
+					})
 				}
 				if err != nil {
 					return err

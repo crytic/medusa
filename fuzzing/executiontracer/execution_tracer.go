@@ -62,8 +62,8 @@ type ExecutionTracer struct {
 	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
 	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
 
-	// onNextCaptureState refers to methods which should be executed the next time CaptureState executes.
-	// CaptureState is called prior to execution of an instruction. This allows actions to be performed
+	// onNextCaptureState refers to methods which should be executed the next time OnOpcode executes.
+	// OnOpcode is called prior to execution of an instruction. This allows actions to be performed
 	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
 	// using this structure to execute code later once the log is committed).
 	onNextCaptureState []func()
@@ -255,13 +255,13 @@ func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 	t.currentCallFrame = t.currentCallFrame.ParentCallFrame
 }
 
-// CaptureStart initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
+// OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Capture that a new call frame was entered.
 	t.captureEnteredCallFrame(from, to, input, typ == byte(vm.CREATE), value)
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// Capture that the call frame was exited.
 	t.captureExitedCallFrame(output, err)
@@ -285,7 +285,7 @@ func (t *ExecutionTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 	t.callDepth--
 }
 
-// CaptureState records data from an EVM state update, as defined by tracers.Tracer.
+// OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Execute all "on next capture state" events and clear them.
 	for _, eventHandler := range t.onNextCaptureState {

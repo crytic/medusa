@@ -30,7 +30,7 @@ type cheatCodeTracer struct {
 	// results stores the tracer output after a transaction has concluded.
 	results *cheatCodeTracerResults
 
-	NativeTracer *TestChainTracer
+	nativeTracer *TestChainTracer
 }
 
 // cheatCodeTracerCallFrame represents per-call-frame data traced by a cheatCodeTracer.
@@ -87,9 +87,13 @@ func newCheatCodeTracer() *cheatCodeTracer {
 			OnOpcode:  tracer.OnOpcode,
 		},
 	}
-	tracer.NativeTracer = &TestChainTracer{innerTracer, tracer.CaptureTxEndSetAdditionalResults}
+	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
 
 	return tracer
+}
+
+func (t *cheatCodeTracer) NativeTracer() *TestChainTracer {
+	return t.nativeTracer
 }
 
 // bindToChain is called by the TestChain which created the tracer to set its reference.

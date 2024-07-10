@@ -258,7 +258,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	// Clone our test chain, adding listeners for contract deployment events from genesis.
 	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
 		// After genesis, prior to adding other blocks, we attach our coverage tracer
-		newChain.AddTracer(coverageTracer.NativeTracer, true, false)
+		newChain.AddTracer(coverageTracer.NativeTracer(), true, false)
 
 		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
 		// sequences.
