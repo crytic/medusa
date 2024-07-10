@@ -26,7 +26,7 @@ func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions cont
 	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
 	defer executionTracer.Close()
 	// Call the contract on our chain with the provided state.
-	executionResult, err := testChain.CallContract(msg, state, executionTracer.NativeTracer)
+	executionResult, err := testChain.CallContract(msg, state, executionTracer.NativeTracer())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -68,7 +68,7 @@ type ExecutionTracer struct {
 	// using this structure to execute code later once the log is committed).
 	onNextCaptureState []func()
 
-	NativeTracer *chain.TestChainTracer
+	nativeTracer *chain.TestChainTracer
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
@@ -78,7 +78,7 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContra
 		cheatCodeContracts:  cheatCodeContracts,
 		traceMap:            make(map[common.Hash]*ExecutionTrace),
 	}
-	nativeTracer := &tracers.Tracer{
+	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: tracer.OnTxStart,
 			OnEnter:   tracer.OnEnter,
@@ -87,10 +87,18 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContra
 			OnOpcode:  tracer.OnOpcode,
 		},
 	}
-	tracer.NativeTracer = &chain.TestChainTracer{nativeTracer, nil}
+	tracer.nativeTracer = &chain.TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: nil}
 
 	return tracer
 }
+
+// NativeTracer returns the underlying TestChainTracer.
+func (t *ExecutionTracer) NativeTracer() *chain.TestChainTracer {
+	return t.nativeTracer
+
+}
+
+// Close sets the traceMap to nil and should be called after the execution tracer is finish being used.
 func (t *ExecutionTracer) Close() {
 	t.traceMap = nil
 }

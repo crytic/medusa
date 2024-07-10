@@ -234,7 +234,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 					executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
 					defer executionTracer.Close()
 					getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-						return executionTracer.NativeTracer.Tracer
+						return executionTracer.NativeTracer().Tracer
 					}
 
 					_, err = calls.ExecuteCallSequenceWithTracer(worker.chain, shrunkenCallSequence, getTracerFunc)

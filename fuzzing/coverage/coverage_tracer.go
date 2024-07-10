@@ -80,7 +80,7 @@ func NewCoverageTracer() *CoverageTracer {
 			OnOpcode:  tracer.OnOpcode,
 		},
 	}
-	tracer.nativeTracer = &chain.TestChainTracer{nativeTracer, tracer.CaptureTxEndSetAdditionalResults}
+	tracer.nativeTracer = &chain.TestChainTracer{Tracer: nativeTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
 
 	return tracer
 }

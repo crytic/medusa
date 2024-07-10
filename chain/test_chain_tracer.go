@@ -53,6 +53,8 @@ func NewTestChainTracerRouter() *TestChainTracerRouter {
 	return tracer
 
 }
+
+// NativeTracer returns the underlying TestChainTracer.
 func (t *TestChainTracerRouter) NativeTracer() *TestChainTracer {
 	return t.nativeTracer
 }

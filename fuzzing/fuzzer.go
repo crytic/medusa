@@ -428,7 +428,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 						executionTracer := executiontracer.NewExecutionTracer(fuzzer.contractDefinitions, testChain.CheatCodeContracts())
 						defer executionTracer.Close()
 						getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-							return executionTracer.NativeTracer.Tracer
+							return executionTracer.NativeTracer().Tracer
 						}
 
 						_, err = calls.ExecuteCallSequenceWithTracer(testChain, []*calls.CallSequenceElement{cse}, getTracerFunc)

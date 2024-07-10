@@ -92,6 +92,7 @@ func newCheatCodeTracer() *cheatCodeTracer {
 	return tracer
 }
 
+// NativeTracer returns the underlying TestChainTracer.
 func (t *cheatCodeTracer) NativeTracer() *TestChainTracer {
 	return t.nativeTracer
 }
