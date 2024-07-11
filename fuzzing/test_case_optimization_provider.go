@@ -89,12 +89,7 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 	var executionResult *core.ExecutionResult
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
-		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-		defer executionTracer.Close()
-		coreMsg := msg.ToCoreMessage()
-		tx := msgutils.MessageToTransaction(coreMsg)
-		executionResult, err = worker.Chain().CallContract(coreMsg, nil, executionTracer.NativeTracer())
-		executionTrace = executionTracer.GetTrace(tx.Hash())
+		executionResult, executionTrace, err = executiontracer.CallWithExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions, msg.ToCoreMessage(), nil)
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}

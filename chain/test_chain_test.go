@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -230,6 +231,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 						// Listen for contract changes
 						deployedContracts := 0
 						chain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event ContractDeploymentsAddedEvent) error {
+							fmt.Println("ContractDeploymentAddedEventEmitter", event.Contract.Address.Hex())
 							deployedContracts++
 							return nil
 						})

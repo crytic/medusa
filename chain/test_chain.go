@@ -199,7 +199,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	}
 
 	// Add our internal tracers to this chain.
-	chain.AddTracer(newTestChainDeploymentsTracer(), true, false)
+	chain.AddTracer(newTestChainDeploymentsTracer().NativeTracer(), true, false)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer.NativeTracer(), true, true)
 		cheatTracer.bindToChain(chain)

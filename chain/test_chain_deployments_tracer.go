@@ -19,9 +19,6 @@ type testChainDeploymentsTracer struct {
 	// results describes the results being currently captured.
 	results []types.DeployedContractBytecodeChange
 
-	// callDepth refers to the current EVM depth during tracing.
-	callDepth int
-
 	// evm refers to the last tracing.VMContext captured.
 	evmContext *tracing.VMContext
 
@@ -29,6 +26,8 @@ type testChainDeploymentsTracer struct {
 	// This is committed as each call frame succeeds, so that contract deployments which later encountered an error
 	// and reverted are not considered. The index of each element in the array represents its call frame depth.
 	pendingCallFrames []*testChainDeploymentsTracerCallFrame
+
+	nativeTracer *TestChainTracer
 }
 
 // testChainDeploymentsTracerCallFrame represents per-call-frame data traced by a testChainDeploymentsTracer.
@@ -38,30 +37,42 @@ type testChainDeploymentsTracerCallFrame struct {
 }
 
 // newTestChainDeploymentsTracer creates a testChainDeploymentsTracer
-func newTestChainDeploymentsTracer() *TestChainTracer {
+func newTestChainDeploymentsTracer() *testChainDeploymentsTracer {
 	tracer := &testChainDeploymentsTracer{}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: tracer.OnTxStart,
-			// OnTxEnd:   t.OnTxEnd,
-			OnEnter: tracer.OnEnter,
-			// OnExit:       t.OnExit,
-			OnOpcode: tracer.OnOpcode,
+			OnTxEnd:   tracer.OnTxEnd,
+			OnEnter:   tracer.OnEnter,
+			OnExit:    tracer.OnExit,
+			OnOpcode:  tracer.OnOpcode,
 			// OnCodeChange: t.OnCodeChange,
 		},
 	}
-	return &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
+	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
+
+	return tracer
 
 }
 
-// CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
+// NativeTracer returns the underlying TestChainTracer.
+func (t *testChainDeploymentsTracer) NativeTracer() *TestChainTracer {
+	return t.nativeTracer
+}
+
+// OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
-	// Reset our capture state
-	t.callDepth = 0
+	// Reset our tracer state
 	t.results = make([]types.DeployedContractBytecodeChange, 0)
 	t.pendingCallFrames = make([]*testChainDeploymentsTracerCallFrame, 0)
 	// Store our evm reference
 	t.evmContext = vm
+}
+
+func (t *testChainDeploymentsTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
+	if receipt.Status == coretypes.ReceiptStatusSuccessful {
+		t.results = append(t.results, t.pendingCallFrames[0].results...)
+	}
 }
 
 // // OnCodeChange initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
@@ -85,36 +96,38 @@ func (t *testChainDeploymentsTracer) OnCodeChange(a common.Address, prevCodeHash
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	// // Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
-	// // We had to fetch it upon exit as it does not exist during creation of course.
-	// for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
-	// 	if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
-	// 		contractChange.Contract.RuntimeBytecode = t.evmContext.StateDB.GetCode(contractChange.Contract.Address)
-	// 	}
-	// }
 
-	// If we didn't encounter an error in this call frame, we're at the end, so we commit all results.
-	if err == nil && !reverted {
-		t.results = append(t.results, t.pendingCallFrames[t.callDepth].results...)
+	isTopLevelFrame := depth == 0
+	// Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
+	// We had to fetch it upon exit as it does not exist during creation of course.
+	for _, contractChange := range t.pendingCallFrames[depth].results {
+		if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
+			contractChange.Contract.RuntimeBytecode = t.evmContext.StateDB.GetCode(contractChange.Contract.Address)
+		}
+	}
+	if !isTopLevelFrame {
+		// If we didn't encounter an error in this call frame, we push our captured data up one frame.
+		if err == nil && !reverted {
+			t.pendingCallFrames[depth-1].results = append(t.pendingCallFrames[depth-1].results, t.pendingCallFrames[depth].results...)
+
+			// // We're exiting the current frame, so remove our frame data.
+			t.pendingCallFrames = t.pendingCallFrames[:depth]
+		}
+
 	}
 
-	// // We're exiting the current frame, so remove our frame data.
-	// t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
 }
 
-// CaptureEnter is called upon entering of the call frame, as defined by tracers.Tracer.
+// OnEnter is called upon entering of the call frame, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Increase our call depth now that we're entering a new call frame.
-	t.callDepth = depth
-
 	// Create our call frame struct to track data for this initial entry call frame.
-	// callFrameData := &testChainDeploymentsTracerCallFrame{}
-	// t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
+	callFrameData := &testChainDeploymentsTracerCallFrame{}
+	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
 
 	// If this is a contract creation, record the `to` address as a pending deployment (if it succeeds upon exit,
 	// we commit it).
 	if typ == byte(vm.CREATE) || typ == byte(vm.CREATE2) {
-		t.results = append(t.results, types.DeployedContractBytecodeChange{
+		callFrameData.results = append(callFrameData.results, types.DeployedContractBytecodeChange{
 			Contract: &types.DeployedContractBytecode{
 				Address:         to,
 				InitBytecode:    input,
@@ -127,34 +140,6 @@ func (t *testChainDeploymentsTracer) OnEnter(depth int, typ byte, from common.Ad
 		})
 	}
 }
-
-// // CaptureExit is called upon exiting of the call frame, as defined by tracers.Tracer.
-// func (t *testChainDeploymentsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-// 	if depth == 0 {
-// 		return
-// 	}
-
-// 	// // Fetch runtime bytecode for all deployments in this frame which did not record one, before exiting.
-// 	// // We had to fetch it upon exit as it does not exist during creation of course.
-// 	// for _, contractChange := range t.pendingCallFrames[t.callDepth].results {
-// 	// 	if contractChange.Creation && contractChange.Contract.RuntimeBytecode == nil {
-// 	// 		contractChange.Contract.RuntimeBytecode = t.evmContext.StateDB.GetCode(contractChange.Contract.Address)
-// 	// 	}
-// 	// }
-
-// 	// If we didn't encounter an error in this call frame, we push our captured data up one frame.
-// 	if err == nil {
-// 		t.pendingCallFrames[t.callDepth-1].results = append(t.pendingCallFrames[t.callDepth-1].results, t.pendingCallFrames[t.callDepth].results...)
-// 	}
-
-// 	// We're exiting the current frame, so remove our frame data.
-// 	t.pendingCallFrames = t.pendingCallFrames[:t.callDepth]
-
-// 	// Decrease our call depth now that we've exited a call frame.
-// 	t.callDepth--
-// 	fmt.Println("OnExit", t.callDepth, depth)
-
-// }
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *testChainDeploymentsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
