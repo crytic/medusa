@@ -46,7 +46,6 @@ func newTestChainDeploymentsTracer() *testChainDeploymentsTracer {
 			OnEnter:   tracer.OnEnter,
 			OnExit:    tracer.OnExit,
 			OnOpcode:  tracer.OnOpcode,
-			// OnCodeChange: t.OnCodeChange,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -73,25 +72,6 @@ func (t *testChainDeploymentsTracer) OnTxEnd(receipt *coretypes.Receipt, err err
 	if receipt.Status == coretypes.ReceiptStatusSuccessful {
 		t.results = append(t.results, t.pendingCallFrames[0].results...)
 	}
-}
-
-// // OnCodeChange initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
-func (t *testChainDeploymentsTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-	// Create our call frame struct to track data for this initial entry call frame.
-	callFrameData := &testChainDeploymentsTracerCallFrame{}
-	t.pendingCallFrames = append(t.pendingCallFrames, callFrameData)
-	// TODO check that we aren't double counting dynamic creations
-	t.results = append(t.results, types.DeployedContractBytecodeChange{
-		Contract: &types.DeployedContractBytecode{
-			Address:         a,
-			InitBytecode:    nil,
-			RuntimeBytecode: code,
-		},
-		Creation:        true,
-		DynamicCreation: false,
-		SelfDestructed:  false,
-		Destroyed:       false,
-	})
 }
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
