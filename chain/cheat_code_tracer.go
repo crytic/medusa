@@ -183,7 +183,7 @@ func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err e
 	}
 
 	// We're exiting the current frame, so remove our frame data.
-	t.callFrames = t.callFrames[:t.callDepth+1]
+	t.callFrames = t.callFrames[:t.callDepth]
 
 	// Decrease our call depth now that we've exited a call frame.
 	t.callDepth--

@@ -585,7 +585,6 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
-		//Debug:            true,
 		Tracer:           extendedTracerRouter.NativeTracer().Tracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
@@ -750,7 +749,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 	blockContext := newTestChainBlockContext(t, t.pendingBlock.Header)
 
 	vmConfig := vm.Config{
-		//Debug:            true,
+
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	}

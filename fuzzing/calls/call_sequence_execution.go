@@ -4,6 +4,9 @@ import (
 	"fmt"
 
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -168,7 +171,8 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil, nil)
 }
 
-func ExecuteCallSequenceWithTracer(chain *chain.TestChain, callSequence CallSequence, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) (CallSequence, error) {
+// ExecuteCallSequenceWithTracer allows attaching a custom tracer to ExecuteCallSequenceIteratively
+func ExecuteCallSequenceWithTracer(testChain *chain.TestChain, callSequence CallSequence, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) (CallSequence, error) {
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
 	fetchElementFunc := func(currentIndex int) (*CallSequenceElement, error) {
 		if currentIndex < len(callSequence) {
@@ -178,5 +182,30 @@ func ExecuteCallSequenceWithTracer(chain *chain.TestChain, callSequence CallSequ
 	}
 
 	// Execute our provided call sequence iteratively.
-	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil, getTracerFn)
+	return ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, getTracerFn)
+}
+
+// ExecuteCallSequenceWithTracer attaches an ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
+func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
+	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
+	defer executionTracer.Close()
+	getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
+		return executionTracer.NativeTracer().Tracer
+	}
+
+	executedCallSeq, err := ExecuteCallSequenceWithTracer(testChain, callSequence, getTracerFunc)
+
+	// By default, we only trace the last element in the call sequence.
+	traceFrom := len(callSequence) - 1
+	// If verbose tracing is enabled, we want to trace all elements in the call sequence.
+	if verboseTracing {
+		traceFrom = 0
+	}
+	for ; traceFrom < len(callSequence); traceFrom++ {
+		callSequenceElement := callSequence[traceFrom]
+		hash := utils.MessageToTransaction(callSequenceElement.Call.ToCoreMessage()).Hash()
+		callSequenceElement.ExecutionTrace = executionTracer.GetTrace(hash)
+	}
+
+	return executedCallSeq, err
 }

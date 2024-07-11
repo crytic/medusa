@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	msgutils "github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -26,7 +25,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
@@ -425,16 +423,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 					if err != nil {
 						fuzzer.logger.Error("failed to reset to genesis block: %v", err)
 					} else {
-						executionTracer := executiontracer.NewExecutionTracer(fuzzer.contractDefinitions, testChain.CheatCodeContracts())
-						defer executionTracer.Close()
-						getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-							return executionTracer.NativeTracer().Tracer
-						}
-
-						_, err = calls.ExecuteCallSequenceWithTracer(testChain, []*calls.CallSequenceElement{cse}, getTracerFunc)
-						hash := msgutils.MessageToTransaction(cse.Call.ToCoreMessage()).Hash()
-						cse.ExecutionTrace = executionTracer.GetTrace(hash)
-
+						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, true)
 						if err != nil {
 							fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx: %v", err)
 						}

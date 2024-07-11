@@ -7,12 +7,8 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/utils"
-	msgutils "github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	"golang.org/x/exp/slices"
 )
@@ -228,20 +224,10 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-				// When we're finished shrinking, attach an execution trace to the last call
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+				// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 				if len(shrunkenCallSequence) > 0 {
-					executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-					defer executionTracer.Close()
-					getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-						return executionTracer.NativeTracer().Tracer
-					}
-
-					_, err = calls.ExecuteCallSequenceWithTracer(worker.chain, shrunkenCallSequence, getTracerFunc)
-					for _, callSequenceElement := range shrunkenCallSequence {
-						hash := msgutils.MessageToTransaction(callSequenceElement.Call.ToCoreMessage()).Hash()
-						callSequenceElement.ExecutionTrace = executionTracer.GetTrace(hash)
-					}
+					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
 					if err != nil {
 						return err
 					}
