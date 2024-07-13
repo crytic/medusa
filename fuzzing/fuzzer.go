@@ -31,6 +31,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/corpus"
+	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -282,6 +283,8 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
 	// Loop for each contract in each compilation and deploy it to the test node.
+	targetMethods := f.config.Fuzzing.Testing.TargetFunctionSignatures
+	excludeMethods := f.config.Fuzzing.Testing.ExcludeFunctionSignatures
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -296,6 +299,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
+				if len(targetMethods) > 0 {
+					// Only consider methods that are in the target methods list
+					contractDefinition = contractDefinition.WithTargetMethods(targetMethods)
+				}
+				if len(excludeMethods) > 0 {
+					// Consider all methods except those in the exclude methods list
+					contractDefinition = contractDefinition.WithExcludedMethods(excludeMethods)
+				}
+				// Filter and record methods available for testing
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(contractDefinition.CandidateMethods(), f.config.Fuzzing.Testing)
+				contractDefinition.AddTestMethods(assertionTestMethods, propertyTestMethods, optimizationTestMethods)
+
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
@@ -343,6 +358,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
+		// TODO filter libraries
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {

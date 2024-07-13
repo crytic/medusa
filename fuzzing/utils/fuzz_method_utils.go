@@ -1,13 +1,15 @@
 package utils
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
+
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func IsOptimizationTest(method abi.Method, prefixes []string) bool {
+func isOptimizationTest(method abi.Method, prefixes []string) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(method.Name, prefix) {
@@ -22,7 +24,7 @@ func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func IsPropertyTest(method abi.Method, prefixes []string) bool {
+func isPropertyTest(method abi.Method, prefixes []string) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		// The property test must simply have the right prefix and take no inputs
@@ -31,4 +33,25 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+// IsAssertionTest checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
+// Returns true if this target should be tested, false otherwise.
+func isAssertionTest(method abi.Method, includeViewMethods bool) bool {
+	// Only test constant methods (pure/view) if we are configured to.
+	return !method.IsConstant() || includeViewMethods
+}
+
+// BinTestByType takes a list of methods and returns whether they are assertion, property, or optimization tests.
+func BinTestByType(methods []abi.Method, testCfg config.TestingConfig) (assertionTests, propertyTests, optimizationTests []abi.Method) {
+	for _, method := range methods {
+		if isPropertyTest(method, testCfg.PropertyTesting.TestPrefixes) {
+			propertyTests = append(propertyTests, method)
+		} else if isOptimizationTest(method, testCfg.OptimizationTesting.TestPrefixes) {
+			optimizationTests = append(optimizationTests, method)
+		} else if isAssertionTest(method, testCfg.AssertionTesting.TestViewMethods) {
+			assertionTests = append(assertionTests, method)
+		}
+	}
+	return assertionTests, propertyTests, optimizationTests
 }
