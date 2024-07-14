@@ -2,11 +2,12 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
-	"math/big"
 )
 
 // CallSequenceGenerator generates call sequences iteratively per element, for use in fuzzing campaigns. It is attached
@@ -269,17 +270,20 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 	return element, nil
 }
 
-// generateNewElement generates a new call sequence element which targets a state changing method in a contract
+// generateNewElement generates a new call sequence element which targets a method in a contract
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
-	// Verify we have state changing methods to call
-	if len(g.worker.stateChangingMethods) == 0 {
+	// Verify we have state changing methods to call if we are not testing view/pure methods.
+	if len(g.worker.stateChangingMethods) == 0 && !g.worker.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
 		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
 	}
-
 	// Select a random method and sender
-	selectedMethod := &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	selectedMethod, err := g.worker.methodChooser.Choose()
+	if err != nil {
+		return nil, err
+	}
+
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
@@ -336,10 +340,10 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+		return fmt.Errorf("could not obtain corpus call sequence for head mutation: %v", err)
 	}
 
-	// Determine a random position to slice the call sequence.
+	// Determine the length of the slice to be copied in the head.
 	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
 
@@ -456,5 +460,8 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}
+	// Re-encode the message's calldata
+	element.Call.WithDataAbiValues(abiValuesMsgData)
+
 	return nil
 }

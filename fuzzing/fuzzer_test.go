@@ -2,15 +2,18 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"math/big"
+	"math/rand"
+	"testing"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-	"math/rand"
-	"testing"
 
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +37,7 @@ func TestFuzzerHooks(t *testing.T) {
 				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
-			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) error {
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
@@ -71,6 +74,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_outofbounds_array_access.sol",
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
 		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
+		"testdata/contracts/assertions/assert_constant_method.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -86,6 +90,7 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.AssertionTesting.TestViewMethods = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
@@ -229,6 +234,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/to_string.sol",
 		"testdata/contracts/cheat_codes/utils/sign.sol",
 		"testdata/contracts/cheat_codes/utils/parse.sol",
+		"testdata/contracts/cheat_codes/vm/snapshot_and_revert_to.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
@@ -481,7 +487,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 func TestExecutionTraces(t *testing.T) {
 	expectedMessagesPerTest := map[string][]string{
 		"testdata/contracts/execution_tracing/call_and_deployment_args.sol": {"Hello from deployment args!", "Hello from call args!"},
-		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(true)"},
+		"testdata/contracts/execution_tracing/cheatcodes.sol":               {"StdCheats.toString(bool)(true)"},
 		"testdata/contracts/execution_tracing/event_emission.sol":           {"TestEvent", "TestIndexedEvent", "TestMixedEvent", "Hello from event args!", "Hello from library event args!"},
 		"testdata/contracts/execution_tracing/proxy_call.sol":               {"TestContract -> InnerDeploymentContract.setXY", "Hello from proxy call args!"},
 		"testdata/contracts/execution_tracing/revert_custom_error.sol":      {"CustomError", "Hello from a custom error!"},

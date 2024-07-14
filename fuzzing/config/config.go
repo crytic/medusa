@@ -3,14 +3,15 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
-	"math/big"
-	"os"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -234,7 +235,7 @@ type FileLoggingConfig struct {
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
-func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
+func ReadProjectConfigFromFile(path string, platform string) (*ProjectConfig, error) {
 	// Read our project configuration file data
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -242,7 +243,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 
 	// Parse the project configuration
-	projectConfig, err := GetDefaultProjectConfig("")
+	projectConfig, err := GetDefaultProjectConfig(platform)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +289,7 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence lengt")
+		return errors.New("project configuration must specify a positive number for the transaction sequence length")
 	}
 
 	// Verify the worker reset limit is a positive number
