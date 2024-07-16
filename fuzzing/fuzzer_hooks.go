@@ -28,7 +28,7 @@ type FuzzerHooks struct {
 	ChainSetupFunc TestChainSetupFunc
 
 	// CallSequenceTestFuncs describes a list of functions to be called upon by a FuzzerWorker after every call
-	// in a call sequence. These must not
+	// in a call sequence. These must not commit to state
 	CallSequenceTestFuncs []CallSequenceTestFunc
 }
 
