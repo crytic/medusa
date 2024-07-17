@@ -29,7 +29,6 @@ type ValueGenerationTrace struct {
 	transactionOutputValues []any
 }
 
-// TODO: Sanan
 type ValueGenerationTracer struct {
 	// evm refers to the EVM instance last captured.
 	evm *vm.EVM
@@ -51,8 +50,6 @@ type ValueGenerationTracer struct {
 }
 
 func NewValueGenerationTracer(contractDefinitions contracts.Contracts) *ValueGenerationTracer {
-	fmt.Println("Called NewValueGenerationTracer")
-	// TODO: Sanan
 	tracer := &ValueGenerationTracer{
 		contractDefinitions: contractDefinitions,
 	}
@@ -60,39 +57,28 @@ func NewValueGenerationTracer(contractDefinitions contracts.Contracts) *ValueGen
 }
 
 func (v *ValueGenerationTracer) CaptureTxStart(gasLimit uint64) {
-	// Sanan: start fresh
-	//v.callDepth = 0
 	v.trace = newValueGenerationTrace(v.contractDefinitions)
 	v.currentCallFrame = nil
 	v.onNextCaptureState = nil
 }
 
 func (v *ValueGenerationTracer) CaptureTxEnd(restGas uint64) {
-	//TODO implement me
-	//panic("implement me")
 }
 
 func (v *ValueGenerationTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	//TODO implement me
 	v.evm = env
 	v.captureEnteredCallFrame(from, to, input, create, value)
-	//panic("implement me")
 }
 
 func (v *ValueGenerationTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	//TODO implement me
-	//panic("implement me")
 	v.captureExitedCallFrame(output, err)
 }
 
 func (v *ValueGenerationTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	//TODO implement me
 	v.captureEnteredCallFrame(from, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
 }
 
 func (v *ValueGenerationTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	//TODO implement me
-	//panic("implement me")
 	v.captureExitedCallFrame(output, err)
 }
 
@@ -106,7 +92,6 @@ func newValueGenerationTrace(contracts contracts.Contracts) *ValueGenerationTrac
 // captureEnteredCallFrame is a helper method used when a new call frame is entered to record information about it.
 func (v *ValueGenerationTracer) captureEnteredCallFrame(fromAddress common.Address, toAddress common.Address, inputData []byte, isContractCreation bool, value *big.Int) {
 	// Create our call frame struct to track data for this call frame we entered.
-	fmt.Println("Entered captureEnteredCallFrame")
 	callFrameData := &utils.CallFrame{
 		SenderAddress:       fromAddress,
 		ToAddress:           toAddress,
@@ -268,8 +253,6 @@ func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost 
 }
 
 func (v *ValueGenerationTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-	//TODO implement me
-	//panic("implement me")
 }
 
 func AddTransactionOutputValuesToValueSet(results *types.MessageResults, valueSet *valuegeneration.ValueSet) {
@@ -301,11 +284,6 @@ func AddTransactionOutputValuesToValueSet(results *types.MessageResults, valueSe
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
 func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
-	// Store our tracer results.
-	//results.Receipt.Logs = v.currentCallFrame.Operations
-	//var eventLogs []*coreTypes.Log
-	//events := make([]EventInputs, 0)
-
 	// Collect generated event and return values of the current transaction
 	eventAndReturnValues := make([]any, 0)
 	eventAndReturnValues = v.trace.generateEvents(v.trace.TopLevelCallFrame, eventAndReturnValues)
@@ -325,7 +303,6 @@ func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame,
 			// If an event log was emitted, add a message for it.
 			events = append(events, t.getEventsGenerated(currentCallFrame, eventLog)...)
 			//t.getEventsGenerated(currentCallFrame, eventLog)
-			fmt.Printf("Value of events: %v\n", events)
 			//eventLogs = append(eventLogs, eventLog)
 		}
 	}
