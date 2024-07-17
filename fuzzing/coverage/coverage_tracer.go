@@ -101,6 +101,13 @@ func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transact
 
 // OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	// Check to see if this is the top level call frame
+	isTopLevelFrame := depth == 0
+
+	// Increment call frame depth if it is not the top level call frame
+	if !isTopLevelFrame {
+		t.callDepth++
+	}
 
 	// Create our state tracking struct for this frame.
 	t.callFrameStates = append(t.callFrameStates, &coverageTracerCallFrameState{
@@ -111,31 +118,40 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	// Check to see if this is the top level call frame
+	isTopLevelFrame := depth == 0
+
 	// If we encountered an error in this call frame, mark all coverage as reverted.
-	idx := len(t.callFrameStates) - 1
 	if err != nil {
-		_, revertCoverageErr := t.callFrameStates[idx].pendingCoverageMap.RevertAll()
+		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
 		if revertCoverageErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", revertCoverageErr)
 		}
 	}
 
 	// Commit all our coverage maps up one call frame.
-	_, _, coverageUpdateErr := t.coverageMaps.Update(t.callFrameStates[idx].pendingCoverageMap)
+	var coverageUpdateErr error
+	if isTopLevelFrame {
+		// Update the final coverage map if this is the top level call frame
+		_, _, coverageUpdateErr = t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+	} else {
+		// Move coverage up one call frame
+		_, _, coverageUpdateErr = t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+
+		// Pop the state tracking struct for this call frame off the stack and decrement the call depth
+		t.callFrameStates = t.callFrameStates[:t.callDepth]
+		t.callDepth--
+	}
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", coverageUpdateErr)
 	}
 
-	// Pop the state tracking struct for this call frame off the stack.
-	t.callFrameStates = t.callFrameStates[:idx]
-
-	// Decrease our call depth now that we've exited a call frame.
 }
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Obtain our call frame state tracking struct
-	callFrameState := t.callFrameStates[len(t.callFrameStates)-1]
+	callFrameState := t.callFrameStates[t.callDepth]
 
 	// If there is code we're executing, collect coverage.
 	address := scope.Address()

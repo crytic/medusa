@@ -44,8 +44,6 @@ func NewTestChainTracerRouter() *TestChainTracerRouter {
 			OnEnter:   tracer.OnEnter,
 			OnExit:    tracer.OnExit,
 			OnOpcode:  tracer.OnOpcode,
-			// OnFault:      tracer.OnFault,
-			OnCodeChange: tracer.OnCodeChange,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
