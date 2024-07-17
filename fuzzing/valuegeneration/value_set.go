@@ -2,6 +2,7 @@ package valuegeneration
 
 import (
 	"encoding/hex"
+	"github.com/crytic/medusa/chain/types"
 	"hash"
 	"math/big"
 
@@ -171,4 +172,48 @@ func (vs *ValueSet) RemoveBytes(b []byte) {
 	vs.hashProvider.Reset()
 
 	delete(vs.bytes, hashStr)
+}
+
+func (vs *ValueSet) Add(results *types.MessageResults) {
+	valueGenerationTracerResults := results.AdditionalResults["ValueGenerationTracerResults"]
+
+	if transactionOutputValues, ok := valueGenerationTracerResults.([]any); ok {
+
+		for _, eventOrReturnValues := range transactionOutputValues {
+			//if eventOrReturnSlice, ok := eventOrReturnValues.(TransactionOutputValues); ok {
+			//	for _, eventOrReturnValue := range eventOrReturnSlice {
+			//		switch v := eventOrReturnValue.(type) {
+			//		case *big.Int:
+			//			valueSet.AddInteger(v)
+			//		case common.Address:
+			//			valueSet.AddAddress(v)
+			//		case string:
+			//			valueSet.AddString(v)
+			//		case []byte:
+			//			valueSet.AddBytes(v)
+			//		default:
+			//			continue
+			//		}
+			//
+			//	}
+			if eventOrReturnSlice, ok := eventOrReturnValues.([]any); ok {
+				for _, eventOrReturnValue := range eventOrReturnSlice {
+					switch v := eventOrReturnValue.(type) {
+					case *big.Int:
+						vs.AddInteger(v)
+					case common.Address:
+						vs.AddAddress(v)
+					case string:
+						vs.AddString(v)
+					case []byte:
+						vs.AddBytes(v)
+					default:
+						continue
+					}
+
+				}
+			}
+		}
+	}
+
 }

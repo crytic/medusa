@@ -259,31 +259,6 @@ func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost 
 func (v *ValueGenerationTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
-func AddTransactionOutputValuesToValueSet(results *types.MessageResults, valueSet *valuegeneration.ValueSet) {
-	valueGenerationTracerResults := results.AdditionalResults["ValueGenerationTracerResults"]
-
-	if transactionOutputValues, ok := valueGenerationTracerResults.(TransactionOutputValues); ok {
-
-		for _, eventOrReturnValue := range transactionOutputValues {
-			switch v := eventOrReturnValue.(type) {
-			case *big.Int:
-				valueSet.AddInteger(v)
-			case common.Address:
-				valueSet.AddAddress(v)
-			case string:
-				valueSet.AddString(v)
-			case []byte:
-				valueSet.AddBytes(v)
-			default:
-				continue
-
-			}
-		}
-	}
-
-	fmt.Printf("ValueSet after modification: %v\n", valueSet)
-}
-
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
