@@ -19,8 +19,12 @@ import (
 const valueGenerationTracerResultsKey = "ValueGenerationTracerResults"
 
 type ValueGenerationTrace struct {
+	// TopLevelCallFrame refers to the root call frame, the first EVM call scope entered when an externally-owned
+	// address calls upon a contract.
 	TopLevelCallFrame *utils.CallFrame
 
+	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
+	// obtain any additional information regarding execution.
 	contractDefinitions     contracts.Contracts
 	transactionOutputValues []any
 }
