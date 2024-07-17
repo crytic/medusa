@@ -1,7 +1,6 @@
 package chain
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"

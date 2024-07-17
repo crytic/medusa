@@ -123,25 +123,15 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Difficulty: Sets VM block number
+	// Difficulty: Updates difficulty
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes until the transaction exits.
-
-			// // Obtain our spoofed difficulty
-			// TODO: Check chain config here to see if the EVM version is before 'Paris'.
-			// if t.evmContext.ChainConfig.LatestFork(t.evmContext.Time)
-			// // Change difficulty in block context.
-			// originalDifficulty := new(big.Int).Set(tracer.chain.pendingBlockContext.Difficulty.Big())
-			// tracer.chain.pendingBlockContext.Difficulty.Set(spoofedDifficulty)
-			// tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-			// 	tracer.chain.pendingBlockContext.Difficulty.Set(originalDifficulty)
-			// })
-
 			spoofedDifficulty := inputs[0].(*big.Int)
 			spoofedDifficultyHash := common.BigToHash(spoofedDifficulty)
 			originalRandom := tracer.chain.pendingBlockContext.Random
+
 			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
 			tracer.chain.pendingBlockContext.Random = &spoofedDifficultyHash
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
@@ -208,9 +198,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			newBalance := inputs[1].(*big.Int)
 			newBalanceUint256 := new(uint256.Int)
 			newBalanceUint256.SetFromBig(newBalance)
-			originalBalance := tracer.chain.State().GetBalance(account)
-			diff := new(uint256.Int).Sub(newBalanceUint256, originalBalance)
-			tracer.chain.State().AddBalance(account, diff, tracing.BalanceChangeUnspecified)
+			tracer.chain.State().SetBalance(account, newBalanceUint256, tracing.BalanceChangeUnspecified)
 			return nil, nil
 		},
 	)

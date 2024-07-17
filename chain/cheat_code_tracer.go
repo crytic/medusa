@@ -30,6 +30,7 @@ type cheatCodeTracer struct {
 	// results stores the tracer output after a transaction has concluded.
 	results *cheatCodeTracerResults
 
+	// nativeTracer is the underlying tracer interface that the cheatcode tracer follows
 	nativeTracer *TestChainTracer
 }
 
@@ -70,6 +71,7 @@ type cheatCodeTracerCallFrame struct {
 	vmErr error
 }
 
+// cheatCodeTracerResults holds the hooks that need to be executed when the chain reverts.
 type cheatCodeTracerResults struct {
 	// onChainRevertHooks describes hooks which are to be executed when the chain reverts.
 	onChainRevertHooks types.GenericHookFuncs
@@ -106,7 +108,7 @@ func (t *cheatCodeTracer) bindToChain(chain *TestChain) {
 
 // PreviousCallFrame returns the previous call frame of the current EVM execution, or nil if there is no previous.
 func (t *cheatCodeTracer) PreviousCallFrame() *cheatCodeTracerCallFrame {
-	if len(t.callFrames) < 1 {
+	if len(t.callFrames) < 2 {
 		return nil
 	}
 	return t.callFrames[t.callDepth-1]
@@ -131,59 +133,73 @@ func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 	// Store our evm reference
 	t.evmContext = vm
 }
+
+// OnTxEnd is called upon the end of transaction execution, as defined by tracers.Tracer
 func (t *cheatCodeTracer) OnTxEnd(*coretypes.Receipt, error) {
-	// Execute our top frame exit hooks.
-	t.callFrames[0].onTopFrameExitRestoreHooks.Execute(false, true)
+
 }
 
 // OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-
+	// Check to see if this is the top level call frame
 	isTopLevelFrame := depth == 0
 	var callFrameData *cheatCodeTracerCallFrame
 	if isTopLevelFrame {
 		// Create our call frame struct to track data for this initial entry call frame.
 		callFrameData = &cheatCodeTracerCallFrame{}
 	} else {
+		// We haven't updated our call depth yet, so obtain the "previous" call frame (current for now)
+		previousCallFrame := t.CurrentCallFrame()
+
 		// Create our call frame struct to track data for this initial entry call frame.
 		// We forward our "next frame hooks" to this frame, then clear them from the previous frame.
-		previousCallFrame := t.CurrentCallFrame()
 		callFrameData = &cheatCodeTracerCallFrame{
 			onFrameExitRestoreHooks: previousCallFrame.onNextFrameExitRestoreHooks,
 		}
 		previousCallFrame.onNextFrameExitRestoreHooks = nil
+
 		// Increase our call depth now that we're entering a new call frame.
 		t.callDepth++
 	}
 
+	// Append our new call frame
 	t.callFrames = append(t.callFrames, callFrameData)
 
+	// Note: We do not execute events for "next frame enter" here, as we do not yet have scope information.
+	// Those events are executed when the first EVM instruction is executed in the new scope.
 }
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	// Top level does not have a parent.
-	if depth == 0 {
-		return
-	}
-	// Execute frame exit hooks for children.
+	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
 
-	parentCallFrame := t.callFrames[t.callDepth-1]
-	parentCallFrame.onTopFrameExitRestoreHooks = append(parentCallFrame.onTopFrameExitRestoreHooks, exitingCallFrame.onTopFrameExitRestoreHooks...)
-
-	// If we didn't encounter an error in this call frame, we push our upward propagating revert events up one frame.
-	if err == nil {
-		// Store these revert hooks in our results.
-		t.results.onChainRevertHooks = append(t.results.onChainRevertHooks, exitingCallFrame.onChainRevertRestoreHooks...)
+	var parentCallFrame *cheatCodeTracerCallFrame
+	if depth == 0 {
+		// If this is the top-level call frame, execute all of its exit hooks
+		exitingCallFrame.onTopFrameExitRestoreHooks.Execute(false, true)
 	} else {
-		// We hit an error, so a revert occurred before this tx was committed.
-		exitingCallFrame.onChainRevertRestoreHooks.Execute(false, true)
+		// If not, retrieve the parent call frame
+		parentCallFrame = t.callFrames[t.callDepth-1]
 	}
 
 	// We're exiting the current frame, so remove our frame data.
 	t.callFrames = t.callFrames[:t.callDepth]
+
+	// If we didn't encounter an error in this call frame, we push our upward propagating restore events up one frame.
+	if err == nil && depth == 0 {
+		// Since this is the top call frame, we add the revert events to the results of the tracer and return early
+		t.results.onChainRevertHooks = append(t.results.onChainRevertHooks, exitingCallFrame.onChainRevertRestoreHooks...)
+		return
+	} else if err == nil {
+		// Propagate hooks up to the parent call frame
+		parentCallFrame.onTopFrameExitRestoreHooks = append(parentCallFrame.onTopFrameExitRestoreHooks, exitingCallFrame.onTopFrameExitRestoreHooks...)
+		parentCallFrame.onChainRevertRestoreHooks = append(parentCallFrame.onChainRevertRestoreHooks, exitingCallFrame.onChainRevertRestoreHooks...)
+	} else {
+		// We hit an error, so a revert occurred before this tx was committed.
+		exitingCallFrame.onChainRevertRestoreHooks.Execute(false, true)
+	}
 
 	// Decrease our call depth now that we've exited a call frame.
 	t.callDepth--

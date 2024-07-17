@@ -421,11 +421,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
 					err = testChain.RevertToBlockNumber(0)
 					if err != nil {
-						fuzzer.logger.Error("failed to reset to genesis block: %v", err)
+						fuzzer.logger.Error("failed to reset to genesis block", err)
 					} else {
 						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, true)
 						if err != nil {
-							fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx: %v", err)
+							fuzzer.logger.Error("failed to attach execution trace to failed contract deployment tx", err)
 						}
 					}
 
