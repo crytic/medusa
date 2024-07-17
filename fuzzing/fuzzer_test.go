@@ -37,7 +37,7 @@ func TestFuzzerHooks(t *testing.T) {
 				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
-			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
@@ -250,7 +250,10 @@ func TestCheatCodes(t *testing.T) {
 
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {

@@ -277,14 +277,9 @@ func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, con
 		return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
 	}
 
-	// Obtain the state prior to executing this transaction.
-	state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
-	if err != nil {
-		return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
-	}
-
+	var err error
 	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), state)
+	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
 	}

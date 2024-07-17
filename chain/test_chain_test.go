@@ -64,12 +64,12 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	assert.NoError(t, err)
 
 	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
 	for _, sender := range senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}
@@ -260,7 +260,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 						assert.NoError(t, err)
 
 						// Add our transaction to the block
-						err = chain.PendingBlockAddTx(&msg)
+						err = chain.PendingBlockAddTx(&msg, nil)
 						assert.NoError(t, err)
 
 						// Commit the pending block to the chain, so it becomes the new head.
@@ -385,7 +385,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 					assert.NoError(t, err)
 
 					// Add our transaction to the block
-					err = chain.PendingBlockAddTx(&msg)
+					err = chain.PendingBlockAddTx(&msg, nil)
 					assert.NoError(t, err)
 
 					// Commit the pending block to the chain, so it becomes the new head.
@@ -494,7 +494,7 @@ func TestChainCloning(t *testing.T) {
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(&msg)
+							err = chain.PendingBlockAddTx(&msg, nil)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
@@ -588,7 +588,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(&msg)
+							err = chain.PendingBlockAddTx(&msg, nil)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
@@ -627,7 +627,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 			_, err := recreatedChain.PendingBlockCreate()
 			assert.NoError(t, err)
 			for _, message := range chain.blocks[i].Messages {
-				err = recreatedChain.PendingBlockAddTx(message)
+				err = recreatedChain.PendingBlockAddTx(message, nil)
 				assert.NoError(t, err)
 			}
 			err = recreatedChain.PendingBlockCommit()
