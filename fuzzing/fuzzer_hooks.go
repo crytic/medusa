@@ -44,7 +44,7 @@ type NewCallSequenceGeneratorConfigFunc func(fuzzer *Fuzzer, valueSet *valuegene
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 // An execution trace can also be returned in case of a deployment error for an improved debugging experience
-type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace)
+type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error)
 
 // CallSequenceTestFunc defines a method called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 // during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for

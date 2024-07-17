@@ -171,8 +171,15 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil, nil)
 }
 
-// ExecuteCallSequenceWithTracer allows attaching a custom tracer to ExecuteCallSequenceIteratively
-func ExecuteCallSequenceWithTracer(testChain *chain.TestChain, callSequence CallSequence, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) (CallSequence, error) {
+// ExecuteCallSequenceWithTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
+func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
+	// Create a new execution tracer
+	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
+	defer executionTracer.Close()
+	getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
+		return executionTracer.NativeTracer().Tracer
+	}
+
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
 	fetchElementFunc := func(currentIndex int) (*CallSequenceElement, error) {
 		if currentIndex < len(callSequence) {
@@ -181,19 +188,8 @@ func ExecuteCallSequenceWithTracer(testChain *chain.TestChain, callSequence Call
 		return nil, nil
 	}
 
-	// Execute our provided call sequence iteratively.
-	return ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, getTracerFn)
-}
-
-// ExecuteCallSequenceWithTracer attaches an ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
-func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
-	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
-	defer executionTracer.Close()
-	getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-		return executionTracer.NativeTracer().Tracer
-	}
-
-	executedCallSeq, err := ExecuteCallSequenceWithTracer(testChain, callSequence, getTracerFunc)
+	// Execute the call sequence
+	executedCallSeq, err := ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, getTracerFunc)
 
 	// By default, we only trace the last element in the call sequence.
 	traceFrom := len(callSequence) - 1
@@ -201,6 +197,8 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 	if verboseTracing {
 		traceFrom = 0
 	}
+
+	// Attach the execution trace for each requested call sequence element
 	for ; traceFrom < len(callSequence); traceFrom++ {
 		callSequenceElement := callSequence[traceFrom]
 		hash := utils.MessageToTransaction(callSequenceElement.Call.ToCoreMessage()).Hash()
