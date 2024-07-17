@@ -1,11 +1,9 @@
 package valuegenerationtracer
 
 import (
-	"fmt"
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,13 +18,11 @@ import (
 // querying them.
 const valueGenerationTracerResultsKey = "ValueGenerationTracerResults"
 
-type TransactionOutputValues []any
-
 type ValueGenerationTrace struct {
 	TopLevelCallFrame *utils.CallFrame
 
 	contractDefinitions     contracts.Contracts
-	transactionOutputValues TransactionOutputValues
+	transactionOutputValues []any
 }
 
 // TODO: Sanan
@@ -189,12 +185,13 @@ func (v *ValueGenerationTracer) resolveCallFrameContractDefinitions(callFrame *u
 }
 
 // getCallFrameReturnValue generates a list of elements describing the return value of the call frame
-func (t *ValueGenerationTracer) getCallFrameReturnValue() TransactionOutputValues {
+func (t *ValueGenerationTracer) getCallFrameReturnValue() any {
 	// Define some strings that represent our current call frame
 	var method *abi.Method
 
 	// Define a slice of any to represent return values of the current call frame
-	var outputValues TransactionOutputValues
+	//var outputValues TransactionOutputValues
+	var outputValue any
 
 	// Resolve our method definition
 	if t.currentCallFrame.CodeContractAbi != nil {
@@ -306,7 +303,7 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	//events := make([]EventInputs, 0)
 
 	// Collect generated event and return values of the current transaction
-	eventAndReturnValues := make(TransactionOutputValues, 0)
+	eventAndReturnValues := make([]any, 0)
 	eventAndReturnValues = v.trace.generateEvents(v.trace.TopLevelCallFrame, eventAndReturnValues)
 
 	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, eventAndReturnValues)
@@ -315,9 +312,8 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 
 }
 
-func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame, events TransactionOutputValues) TransactionOutputValues {
-	for iter, operation := range currentCallFrame.Operations {
-		fmt.Printf("Iteration: %d\n", iter)
+func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame, events []any) []any {
+	for _, operation := range currentCallFrame.Operations {
 		if childCallFrame, ok := operation.(*utils.CallFrame); ok {
 			// If this is a call frame being entered, generate information recursively.
 			t.generateEvents(childCallFrame, events)
@@ -332,7 +328,7 @@ func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame,
 	return events
 }
 
-func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) TransactionOutputValues {
+func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) []any {
 	// Try to unpack our event data
 	eventInputs := t.transactionOutputValues
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
