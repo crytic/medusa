@@ -290,7 +290,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Add event values to copied ValueSet
 		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		messageResults := lastExecutedSequenceElement.ChainReference.MessageResults()
-		valuegenerationtracer.AddTransactionOutputValuesToValueSet(messageResults, fw.valueSet)
+		fw.ValueSet().Add(messageResults)
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
 		// this call sequence.
