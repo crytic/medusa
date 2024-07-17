@@ -71,7 +71,7 @@ func (v *ValueGenerationTracer) CaptureStart(env *vm.EVM, from common.Address, t
 }
 
 func (v *ValueGenerationTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	v.captureExitedCallFrame(output, err)
+	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.captureExitedCallFrame(output, err))
 }
 
 func (v *ValueGenerationTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
@@ -79,7 +79,7 @@ func (v *ValueGenerationTracer) CaptureEnter(typ vm.OpCode, from common.Address,
 }
 
 func (v *ValueGenerationTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	v.captureExitedCallFrame(output, err)
+	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.captureExitedCallFrame(output, err))
 }
 
 func newValueGenerationTrace(contracts contracts.Contracts) *ValueGenerationTrace {
@@ -190,16 +190,17 @@ func (t *ValueGenerationTracer) getCallFrameReturnValue() any {
 	if method != nil {
 		// Unpack our output values and obtain a string to represent them, only if we didn't encounter an error.
 		if t.currentCallFrame.ReturnError == nil {
-			outputValue, _ := method.Outputs.Unpack(t.currentCallFrame.ReturnData)
-			outputValues = append(outputValues, outputValue)
+			outputValue, _ = method.Outputs.Unpack(t.currentCallFrame.ReturnData)
+			//outputValues = append(outputValues, outputValue)
 		}
 	}
 
-	return outputValues
+	return outputValue
 }
 
 // captureExitedCallFrame is a helper method used when a call frame is exited, to record information about it.
-func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error) {
+func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error) any {
+
 	// If this was an initial deployment, now that we're exiting, we'll want to record the finally deployed bytecodes.
 	if v.currentCallFrame.ToRuntimeBytecode == nil {
 		// As long as this isn't a failed contract creation, we should be able to fetch "to" byte code on exit.
@@ -224,13 +225,16 @@ func (v *ValueGenerationTracer) captureExitedCallFrame(output []byte, err error)
 	v.currentCallFrame.ReturnData = slices.Clone(output)
 	v.currentCallFrame.ReturnError = err
 
+	var returnValue any
 	if v.currentCallFrame.ReturnError == nil {
 		// Grab return data of the call frame
-		v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, v.getCallFrameReturnValue())
+		returnValue = v.getCallFrameReturnValue()
 	}
 
 	// We're exiting the current frame, so set our current call frame to the parent
 	v.currentCallFrame = v.currentCallFrame.ParentCallFrame
+
+	return returnValue
 }
 
 func (v *ValueGenerationTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
@@ -288,7 +292,9 @@ func (v *ValueGenerationTracer) CaptureTxEndSetAdditionalResults(results *types.
 	eventAndReturnValues := make([]any, 0)
 	eventAndReturnValues = v.trace.generateEvents(v.trace.TopLevelCallFrame, eventAndReturnValues)
 
-	v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, eventAndReturnValues)
+	if len(eventAndReturnValues) > 0 {
+		v.trace.transactionOutputValues = append(v.trace.transactionOutputValues, eventAndReturnValues)
+	}
 
 	results.AdditionalResults[valueGenerationTracerResultsKey] = v.trace.transactionOutputValues
 
@@ -311,7 +317,7 @@ func (t *ValueGenerationTrace) generateEvents(currentCallFrame *utils.CallFrame,
 
 func (t *ValueGenerationTrace) getEventsGenerated(callFrame *utils.CallFrame, eventLog *coreTypes.Log) []any {
 	// Try to unpack our event data
-	eventInputs := t.transactionOutputValues
+	eventInputs := make([]any, 0)
 	event, eventInputValues := abiutils.UnpackEventAndValues(callFrame.CodeContractAbi, eventLog)
 
 	if event == nil {
