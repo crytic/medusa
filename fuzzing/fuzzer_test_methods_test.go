@@ -1,6 +1,8 @@
 package fuzzing
 
 import (
+	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 	"testing"
 
 	"github.com/crytic/medusa/compilation"
@@ -110,4 +112,33 @@ func expectEventEmitted[T any](f *fuzzerTestContext, eventEmitter *events.EventE
 	f.postExecutionChecks = append(f.postExecutionChecks, func(t *testing.T, fctx *fuzzerTestContext) {
 		assert.Greater(f.t, f.eventCounter[eventType], 0, "Event was not emitted at all")
 	})
+}
+
+// experimentalValuesAddedToBaseValueSet will ensure whether collected EVM values during execution of the current
+// transaction is added to the base value set
+func experimentalValuesAddedToBaseValueSet(f *fuzzerTestContext, valueGenerationResults any) bool {
+	var allAdded bool
+	currentValueSet := f.fuzzer.workers[0].valueSet
+	if valGenResults, ok := valueGenerationResults.([]any); ok {
+		for _, eventOrReturnValues := range valGenResults {
+			if values, ok := eventOrReturnValues.([]any); ok {
+				for _, value := range values {
+					switch v := value.(type) {
+					case *big.Int:
+						allAdded = currentValueSet.ContainsInteger(v)
+					case common.Address:
+						allAdded = currentValueSet.ContainsAddress(v)
+					case string:
+						allAdded = currentValueSet.ContainsString(v)
+					case []byte:
+						allAdded = currentValueSet.ContainsBytes(v)
+					default:
+						// TODO(Sanan): A byte array with just one element is considered as default, fix.
+						continue
+					}
+				}
+			}
+		}
+	}
+	return allAdded
 }

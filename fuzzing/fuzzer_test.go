@@ -60,7 +60,11 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
-func TestExperimentalValueGeneration_ValueSet(t *testing.T) {
+// TestExperimentalValueGeneration_EventsReturnValues runs tests to ensure whether interesting values collected
+// during EVM execution is added to the base value set (which gets reset to default at each call sequence execution)
+// In addition, it makes sure that the base value set is reset to default after the end of each call sequence
+// execution
+func TestExperimentalValueGeneration_EventsReturnValues(t *testing.T) {
 	filePaths := []string{
 		"testdata/contracts/assertions/assert_immediate.sol",
 	}
@@ -79,14 +83,35 @@ func TestExperimentalValueGeneration_ValueSet(t *testing.T) {
 				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
 			},
 			method: func(f *fuzzerTestContext) {
-				baseValueSet := f.fuzzer.baseValueSet
-				// Start the fuzzer
+				valueSet := f.fuzzer.baseValueSet
+				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
+					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
+						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
+							valueGenerationResults := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"]
+							res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
+							assert.True(t, res)
+							// just check if these values are added to value set
+							//msgResult[event.TransactionIndex].AdditionalResults
+							// make sure to use CallSequenceTested event to see if the base value set
+							// is reset at the end of each sequence
+							//fmt.Printf("MsgResult: %v\n", msgResult[event.TransactionIndex].AdditionalResults)
+							return nil
+						})
+						// This will make sure that the base value set is reset after the end of execution of each
+						// call sequence
+						event.Worker.Events.CallSequenceTested.Subscribe(func(event FuzzerWorkerCallSequenceTestedEvent) error {
+							sequenceValueSet := f.fuzzer.baseValueSet
+							assert.EqualValues(t, valueSet, sequenceValueSet)
+							return nil
+						})
+						return nil
+					})
+					return nil
+				})
 				err := f.fuzzer.Start()
+
 				assert.NoError(t, err)
 
-				valueSet := f.fuzzer.baseValueSet
-
-				assert.EqualValues(t, valueSet, baseValueSet)
 			},
 		})
 	}
