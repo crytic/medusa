@@ -3,6 +3,7 @@ package utils
 import (
 	"strings"
 
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
@@ -42,9 +43,9 @@ func isAssertionTest(method abi.Method, includeViewMethods bool) bool {
 	return !method.IsConstant() || includeViewMethods
 }
 
-// BinTestByType takes a list of methods and returns whether they are assertion, property, or optimization tests.
-func BinTestByType(methods []abi.Method, testCfg config.TestingConfig) (assertionTests, propertyTests, optimizationTests []abi.Method) {
-	for _, method := range methods {
+// BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
+func BinTestByType(contract *compilationTypes.CompiledContract, testCfg config.TestingConfig) (assertionTests, propertyTests, optimizationTests []abi.Method) {
+	for _, method := range contract.Abi.Methods {
 		if isPropertyTest(method, testCfg.PropertyTesting.TestPrefixes) {
 			propertyTests = append(propertyTests, method)
 		} else if isOptimizationTest(method, testCfg.OptimizationTesting.TestPrefixes) {
