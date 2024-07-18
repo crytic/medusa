@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"math/rand"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -245,6 +246,9 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	// Acquire a thread lock to avoid race conditions
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()
+
+	// Display what is being tested
+	f.logger.Info(testCase.LogMessage().Elements()...)
 
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
@@ -751,7 +755,10 @@ func (f *Fuzzer) Start() error {
 
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
-		err = fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
+		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
+		if !f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+			err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz and testing view methods is disabled")
+		}
 		f.logger.Error("Failed to start fuzzer", err)
 		return err
 	}
