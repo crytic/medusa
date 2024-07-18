@@ -7,8 +7,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/fuzzing/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 
 	"golang.org/x/exp/slices"
 )
@@ -42,23 +40,6 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
 	return t
-}
-
-// isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
-// Returns true if this target should be tested, false otherwise.
-func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
-	// Do not test optimization tests
-	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
-		return false
-	}
-
-	// Do not test property tests
-	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
-		return false
-	}
-
-	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
@@ -105,12 +86,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 			continue
 		}
 
-		for _, method := range contract.CompiledContract().Abi.Methods {
-			// Verify this method is an assertion testable method
-			if !t.isTestableMethod(method) {
-				continue
-			}
-
+		for _, method := range contract.AssertionTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method

@@ -141,6 +141,48 @@ type TestingConfig struct {
 
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
+
+	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
+
+	// ExcludeFunctionSignatures is a list of function signatures that will be excluded from call sequences.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+	ExcludeFunctionSignatures []string `json:"excludeFunctionSignatures"`
+}
+
+// Validate validates that the TestingConfig meets certain requirements.
+func (testCfg *TestingConfig) Validate() error {
+	// Verify that target and exclude function signatures are used mutually exclusive.
+	if (len(testCfg.TargetFunctionSignatures) != 0) && (len(testCfg.ExcludeFunctionSignatures) != 0) {
+		return errors.New("project configuration must specify only one of blacklist or whitelist at a time")
+	}
+
+	// Verify property testing fields.
+	if testCfg.PropertyTesting.Enabled {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(testCfg.PropertyTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+		}
+	}
+
+	if testCfg.OptimizationTesting.Enabled {
+		// Test prefixes must be supplied if optimization testing is enabled.
+		if len(testCfg.OptimizationTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if optimization testing is enabled")
+		}
+	}
+
+	// Validate that prefixes do not overlap
+	for _, prefix := range testCfg.PropertyTesting.TestPrefixes {
+		for _, prefix2 := range testCfg.OptimizationTesting.TestPrefixes {
+			if prefix == prefix2 {
+				return errors.New("project configuration must specify unique test name prefixes for property and optimization testing")
+			}
+		}
+	}
+
+	return nil
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -216,7 +258,7 @@ type LoggingConfig struct {
 	// equivalent to enabling file logging.
 	LogDirectory string `json:"logDirectory"`
 
-	// NoColor indicates whether or not log messages should be displayed with colored formatting.
+	// NoColor indicates whether log messages should be displayed with colored formatting.
 	NoColor bool `json:"noColor"`
 }
 
@@ -284,6 +326,11 @@ func (p *ProjectConfig) Validate() error {
 	logger := logging.NewLogger(zerolog.Disabled)
 	if logging.GlobalLogger != nil {
 		logger = logging.GlobalLogger.NewSubLogger("module", "fuzzer config")
+	}
+
+	// Validate testing config
+	if err := p.Fuzzing.Testing.Validate(); err != nil {
+		return err
 	}
 
 	// Verify the worker count is a positive number.

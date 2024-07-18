@@ -8,7 +8,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"github.com/crytic/medusa/fuzzing/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 )
@@ -137,12 +136,7 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 			continue
 		}
 
-		for _, method := range contract.CompiledContract().Abi.Methods {
-			// Verify this method is a property test method
-			if !utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
-				continue
-			}
-
+		for _, method := range contract.PropertyTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method

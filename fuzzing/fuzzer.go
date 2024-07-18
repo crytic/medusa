@@ -32,6 +32,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/corpus"
+	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -282,7 +283,7 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test node.
+	// Loop for each contract in each compilation and deploy it to the test chain
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -297,6 +298,26 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
+
+				// Sort available methods by type
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
+					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
+					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
+					f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods)
+				contractDefinition.AssertionTestMethods = assertionTestMethods
+				contractDefinition.PropertyTestMethods = propertyTestMethods
+				contractDefinition.OptimizationTestMethods = optimizationTestMethods
+
+				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
+				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {
+					// Only consider methods that are in the target methods list
+					contractDefinition = contractDefinition.WithTargetedAssertionMethods(f.config.Fuzzing.Testing.TargetFunctionSignatures)
+				}
+				if len(f.config.Fuzzing.Testing.ExcludeFunctionSignatures) > 0 {
+					// Consider all methods except those in the exclude methods list
+					contractDefinition = contractDefinition.WithExcludedAssertionMethods(f.config.Fuzzing.Testing.ExcludeFunctionSignatures)
+				}
+
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
@@ -373,6 +394,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
+		// TODO filter libraries
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {

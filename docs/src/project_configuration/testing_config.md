@@ -63,6 +63,20 @@ contract MyContract {
   that triggered a test failure.
 - **Default**: `false`
 
+### `targetFunctionSignatures`:
+
+- **Type**: [String]
+- **Description**: A list of function signatures that the fuzzer should exclusively target by omitting calls to other signatures. The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+  > **Note**: Property and optimization tests will always be called even if they are not explicitly specified in this list.
+- **Default**: `[]`
+
+### `excludeFunctionSignatures`:
+
+- **Type**: [String]
+- **Description**: A list of function signatures that the fuzzer should exclude from the fuzzing campaign. The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+  > **Note**: Property and optimization tests will always be called and cannot be excluded.
+- **Default**: `[]`
+
 ## Assertion Testing Configuration
 
 ### `enabled`
