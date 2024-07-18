@@ -15,7 +15,7 @@ type TestChainConfig struct {
 	CheatCodeConfig CheatCodeConfig `json:"cheatCodes"`
 
 	// ContractAddressOverrides describes contracts that are going to be deployed at deterministic addresses
-	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides"`
+	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides,omitempty"`
 }
 
 // CheatCodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheat codes)
