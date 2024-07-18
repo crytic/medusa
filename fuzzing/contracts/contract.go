@@ -70,7 +70,8 @@ func containsMethod(methods []string, target string) bool {
 	return false
 }
 
-func (c *Contract) WithTargetMethods(target []string) *Contract {
+// WithTargetedAssertionMethods filters the assertion test methods to those in the target list.
+func (c *Contract) WithTargetedAssertionMethods(target []string) *Contract {
 	var candidateMethods []abi.Method
 	for _, method := range c.assertionTestMethods {
 		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")
@@ -82,7 +83,8 @@ func (c *Contract) WithTargetMethods(target []string) *Contract {
 	return c
 }
 
-func (c *Contract) WithExcludedMethods(excludedMethods []string) *Contract {
+// WithExcludedAssertionMethods filters the assertion test methods to all methods not in excluded list.
+func (c *Contract) WithExcludedAssertionMethods(excludedMethods []string) *Contract {
 	var candidateMethods []abi.Method
 	for _, method := range c.assertionTestMethods {
 		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")

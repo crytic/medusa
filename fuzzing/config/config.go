@@ -139,11 +139,11 @@ type TestingConfig struct {
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 
 	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
-	// The signatures should specify the contract name and signature in the ABI format like `Contract:func(uint256,bytes32)`.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
 
 	// ExcludeFunctionSignatures is a list of function signatures that will be excluded from call sequences.
-	// The signatures should specify the contract name and signature in the ABI format like `Contract:func(uint256,bytes32)`.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	ExcludeFunctionSignatures []string `json:"excludeFunctionSignatures"`
 }
 

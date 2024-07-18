@@ -307,11 +307,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
 				if len(targetMethods) > 0 {
 					// Only consider methods that are in the target methods list
-					contractDefinition = contractDefinition.WithTargetMethods(targetMethods)
+					contractDefinition = contractDefinition.WithTargetedAssertionMethods(targetMethods)
 				}
 				if len(excludeMethods) > 0 {
 					// Consider all methods except those in the exclude methods list
-					contractDefinition = contractDefinition.WithExcludedMethods(excludeMethods)
+					contractDefinition = contractDefinition.WithExcludedAssertionMethods(excludeMethods)
 				}
 
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
