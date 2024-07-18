@@ -77,7 +77,6 @@ contract MyContract {
   > **Note**: Property and optimization tests will always be called and cannot be excluded.
 - **Default**: `[]`
 
-
 ## Assertion Testing Configuration
 
 ### `enabled`
