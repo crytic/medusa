@@ -396,6 +396,29 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 	})
 }
 
+// TestDeploymentsWithPredeploy runs a test to ensure that predeployed contracts are instantiated correctly.
+func TestDeploymentsWithPredeploy(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
 // TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
 func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{

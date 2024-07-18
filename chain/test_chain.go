@@ -775,8 +775,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 
 	// Apply our transaction
 	var usedGas uint64
-	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
-
+	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, t.testChainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
 		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}

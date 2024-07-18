@@ -63,6 +63,10 @@ type FuzzingConfig struct {
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
+	// PredeployedContracts are contracts that can be deterministically deployed at a specific address. It maps the
+	// contract name to the deployment address
+	PredeployedContracts map[string]string `json:"predeployedContracts"`
+
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
 	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
@@ -331,6 +335,13 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
 		return errors.New("project configuration must specify only a well-formed deployer address")
+	}
+
+	// Verify that addresses of predeployed contracts are well-formed
+	for _, addr := range p.Fuzzing.PredeployedContracts {
+		if _, err := utils.HexStringToAddress(addr); err != nil {
+			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
+		}
 	}
 
 	// Ensure that the log level is a valid one

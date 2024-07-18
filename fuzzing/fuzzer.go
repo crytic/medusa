@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"math/rand"
 	"os"
@@ -327,6 +328,35 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		Balance: initBalance,
 	}
 
+	// Identify which contracts need to be predeployed to a deterministic address by iterating across the mapping
+	contractAddressOverrides := make(map[common.Hash]common.Address, len(f.config.Fuzzing.PredeployedContracts))
+	for contractName, addrStr := range f.config.Fuzzing.PredeployedContracts {
+		found := false
+		// Try to find the associated compilation artifact
+		for _, contract := range f.contractDefinitions {
+			if contract.Name() == contractName {
+				// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
+				// requested address
+				initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
+				contractAddr, err := utils.HexStringToAddress(addrStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid address provided for a predeployed contract: %v", contract.Name())
+				}
+				contractAddressOverrides[initBytecodeHash] = contractAddr
+				found = true
+				break
+			}
+		}
+
+		// Throw an error if the contract specified in the config is not found
+		if !found {
+			return nil, fmt.Errorf("%v was specified in the predeployed contracts but was not found in the compilation artifacts", contractName)
+		}
+	}
+
+	// Update the test chain config with the contract address overrides
+	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
+
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
@@ -346,21 +376,35 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return nil, fmt.Errorf("missing target contracts (update fuzzing.targetContracts in the project config " +
-				"or use the --target-contracts CLI flag)")
+			return nil, fmt.Errorf("missing target contracts")
 		}
 	}
 
-	// Loop for all contracts to deploy
+	// Concatenate the predeployed contracts and target contracts
+	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
+	// while still being able to use the contract address overrides
+	contractsToDeploy := make([]string, 0)
+	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
+		contractsToDeploy = append(contractsToDeploy, contractName)
+	}
+	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
+
 	deployedContractAddr := make(map[string]common.Address)
-	for i, contractName := range fuzzer.config.Fuzzing.TargetContracts {
+	// Loop for all contracts to deploy
+	for i, contractName := range contractsToDeploy {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
+				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+					// If the contract is a predeployed contract, throw an error because they do not accept constructor
+					// args.
+					if _, ok := fuzzer.config.Fuzzing.PredeployedContracts[contractName]; ok {
+						return nil, fmt.Errorf("predeployed contracts cannot accept constructor arguments")
+					}
 					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
 					if !ok {
 						return nil, fmt.Errorf("constructor arguments for contract %s not provided", contractName)

@@ -65,6 +65,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > longer work since the contract addresses of the target contracts will change. This may render the entire corpus useless.
 - **Default**: `[]`
 
+### `predeployedContracts`
+
+- **Type**: `{"contractName": "contractAddress"}` (e.g.`{"TestContract": "0x1234"}`)
+- **Description**: This configuration parameter allows you to deterministically deploy contracts at predefined addresses.
+  > 🚩 Predeployed contracts do not accept constructor arguments. This may be added in the future.
+- **Default**: `{}`
+
 ### `targetContractBalances`
 
 - **Type**: [Base-16 Strings] (e.g. `[0x123, 0x456, 0x789]`)
