@@ -895,6 +895,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 	})
 }
 
+// TestTargetingFuncSignatures tests whether functions will be correctly whitelisted for testing
 func TestTargetingFuncSignatures(t *testing.T) {
 	targets := []string{"TestContract.f(), TestContract.g()"}
 	runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -906,15 +907,16 @@ func TestTargetingFuncSignatures(t *testing.T) {
 		method: func(f *fuzzerTestContext) {
 			for _, contract := range f.fuzzer.ContractDefinitions() {
 				// The targets should be the only functions tested, excluding h and i
-				reflect.DeepEqual(contract.AssertionTestMethods(), targets)
+				reflect.DeepEqual(contract.AssertionTestMethods, targets)
 
 				// ALL properties and optimizations should be tested
-				reflect.DeepEqual(contract.PropertyTestMethods(), []string{"TestContract.property_a()"})
-				reflect.DeepEqual(contract.OptimizationTestMethods(), []string{"TestContract.optimize_b()"})
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
 			}
 		}})
 }
 
+// TestExcludeFunctionSignatures tests whether functions will be blacklisted/excluded for testing
 func TestExcludeFunctionSignatures(t *testing.T) {
 	excluded := []string{"TestContract.f(), TestContract.g()"}
 	runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -926,11 +928,11 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 		method: func(f *fuzzerTestContext) {
 			for _, contract := range f.fuzzer.ContractDefinitions() {
 				// Only h and i should be test since f and g are excluded
-				reflect.DeepEqual(contract.AssertionTestMethods(), []string{"TestContract.h()", "TestContract.i()"})
+				reflect.DeepEqual(contract.AssertionTestMethods, []string{"TestContract.h()", "TestContract.i()"})
 
 				// ALL properties and optimizations should be tested
-				reflect.DeepEqual(contract.PropertyTestMethods(), []string{"TestContract.property_a()"})
-				reflect.DeepEqual(contract.OptimizationTestMethods(), []string{"TestContract.optimize_b()"})
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
 			}
 		}})
 }

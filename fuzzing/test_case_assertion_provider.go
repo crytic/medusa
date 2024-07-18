@@ -86,7 +86,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 			continue
 		}
 
-		for _, method := range contract.AssertionTestMethods() {
+		for _, method := range contract.AssertionTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method

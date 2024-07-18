@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"golang.org/x/exp/slices"
 	"strings"
 
 	"github.com/crytic/medusa/compilation/types"
@@ -39,16 +40,16 @@ type Contract struct {
 	// compilation describes the compilation which contains the compiledContract.
 	compilation *types.Compilation
 
-	// propertyTestMethods are the methods that are property tests.
-	propertyTestMethods []abi.Method
+	// PropertyTestMethods are the methods that are property tests.
+	PropertyTestMethods []abi.Method
 
-	// optimizationTestMethods are the methods that are optimization tests.
-	optimizationTestMethods []abi.Method
+	// OptimizationTestMethods are the methods that are optimization tests.
+	OptimizationTestMethods []abi.Method
 
-	// assertionTestMethods are ALL other methods that are not property or optimization tests by default.
+	// AssertionTestMethods are ALL other methods that are not property or optimization tests by default.
 	// If configured, the methods will be targeted or excluded based on the targetFunctionSignatures
 	// and excludedFunctionSignatures, respectively.
-	assertionTestMethods []abi.Method
+	AssertionTestMethods []abi.Method
 }
 
 // NewContract returns a new Contract instance with the provided information.
@@ -61,38 +62,29 @@ func NewContract(name string, sourcePath string, compiledContract *types.Compile
 	}
 }
 
-func containsMethod(methods []string, target string) bool {
-	for _, method := range methods {
-		if method == target {
-			return true
-		}
-	}
-	return false
-}
-
 // WithTargetedAssertionMethods filters the assertion test methods to those in the target list.
 func (c *Contract) WithTargetedAssertionMethods(target []string) *Contract {
 	var candidateMethods []abi.Method
-	for _, method := range c.assertionTestMethods {
+	for _, method := range c.AssertionTestMethods {
 		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")
-		if containsMethod(target, canonicalSig) {
+		if slices.Contains(target, canonicalSig) {
 			candidateMethods = append(candidateMethods, method)
 		}
 	}
-	c.assertionTestMethods = candidateMethods
+	c.AssertionTestMethods = candidateMethods
 	return c
 }
 
 // WithExcludedAssertionMethods filters the assertion test methods to all methods not in excluded list.
 func (c *Contract) WithExcludedAssertionMethods(excludedMethods []string) *Contract {
 	var candidateMethods []abi.Method
-	for _, method := range c.assertionTestMethods {
+	for _, method := range c.AssertionTestMethods {
 		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")
-		if !containsMethod(excludedMethods, canonicalSig) {
+		if !slices.Contains(excludedMethods, canonicalSig) {
 			candidateMethods = append(candidateMethods, method)
 		}
 	}
-	c.assertionTestMethods = candidateMethods
+	c.AssertionTestMethods = candidateMethods
 	return c
 }
 
@@ -114,25 +106,4 @@ func (c *Contract) CompiledContract() *types.CompiledContract {
 // Compilation returns the compilation which contains the CompiledContract.
 func (c *Contract) Compilation() *types.Compilation {
 	return c.compilation
-}
-
-// PropertyTestMethods returns the methods that are property tests.
-func (c *Contract) PropertyTestMethods() []abi.Method {
-	return c.propertyTestMethods
-}
-
-// OptimizationTestMethods returns the methods that are optimization tests.
-func (c *Contract) OptimizationTestMethods() []abi.Method {
-	return c.optimizationTestMethods
-}
-
-// AssertionTestMethods returns the methods that are assertion tests.
-func (c *Contract) AssertionTestMethods() []abi.Method {
-	return c.assertionTestMethods
-}
-
-func (c *Contract) AddTestMethods(assertion, property, optimization []abi.Method) {
-	c.assertionTestMethods = assertion
-	c.propertyTestMethods = property
-	c.optimizationTestMethods = optimization
 }

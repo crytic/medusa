@@ -283,9 +283,7 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test node.
-	targetMethods := f.config.Fuzzing.Testing.TargetFunctionSignatures
-	excludeMethods := f.config.Fuzzing.Testing.ExcludeFunctionSignatures
+	// Loop for each contract in each compilation and deploy it to the test chain
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -302,17 +300,22 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract, f.config.Fuzzing.Testing)
-				contractDefinition.AddTestMethods(assertionTestMethods, propertyTestMethods, optimizationTestMethods)
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
+					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
+					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
+					f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods)
+				contractDefinition.AssertionTestMethods = assertionTestMethods
+				contractDefinition.PropertyTestMethods = propertyTestMethods
+				contractDefinition.OptimizationTestMethods = optimizationTestMethods
 
 				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
-				if len(targetMethods) > 0 {
+				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {
 					// Only consider methods that are in the target methods list
-					contractDefinition = contractDefinition.WithTargetedAssertionMethods(targetMethods)
+					contractDefinition = contractDefinition.WithTargetedAssertionMethods(f.config.Fuzzing.Testing.TargetFunctionSignatures)
 				}
-				if len(excludeMethods) > 0 {
+				if len(f.config.Fuzzing.Testing.ExcludeFunctionSignatures) > 0 {
 					// Consider all methods except those in the exclude methods list
-					contractDefinition = contractDefinition.WithExcludedAssertionMethods(excludeMethods)
+					contractDefinition = contractDefinition.WithExcludedAssertionMethods(f.config.Fuzzing.Testing.ExcludeFunctionSignatures)
 				}
 
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)

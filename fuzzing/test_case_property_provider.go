@@ -136,7 +136,7 @@ func (t *PropertyTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) e
 			continue
 		}
 
-		for _, method := range contract.PropertyTestMethods() {
+		for _, method := range contract.PropertyTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method

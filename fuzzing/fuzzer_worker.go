@@ -240,7 +240,7 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
-		for _, method := range contractDefinition.AssertionTestMethods() {
+		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
 			// We favor calling state changing methods over view/pure methods.
 			if method.IsConstant() {

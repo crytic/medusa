@@ -134,7 +134,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 			continue
 		}
 
-		for _, method := range contract.OptimizationTestMethods() {
+		for _, method := range contract.OptimizationTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method

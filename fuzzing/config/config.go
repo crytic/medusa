@@ -151,6 +151,7 @@ type TestingConfig struct {
 	ExcludeFunctionSignatures []string `json:"excludeFunctionSignatures"`
 }
 
+// Validate validates that the TestingConfig meets certain requirements.
 func (testCfg *TestingConfig) Validate() error {
 	// Verify that target and exclude function signatures are used mutually exclusive.
 	if (len(testCfg.TargetFunctionSignatures) != 0) && (len(testCfg.ExcludeFunctionSignatures) != 0) {
@@ -257,7 +258,7 @@ type LoggingConfig struct {
 	// equivalent to enabling file logging.
 	LogDirectory string `json:"logDirectory"`
 
-	// NoColor indicates whether or not log messages should be displayed with colored formatting.
+	// NoColor indicates whether log messages should be displayed with colored formatting.
 	NoColor bool `json:"noColor"`
 }
 
@@ -325,6 +326,11 @@ func (p *ProjectConfig) Validate() error {
 	logger := logging.NewLogger(zerolog.Disabled)
 	if logging.GlobalLogger != nil {
 		logger = logging.GlobalLogger.NewSubLogger("module", "fuzzer config")
+	}
+
+	// Validate testing config
+	if err := p.Fuzzing.Testing.Validate(); err != nil {
+		return err
 	}
 
 	// Verify the worker count is a positive number.

@@ -4,13 +4,12 @@ import (
 	"strings"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func isOptimizationTest(method abi.Method, prefixes []string) bool {
+func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(method.Name, prefix) {
@@ -25,32 +24,27 @@ func isOptimizationTest(method abi.Method, prefixes []string) bool {
 
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func isPropertyTest(method abi.Method, prefixes []string) bool {
+func IsPropertyTest(method abi.Method, prefixes []string) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
-		// The property test must simply have the right prefix and take no inputs
-		if strings.HasPrefix(method.Name, prefix) && len(method.Inputs) == 0 {
-			return true
+		// The property test must simply have the right prefix and take no inputs and return a boolean
+		if strings.HasPrefix(method.Name, prefix) {
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// IsAssertionTest checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
-// Returns true if this target should be tested, false otherwise.
-func isAssertionTest(method abi.Method, includeViewMethods bool) bool {
-	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || includeViewMethods
-}
-
 // BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
-func BinTestByType(contract *compilationTypes.CompiledContract, testCfg config.TestingConfig) (assertionTests, propertyTests, optimizationTests []abi.Method) {
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method) {
 	for _, method := range contract.Abi.Methods {
-		if isPropertyTest(method, testCfg.PropertyTesting.TestPrefixes) {
+		if IsPropertyTest(method, propertyTestPrefixes) {
 			propertyTests = append(propertyTests, method)
-		} else if isOptimizationTest(method, testCfg.OptimizationTesting.TestPrefixes) {
+		} else if IsOptimizationTest(method, optimizationTestPrefixes) {
 			optimizationTests = append(optimizationTests, method)
-		} else if isAssertionTest(method, testCfg.AssertionTesting.TestViewMethods) {
+		} else if !method.IsConstant() || testViewMethods {
 			assertionTests = append(assertionTests, method)
 		}
 	}
