@@ -2,6 +2,7 @@ package executiontracer
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -238,7 +239,7 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []a
 	}
 
 	// Check if this is a generic revert.
-	if callFrame.ReturnError == vm.ErrExecutionReverted {
+	if errors.Is(callFrame.ReturnError, vm.ErrExecutionReverted) {
 		elements = append(elements, colors.RedBold, "[revert]", colors.Reset, "\n")
 		return elements
 	}

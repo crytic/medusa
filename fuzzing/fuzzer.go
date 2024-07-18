@@ -36,7 +36,6 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 )
 
@@ -314,18 +313,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// Create our genesis allocations.
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for _, sender := range f.senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}
 
 	// Fund our deployer address in the genesis block
-	genesisAlloc[f.deployer] = core.GenesisAccount{
+	genesisAlloc[f.deployer] = types.Account{
 		Balance: initBalance,
 	}
 
@@ -370,14 +369,14 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
-func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
+func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return fmt.Errorf("missing target contracts"), nil
+			return nil, fmt.Errorf("missing target contracts")
 		}
 	}
 
@@ -404,16 +403,16 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 					// If the contract is a predeployed contract, throw an error because they do not accept constructor
 					// args.
 					if _, ok := fuzzer.config.Fuzzing.PredeployedContracts[contractName]; ok {
-						return fmt.Errorf("predeployed contracts cannot accept constructor arguments"), nil
+						return nil, fmt.Errorf("predeployed contracts cannot accept constructor arguments")
 					}
 					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
 					if !ok {
-						return fmt.Errorf("constructor arguments for contract %s not provided", contractName), nil
+						return nil, fmt.Errorf("constructor arguments for contract %s not provided", contractName)
 					}
 					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
 					if err != nil {
-						return err, nil
+						return nil, err
 					}
 					args = decoded
 				}
@@ -421,7 +420,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 				// Construct our deployment message/tx data field
 				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 				if err != nil {
-					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err), nil
+					return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
 				}
 
 				// If our project config has a non-zero balance for this target contract, retrieve it
@@ -438,20 +437,19 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 				// Create a new pending block we'll commit to chain
 				block, err := testChain.PendingBlockCreate()
 				if err != nil {
-					return err, nil
+					return nil, err
 				}
 
 				// Add our transaction to the block
-				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+				err = testChain.PendingBlockAddTx(msg.ToCoreMessage(), nil)
 				if err != nil {
-					return err, nil
+					return nil, err
 				}
 
 				// Commit the pending block to the chain, so it becomes the new head.
 				err = testChain.PendingBlockCommit()
 				if err != nil {
-					return err, nil
+					return nil, err
 				}
 
 				// Ensure our transaction succeeded and, if it did not, attach an execution trace to it and re-run it.
@@ -463,20 +461,20 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-
-					// Replay the execution trace for the failed contract deployment tx
-					err = cse.AttachExecutionTrace(testChain, fuzzer.contractDefinitions)
-
-					// Throw an error if execution tracing threw an error or the trace is nil
+					// Revert to genesis and re-run the failed contract deployment tx.
+					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
+					err = testChain.RevertToBlockNumber(0)
 					if err != nil {
-						return fmt.Errorf("failed to attach execution trace to failed contract deployment tx: %v", err), nil
-					}
-					if cse.ExecutionTrace == nil {
-						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), nil
+						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
+					} else {
+						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, true)
+						if err != nil {
+							return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
+						}
 					}
 
-					// Return the execution error and the execution trace
-					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), cse.ExecutionTrace
+					// Return the execution error and the execution trace, if possible.
+					return cse.ExecutionTrace, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this
@@ -492,7 +490,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (err
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName), nil
+			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
 	return nil, nil
@@ -712,7 +710,7 @@ func (f *Fuzzer) Start() error {
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	f.logger.Info("Setting up base chain")
-	err, trace := f.Hooks.ChainSetupFunc(f, baseTestChain)
+	trace, err := f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		if trace != nil {
 			f.logger.Error("Failed to initialize the test chain", err, errors.New(trace.Log().ColorString()))

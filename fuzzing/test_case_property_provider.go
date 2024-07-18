@@ -89,9 +89,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	var executionResult *core.ExecutionResult
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
-		executionTracer := executiontracer.NewExecutionTracer(worker.fuzzer.contractDefinitions, worker.chain.CheatCodeContracts())
-		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil, executionTracer)
-		executionTrace = executionTracer.Trace()
+		executionResult, executionTrace, err = executiontracer.CallWithExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions, msg.ToCoreMessage(), nil)
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}
@@ -318,10 +316,10 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 					shrunkenSequenceFailedTest, _, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, false)
 					return shrunkenSequenceFailedTest, err
 				},
-				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-					// When we're finished shrinking, attach an execution trace to the last call
+				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+					// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 					if len(shrunkenCallSequence) > 0 {
-						err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+						_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
 						if err != nil {
 							return err
 						}
