@@ -41,6 +41,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
 			TargetContractsBalances: []*big.Int{},
+			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
