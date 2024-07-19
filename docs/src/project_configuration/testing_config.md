@@ -59,7 +59,7 @@ contract MyContract {
 ### `traceAll`:
 
 - **Type**: Boolean
-- **Description**: Determines whether an [execution trace](TODO) should be attached to each element of a call sequence
+- **Description**: Determines whether an `execution trace` should be attached to each element of a call sequence
   that triggered a test failure.
 - **Default**: `false`
 
