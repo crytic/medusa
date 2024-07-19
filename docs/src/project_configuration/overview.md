@@ -43,7 +43,7 @@ value to `10_000` or `100_000` depending on the use case. You can learn more abo
 Updating the corpus directory is optional but recommended. The corpus directory determines where corpus items should be
 stored on disk. A corpus item is a sequence of transactions that increased `medusa`'s coverage of the system. Thus, these
 corpus items are valuable to store so that they can be re-used for the next fuzzing campaign. Additionally, the directory
-will also hold [coverage reports](TODO) which is a valuable tool for debugging and validation. For most cases, you may set
+will also hold [coverage reports](../coverage_reports.md) which is a valuable tool for debugging and validation. For most cases, you may set
 `corpusDirectory`'s value to "corpus". This will create a `corpus/` directory in the same directory as the `medusa.json`
 file.
 You can learn more about this option [here](./fuzzing_config.md#corpusdirectory).

@@ -59,7 +59,7 @@ To install
 To run
 
 - `prettier '**.json' '**/*.md' '**/*.yml' '!(pkg)'`
-- `markdown-link-check --config .github/workflows/resources/markdown_link_check.json ./*.md`
+- `find . -name '*.md' -print0 | xargs -0 -n1 markdown-link-check --config .github/workflows/resources/markdown_link_check.json`
 
 To format (overwrite files)
 
