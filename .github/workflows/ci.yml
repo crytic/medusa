@@ -156,6 +156,13 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run --timeout 5m0s
 
+      - name: Gencodec
+        run: |
+          go get github.com/fjl/gencodec 
+          pushd fuzzing/config
+          go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
+          git diff --exit-code -- .
+          popd
   test:
     strategy:
       matrix:
