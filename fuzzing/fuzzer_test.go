@@ -87,9 +87,11 @@ func TestExperimentalValueGeneration_EventsReturnValues(t *testing.T) {
 				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
 					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
 						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
-							valueGenerationResults := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"]
-							res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
-							assert.True(t, res)
+							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
+								res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
+								assert.True(t, res)
+							}
 							// just check if these values are added to value set
 							//msgResult[event.TransactionIndex].AdditionalResults
 							// make sure to use CallSequenceTested event to see if the base value set
