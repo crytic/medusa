@@ -60,6 +60,10 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
+	// JSONCoverageReportEnabled describes whether a JSON coverage report should be provided after the fuzzing campaign
+	// is complete.
+	JSONCoverageReportEnabled bool `json:"jsonCoverageReportEnabled"`
+
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
