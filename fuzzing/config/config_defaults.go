@@ -1,10 +1,11 @@
 package config
 
 import (
+	"math/big"
+
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/rs/zerolog"
-	"math/big"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -41,6 +42,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
 			TargetContractsBalances: []*big.Int{},
+			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
@@ -55,11 +57,13 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
 			Testing: TestingConfig{
-				StopOnFailedTest:                   true,
-				StopOnFailedContractMatching:       false,
-				StopOnNoTests:                      true,
-				TestAllContracts:                   false,
-				TraceAll:                           false,
+				StopOnFailedTest:             true,
+				StopOnFailedContractMatching: false,
+				StopOnNoTests:                true,
+				TestAllContracts:             false,
+				TraceAll:                     false,
+				TargetFunctionSignatures:     []string{},
+				ExcludeFunctionSignatures:    []string{},
 				ExperimentalValueGenerationEnabled: false,
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         true,

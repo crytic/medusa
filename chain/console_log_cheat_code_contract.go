@@ -1,10 +1,11 @@
 package chain
 
 import (
+	"strconv"
+
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"strconv"
 )
 
 // ConsoleLogContractAddress is the address for the console.log precompile contract

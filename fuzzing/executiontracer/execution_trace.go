@@ -2,6 +2,7 @@ package executiontracer
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/crytic/medusa/utils"
 	"regexp"
@@ -239,7 +240,7 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *utils.CallFram
 	}
 
 	// Check if this is a generic revert.
-	if callFrame.ReturnError == vm.ErrExecutionReverted {
+	if errors.Is(callFrame.ReturnError, vm.ErrExecutionReverted) {
 		elements = append(elements, colors.RedBold, "[revert]", colors.Reset, "\n")
 		return elements
 	}
