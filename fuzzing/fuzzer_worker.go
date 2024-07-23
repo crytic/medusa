@@ -578,7 +578,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// execution and connect it to the chain
 		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
 			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer(fw.fuzzer.contractDefinitions)
-			initializedChain.AddTracer(fw.valueGenerationTracer, true, false)
+			initializedChain.AddTracer(fw.valueGenerationTracer.NativeTracer(), true, false)
 		}
 		return nil
 	})
