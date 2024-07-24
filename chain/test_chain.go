@@ -754,7 +754,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 		// If we have more tracers, extend the transaction tracer router's tracers with additional ones
 		extendedTracerRouter = NewTestChainTracerRouter()
 		extendedTracerRouter.AddTracer(t.transactionTracerRouter.NativeTracer())
-		t.transactionTracerRouter.AddTracers(additionalTracers...)
+		extendedTracerRouter.AddTracers(additionalTracers...)
 	} else {
 		extendedTracerRouter = t.transactionTracerRouter
 	}
