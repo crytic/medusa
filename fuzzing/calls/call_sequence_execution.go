@@ -7,8 +7,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // ExecuteCallSequenceFetchElementFunc describes a function that is called to obtain the next call sequence element to
@@ -28,7 +26,7 @@ type ExecuteCallSequenceExecutionCheckFunc func(currentExecutedSequence CallSequ
 // A "post element executed check" function is provided to check whether execution should stop after each element is
 // executed.
 // Returns the call sequence which was executed and an error if one occurs.
-func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) (CallSequence, error) {
+func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, additionalTracers ...*chain.TestChainTracer) (CallSequence, error) {
 	// If there is no fetch element function provided, throw an error
 	if fetchElementFunc == nil {
 		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
@@ -90,7 +88,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			}
 
 			// Try to add our transaction to this block.
-			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), getTracerFn)
+			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
 
 			if err != nil {
 				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
@@ -168,7 +166,7 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 		return nil, nil
 	}
 
-	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil, nil)
+	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil)
 }
 
 // ExecuteCallSequenceWithTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
@@ -176,9 +174,6 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 	// Create a new execution tracer
 	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
 	defer executionTracer.Close()
-	getTracerFunc := func(txIndex int, txHash common.Hash) *tracers.Tracer {
-		return executionTracer.NativeTracer().Tracer
-	}
 
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
 	fetchElementFunc := func(currentIndex int) (*CallSequenceElement, error) {
@@ -188,8 +183,8 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 		return nil, nil
 	}
 
-	// Execute the call sequence
-	executedCallSeq, err := ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, getTracerFunc)
+	// Execute the call sequence and attach the execution tracer
+	executedCallSeq, err := ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, executionTracer.NativeTracer())
 
 	// By default, we only trace the last element in the call sequence.
 	traceFrom := len(callSequence) - 1
