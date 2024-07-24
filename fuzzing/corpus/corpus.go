@@ -406,20 +406,22 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	coverage.RemoveCoverageTracerResults(lastMessageResult)
 
 	// Merge the coverage maps into our total coverage maps and check if we had an update.
-	_, _, err := c.coverageMaps.Update(lastMessageCoverageMaps)
+	successCoverageUpdated, revertedCoverageUpdated, err := c.coverageMaps.Update(lastMessageCoverageMaps)
 	if err != nil {
 		return err
 	}
 
-	// If we had an increase in non-reverted or reverted coverage, we save the sequence.
 	// Note: We only want to save the sequence once. We're most interested if it can be used for mutations first.
-	if lastMessageResult.Receipt.Status == types.ReceiptStatusSuccessful {
-		// If we achieved new non-reverting coverage, save this sequence for mutation purposes.
-		err = c.addCallSequence(c.mutableSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
-	} else if lastMessageResult.Receipt.Status == types.ReceiptStatusFailed {
-		// If we did not achieve new successful coverage, but achieved an increase in reverted coverage, save this
-		// sequence for non-mutation purposes.
-		err = c.addCallSequence(c.immutableSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
+	// If we had an increase in non-reverted or reverted coverage, we save the sequence.
+	changed := successCoverageUpdated || revertedCoverageUpdated
+	if changed {
+		if lastMessageResult.Receipt.Status == types.ReceiptStatusSuccessful {
+			// If this a non-reverting sequence, save this sequence for mutation purposes.
+			err = c.addCallSequence(c.mutableSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
+		} else if lastMessageResult.Receipt.Status == types.ReceiptStatusFailed {
+			// If this is a reverting sequence, save this sequence for non-mutation purposes.
+			err = c.addCallSequence(c.immutableSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
+		}
 	}
 
 	if err != nil {
