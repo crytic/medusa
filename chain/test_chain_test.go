@@ -260,7 +260,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 						assert.NoError(t, err)
 
 						// Add our transaction to the block
-						err = chain.PendingBlockAddTx(&msg, nil)
+						err = chain.PendingBlockAddTx(&msg)
 						assert.NoError(t, err)
 
 						// Commit the pending block to the chain, so it becomes the new head.
@@ -385,7 +385,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 					assert.NoError(t, err)
 
 					// Add our transaction to the block
-					err = chain.PendingBlockAddTx(&msg, nil)
+					err = chain.PendingBlockAddTx(&msg)
 					assert.NoError(t, err)
 
 					// Commit the pending block to the chain, so it becomes the new head.
@@ -494,7 +494,7 @@ func TestChainCloning(t *testing.T) {
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(&msg, nil)
+							err = chain.PendingBlockAddTx(&msg)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
@@ -588,7 +588,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 							assert.NoError(t, err)
 
 							// Add our transaction to the block
-							err = chain.PendingBlockAddTx(&msg, nil)
+							err = chain.PendingBlockAddTx(&msg)
 							assert.NoError(t, err)
 
 							// Commit the pending block to the chain, so it becomes the new head.
@@ -627,7 +627,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 			_, err := recreatedChain.PendingBlockCreate()
 			assert.NoError(t, err)
 			for _, message := range chain.blocks[i].Messages {
-				err = recreatedChain.PendingBlockAddTx(message, nil)
+				err = recreatedChain.PendingBlockAddTx(message)
 				assert.NoError(t, err)
 			}
 			err = recreatedChain.PendingBlockCommit()

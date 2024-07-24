@@ -463,7 +463,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				}
 
 				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage(), nil)
+				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
 				if err != nil {
 					return nil, err
 				}

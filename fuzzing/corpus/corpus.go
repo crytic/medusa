@@ -210,7 +210,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc, nil)
+		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
