@@ -2,11 +2,12 @@ package coverage
 
 import (
 	"bytes"
+	"sync"
+
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -158,8 +159,8 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 				}
 			} else {
 				mapsByAddress[codeAddress] = coverageMapToMerge
-				successCoverageChanged = coverageMapToMerge.successfulCoverage != nil
-				revertedCoverageChanged = coverageMapToMerge.revertedCoverage != nil
+				successCoverageChanged = coverageMapToMerge.HasSuccessCoverage()
+				revertedCoverageChanged = coverageMapToMerge.HasRevertCoverage()
 			}
 		}
 	}
@@ -258,6 +259,16 @@ func newContractCoverageMap() *ContractCoverageMap {
 		successfulCoverage: &CoverageMapBytecodeData{},
 		revertedCoverage:   &CoverageMapBytecodeData{},
 	}
+}
+
+// HasSuccessCoverage checks if the contract has successful coverage.
+func (cm *ContractCoverageMap) HasSuccessCoverage() bool {
+	return cm.successfulCoverage != nil && cm.successfulCoverage.executedFlags != nil
+}
+
+// HasRevertCoverage checks if the contract has reverted coverage.
+func (cm *ContractCoverageMap) HasRevertCoverage() bool {
+	return cm.revertedCoverage != nil && cm.revertedCoverage.executedFlags != nil
 }
 
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
