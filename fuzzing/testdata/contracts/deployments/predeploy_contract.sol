@@ -1,6 +1,11 @@
 contract PredeployContract {
+    bool called = false;
+
     function triggerFailure() public {
-        assert(false);
+        if (called) {
+            assert(false);
+        }
+        called = true;
     }
 }
 
