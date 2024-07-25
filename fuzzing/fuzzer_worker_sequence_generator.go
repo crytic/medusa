@@ -287,8 +287,8 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 			// There are no pure functions to call either
 			return nil, fmt.Errorf("cannot generate fuzzed call as there are no methods to call")
 		}
-		// Now we know that there are no state-changing functions, there are pure functions, and we can call the
-		// pure functions
+		// Since there are no state-changing functions, there are pure functions, and TestViewMethods is enabled, we can call
+		// exclusively pure functions.
 		onlyPure = true
 	}
 
@@ -296,7 +296,7 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Select a random method
-	// There is a 1/100 chance that a pure method will be invoked (or there are onl pure functions)
+	// There is a 1/100 chance that a pure method will be invoked (or there are only pure functions)
 	var selectedMethod *contracts.DeployedContractMethod
 	if len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0 || onlyPure {
 		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
