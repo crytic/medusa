@@ -90,7 +90,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
-		pureMethods:          make([]fuzzerTypes.DeployedContractMethod, 0),
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
@@ -240,9 +239,9 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
-		for _, method := range contractDefinition.AssertionTestMethods {
+		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
 			// Any non-constant method should be tracked as a state changing method.
-			// We favor calling state changing methods over view/pure methods.
+			// We favor calling state changing methods over view methods.
 			if method.IsConstant() {
 				fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
 				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(1)))
