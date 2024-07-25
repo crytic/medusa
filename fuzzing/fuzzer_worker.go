@@ -11,7 +11,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
 )
@@ -43,9 +42,6 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
-
-	// methodChooser uses a weighted selection algorithm to choose a method to call, prioritizing state changing methods over pure ones.
-	methodChooser *randomutils.WeightedRandomChooser[fuzzerTypes.DeployedContractMethod]
 
 	// randomProvider provides random data as inputs to decisions throughout the worker.
 	randomProvider *rand.Rand
@@ -94,7 +90,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
-		methodChooser:        randomutils.NewWeightedRandomChooser[fuzzerTypes.DeployedContractMethod](),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -245,10 +240,8 @@ func (fw *FuzzerWorker) updateMethods() {
 			// We favor calling state changing methods over view/pure methods.
 			if method.IsConstant() {
 				fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(1)))
 			} else {
 				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(100)))
 			}
 		}
 	}
