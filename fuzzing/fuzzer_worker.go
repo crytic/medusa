@@ -237,9 +237,11 @@ func (fw *FuzzerWorker) updateMethods() {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
-			// We favor calling state changing methods over view/pure methods.
 			if method.IsConstant() {
-				fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+				// Only track the pure/view method if testing view methods is enabled
+				if fw.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+					fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+				}
 			} else {
 				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
 			}
