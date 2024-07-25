@@ -2,9 +2,9 @@ package fuzzing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"math/rand"
 	"os"
@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -25,6 +27,7 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/crytic/medusa/chain"
@@ -39,6 +42,31 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
 )
+
+type Alloc map[common.Address]types.Account
+
+func (g Alloc) OnRoot(common.Hash) {}
+
+func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
+	if addr == nil {
+		return
+	}
+	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
+	var storage map[common.Hash]common.Hash
+	if dumpAccount.Storage != nil {
+		storage = make(map[common.Hash]common.Hash, len(dumpAccount.Storage))
+		for k, v := range dumpAccount.Storage {
+			storage[k] = common.HexToHash(v)
+		}
+	}
+	genesisAccount := types.Account{
+		Code:    dumpAccount.Code,
+		Storage: storage,
+		Balance: balance,
+		Nonce:   dumpAccount.Nonce,
+	}
+	g[*addr] = genesisAccount
+}
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
 type Fuzzer struct {
@@ -386,6 +414,27 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	return testChain, err
 }
 
+func (f *Fuzzer) CreateTestChainWithAllocFile() (*chain.TestChain, error) {
+	inFile, err := os.Open("alloc.json")
+	if err != nil {
+		return nil, err
+	}
+	defer inFile.Close()
+	decoder := json.NewDecoder(inFile)
+	var genesisAlloc types.GenesisAlloc
+	if err := decoder.Decode(&genesisAlloc); err != nil {
+		return nil, err
+	}
+	fmt.Println("Genesis alloc loaded from alloc.json")
+
+	// Create our test chain with our basic allocations and passed medusa's chain configuration
+	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+
+	// Set our block gas limit
+	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
+	return testChain, err
+}
+
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
@@ -515,6 +564,18 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
+
+	// Write the state after deployment to alloc.json
+	dumpdb := testChain.State().Copy()
+	collector := make(Alloc)
+	dumpdb.DumpToCollector(collector, nil)
+	b, err := json.MarshalIndent(collector, "", " ")
+	os.WriteFile("alloc.json", b, 0644)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 

@@ -1,7 +1,9 @@
 package calls
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/contracts"
@@ -26,14 +28,22 @@ type ExecuteCallSequenceExecutionCheckFunc func(currentExecutedSequence CallSequ
 // A "post element executed check" function is provided to check whether execution should stop after each element is
 // executed.
 // Returns the call sequence which was executed and an error if one occurs.
-func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, additionalTracers ...*chain.TestChainTracer) (CallSequence, error) {
+func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, additionalTracers ...*chain.TestChainTracer) (callSequenceExecuted CallSequence, err error) {
+	defer func() {
+		if recover() != nil {
+			// Marshal the data
+			jsonEncodedData, _ := json.MarshalIndent(callSequenceExecuted, "", " ")
+
+			// Write the JSON encoded data.
+			err = os.WriteFile("crash1.json", jsonEncodedData, os.ModePerm)
+			fmt.Println("Recovered from panic in ExecuteCallSequenceIteratively")
+		}
+	}()
+
 	// If there is no fetch element function provided, throw an error
 	if fetchElementFunc == nil {
 		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
 	}
-
-	// Create a call sequence to track all elements executed throughout this operation.
-	var callSequenceExecuted CallSequence
 
 	// Create a variable to track if the post-execution check operation requested we break execution.
 	execCheckFuncRequestedBreak := false
@@ -63,6 +73,11 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 					return callSequenceExecuted, err
 				}
 			}
+
+			// // randomly panic
+			// if i == 3 {
+			// 	panic("random panic")
+			// }
 
 			// If we have no pending block to add a tx containing our call to, we must create one.
 			if chain.PendingBlock() == nil {
