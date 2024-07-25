@@ -275,29 +275,34 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
-	// Verify we have state changing methods to call.
+	// This will track if the fuzzer worker can only invoke pure functions
 	onlyPure := false
+
+	// Verify we have any method (state-changing or pure) to call
 	if len(g.worker.stateChangingMethods) == 0 {
 		if !g.worker.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+			// There are no state-changing methods and we are not testing view/pure methods
 			return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
 		} else if len(g.worker.pureMethods) == 0 {
+			// There are no pure functions to call either
 			return nil, fmt.Errorf("cannot generate fuzzed call as there are no methods to call")
-		} else {
-			// TestViewMethods && len(g.worker.pureMethods) > 0
-			onlyPure = true
 		}
+		// Now we know that there are no state-changing functions, there are pure functions, and we can call the
+		// pure functions
+		onlyPure = true
 	}
-	// Select a random method and sender
 
-	// If available, 1 out 100 calls will be pure/view method calls.
+	// Select a random sender
+	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
+
+	// Select a random method
+	// There is a 1/100 chance that a pure method will be invoked (or there are onl pure functions)
 	var selectedMethod *contracts.DeployedContractMethod
 	if len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0 || onlyPure {
 		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
 	} else {
 		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
 	}
-
-	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
 	args := make([]any, len(selectedMethod.Method.Inputs))
