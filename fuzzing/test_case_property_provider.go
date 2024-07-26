@@ -332,6 +332,7 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 					testCase.status = TestCaseStatusFailed
 					testCase.callSequence = &shrunkenCallSequence
 					testCase.propertyTestTrace = executionTrace
+					worker.workerMetrics().failedSequences.Add(worker.workerMetrics().failedSequences, big.NewInt(1))
 					worker.Fuzzer().ReportTestCaseFinished(testCase)
 					return nil
 				},
