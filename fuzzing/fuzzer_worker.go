@@ -13,6 +13,7 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/exp/maps"
 )
 
@@ -424,6 +425,31 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.ctx)
 	}
 	if shrinkLimit > 0 {
+
+		// First, remove all reverting txs from the sequence.
+		var withoutReverts calls.CallSequence
+		for i := 0; i < len(optimizedSequence); i++ {
+			var err error
+			withoutReverts, err = optimizedSequence.Clone()
+			if err != nil {
+				return nil, err
+			}
+			lastCall := withoutReverts[i]
+			lastCallChainReference := lastCall.ChainReference
+			lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
+			if lastMessageResult.Receipt.Status == types.ReceiptStatusFailed {
+				withoutReverts = append(withoutReverts[:i], withoutReverts[i+1:]...)
+			}
+		}
+		// Test the sequence with all reverts removed.
+		validShrunkSequence, err := fw.testShrunkenCallSequence(withoutReverts, shrinkRequest)
+		if err != nil {
+			return nil, err
+		}
+		if validShrunkSequence {
+			optimizedSequence = withoutReverts
+		}
+
 		// The first pass of shrinking is greedy towards trying to remove any unnecessary calls.
 		// For each call in the sequence, the following removal strategies are used:
 		// 1) Plain removal (lower block/time gap between surrounding blocks, maintain properties of max delay)
