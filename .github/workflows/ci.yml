@@ -87,7 +87,6 @@ jobs:
           inputs: ./medusa-*.tar.gz
 
       - name: Upload artifact
-        if: github.ref == 'refs/heads/master' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         uses: actions/upload-artifact@v4
         with:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
