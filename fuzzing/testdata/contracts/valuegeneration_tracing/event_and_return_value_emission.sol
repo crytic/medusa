@@ -1,85 +1,44 @@
 pragma solidity ^0.8.0;
 
-// This contract includes a function that we will call from TestContract.
 contract AnotherContract {
-    // This function doesn't need to do anything specific for this example.
-    function externalFunction() public pure returns (string memory) {
-        return "External function called";
+    // This function returns a variety of values that need to be captured in the value set
+    function testAnotherFunction(uint256 x) public pure returns (uint256, int256, string memory, address, bytes memory, bytes4) {
+        // Fix the values we want to return
+        uint256 myUint = 3;
+        int256 myInt = 4;
+        string memory myStr = "another string";
+        address myAddr = address(0x5678);
+        bytes memory myBytes = "another byte array";
+        bytes4 fixedBytes = "word";
+
+        return (myUint, myInt, myStr, myAddr, myBytes, fixedBytes);
     }
 }
 
-// This contract ensures the fuzzer can encounter an immediate assertion failure.
 contract TestContract {
     AnotherContract public anotherContract;
 
-    bytes private constant _chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-    function random(uint seed) internal view returns (uint) {
-        return uint(keccak256(abi.encodePacked(block.timestamp, block.difficulty, seed)));
-    }
-
-    function generateRandomString(uint seed) public view returns (string memory) {
-        bytes memory result = new bytes(6);
-        uint rand = random(seed);
-
-        for (uint i = 0; i < 6; i++) {
-            result[i] = _chars[rand % _chars.length];
-            rand = rand / _chars.length;
-        }
-
-        return string(result);
-    }
-
-    function generateRandomByteArray(uint seed, uint length) public view returns (bytes memory) {
-        bytes memory result = new bytes(length);
-        uint rand = random(seed);
-
-        for (uint i = 0; i < length; i++) {
-            result[i] = _chars[rand % _chars.length];
-            rand = rand / _chars.length;
-        }
-
-        return result;
-    }
-
-    event ValueReceived(uint indexed value, uint second_val, string test, bytes byteArray,  string test2);
-    event ValueNonIndexedReceived(uint firstval, uint secondval, bytes1 myByte);
-    event NewEvent(string newEventVal1, string newEventVal2);
-
-    function internalFunction() public returns (string memory, string memory, uint, bytes1, bytes memory) {
-        string memory internalString = generateRandomString(444);
-        uint randInt = 4+14;
-        bytes1 randByte = 0x44;
-        bytes memory randBytes = generateRandomByteArray(555, 11);
-
-        emit NewEvent("neweventval1", "neweventval2");
-        return (string(abi.encodePacked("t", "est")), internalString, randInt, randByte, randBytes);
-    }
+    event EventValues(uint indexed myUint, int myInt, string myStr, address myAddr, bytes myBytes, bytes4 fixedBytes);
 
     // Deploy AnotherContract within the TestContract
     constructor() {
-//        internalFunction();
         anotherContract = new AnotherContract();
     }
 
+    function testFunction(uint x) public {
+        // Fix the values we want to emit
+        uint256 myUint = 1;
+        int256 myInt = 2;
+        string memory myStr = "string";
+        address myAddr = address(0x1234);
+        bytes memory myBytes = "byte array";
+        bytes4 fixedBytes = "byte";
 
-    function callingMeFails(uint value) public {
-//        // Call internalFunction()
-//        internalFunction();
-//        // Call the external function in AnotherContract.
-//        anotherContract.externalFunction();
+        // Call an external contract
+        anotherContract.testAnotherFunction(x);
 
-        string memory randString = generateRandomString(123);
-        bytes memory byteArray = generateRandomByteArray(456, 10);
-
-        uint second_val = 2+12;
-
-        bytes1 myByte = 0x51;
-
-        string memory secondString = string(abi.encodePacked("trailof", "bits"));
-
-        emit ValueReceived(value, second_val, randString, byteArray, secondString);
-        emit ValueNonIndexedReceived(111+111, 444+444, myByte);
+        // Emit an event in this call frame
+        emit EventValues(myUint, myInt, myStr, myAddr, myBytes, fixedBytes);
 
         // ASSERTION: We always fail when you call this function.
         assert(false);

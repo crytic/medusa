@@ -951,7 +951,6 @@ func TestExperimentalValueGeneration(t *testing.T) {
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.TestLimit = 500
-				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Workers = 1
