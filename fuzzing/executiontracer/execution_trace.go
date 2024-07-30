@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/utils"
 	"regexp"
 	"strings"
 
@@ -24,7 +23,7 @@ import (
 type ExecutionTrace struct {
 	// TopLevelCallFrame refers to the root call frame, the first EVM call scope entered when an externally-owned
 	// address calls upon a contract.
-	TopLevelCallFrame *utils.CallFrame
+	TopLevelCallFrame *CallFrame
 
 	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
 	// obtain any additional information regarding execution.
@@ -43,7 +42,7 @@ func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
 // This list of elements will hold information about what kind of call it is, wei sent, what method is called, and more.
 // Additionally, the list may also hold formatting options for console output. This function also returns a non-empty
 // string in case this call frame represents a call to the console.log precompile contract.
-func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *utils.CallFrame) ([]any, string) {
+func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([]any, string) {
 	// Create list of elements and console log string
 	elements := make([]any, 0)
 	var consoleLogString string
@@ -166,7 +165,7 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *utils.CallFra
 
 // generateCallFrameExitElements generates a list of elements describing the return data of the call frame (e.g.
 // traditional return data, assertion failure, revert data, etc.). Additionally, the list may also hold formatting options for console output.
-func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *utils.CallFrame) []any {
+func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []any {
 	// Create list of elements
 	elements := make([]any, 0)
 
@@ -252,7 +251,7 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *utils.CallFram
 
 // generateEventEmittedElements generates a list of elements used to express an event emission. It contains information about an
 // event log such as the topics and the event data. Additionally, the list may also hold formatting options for console output.
-func (t *ExecutionTrace) generateEventEmittedElements(callFrame *utils.CallFrame, eventLog *coreTypes.Log) []any {
+func (t *ExecutionTrace) generateEventEmittedElements(callFrame *CallFrame, eventLog *coreTypes.Log) []any {
 	// Create list of elements
 	elements := make([]any, 0)
 
@@ -303,7 +302,7 @@ func (t *ExecutionTrace) generateEventEmittedElements(callFrame *utils.CallFrame
 // generateElementsAndLogsForCallFrame generates a list of elements and logs for a given call frame and its children.
 // The list of elements may also hold formatting options for console output. The list of logs represent calls to the
 // console.log precompile contract.
-func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, callFrame *utils.CallFrame) ([]any, []any) {
+func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, callFrame *CallFrame) ([]any, []any) {
 	// Create list of elements and logs
 	elements := make([]any, 0)
 	consoleLogs := make([]any, 0)
@@ -336,7 +335,7 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 		// Loop for each operation performed in the call frame, to provide a chronological history of operations in the
 		// frame.
 		for _, operation := range callFrame.Operations {
-			if childCallFrame, ok := operation.(*utils.CallFrame); ok {
+			if childCallFrame, ok := operation.(*CallFrame); ok {
 				// If this is a call frame being entered, generate information recursively.
 				childOutputLines, childConsoleLogStrings := t.generateElementsAndLogsForCallFrame(currentDepth+1, childCallFrame)
 				elements = append(elements, childOutputLines...)

@@ -62,65 +62,6 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
-// TestExperimentalValueGeneration_EventsReturnValues runs tests to ensure whether interesting values collected
-// during EVM execution is added to the base value set (which gets reset to default at each call sequence execution)
-// In addition, it makes sure that the base value set is reset to default after the end of each call sequence
-// execution
-func TestExperimentalValueGeneration_EventsReturnValues(t *testing.T) {
-	filePaths := []string{
-		"testdata/contracts/valuegeneration_tracing/event_and_return_value_emission.sol",
-	}
-
-	for _, filePath := range filePaths {
-		runFuzzerTest(t, &fuzzerSolcFileTest{
-			filePath: filePath,
-			configUpdates: func(config *config.ProjectConfig) {
-				config.Fuzzing.TargetContracts = []string{"TestContract"}
-				config.Fuzzing.TestLimit = 500
-				config.Fuzzing.Testing.AssertionTesting.Enabled = false
-				config.Fuzzing.Testing.PropertyTesting.Enabled = false
-				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-				config.Fuzzing.Testing.StopOnNoTests = false
-				config.Fuzzing.Workers = 1
-				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
-			},
-			method: func(f *fuzzerTestContext) {
-				valueSet := f.fuzzer.baseValueSet
-				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
-					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
-						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
-							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
-								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
-								res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
-								assert.True(t, res)
-							}
-							// just check if these values are added to value set
-							//msgResult[event.TransactionIndex].AdditionalResults
-							// make sure to use CallSequenceTested event to see if the base value set
-							// is reset at the end of each sequence
-							//fmt.Printf("MsgResult: %v\n", msgResult[event.TransactionIndex].AdditionalResults)
-							return nil
-						})
-						// This will make sure that the base value set is reset after the end of execution of each
-						// call sequence
-						event.Worker.Events.CallSequenceTested.Subscribe(func(event FuzzerWorkerCallSequenceTestedEvent) error {
-							sequenceValueSet := f.fuzzer.baseValueSet
-							assert.EqualValues(t, valueSet, sequenceValueSet)
-							return nil
-						})
-						return nil
-					})
-					return nil
-				})
-				err := f.fuzzer.Start()
-
-				assert.NoError(t, err)
-
-			},
-		})
-	}
-}
-
 // TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
@@ -994,4 +935,61 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
 			}
 		}})
+}
+
+// TestExperimentalValueGeneration runs tests to ensure whether interesting values collected
+// during EVM execution is added to the base value set. In addition, it makes sure that the base value set is reset to
+// default after the end of each call sequence execution
+func TestExperimentalValueGeneration(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/valuegeneration_tracing/event_and_return_value_emission.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 500
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Workers = 1
+				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				valueSet := f.fuzzer.baseValueSet
+				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
+					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
+						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
+							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
+								res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
+								assert.True(t, res)
+							}
+							// just check if these values are added to value set
+							//msgResult[event.TransactionIndex].AdditionalResults
+							// make sure to use CallSequenceTested event to see if the base value set
+							// is reset at the end of each sequence
+							//fmt.Printf("MsgResult: %v\n", msgResult[event.TransactionIndex].AdditionalResults)
+							return nil
+						})
+						// This will make sure that the base value set is reset after the end of execution of each
+						// call sequence
+						event.Worker.Events.CallSequenceTested.Subscribe(func(event FuzzerWorkerCallSequenceTestedEvent) error {
+							sequenceValueSet := f.fuzzer.baseValueSet
+							assert.EqualValues(t, valueSet, sequenceValueSet)
+							return nil
+						})
+						return nil
+					})
+					return nil
+				})
+				err := f.fuzzer.Start()
+
+				assert.NoError(t, err)
+
+			},
+		})
+	}
 }

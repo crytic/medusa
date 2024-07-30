@@ -173,26 +173,21 @@ func (vs *ValueSet) RemoveBytes(b []byte) {
 	delete(vs.bytes, hashStr)
 }
 
-func (vs *ValueSet) Add(results []any) {
-
-	for _, eventOrReturnValues := range results {
-		if eventOrReturnSlice, ok := eventOrReturnValues.([]any); ok {
-			for _, eventOrReturnValue := range eventOrReturnSlice {
-				switch v := eventOrReturnValue.(type) {
-				case *big.Int:
-					vs.AddInteger(v)
-				case common.Address:
-					vs.AddAddress(v)
-				case string:
-					vs.AddString(v)
-				case []byte:
-					vs.AddBytes(v)
-				default:
-					continue
-				}
-
-			}
+// Add adds one or more values. Note the values could be any primitive type (integer, address, string, bytes)
+func (vs *ValueSet) Add(values []any) {
+	// Iterate across each value and assert on its type
+	for _, value := range values {
+		switch v := value.(type) {
+		case *big.Int:
+			vs.AddInteger(v)
+		case common.Address:
+			vs.AddAddress(v)
+		case string:
+			vs.AddString(v)
+		case []byte:
+			vs.AddBytes(v)
+		default:
+			continue
 		}
 	}
-
 }

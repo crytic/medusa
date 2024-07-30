@@ -265,16 +265,21 @@ func (fw *FuzzerWorker) updateMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
-	// Copy the existing ValueSet
-	originalValueSet := fw.ValueSet().Clone()
-
+	// Copy the existing value set if experimental value generation is enabled
+	var originalValueSet *valuegeneration.ValueSet
+	if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+		originalValueSet = fw.valueSet.Clone()
+	}
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
 		if err == nil {
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
-		fw.valueSet = originalValueSet
+		// Reset the value set if experimental value generation is enabled
+		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+			fw.valueSet = originalValueSet
+		}
 	}()
 
 	// Initialize a new sequence within our sequence generator.
@@ -303,11 +308,14 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			return true, err
 		}
 
-		// Add event values to copied ValueSet
-		lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		// Add event and return values to the value set if experimental value generation is enabled
+		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 
-		if messageResults, ok := lastExecutedSequenceElement.ChainReference.MessageResults().AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
-			fw.ValueSet().Add(messageResults)
+			if values, ok := lastExecutedSequenceElement.ChainReference.MessageResults().AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+				fw.valueSet.Add(values)
+			}
+
 		}
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
