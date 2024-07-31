@@ -209,17 +209,18 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("could not parse AST from sources: %v", err)
 			}
 
-			// From the AST, extract the contract kinds.
+			// From the AST, extract the contract kinds where the contract definition could be for a contract, library,
+			// or interface
 			for _, node := range ast.Nodes {
 				if node.GetNodeType() == "ContractDefinition" {
-					cdef := node.(types.ContractDefinition)
-					contractKinds[cdef.CanonicalName] = cdef.ContractKind
+					contractDefinition := node.(types.ContractDefinition)
+					contractKinds[contractDefinition.CanonicalName] = contractDefinition.Kind
 				}
 			}
 
 			sourceUnitId := getSourceUnitID(ast.Src)
 			compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
-				// TODO our types.AST is not the same as the original AST but we could parse it and avoid using "any"
+				// TODO: Our types.AST is not the same as the original AST but we could parse it and avoid using "any"
 				Ast:          source.AST,
 				Contracts:    make(map[string]types.CompiledContract),
 				SourceUnitId: sourceUnitId,
