@@ -8,8 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/crytic/medusa/compilation/types"
@@ -87,19 +85,6 @@ func (c *CryticCompilationConfig) getArgs() ([]string, error) {
 	// Add remaining args
 	args = append(args, c.Args...)
 	return args, nil
-}
-
-func getSourceUnitID(src string) int {
-	re := regexp.MustCompile(`[0-9]*:[0-9]*:([0-9]*)`)
-	sourceUnitCandidates := re.FindStringSubmatch(src)
-
-	if len(sourceUnitCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
-		sourceUnit, err := strconv.Atoi(sourceUnitCandidates[1])
-		if err == nil {
-			return sourceUnit
-		}
-	}
-	return -1
 }
 
 // Compile uses the CryticCompilationConfig provided to compile a given target, parse the artifacts, and then
@@ -200,12 +185,10 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			var ast types.AST
 			b, err = json.Marshal(source.AST)
 			if err != nil {
-
 				return nil, "", fmt.Errorf("could not encode AST from sources: %v", err)
 			}
 			err = json.Unmarshal(b, &ast)
 			if err != nil {
-
 				return nil, "", fmt.Errorf("could not parse AST from sources: %v", err)
 			}
 
@@ -218,7 +201,8 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				}
 			}
 
-			sourceUnitId := getSourceUnitID(ast.Src)
+			// Retrieve the source unit ID
+			sourceUnitId := ast.GetSourceUnitID()
 			compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
 				// TODO: Our types.AST is not the same as the original AST but we could parse it and avoid using "any"
 				Ast:          source.AST,

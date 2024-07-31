@@ -124,21 +124,28 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 					return nil, "", fmt.Errorf("could not parse AST from sources, AST field could not be found")
 				}
 
+				// Convert the AST into our version of the AST (types.AST)
 				var ast types.AST
-				b, _ := json.Marshal(sourceDict["AST"])
-				err := json.Unmarshal(b, &ast)
+				b, err := json.Marshal(origAST)
+				if err != nil {
+					return nil, "", fmt.Errorf("could not encode AST from sources: %v", err)
+				}
+				err = json.Unmarshal(b, &ast)
 				if err != nil {
 					return nil, "", fmt.Errorf("could not parse AST from sources, error: %v", err)
 				}
-				// From the AST, extract the contract kinds.
+
+				// From the AST, extract the contract kinds where the contract definition could be for a contract, library,
+				// or interface
 				for _, node := range ast.Nodes {
 					if node.GetNodeType() == "ContractDefinition" {
-						cdef := node.(types.ContractDefinition)
-						contractKinds[cdef.CanonicalName] = cdef.ContractKind
+						contractDefinition := node.(types.ContractDefinition)
+						contractKinds[contractDefinition.CanonicalName] = contractDefinition.Kind
 					}
 				}
 
-				sourceUnitId := getSourceUnitID(ast.Src)
+				// Get the source unit ID
+				sourceUnitId := ast.GetSourceUnitID()
 				// Construct our compiled source object
 				compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
 					// TODO our types.AST is not the same as the original AST but we could parse it and avoid using "any"

@@ -2,6 +2,8 @@ package types
 
 import (
 	"encoding/json"
+	"regexp"
+	"strconv"
 )
 
 // ContractKind represents the kind of contract definition represented by an AST node
@@ -38,9 +40,12 @@ func (s ContractDefinition) GetNodeType() string {
 
 // AST is the abstract syntax tree
 type AST struct {
+	// NodeType represents the node type (currently we only evaluate source unit node types)
 	NodeType string `json:"nodeType"`
-	Nodes    []Node `json:"nodes"`
-	Src      string `json:"src"`
+	// Nodes is a list of Nodes within the AST
+	Nodes []Node `json:"nodes"`
+	// Src is the source file for this AST
+	Src string `json:"src"`
 }
 
 // UnmarshalJSON unmarshals from JSON
@@ -92,4 +97,18 @@ func (a *AST) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// GetSourceUnitID returns the source unit ID based on the source of the AST
+func (a *AST) GetSourceUnitID() int {
+	re := regexp.MustCompile(`[0-9]*:[0-9]*:([0-9]*)`)
+	sourceUnitCandidates := re.FindStringSubmatch(a.Src)
+
+	if len(sourceUnitCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
+		sourceUnit, err := strconv.Atoi(sourceUnitCandidates[1])
+		if err == nil {
+			return sourceUnit
+		}
+	}
+	return -1
 }
