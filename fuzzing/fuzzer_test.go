@@ -959,6 +959,8 @@ func TestExperimentalValueGeneration(t *testing.T) {
 			method: func(f *fuzzerTestContext) {
 				valueSet := f.fuzzer.baseValueSet
 				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
+					// Wipe constants that were retrieved from AST so that we can test the capturing of values
+					event.Worker.valueSet = valuegeneration.NewValueSet()
 					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
 						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
 							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
