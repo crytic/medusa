@@ -2,31 +2,19 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 )
 
-// ContractKind represents the kind of contract
+// ContractKind represents the kind of contract represented by an AST node
 type ContractKind string
 
 const (
-	ContractKindContract  ContractKind = "contract"
-	ContractKindLibrary   ContractKind = "library"
+	// ContractKindContract represents a contract node
+	ContractKindContract ContractKind = "contract"
+	// ContractKindLibrary represents a library node
+	ContractKindLibrary ContractKind = "library"
+	// ContractKindInterface represents an interface node
 	ContractKindInterface ContractKind = "interface"
 )
-
-// ContractKindFromString converts a string to a ContractKind
-func ContractKindFromString(s string) ContractKind {
-	switch s {
-	case "contract":
-		return ContractKindContract
-	case "library":
-		return ContractKindLibrary
-	case "interface":
-		return ContractKindInterface
-	default:
-		panic(fmt.Sprintf("unknown contract kind: %s", s))
-	}
-}
 
 // Node interface represents a generic AST node
 type Node interface {

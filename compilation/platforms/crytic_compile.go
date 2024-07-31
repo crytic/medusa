@@ -196,13 +196,19 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 		// Loop through all sources and parse them into our types.
 		for sourcePath, source := range solcExport.Sources {
-
+			// Convert the AST into our version of the AST (types.AST)
 			var ast types.AST
-			b, _ := json.Marshal(source.AST)
-			err := json.Unmarshal(b, &ast)
+			b, err = json.Marshal(source.AST)
 			if err != nil {
-				return nil, "", fmt.Errorf("could not parse AST from sources, error: %v", err)
+
+				return nil, "", fmt.Errorf("could not encode AST from sources: %v", err)
 			}
+			err = json.Unmarshal(b, &ast)
+			if err != nil {
+
+				return nil, "", fmt.Errorf("could not parse AST from sources: %v", err)
+			}
+
 			// From the AST, extract the contract kinds.
 			for _, node := range ast.Nodes {
 				if node.GetNodeType() == "ContractDefinition" {
