@@ -24,7 +24,6 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		CorpusDirectory         string                    `json:"corpusDirectory"`
 		CoverageEnabled         bool                      `json:"coverageEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
-		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         string                    `json:"deployerAddress"`
@@ -46,7 +45,6 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
 	enc.TargetContracts = f.TargetContracts
-	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
 		enc.TargetContractsBalances = make([]*hexutil.Big, len(f.TargetContractsBalances))
 		for k, v := range f.TargetContractsBalances {
@@ -77,7 +75,6 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		CorpusDirectory         *string                   `json:"corpusDirectory"`
 		CoverageEnabled         *bool                     `json:"coverageEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
-		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         *string                   `json:"deployerAddress"`
@@ -119,9 +116,6 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts
-	}
-	if dec.PredeployedContracts != nil {
-		f.PredeployedContracts = dec.PredeployedContracts
 	}
 	if dec.TargetContractsBalances != nil {
 		f.TargetContractsBalances = make([]*big.Int, len(dec.TargetContractsBalances))

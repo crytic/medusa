@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
 	"os"
@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
@@ -32,11 +30,11 @@ import (
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/corpus"
-	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 )
 
@@ -202,9 +200,34 @@ func (f *Fuzzer) ContractDefinitions() fuzzerTypes.Contracts {
 	return slices.Clone(f.contractDefinitions)
 }
 
+// Metrics exposes the underlying metrics provided to the Fuzzer.
+func (f *Fuzzer) Metrics() *FuzzerMetrics {
+	return f.metrics
+}
+
+// Logger exposes the logger registered with the Fuzzer.
+func (f *Fuzzer) Logger() *logging.Logger {
+	return f.logger
+}
+
+// Context exposes the Fuzzer's running context.
+func (f *Fuzzer) Context() context.Context {
+	return f.ctx
+}
+
 // Config exposes the underlying project configuration provided to the Fuzzer.
 func (f *Fuzzer) Config() config.ProjectConfig {
 	return f.config
+}
+
+// Corpus exposes the underlying corpus provided to the Fuzzer.
+func (f *Fuzzer) Corpus() *corpus.Corpus {
+	return f.corpus
+}
+
+// Compilations exposes the Fuzzer compilation targets.
+func (f *Fuzzer) Compilations() []compilationTypes.Compilation {
+	return f.compilations
 }
 
 // BaseValueSet exposes the underlying value set provided to the Fuzzer value generators to aid in generation
@@ -247,9 +270,6 @@ func (f *Fuzzer) RegisterTestCase(testCase TestCase) {
 	f.testCasesLock.Lock()
 	defer f.testCasesLock.Unlock()
 
-	// Display what is being tested
-	f.logger.Info(testCase.LogMessage().Elements()...)
-
 	// Append our test case to our list
 	f.testCases = append(f.testCases, testCase)
 }
@@ -283,7 +303,7 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test chain
+	// Loop for each contract in each compilation and deploy it to the test node.
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -298,26 +318,6 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
-
-				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
-					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
-					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
-					f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods)
-				contractDefinition.AssertionTestMethods = assertionTestMethods
-				contractDefinition.PropertyTestMethods = propertyTestMethods
-				contractDefinition.OptimizationTestMethods = optimizationTestMethods
-
-				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
-				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {
-					// Only consider methods that are in the target methods list
-					contractDefinition = contractDefinition.WithTargetedAssertionMethods(f.config.Fuzzing.Testing.TargetFunctionSignatures)
-				}
-				if len(f.config.Fuzzing.Testing.ExcludeFunctionSignatures) > 0 {
-					// Consider all methods except those in the exclude methods list
-					contractDefinition = contractDefinition.WithExcludedAssertionMethods(f.config.Fuzzing.Testing.ExcludeFunctionSignatures)
-				}
-
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
@@ -334,49 +334,20 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// Create our genesis allocations.
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
-	genesisAlloc := make(types.GenesisAlloc)
+	genesisAlloc := make(core.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
 	for _, sender := range f.senders {
-		genesisAlloc[sender] = types.Account{
+		genesisAlloc[sender] = core.GenesisAccount{
 			Balance: initBalance,
 		}
 	}
 
 	// Fund our deployer address in the genesis block
-	genesisAlloc[f.deployer] = types.Account{
+	genesisAlloc[f.deployer] = core.GenesisAccount{
 		Balance: initBalance,
 	}
-
-	// Identify which contracts need to be predeployed to a deterministic address by iterating across the mapping
-	contractAddressOverrides := make(map[common.Hash]common.Address, len(f.config.Fuzzing.PredeployedContracts))
-	for contractName, addrStr := range f.config.Fuzzing.PredeployedContracts {
-		found := false
-		// Try to find the associated compilation artifact
-		for _, contract := range f.contractDefinitions {
-			if contract.Name() == contractName {
-				// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
-				// requested address
-				initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
-				contractAddr, err := utils.HexStringToAddress(addrStr)
-				if err != nil {
-					return nil, fmt.Errorf("invalid address provided for a predeployed contract: %v", contract.Name())
-				}
-				contractAddressOverrides[initBytecodeHash] = contractAddr
-				found = true
-				break
-			}
-		}
-
-		// Throw an error if the contract specified in the config is not found
-		if !found {
-			return nil, fmt.Errorf("%v was specified in the predeployed contracts but was not found in the compilation artifacts", contractName)
-		}
-	}
-
-	// Update the test chain config with the contract address overrides
-	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
@@ -390,51 +361,36 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // all compiled contract definitions. This includes any successful compilations as a result of the Fuzzer.config
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
-func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
+func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
-		// TODO filter libraries
 		if len(fuzzer.contractDefinitions) == 1 {
 			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
 		} else {
-			return nil, fmt.Errorf("missing target contracts")
+			return fmt.Errorf("missing target contracts (update fuzzing.targetContracts in the project config " +
+				"or use the --target-contracts CLI flag)"), nil
 		}
 	}
 
-	// Concatenate the predeployed contracts and target contracts
-	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
-	// while still being able to use the contract address overrides
-	contractsToDeploy := make([]string, 0)
-	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
-		contractsToDeploy = append(contractsToDeploy, contractName)
-	}
-	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
-
-	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
-	for i, contractName := range contractsToDeploy {
+	deployedContractAddr := make(map[string]common.Address)
+	for i, contractName := range fuzzer.config.Fuzzing.TargetContracts {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
-					// If the contract is a predeployed contract, throw an error because they do not accept constructor
-					// args.
-					if _, ok := fuzzer.config.Fuzzing.PredeployedContracts[contractName]; ok {
-						return nil, fmt.Errorf("predeployed contracts cannot accept constructor arguments")
-					}
 					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
 					if !ok {
-						return nil, fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+						return fmt.Errorf("constructor arguments for contract %s not provided", contractName), nil
 					}
 					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
 						jsonArgs, deployedContractAddr)
 					if err != nil {
-						return nil, err
+						return err, nil
 					}
 					args = decoded
 				}
@@ -442,7 +398,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// Construct our deployment message/tx data field
 				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 				if err != nil {
-					return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+					return fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err), nil
 				}
 
 				// If our project config has a non-zero balance for this target contract, retrieve it
@@ -459,19 +415,20 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// Create a new pending block we'll commit to chain
 				block, err := testChain.PendingBlockCreate()
 				if err != nil {
-					return nil, err
+					return err, nil
 				}
 
 				// Add our transaction to the block
+				// Add our transaction to the block
 				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
 				if err != nil {
-					return nil, err
+					return err, nil
 				}
 
 				// Commit the pending block to the chain, so it becomes the new head.
 				err = testChain.PendingBlockCommit()
 				if err != nil {
-					return nil, err
+					return err, nil
 				}
 
 				// Ensure our transaction succeeded and, if it did not, attach an execution trace to it and re-run it.
@@ -483,20 +440,20 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// Revert to genesis and re-run the failed contract deployment tx.
-					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockNumber(0)
+
+					// Replay the execution trace for the failed contract deployment tx
+					err = cse.AttachExecutionTrace(testChain, fuzzer.contractDefinitions)
+
+					// Throw an error if execution tracing threw an error or the trace is nil
 					if err != nil {
-						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
-					} else {
-						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, true)
-						if err != nil {
-							return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
-						}
+						return fmt.Errorf("failed to attach execution trace to failed contract deployment tx: %v", err), nil
+					}
+					if cse.ExecutionTrace == nil {
+						return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), nil
 					}
 
-					// Return the execution error and the execution trace, if possible.
-					return cse.ExecutionTrace, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
+					// Return the execution error and the execution trace
+					return fmt.Errorf("contract deployment tx returned a failed status: %v", block.MessageResults[0].ExecutionResult.Err), cse.ExecutionTrace
 				}
 
 				// Record our deployed contract so the next config-specified constructor args can reference this
@@ -512,7 +469,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 		// If we did not find a contract corresponding to this item in the deployment order, we throw an error.
 		if !found {
-			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
+			return fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName), nil
 		}
 	}
 	return nil, nil
@@ -732,7 +689,7 @@ func (f *Fuzzer) Start() error {
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
 	f.logger.Info("Setting up base chain")
-	trace, err := f.Hooks.ChainSetupFunc(f, baseTestChain)
+	err, trace := f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		if trace != nil {
 			f.logger.Error("Failed to initialize the test chain", err, errors.New(trace.Log().ColorString()))
@@ -775,10 +732,7 @@ func (f *Fuzzer) Start() error {
 
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
-		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
-		if !f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
-			err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz and testing view methods is disabled")
-		}
+		err = fmt.Errorf("no tests of any kind (assertion/property/optimization/custom) have been identified for fuzzing")
 		f.logger.Error("Failed to start fuzzer", err)
 		return err
 	}
