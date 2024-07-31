@@ -958,6 +958,11 @@ func TestExperimentalValueGeneration(t *testing.T) {
 			},
 			method: func(f *fuzzerTestContext) {
 				valueSet := f.fuzzer.baseValueSet
+				expectedInts := []int{1, 2, 3, 4}
+				expectedStrings := []string{"another string", "string"}
+				expectedAddresses := []common.Address{common.HexToAddress("0x1234"), common.HexToAddress("0x5678")}
+				expectedByteArrays := [][]byte{[]byte("another byte array"), []byte("byte array"), []byte("word"), []byte("byte")}
+
 				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
 					// Wipe constants that were retrieved from AST so that we can test the capturing of values
 					event.Worker.valueSet = valuegeneration.NewValueSet()
@@ -965,8 +970,25 @@ func TestExperimentalValueGeneration(t *testing.T) {
 						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
 							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
 								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
-								res := experimentalValuesAddedToBaseValueSet(f, valueGenerationResults)
-								assert.True(t, res)
+								var contains bool
+
+								for _, intValue := range expectedInts {
+									contains = valueSet.ContainsInteger(big.NewInt(int64(intValue)))
+								}
+
+								for _, stringValue := range expectedStrings {
+									contains = valueSet.ContainsString(stringValue)
+								}
+
+								for _, addressValue := range expectedAddresses {
+									contains = valueSet.ContainsAddress(addressValue)
+								}
+
+								for _, byteArrayValue := range expectedByteArrays {
+									contains = valueSet.ContainsBytes(byteArrayValue)
+								}
+
+								assert.True(t, contains)
 							}
 							// just check if these values are added to value set
 							//msgResult[event.TransactionIndex].AdditionalResults
