@@ -23,6 +23,8 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		CallSequenceLength      int                       `json:"callSequenceLength"`
 		CorpusDirectory         string                    `json:"corpusDirectory"`
 		CoverageEnabled         bool                      `json:"coverageEnabled"`
+		HtmlReportFile          string                    `json:"htmlReportPath"`
+		JsonReportFile          string                    `json:"jsonReportPath"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
@@ -45,6 +47,8 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CallSequenceLength = f.CallSequenceLength
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
+	enc.HtmlReportFile = f.HtmlReportFile
+	enc.JsonReportFile = f.JsonReportFile
 	enc.TargetContracts = f.TargetContracts
 	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
@@ -76,6 +80,8 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		CallSequenceLength      *int                      `json:"callSequenceLength"`
 		CorpusDirectory         *string                   `json:"corpusDirectory"`
 		CoverageEnabled         *bool                     `json:"coverageEnabled"`
+		HtmlReportFile          *string                   `json:"htmlReportPath"`
+		JsonReportFile          *string                   `json:"jsonReportPath"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
@@ -116,6 +122,12 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.CoverageEnabled != nil {
 		f.CoverageEnabled = *dec.CoverageEnabled
+	}
+	if dec.HtmlReportFile != nil {
+		f.HtmlReportFile = *dec.HtmlReportFile
+	}
+	if dec.JsonReportFile != nil {
+		f.JsonReportFile = *dec.JsonReportFile
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts

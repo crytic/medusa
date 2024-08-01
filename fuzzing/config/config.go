@@ -60,6 +60,14 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
+	// HtmlReportFile describes the name for the html coverage file. If empty,
+	// the html coverage file will not be saved
+	HtmlReportFile string `json:"htmlReportPath"`
+
+	// JsonReportFile describes the name for the html coverage file. If empty,
+	// the json coverage file will not be saved
+	JsonReportFile string `json:"jsonReportPath"`
+
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
