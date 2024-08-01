@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/valuegenerationtracer"
 	"math/big"
 	"math/rand"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
 )
@@ -29,6 +29,10 @@ type FuzzerWorker struct {
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
 
+	// valueGenerationTracer represents the structure that is used for collecting "interesting" values during EVM
+	// execution, such as emitted event and return values of executed functions in one sequence.
+	valueGenerationTracer *valuegenerationtracer.ValueGenerationTracer
+
 	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
 	// to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
 	testingBaseBlockNumber uint64
@@ -43,9 +47,6 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
-
-	// methodChooser uses a weighted selection algorithm to choose a method to call, prioritizing state changing methods over pure ones.
-	methodChooser *randomutils.WeightedRandomChooser[fuzzerTypes.DeployedContractMethod]
 
 	// randomProvider provides random data as inputs to decisions throughout the worker.
 	randomProvider *rand.Rand
@@ -94,7 +95,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
-		methodChooser:        randomutils.NewWeightedRandomChooser[fuzzerTypes.DeployedContractMethod](),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -242,13 +242,13 @@ func (fw *FuzzerWorker) updateMethods() {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
-			// We favor calling state changing methods over view/pure methods.
 			if method.IsConstant() {
-				fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(1)))
+				// Only track the pure/view method if testing view methods is enabled
+				if fw.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+					fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+				}
 			} else {
 				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(100)))
 			}
 		}
 	}
@@ -260,11 +260,20 @@ func (fw *FuzzerWorker) updateMethods() {
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+	// Copy the existing value set if experimental value generation is enabled
+	var originalValueSet *valuegeneration.ValueSet
+	if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+		originalValueSet = fw.valueSet.Clone()
+	}
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
 		if err == nil {
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+		}
+		// Reset the value set if experimental value generation is enabled
+		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+			fw.valueSet = originalValueSet
 		}
 	}()
 
@@ -292,6 +301,16 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return true, err
+		}
+
+		// Add event and return values to the value set if experimental value generation is enabled
+		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+
+			if values, ok := lastExecutedSequenceElement.ChainReference.MessageResults().AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+				fw.valueSet.Add(values)
+			}
+
 		}
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
@@ -556,6 +575,13 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer.NativeTracer(), true, false)
+		}
+
+		// If we enabled experimental value generation, create a tracer to collect interesting values during EVM
+		// execution and connect it to the chain
+		if fw.fuzzer.config.Fuzzing.Testing.ExperimentalValueGenerationEnabled {
+			fw.valueGenerationTracer = valuegenerationtracer.NewValueGenerationTracer(fw.fuzzer.contractDefinitions)
+			initializedChain.AddTracer(fw.valueGenerationTracer.NativeTracer(), true, false)
 		}
 		return nil
 	})

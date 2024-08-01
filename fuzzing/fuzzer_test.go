@@ -936,3 +936,83 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 			}
 		}})
 }
+
+// TestExperimentalValueGeneration runs tests to ensure whether interesting values collected
+// during EVM execution is added to the base value set. In addition, it makes sure that the base value set is reset to
+// default after the end of each call sequence execution
+func TestExperimentalValueGeneration(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/valuegeneration_tracing/event_and_return_value_emission.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 500
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Workers = 1
+				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				valueSet := f.fuzzer.baseValueSet
+				expectedInts := []int{1, 2, 3, 4}
+				expectedStrings := []string{"another string", "string"}
+				expectedAddresses := []common.Address{common.HexToAddress("0x1234"), common.HexToAddress("0x5678")}
+				expectedByteArrays := [][]byte{[]byte("another byte array"), []byte("byte array"), []byte("word"), []byte("byte")}
+
+				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
+					// Wipe constants that were retrieved from AST so that we can test the capturing of values
+					event.Worker.valueSet = valuegeneration.NewValueSet()
+					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
+						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
+							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
+								var contains bool
+
+								for _, intValue := range expectedInts {
+									contains = valueSet.ContainsInteger(big.NewInt(int64(intValue)))
+								}
+
+								for _, stringValue := range expectedStrings {
+									contains = valueSet.ContainsString(stringValue)
+								}
+
+								for _, addressValue := range expectedAddresses {
+									contains = valueSet.ContainsAddress(addressValue)
+								}
+
+								for _, byteArrayValue := range expectedByteArrays {
+									contains = valueSet.ContainsBytes(byteArrayValue)
+								}
+
+								assert.True(t, contains)
+							}
+							// just check if these values are added to value set
+							//msgResult[event.TransactionIndex].AdditionalResults
+							// make sure to use CallSequenceTested event to see if the base value set
+							// is reset at the end of each sequence
+							//fmt.Printf("MsgResult: %v\n", msgResult[event.TransactionIndex].AdditionalResults)
+							return nil
+						})
+						// This will make sure that the base value set is reset after the end of execution of each
+						// call sequence
+						event.Worker.Events.CallSequenceTested.Subscribe(func(event FuzzerWorkerCallSequenceTestedEvent) error {
+							sequenceValueSet := f.fuzzer.baseValueSet
+							assert.EqualValues(t, valueSet, sequenceValueSet)
+							return nil
+						})
+						return nil
+					})
+					return nil
+				})
+				err := f.fuzzer.Start()
+
+				assert.NoError(t, err)
+
+			},
+		})
+	}
+}

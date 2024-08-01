@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"math/big"
 	"sync"
 
 	"github.com/crytic/medusa/compilation/abiutils"
@@ -212,6 +213,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// Update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
+				worker.workerMetrics().failedSequences.Add(worker.workerMetrics().failedSequences, big.NewInt(1))
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil
 			},

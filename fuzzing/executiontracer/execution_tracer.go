@@ -1,11 +1,11 @@
 package executiontracer
 
 import (
+	"github.com/crytic/medusa/utils"
 	"math/big"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
