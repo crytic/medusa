@@ -15,27 +15,28 @@ var _ = (*fuzzingConfigMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	type FuzzingConfig struct {
-		Workers                   int                       `json:"workers"`
-		WorkerResetLimit          int                       `json:"workerResetLimit"`
-		Timeout                   int                       `json:"timeout"`
-		TestLimit                 uint64                    `json:"testLimit"`
-		ShrinkLimit               uint64                    `json:"shrinkLimit"`
-		CallSequenceLength        int                       `json:"callSequenceLength"`
-		CorpusDirectory           string                    `json:"corpusDirectory"`
-		CoverageEnabled           bool                      `json:"coverageEnabled"`
-		JSONCoverageReportEnabled bool                      `json:"jsonCoverageReportEnabled"`
-		TargetContracts           []string                  `json:"targetContracts"`
-		PredeployedContracts      map[string]string         `json:"predeployedContracts"`
-		TargetContractsBalances   []*hexutil.Big            `json:"targetContractsBalances"`
-		ConstructorArgs           map[string]map[string]any `json:"constructorArgs"`
-		DeployerAddress           string                    `json:"deployerAddress"`
-		SenderAddresses           []string                  `json:"senderAddresses"`
-		MaxBlockNumberDelay       uint64                    `json:"blockNumberDelayMax"`
-		MaxBlockTimestampDelay    uint64                    `json:"blockTimestampDelayMax"`
-		BlockGasLimit             uint64                    `json:"blockGasLimit"`
-		TransactionGasLimit       uint64                    `json:"transactionGasLimit"`
-		Testing                   TestingConfig             `json:"testing"`
-		TestChainConfig           config.TestChainConfig    `json:"chainConfig"`
+		Workers                 int                       `json:"workers"`
+		WorkerResetLimit        int                       `json:"workerResetLimit"`
+		Timeout                 int                       `json:"timeout"`
+		TestLimit               uint64                    `json:"testLimit"`
+		ShrinkLimit             uint64                    `json:"shrinkLimit"`
+		CallSequenceLength      int                       `json:"callSequenceLength"`
+		CorpusDirectory         string                    `json:"corpusDirectory"`
+		CoverageEnabled         bool                      `json:"coverageEnabled"`
+		HtmlReportFile          string                    `json:"htmlReportPath"`
+		JsonReportFile          string                    `json:"jsonReportPath"`
+		TargetContracts         []string                  `json:"targetContracts"`
+		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
+		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
+		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
+		DeployerAddress         string                    `json:"deployerAddress"`
+		SenderAddresses         []string                  `json:"senderAddresses"`
+		MaxBlockNumberDelay     uint64                    `json:"blockNumberDelayMax"`
+		MaxBlockTimestampDelay  uint64                    `json:"blockTimestampDelayMax"`
+		BlockGasLimit           uint64                    `json:"blockGasLimit"`
+		TransactionGasLimit     uint64                    `json:"transactionGasLimit"`
+		Testing                 TestingConfig             `json:"testing"`
+		TestChainConfig         config.TestChainConfig    `json:"chainConfig"`
 	}
 	var enc FuzzingConfig
 	enc.Workers = f.Workers
@@ -46,7 +47,8 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CallSequenceLength = f.CallSequenceLength
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
-	enc.JSONCoverageReportEnabled = f.JSONCoverageReportEnabled
+	enc.HtmlReportFile = f.HtmlReportFile
+	enc.JsonReportFile = f.JsonReportFile
 	enc.TargetContracts = f.TargetContracts
 	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
@@ -70,27 +72,28 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	type FuzzingConfig struct {
-		Workers                   *int                      `json:"workers"`
-		WorkerResetLimit          *int                      `json:"workerResetLimit"`
-		Timeout                   *int                      `json:"timeout"`
-		TestLimit                 *uint64                   `json:"testLimit"`
-		ShrinkLimit               *uint64                   `json:"shrinkLimit"`
-		CallSequenceLength        *int                      `json:"callSequenceLength"`
-		CorpusDirectory           *string                   `json:"corpusDirectory"`
-		CoverageEnabled           *bool                     `json:"coverageEnabled"`
-		JSONCoverageReportEnabled *bool                     `json:"jsonCoverageReportEnabled"`
-		TargetContracts           []string                  `json:"targetContracts"`
-		PredeployedContracts      map[string]string         `json:"predeployedContracts"`
-		TargetContractsBalances   []*hexutil.Big            `json:"targetContractsBalances"`
-		ConstructorArgs           map[string]map[string]any `json:"constructorArgs"`
-		DeployerAddress           *string                   `json:"deployerAddress"`
-		SenderAddresses           []string                  `json:"senderAddresses"`
-		MaxBlockNumberDelay       *uint64                   `json:"blockNumberDelayMax"`
-		MaxBlockTimestampDelay    *uint64                   `json:"blockTimestampDelayMax"`
-		BlockGasLimit             *uint64                   `json:"blockGasLimit"`
-		TransactionGasLimit       *uint64                   `json:"transactionGasLimit"`
-		Testing                   *TestingConfig            `json:"testing"`
-		TestChainConfig           *config.TestChainConfig   `json:"chainConfig"`
+		Workers                 *int                      `json:"workers"`
+		WorkerResetLimit        *int                      `json:"workerResetLimit"`
+		Timeout                 *int                      `json:"timeout"`
+		TestLimit               *uint64                   `json:"testLimit"`
+		ShrinkLimit             *uint64                   `json:"shrinkLimit"`
+		CallSequenceLength      *int                      `json:"callSequenceLength"`
+		CorpusDirectory         *string                   `json:"corpusDirectory"`
+		CoverageEnabled         *bool                     `json:"coverageEnabled"`
+		HtmlReportFile          *string                   `json:"htmlReportPath"`
+		JsonReportFile          *string                   `json:"jsonReportPath"`
+		TargetContracts         []string                  `json:"targetContracts"`
+		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
+		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
+		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
+		DeployerAddress         *string                   `json:"deployerAddress"`
+		SenderAddresses         []string                  `json:"senderAddresses"`
+		MaxBlockNumberDelay     *uint64                   `json:"blockNumberDelayMax"`
+		MaxBlockTimestampDelay  *uint64                   `json:"blockTimestampDelayMax"`
+		BlockGasLimit           *uint64                   `json:"blockGasLimit"`
+		TransactionGasLimit     *uint64                   `json:"transactionGasLimit"`
+		Testing                 *TestingConfig            `json:"testing"`
+		TestChainConfig         *config.TestChainConfig   `json:"chainConfig"`
 	}
 	var dec FuzzingConfig
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -120,8 +123,11 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	if dec.CoverageEnabled != nil {
 		f.CoverageEnabled = *dec.CoverageEnabled
 	}
-	if dec.JSONCoverageReportEnabled != nil {
-		f.JSONCoverageReportEnabled = *dec.JSONCoverageReportEnabled
+	if dec.HtmlReportFile != nil {
+		f.HtmlReportFile = *dec.HtmlReportFile
+	}
+	if dec.JsonReportFile != nil {
+		f.JsonReportFile = *dec.JsonReportFile
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts

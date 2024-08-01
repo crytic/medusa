@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -274,16 +275,27 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
-	// Verify we have state changing methods to call if we are not testing view/pure methods.
-	if len(g.worker.stateChangingMethods) == 0 && !g.worker.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
-	}
-	// Select a random method and sender
-	selectedMethod, err := g.worker.methodChooser.Choose()
-	if err != nil {
-		return nil, err
+	// Check to make sure that we have any functions to call
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) == 0 {
+		return nil, fmt.Errorf("cannot generate fuzzed call as there are no methods to call")
 	}
 
+	// Only call view functions if there are no state-changing methods
+	var callOnlyPureFunctions bool
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) > 0 {
+		callOnlyPureFunctions = true
+	}
+
+	// Select a random method
+	// There is a 1/100 chance that a pure method will be invoked or if there are only pure functions that are callable
+	var selectedMethod *contracts.DeployedContractMethod
+	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0) || callOnlyPureFunctions {
+		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
+	} else {
+		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	}
+
+	// Select a random sender
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call

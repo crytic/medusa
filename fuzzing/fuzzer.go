@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
@@ -463,7 +464,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				}
 
 				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage(), nil)
+				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
 				if err != nil {
 					return nil, err
 				}
@@ -849,6 +850,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		// Obtain our metrics
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
+		failedSequences := f.metrics.FailedSequences()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 		workersShrinking := f.metrics.WorkersShrinkingCount()
 
@@ -868,8 +870,9 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
+		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
-			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		}
