@@ -138,6 +138,13 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 		),
 		randomutils.NewWeightedRandomChoice(
 			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncDuplicateAtRandom,
+				PrefetchModifyCallFunc:    nil,
+			},
+			new(big.Int).SetUint64(config.RandomUnmodifiedCorpusTailWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
 				CallSequenceGeneratorFunc: callSeqGenFuncSpliceAtRandom,
 				PrefetchModifyCallFunc:    nil,
 			},
@@ -365,6 +372,20 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	targetLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	copy(sequence[len(sequence)-targetLength:], corpusSequence[len(corpusSequence)-targetLength:])
 
+	return nil
+}
+
+// callSeqGenFuncDuplicateAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a sequence
+// which duplicates a call sequence element at index N and inserts it at N+1
+// if random index is len(sequence)-1, it inserts the duplicated call sequence element at N-1
+func callSeqGenFuncDuplicateAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	randIndex := sequenceGenerator.worker.randomProvider.Intn(len(sequence))
+	duplicatedElement := sequence[randIndex]
+	if randIndex == len(sequence)-1 {
+		sequence[randIndex-1] = duplicatedElement
+	} else {
+		sequence[randIndex+1] = duplicatedElement
+	}
 	return nil
 }
 
