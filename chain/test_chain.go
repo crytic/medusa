@@ -9,7 +9,6 @@ import (
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/holiman/uint256"
@@ -256,7 +255,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		// Now add each transaction/message to it.
 		messages := t.blocks[i].Messages
 		for j := 0; j < len(messages); j++ {
-			err = targetChain.PendingBlockAddTx(messages[j], nil)
+			err = targetChain.PendingBlockAddTx(messages[j])
 			if err != nil {
 				return nil, err
 			}
@@ -728,15 +727,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns an error if one occurred.
-func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(txIndex int, txHash common.Hash) *tracers.Tracer) error {
-	// Caller can specify any tracer they wish to use for this transaction
-	if getTracerFn == nil {
-		// TODO: Figure out whether it is possible to identify _which_ transaction you want to trace (versus all)
-		getTracerFn = func(txIndex int, txHash common.Hash) *tracers.Tracer {
-			return t.transactionTracerRouter.NativeTracer().Tracer
-		}
-	}
-
+func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers ...*TestChainTracer) error {
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
@@ -757,11 +748,19 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, getTracerFn func(tx
 		ConfigExtensions: t.vmConfigExtensions,
 	}
 
-	// Set the tracer to be used in the vm config
-	tracer := getTracerFn(len(t.pendingBlock.Messages), tx.Hash())
-	if tracer != nil {
-		vmConfig.Tracer = tracer.Hooks
+	// Figure out whether we need to attach any more tracers
+	var extendedTracerRouter *TestChainTracerRouter
+	if len(additionalTracers) > 0 {
+		// If we have more tracers, extend the transaction tracer router's tracers with additional ones
+		extendedTracerRouter = NewTestChainTracerRouter()
+		extendedTracerRouter.AddTracer(t.transactionTracerRouter.NativeTracer())
+		extendedTracerRouter.AddTracers(additionalTracers...)
+	} else {
+		extendedTracerRouter = t.transactionTracerRouter
 	}
+
+	// Update the VM's tracer
+	vmConfig.Tracer = extendedTracerRouter.NativeTracer().Tracer.Hooks
 
 	// Set tx context
 	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))

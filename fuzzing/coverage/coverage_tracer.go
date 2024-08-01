@@ -155,7 +155,9 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 
 	// If there is code we're executing, collect coverage.
 	address := scope.Address()
-	code := t.evmContext.StateDB.GetCode(address)
+	// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+	scopeContext := scope.(*vm.ScopeContext)
+	code := scopeContext.Contract.Code
 	codeSize := len(code)
 	if codeSize > 0 {
 
