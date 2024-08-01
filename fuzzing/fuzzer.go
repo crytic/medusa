@@ -571,9 +571,7 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 // shrinking purposes. Returns the value mutator or an error, if one occurs.
 func defaultShrinkingValueMutatorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueMutator, error) {
 	// Create the shrinking value mutator for the worker.
-	shrinkingValueMutatorConfig := &valuegeneration.ShrinkingValueMutatorConfig{
-		ShrinkValueProbability: 0.1,
-	}
+	shrinkingValueMutatorConfig := &valuegeneration.ShrinkingValueMutatorConfig{}
 	shrinkingValueMutator := valuegeneration.NewShrinkingValueMutator(shrinkingValueMutatorConfig, valueSet, randomProvider)
 	return shrinkingValueMutator, nil
 }

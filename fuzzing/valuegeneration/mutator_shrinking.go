@@ -22,9 +22,6 @@ type ShrinkingValueMutator struct {
 
 // ShrinkingValueMutatorConfig defines the operating parameters for a ShrinkingValueMutator.
 type ShrinkingValueMutatorConfig struct {
-	// ShrinkValueProbability is the probability that any shrinkable value will be shrunk/mutated when a mutation
-	// method is invoked.
-	ShrinkValueProbability float32
 }
 
 // NewShrinkingValueMutator creates a new ShrinkingValueMutator using a ValueSet to seed base-values for mutation.
@@ -93,13 +90,9 @@ var bytesShrinkingMethods = []func(*ShrinkingValueMutator, []byte) []byte{
 
 // MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
 func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.ShrinkValueProbability {
-		// Mutate the data for our desired number of rounds
-		input := bytesShrinkingMethods[g.randomProvider.Intn(len(bytesShrinkingMethods))](g, b)
-		return input
-	}
-	return b
+	// Mutate the data for our desired number of rounds
+	input := bytesShrinkingMethods[g.randomProvider.Intn(len(bytesShrinkingMethods))](g, b)
+	return input
 }
 
 // integerShrinkingMethods define methods which take a big integer and a set of inputs and
@@ -126,34 +119,30 @@ var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.I
 // MutateInteger takes an integer input and applies optional mutations to the provided value.
 // Returns an optionally mutated copy of the input.
 func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.ShrinkValueProbability {
-		// Calculate our integer bounds
-		min, max := utils.GetIntegerConstraints(signed, bitLength)
+	// Calculate our integer bounds
+	min, max := utils.GetIntegerConstraints(signed, bitLength)
 
-		// Obtain our inputs. We also add our min/max values for this range to the list of inputs.
-		// Note: We exclude min being added if we're requesting an unsigned integer, as zero is already
-		// in our set, and we don't want duplicates.
-		var inputs []*big.Int
-		inputs = append(inputs, g.valueSet.Integers()...)
-		if signed {
-			inputs = append(inputs, min, max)
-		} else {
-			inputs = append(inputs, max)
-		}
-
-		// Set the input and ensure it is constrained to the value boundaries
-		input := new(big.Int).Set(i)
-		input = utils.ConstrainIntegerToBounds(input, min, max)
-
-		// Shrink input
-		input = integerShrinkingMethods[g.randomProvider.Intn(len(integerShrinkingMethods))](g, input, inputs...)
-
-		// Correct value boundaries (underflow/overflow)
-		input = utils.ConstrainIntegerToBounds(input, min, max)
-		return input
+	// Obtain our inputs. We also add our min/max values for this range to the list of inputs.
+	// Note: We exclude min being added if we're requesting an unsigned integer, as zero is already
+	// in our set, and we don't want duplicates.
+	var inputs []*big.Int
+	inputs = append(inputs, g.valueSet.Integers()...)
+	if signed {
+		inputs = append(inputs, min, max)
+	} else {
+		inputs = append(inputs, max)
 	}
-	return i
+
+	// Set the input and ensure it is constrained to the value boundaries
+	input := new(big.Int).Set(i)
+	input = utils.ConstrainIntegerToBounds(input, min, max)
+
+	// Shrink input
+	input = integerShrinkingMethods[g.randomProvider.Intn(len(integerShrinkingMethods))](g, input, inputs...)
+
+	// Correct value boundaries (underflow/overflow)
+	input = utils.ConstrainIntegerToBounds(input, min, max)
+	return input
 }
 
 // stringShrinkingMethods define methods which take an initial string and a set of inputs to transform the input. The
@@ -186,10 +175,6 @@ var stringShrinkingMethods = []func(*ShrinkingValueMutator, string) string{
 
 // MutateString takes a string input and returns a mutated value based off the input.
 func (g *ShrinkingValueMutator) MutateString(s string) string {
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.ShrinkValueProbability {
-		input := stringShrinkingMethods[g.randomProvider.Intn(len(stringShrinkingMethods))](g, s)
-		return input
-	}
-	return s
+	input := stringShrinkingMethods[g.randomProvider.Intn(len(stringShrinkingMethods))](g, s)
+	return input
 }
