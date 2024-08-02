@@ -105,6 +105,11 @@ func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 	return c.coverageMaps
 }
 
+// UnexecutedCallSequences returns the list of call sequences that have not been executed yet.
+func (c *Corpus) UnexecutedCallSequences() []calls.CallSequence {
+	return c.unexecutedCallSequences
+}
+
 // CallSequenceEntryCount returns the total number of call sequences entries in the corpus, based on the provided filter
 // flags. Some call sequences may not be valid for use if they fail validation when initializing the corpus.
 // Returns the count of the requested call sequence entries.
