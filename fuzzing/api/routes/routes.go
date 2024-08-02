@@ -6,6 +6,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func attachWebsocketRoutes(router *mux.Router, fuzzer *fuzzing.Fuzzer) {
+	router.HandleFunc("/ws/env", handlers.WebsocketGetEnvHandler(fuzzer)).Methods("GET")
+	router.HandleFunc("/ws/fuzzing", handlers.WebsocketGetFuzzingInfoHandler(fuzzer)).Methods("GET")
+	router.HandleFunc("/ws/logs", handlers.WebsocketGetLogsHandler(fuzzer)).Methods("GET")
+	router.HandleFunc("/ws/coverage", handlers.WebsocketGetCoverageInfoHandler(fuzzer)).Methods("GET")
+	router.HandleFunc("/ws/corpus", handlers.WebsocketGetCorpusHandler(fuzzer)).Methods("GET")
+	router.HandleFunc("/ws", handlers.WebsocketHandler(fuzzer)).Methods("GET")
+}
+
 func attachEnvRoutes(router *mux.Router, fuzzer *fuzzing.Fuzzer) {
 	router.HandleFunc("/env", handlers.GetEnvHandler(fuzzer)).Methods("GET")
 }
@@ -28,6 +37,7 @@ func attachCorpusRoutes(router *mux.Router, fuzzer *fuzzing.Fuzzer) {
 
 func AttachRoutes(router *mux.Router, fuzzer *fuzzing.Fuzzer) {
 	// Register routes
+	attachWebsocketRoutes(router, fuzzer)
 	attachEnvRoutes(router, fuzzer)
 	attachFuzzingRoutes(router, fuzzer)
 	attachLogsRoutes(router, fuzzer)
