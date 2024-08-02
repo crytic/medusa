@@ -29,6 +29,9 @@ type CompiledContract struct {
 
 	// SrcMapsRuntime describes the source mappings to associate source file and bytecode segments in RuntimeBytecode.
 	SrcMapsRuntime string
+
+	// Kind describes the kind of contract, i.e. contract, library, interface.
+	Kind ContractKind
 }
 
 // IsMatch returns a boolean indicating whether provided contract bytecode is a match to this compiled contract

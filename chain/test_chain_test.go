@@ -215,7 +215,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -223,7 +223,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		// Deploy each contract that has no construct arguments.
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -329,7 +329,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -346,7 +346,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		// Deploy each contract
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for contractName, contract := range source.Contracts {
 					contract := contract
 
@@ -467,7 +467,7 @@ func TestChainCloning(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -563,7 +563,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
