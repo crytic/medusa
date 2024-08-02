@@ -14,7 +14,7 @@ type fuzzerWorkerMetrics struct {
 	// sequencesTested describes the amount of sequences of transactions which tests were run against.
 	sequencesTested *big.Int
 
-	//failedSequences describes the amount of sequences of transactions which tests failed.
+	// failedSequences describes the amount of sequences of transactions which tests failed.
 	failedSequences *big.Int
 
 	// callsTested describes the amount of transactions/calls the fuzzer executed and ran tests against.
@@ -43,6 +43,7 @@ func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	return &metrics
 }
 
+// FailedSequences returns the number of sequences that led to failures across all workers
 func (m *FuzzerMetrics) FailedSequences() *big.Int {
 	failedSequences := big.NewInt(0)
 	for _, workerMetrics := range m.workerMetrics {
