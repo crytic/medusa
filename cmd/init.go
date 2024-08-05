@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/crytic/medusa/logging/colors"
 	"os"
@@ -134,6 +135,22 @@ func cmdRunInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		cmdLogger.Error("Failed to run the init command", err)
 		return err
+	}
+
+	// Add warning and prompt for confirmation
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Warning: This will overwrite the existing project configuration file. Do you want to continue? (yes/no)")
+
+	userInput, err := reader.ReadString('\n')
+	if err != nil {
+		cmdLogger.Error("Failed to read user input", err)
+		return err
+	}
+
+	userInput = strings.TrimSpace(strings.ToLower(userInput))
+	if userInput != "yes" {
+		cmdLogger.Info("Operation cancelled by the user.")
+		return nil
 	}
 
 	// Write our project configuration
