@@ -31,7 +31,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	return corpus, nil
 }
 
-// getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
+// getMockCallSequence creates a mock CorpusCallSequence with numBlocks blocks for testing
 func getMockCallSequence(size int) calls.CallSequence {
 	cs := make(calls.CallSequence, size)
 	for i := 0; i < size; i++ {
@@ -40,7 +40,7 @@ func getMockCallSequence(size int) calls.CallSequence {
 	return cs
 }
 
-// getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
+// getMockCallSequenceElement creates a mock CorpusBlock with numTransactions transactions and receipts for testing
 func getMockCallSequenceElement() *calls.CallSequenceElement {
 	return &calls.CallSequenceElement{
 		Contract:            nil,

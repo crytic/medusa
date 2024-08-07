@@ -169,7 +169,7 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 	return ExecuteCallSequenceIteratively(chain, fetchElementFunc, nil)
 }
 
-// ExecuteCallSequenceWithTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
+// ExecuteCallSequenceWithExecutionTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
 func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
 	// Create a new execution tracer
 	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
