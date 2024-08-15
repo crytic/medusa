@@ -38,7 +38,7 @@ contract TestXY {
 
 To begin a fuzzing campaign in property-mode, you can run `medusa fuzz` or `medusa fuzz --config [config_path]`.
 
-> **Note**: Learn more about running `medusa` with its CLI [here](./Command-Line-Interface.md).
+> **Note**: Learn more about running `medusa` with its CLI [here](../cli/overview.md).
 
 Invoking this fuzzing campaign, `medusa` will:
 
@@ -59,7 +59,7 @@ Test "TestXY.fuzz_never_specific_values()" failed after the following call seque
 
 ## Writing assertion tests
 
-Although both property-mode and assertion-mode try to validate / invalidate invariants of the system, they do so in different ways. In property-mode, `medusa` will look for functions with a specific test prefix (e.g. `fuzz_`) and test those. In assertion-mode, `medusa` will test to see if a given call sequence can cause the Ethereum Virtual Machine (EVM) to "panic". The EVM has a variety of panic codes for different scenarios. For example, there is a unique panic code when an `assert(x)` statement returns `false` or when a division by zero is encountered. In assertion mode, which panics should or should not be treated as "failing test cases" can be toggled by updating the [Project Configuration](./Project-Configuration.md#fuzzing-configuration). By default, only `FailOnAssertion` is enabled. Check out the [Example Project Configuration File](https://github.com/crytic/medusa/wiki/Example-Project-Configuration-File) for a visualization of the various panic codes that can be enabled. An explanation of the various panic codes can be found in the [Solidity documentation](https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require).
+Although both property-mode and assertion-mode try to validate / invalidate invariants of the system, they do so in different ways. In property-mode, `medusa` will look for functions with a specific test prefix (e.g. `fuzz_`) and test those. In assertion-mode, `medusa` will test to see if a given call sequence can cause the Ethereum Virtual Machine (EVM) to "panic". The EVM has a variety of panic codes for different scenarios. For example, there is a unique panic code when an `assert(x)` statement returns `false` or when a division by zero is encountered. In assertion mode, which panics should or should not be treated as "failing test cases" can be toggled by updating the [Project Configuration](../project_configuration/fuzzing_config.md#fuzzing-configuration). By default, only `FailOnAssertion` is enabled. Check out the [Example Project Configuration File](https://github.com/crytic/medusa/wiki/Example-Project-Configuration-File) for a visualization of the various panic codes that can be enabled. An explanation of the various panic codes can be found in the [Solidity documentation](https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require).
 
 Please note that the behavior of assertion mode is different between `medusa` and Echidna. Echidna will only test for `assert(x)` statements while `medusa` provides additional flexibility.
 
@@ -83,7 +83,7 @@ During a call sequence, if `setX` is called with a `value` that breaks the asser
 
 To begin a fuzzing campaign in assertion-mode, you can run `medusa fuzz --assertion-mode` or `medusa fuzz --config [config_path] --assertion-mode`.
 
-> **Note**: Learn more about running `medusa` with its CLI [here](./Command-Line-Interface.md).
+> **Note**: Learn more about running `medusa` with its CLI [here](../cli/overview.md).
 
 Invoking this fuzzing campaign, `medusa` will:
 
@@ -127,7 +127,7 @@ contract TestContract {
 
 To begin a fuzzing campaign in optimization-mode, you can run `medusa fuzz --optimization-mode` or `medusa fuzz --config [config_path] --optimization-mode`.
 
-> **Note**: Learn more about running `medusa` with its CLI [here](./Command-Line-Interface.md).
+> **Note**: Learn more about running `medusa` with its CLI [here](../cli/overview.md).
 
 Invoking this fuzzing campaign, `medusa` will:
 
@@ -149,7 +149,7 @@ Optimization test "TestContract.optimize_opt_linear()" resulted in the maximum v
 
 ## Testing with multiple modes
 
-Note that we can run `medusa` with one, many, or no modes enabled. Running `medusa fuzz --assertion-mode --optimization-mode` will run all three modes at the same time, since property-mode is enabled by default. If a project configuration file is used, any combination of the three modes can be toggled. In fact, all three modes can be disabled and `medusa` will still run. Please review the [Project Configuration](./Project-Configuration.md) wiki page and the [Project Configuration Example](/Example-Project-Configuration-File.md) for more information.
+Note that we can run `medusa` with one, many, or no modes enabled. Running `medusa fuzz --assertion-mode --optimization-mode` will run all three modes at the same time, since property-mode is enabled by default. If a project configuration file is used, any combination of the three modes can be toggled. In fact, all three modes can be disabled and `medusa` will still run. Please review the [Project Configuration](https://github.com/crytic/medusa/wiki/Project-Configuration) wiki page and the [Project Configuration Example](https://github.com/crytic/medusa/wiki/Example-Project-Configuration-File) for more information.
 
 ```solidity
 contract TestContract {

@@ -1,22 +1,23 @@
 package platforms
 
 import (
-	"github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/utils"
-	"github.com/crytic/medusa/utils/testutils"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/testutils"
+	"github.com/stretchr/testify/assert"
 )
 
 // testCryticGetCompiledSourceByBaseName checks if a given source file exists in a given compilation's map of sources.
 // The source file is the file name of a specific file. This function simply checks one of the paths ends with
 // this name. Avoid including any directories in case the path separators differ per system.
 // Returns the types.CompiledSource (mapping value) associated to the path if it is found. Returns nil otherwise.
-func testCryticGetCompiledSourceByBaseName(sources map[string]types.CompiledSource, name string) *types.CompiledSource {
+func testCryticGetCompiledSourceByBaseName(sources map[string]types.SourceArtifact, name string) *types.SourceArtifact {
 	// Obtain a lower case version of our name to search for
 	lowerName := strings.ToLower(name)
 
@@ -53,10 +54,10 @@ func TestCryticSingleFileAbsolutePath(t *testing.T) {
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 		// Two contracts in SimpleContract.sol
 		contractCount := 0
-		for _, source := range compilations[0].Sources {
+		for _, source := range compilations[0].SourcePathToArtifact {
 			contractCount += len(source.Contracts)
 		}
 		assert.EqualValues(t, 2, contractCount)
@@ -82,10 +83,10 @@ func TestCryticSingleFileRelativePathSameDirectory(t *testing.T) {
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 		// Two contracts in SimpleContract.sol
 		contractCount := 0
-		for _, source := range compilations[0].Sources {
+		for _, source := range compilations[0].SourcePathToArtifact {
 			contractCount += len(source.Contracts)
 		}
 		assert.EqualValues(t, 2, contractCount)
@@ -118,10 +119,10 @@ func TestCryticSingleFileRelativePathChildDirectory(t *testing.T) {
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 		// Two contracts in SimpleContract.sol
 		contractCount := 0
-		for _, source := range compilations[0].Sources {
+		for _, source := range compilations[0].SourcePathToArtifact {
 			contractCount += len(source.Contracts)
 		}
 		assert.EqualValues(t, 2, contractCount)
@@ -160,9 +161,9 @@ func TestCryticSingleFileBuildDirectoryArgRelativePath(t *testing.T) {
 		// One compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// One source because we specified one file
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 		// Two contracts in SimpleContract.sol.
-		compiledSource := testCryticGetCompiledSourceByBaseName(compilations[0].Sources, contractName)
+		compiledSource := testCryticGetCompiledSourceByBaseName(compilations[0].SourcePathToArtifact, contractName)
 		assert.NotNil(t, compiledSource, "source file could not be resolved in compilation sources")
 		assert.EqualValues(t, 2, len(compiledSource.Contracts))
 	})
@@ -215,11 +216,11 @@ func TestCryticMultipleFiles(t *testing.T) {
 		// Verify there is one compilation object
 		assert.EqualValues(t, 1, len(compilations))
 		// Verify there are two sources
-		assert.EqualValues(t, 2, len(compilations[0].Sources))
+		assert.EqualValues(t, 2, len(compilations[0].SourcePathToArtifact))
 
 		// Verify there are three contracts
 		contractCount := 0
-		for _, source := range compilations[0].Sources {
+		for _, source := range compilations[0].SourcePathToArtifact {
 			contractCount += len(source.Contracts)
 		}
 		assert.EqualValues(t, 3, contractCount)
@@ -247,16 +248,16 @@ func TestCryticDirectoryNoArgs(t *testing.T) {
 		// Two compilation objects
 		assert.EqualValues(t, 2, len(compilations))
 		// One source per compilation unit
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
-		assert.EqualValues(t, 1, len(compilations[1].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
+		assert.EqualValues(t, 1, len(compilations[1].SourcePathToArtifact))
 
 		// Obtain the compiled source from both compilation units
 		firstContractName := "FirstContract.sol"
 		secondContractName := "SecondContract.sol"
-		firstUnitFirstContractSource := testCryticGetCompiledSourceByBaseName(compilations[0].Sources, firstContractName)
-		firstUnitSecondContractSource := testCryticGetCompiledSourceByBaseName(compilations[0].Sources, secondContractName)
-		secondUnitFirstContractSource := testCryticGetCompiledSourceByBaseName(compilations[1].Sources, firstContractName)
-		secondUnitSecondContractSource := testCryticGetCompiledSourceByBaseName(compilations[1].Sources, secondContractName)
+		firstUnitFirstContractSource := testCryticGetCompiledSourceByBaseName(compilations[0].SourcePathToArtifact, firstContractName)
+		firstUnitSecondContractSource := testCryticGetCompiledSourceByBaseName(compilations[0].SourcePathToArtifact, secondContractName)
+		secondUnitFirstContractSource := testCryticGetCompiledSourceByBaseName(compilations[1].SourcePathToArtifact, firstContractName)
+		secondUnitSecondContractSource := testCryticGetCompiledSourceByBaseName(compilations[1].SourcePathToArtifact, secondContractName)
 
 		// Assert that each compilation unit should have two contracts in it.
 		// Compilation unit ordering is non-deterministic in JSON output

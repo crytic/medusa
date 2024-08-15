@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -37,7 +38,7 @@ func TestFuzzerHooks(t *testing.T) {
 				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
-			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
@@ -250,7 +251,10 @@ func TestCheatCodes(t *testing.T) {
 
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
@@ -388,6 +392,29 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestDeploymentsWithPredeploy runs a test to ensure that predeployed contracts are instantiated correctly.
+func TestDeploymentsWithPredeploy(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, true)
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
@@ -866,4 +893,46 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.False(t, originalCoverage.Equal(newCoverage))
 		},
 	})
+}
+
+// TestTargetingFuncSignatures tests whether functions will be correctly whitelisted for testing
+func TestTargetingFuncSignatures(t *testing.T) {
+	targets := []string{"TestContract.f(), TestContract.g()"}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/filtering/target_and_exclude.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.TargetFunctionSignatures = targets
+		},
+		method: func(f *fuzzerTestContext) {
+			for _, contract := range f.fuzzer.ContractDefinitions() {
+				// The targets should be the only functions tested, excluding h and i
+				reflect.DeepEqual(contract.AssertionTestMethods, targets)
+
+				// ALL properties and optimizations should be tested
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
+			}
+		}})
+}
+
+// TestExcludeFunctionSignatures tests whether functions will be blacklisted/excluded for testing
+func TestExcludeFunctionSignatures(t *testing.T) {
+	excluded := []string{"TestContract.f(), TestContract.g()"}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/filtering/target_and_exclude.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.ExcludeFunctionSignatures = excluded
+		},
+		method: func(f *fuzzerTestContext) {
+			for _, contract := range f.fuzzer.ContractDefinitions() {
+				// Only h and i should be test since f and g are excluded
+				reflect.DeepEqual(contract.AssertionTestMethods, []string{"TestContract.h()", "TestContract.i()"})
+
+				// ALL properties and optimizations should be tested
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
+			}
+		}})
 }

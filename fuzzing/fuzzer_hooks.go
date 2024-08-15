@@ -1,8 +1,9 @@
 package fuzzing
 
 import (
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/rand"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -27,7 +28,7 @@ type FuzzerHooks struct {
 	ChainSetupFunc TestChainSetupFunc
 
 	// CallSequenceTestFuncs describes a list of functions to be called upon by a FuzzerWorker after every call
-	// in a call sequence.
+	// in a call sequence. These must not commit to state
 	CallSequenceTestFuncs []CallSequenceTestFunc
 }
 
@@ -43,7 +44,7 @@ type NewCallSequenceGeneratorConfigFunc func(fuzzer *Fuzzer, valueSet *valuegene
 
 // TestChainSetupFunc describes a function which sets up a test chain's initial state prior to fuzzing.
 // An execution trace can also be returned in case of a deployment error for an improved debugging experience
-type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace)
+type TestChainSetupFunc func(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error)
 
 // CallSequenceTestFunc defines a method called after a fuzzing.FuzzerWorker sends another call in a types.CallSequence
 // during a fuzzing campaign. It returns a ShrinkCallSequenceRequest set, which represents a set of requests for
@@ -61,7 +62,7 @@ type ShrinkCallSequenceRequest struct {
 	VerifierFunction func(worker *FuzzerWorker, callSequence calls.CallSequence) (bool, error)
 	// FinishedCallback is a method called upon when the shrink request has concluded. It provides the finalized
 	// shrunken call sequence.
-	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error
+	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error
 	// RecordResultInCorpus indicates whether the shrunken call sequence should be recorded in the corpus. If so, when
 	// the shrinking operation is completed, the sequence will be added to the corpus if it doesn't already exist.
 	RecordResultInCorpus bool
