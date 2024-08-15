@@ -139,6 +139,13 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 		),
 		randomutils.NewWeightedRandomChoice(
 			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: callSeqGenFuncExpansion,
+				PrefetchModifyCallFunc:    nil,
+			},
+			new(big.Int).SetUint64(config.RandomUnmodifiedCorpusTailWeight),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
 				CallSequenceGeneratorFunc: callSeqGenFuncSpliceAtRandom,
 				PrefetchModifyCallFunc:    nil,
 			},
@@ -377,6 +384,29 @@ func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence
 	targetLength := sequenceGenerator.worker.randomProvider.Intn(maxLength) + 1
 	copy(sequence[len(sequence)-targetLength:], corpusSequence[len(corpusSequence)-targetLength:])
 
+	return nil
+}
+
+// callSeqGenFuncExpansion is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is expanded up to 30 times by replicating an existing call sequence element at a random position.
+func callSeqGenFuncExpansion(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
+	rounds := sequenceGenerator.worker.randomProvider.Intn(31)
+
+	// Get item to expand
+	randIndex := sequenceGenerator.worker.randomProvider.Intn(len(sequence))
+	duplicatedElement := sequence[randIndex]
+
+	// Perform N rounds of expansion
+	for i := 0; i < rounds; i++ {
+		randIndex += i
+		if randIndex < len(sequence) {
+			// Insert
+			sequence = append(sequence[:randIndex], append([]*calls.CallSequenceElement{duplicatedElement}, sequence[randIndex:]...)...)
+		} else {
+			// Extend
+			sequence = append(sequence, duplicatedElement)
+		}
+	}
 	return nil
 }
 
