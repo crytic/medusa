@@ -11,7 +11,7 @@ However, it is important to note that medusa does not support all the cheatcodes
 by Foundry (see below for supported cheatcodes).
 
 ```solidity
-interface StdCheats {
+interface IStdCheats {
     // Set block.timestamp
     function warp(uint256) external;
 
