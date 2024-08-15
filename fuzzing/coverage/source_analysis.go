@@ -55,6 +55,36 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 	return count
 }
 
+// GenerateLCOVReport generates an LCOV report from the source analysis.
+// The spec of the format is here https://github.com/linux-test-project/lcov/blob/07a1127c2b4390abf4a516e9763fb28a956a9ce4/man/geninfo.1#L989
+func (s *SourceAnalysis) GenerateLCOVReport() string {
+	var linesHit, linesInstrumented int
+	var buffer bytes.Buffer
+	buffer.WriteString("TN:\n")
+	for _, file := range s.SortedFiles() {
+		// SF:<path to the source file>
+		buffer.WriteString(fmt.Sprintf("SF:%s\n", file.Path))
+		for idx, line := range file.Lines {
+			if line.IsActive {
+				// DA:<line number>,<execution count>
+				if line.IsCovered {
+					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, 1))
+					linesHit++
+				} else {
+					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, 0))
+				}
+				linesInstrumented++
+			}
+		}
+		// LH:<number of lines with a non\-zero execution count>
+		// buffer.WriteString(fmt.Sprintf("LH:%d", linesHit))
+		// LF:<number of instrumented lines>
+		// buffer.WriteString(fmt.Sprintf("LF:%d", linesInstrumented))
+	}
+	buffer.WriteString("end_of_record\n")
+	return buffer.String()
+}
+
 // SourceFileAnalysis describes coverage information for a given source file.
 type SourceFileAnalysis struct {
 	// Path describes the file path of the source file. This is kept here for access during report generation.

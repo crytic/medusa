@@ -409,6 +409,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
 					found = true
 				} else {
+					// TODO list options for the user to choose from
 					return nil, fmt.Errorf("specify target contract(s)")
 				}
 			}
@@ -826,12 +827,13 @@ func (f *Fuzzer) Start() error {
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
-		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		// TODO don't overwrite the coverage report if it already exists and support toggling to LCOV
+		err = coverage.GenerateReports(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
 		if err != nil {
 			f.logger.Error("Failed to generate coverage report", err)
 		} else {
-			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+			f.logger.Info("Coverage report(s) saved to: ", colors.Bold, coverageReportPath, colors.Reset)
 		}
 	}
 
