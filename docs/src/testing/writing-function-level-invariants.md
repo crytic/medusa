@@ -99,6 +99,7 @@ contract TestDepositContract {
     }
 
     // @notice testDeposit tests the DepositContract.deposit function
+    // Assertion Test
     function testDeposit(uint256 _amount) public {
         // Let's bound the input to be _at most_ the ETH balance of this contract
         // The amount value will now in between [0, address(this).balance]
@@ -113,6 +114,24 @@ contract TestDepositContract {
         // Assert post-conditions
         assert(depositContract.balances(address(this)) == preBalance + amount);
         // Add other assertions here
+    }
+
+
+    // @notice property_testDeposit tests the DepositContract.deposit function
+    // Property Test
+    function property_testDeposit(uint256 _amount) public returns(bool) {
+        // Let's bound the input to be _at most_ the ETH balance of this contract
+        // The amount value will now in between [0, address(this).balance]
+        uint256 amount = clampLte(_amount, address(this).balance);
+
+        // Retrieve balance of user before deposit
+        uint256 preBalance = depositContract.balances(address(this));
+
+        // Call the deposit contract with a variable amount
+        depositContract.deposit{value: _amount}();
+
+        // Test post-conditions
+        return depositContract.balances(address(this)) == (preBalance + amount);
     }
 
     // @notice clampLte returns a value between [a, b]
