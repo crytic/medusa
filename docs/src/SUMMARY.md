@@ -28,6 +28,7 @@
 - [Testing Overview](./testing/overview.md)
 - [The Fuzzing Lifecycle](./testing/fuzzing_lifecycle.md)
 - [Types of Invariants](./testing/invariants.md)
+- [Testing Mode with Medusa](./testing/writing-tests.md)
 - [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
 - [Writing System-Level Invariants (WIP)](./testing/writing-system-level-invariants.md)
 - [Coverage Reports (WIP)](./testing/coverage_reports.md)
