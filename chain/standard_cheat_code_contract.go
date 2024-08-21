@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -238,7 +239,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Prank: Sets the msg.sender within the next EVM call scope created by the caller.
+	// prank: Sets the msg.sender within the next EVM call scope created by the caller.
 	contract.addMethod(
 		"prank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
@@ -261,7 +262,60 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// PrankHere: Sets the msg.sender within caller EVM scope until it is exited.
+	// startPrank: Sets the msg.sender within external calls until stopPrank is called
+	contract.addMethod(
+		"startPrank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Obtain the caller frame.
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+
+			// Initialize storage for startPrank
+			_, ok := contract.storage["startPrank"]
+			if !ok {
+				contract.storage["startPrank"] = map[string]any{}
+			}
+
+			// Store new caller address
+			newCallerAddress := inputs[0].(common.Address)
+			contract.storage["startPrank"]["newCallerAddress"] = newCallerAddress
+
+			var nextFrameEnterHook types.GenericHookFunc
+			nextFrameEnterHook = func() {
+				prankCallFrame := tracer.CurrentCallFrame()
+				scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
+
+				// If we don't have a caller address, stopPrank was called and we can stop propagating the hook
+				// If the caller address has changed, there has been a new call to startPrank and we can stop propagating the hook
+				if callerAddress, ok := contract.storage["startPrank"]["newCallerAddress"]; ok && callerAddress == newCallerAddress {
+					// Override the caller address for the current scope
+					scopeContext.Contract.CallerAddress = newCallerAddress
+
+					// Re-attach hook to override caller address for subsequent external calls
+					prankCallFrame.onFrameExitRestoreHooks.Push(func() {
+						currentCallFrame := tracer.PreviousCallFrame()
+						currentCallFrame.onNextFrameEnterHooks.Push(nextFrameEnterHook)
+					})
+				}
+			}
+
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(nextFrameEnterHook)
+
+			return nil, nil
+		},
+	)
+
+	// stopPrank: Resets msg.sender altered by startPrank
+	contract.addMethod(
+		"stopPrank", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Delete new caller address
+			delete(contract.storage["startPrank"], "newCallerAddress")
+
+			return nil, nil
+		},
+	)
+
+	// prankHere: Sets the msg.sender within caller EVM scope until it is exited.
 	contract.addMethod(
 		"prankHere", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {

@@ -3,6 +3,7 @@ package chain
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -27,6 +28,9 @@ type CheatCodeContract struct {
 
 	// abi refers to the cheat code contract's ABI definition.
 	abi abi.ABI
+
+	// storage holds values stored by cheatcodes
+	storage map[string]map[string]any
 }
 
 // cheatCodeMethod defines the method information for a given precompiledContract.
@@ -94,6 +98,7 @@ func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address, name 
 			Fallback:    abi.Method{},
 			Receive:     abi.Method{},
 		},
+		storage: make(map[string]map[string]any),
 	}
 }
 
