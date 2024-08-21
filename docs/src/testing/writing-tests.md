@@ -10,7 +10,7 @@ For more advanced information and documentation on how the various modes work an
 
 ## Writing property tests
 
-Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
+Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`property_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 
 ```solidity
 contract TestXY {
@@ -25,7 +25,7 @@ contract TestXY {
         y = value + 9;
     }
 
-    function fuzz_never_specific_values() public returns (bool) {
+    function property_never_specific_values() public returns (bool) {
         // ASSERTION: x should never be 10 at the same time y is 80
         return !(x == 10 && y == 80);
     }
@@ -51,15 +51,15 @@ Invoking this fuzzing campaign, `medusa` will:
 Upon discovery of a failed property test, `medusa` will halt, reporting the call sequence used to violate any property test(s):
 
 ```
-[FAILED] Property Test: TestXY.fuzz_never_specific_values()
-Test "TestXY.fuzz_never_specific_values()" failed after the following call sequence:
+[FAILED] Property Test: TestXY.property_never_specific_values()
+Test "TestXY.property_never_specific_values()" failed after the following call sequence:
 1) TestXY.setY([71]) (gas=4712388, gasprice=1, value=0, sender=0x2222222222222222222222222222222222222222)
 2) TestXY.setX([7]) (gas=4712388, gasprice=1, value=0, sender=0x3333333333333333333333333333333333333333)
 ```
 
 ## Writing assertion tests
 
-Although both property-mode and assertion-mode try to validate / invalidate invariants of the system, they do so in different ways. In property-mode, `medusa` will look for functions with a specific test prefix (e.g. `fuzz_`) and test those. In assertion-mode, `medusa` will test to see if a given call sequence can cause the Ethereum Virtual Machine (EVM) to "panic". The EVM has a variety of panic codes for different scenarios. For example, there is a unique panic code when an `assert(x)` statement returns `false` or when a division by zero is encountered. In assertion mode, which panics should or should not be treated as "failing test cases" can be toggled by updating the [Project Configuration](../project_configuration/fuzzing_config.md#fuzzing-configuration). By default, only `FailOnAssertion` is enabled. Check out the [Example Project Configuration File](https://github.com/crytic/medusa/wiki/Example-Project-Configuration-File) for a visualization of the various panic codes that can be enabled. An explanation of the various panic codes can be found in the [Solidity documentation](https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require).
+Although both property-mode and assertion-mode try to validate / invalidate invariants of the system, they do so in different ways. In property-mode, `medusa` will look for functions with a specific test prefix (e.g. `property_`) and test those. In assertion-mode, `medusa` will test to see if a given call sequence can cause the Ethereum Virtual Machine (EVM) to "panic". The EVM has a variety of panic codes for different scenarios. For example, there is a unique panic code when an `assert(x)` statement returns `false` or when a division by zero is encountered. In assertion mode, which panics should or should not be treated as "failing test cases" can be toggled by updating the [Project Configuration](../project_configuration/fuzzing_config.md#fuzzing-configuration). By default, only `FailOnAssertion` is enabled. Check out the [Example Project Configuration File](https://github.com/crytic/medusa/wiki/Example-Project-Configuration-File) for a visualization of the various panic codes that can be enabled. An explanation of the various panic codes can be found in the [Solidity documentation](https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require).
 
 Please note that the behavior of assertion mode is different between `medusa` and Echidna. Echidna will only test for `assert(x)` statements while `medusa` provides additional flexibility.
 
@@ -164,7 +164,7 @@ contract TestContract {
         assert(false);
     }
 
-    function fuzz_failing_property() public view returns (bool) {
+    function property_failing_property() public view returns (bool) {
         // ASSERTION: fail immediately.
         return false;
     }
