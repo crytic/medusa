@@ -19,10 +19,12 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		WorkerResetLimit        int                       `json:"workerResetLimit"`
 		Timeout                 int                       `json:"timeout"`
 		TestLimit               uint64                    `json:"testLimit"`
+		ShrinkLimit             uint64                    `json:"shrinkLimit"`
 		CallSequenceLength      int                       `json:"callSequenceLength"`
 		CorpusDirectory         string                    `json:"corpusDirectory"`
 		CoverageEnabled         bool                      `json:"coverageEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
+		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         string                    `json:"deployerAddress"`
@@ -39,10 +41,12 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.WorkerResetLimit = f.WorkerResetLimit
 	enc.Timeout = f.Timeout
 	enc.TestLimit = f.TestLimit
+	enc.ShrinkLimit = f.ShrinkLimit
 	enc.CallSequenceLength = f.CallSequenceLength
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
 	enc.TargetContracts = f.TargetContracts
+	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
 		enc.TargetContractsBalances = make([]*hexutil.Big, len(f.TargetContractsBalances))
 		for k, v := range f.TargetContractsBalances {
@@ -68,10 +72,12 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		WorkerResetLimit        *int                      `json:"workerResetLimit"`
 		Timeout                 *int                      `json:"timeout"`
 		TestLimit               *uint64                   `json:"testLimit"`
+		ShrinkLimit             *uint64                   `json:"shrinkLimit"`
 		CallSequenceLength      *int                      `json:"callSequenceLength"`
 		CorpusDirectory         *string                   `json:"corpusDirectory"`
 		CoverageEnabled         *bool                     `json:"coverageEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
+		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         *string                   `json:"deployerAddress"`
@@ -99,6 +105,9 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	if dec.TestLimit != nil {
 		f.TestLimit = *dec.TestLimit
 	}
+	if dec.ShrinkLimit != nil {
+		f.ShrinkLimit = *dec.ShrinkLimit
+	}
 	if dec.CallSequenceLength != nil {
 		f.CallSequenceLength = *dec.CallSequenceLength
 	}
@@ -110,6 +119,9 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts
+	}
+	if dec.PredeployedContracts != nil {
+		f.PredeployedContracts = dec.PredeployedContracts
 	}
 	if dec.TargetContractsBalances != nil {
 		f.TargetContractsBalances = make([]*big.Int, len(dec.TargetContractsBalances))

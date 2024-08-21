@@ -5,28 +5,35 @@ import (
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	coretypes "github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"golang.org/x/exp/slices"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
-	executionTracer := NewExecutionTracer(contractDefinitions, chain.CheatCodeContracts())
+	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
+	defer executionTracer.Close()
 
 	// Call the contract on our chain with the provided state.
-	executionResult, err := chain.CallContract(msg, state, executionTracer)
+	executionResult, err := testChain.CallContract(msg, state, executionTracer.NativeTracer())
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Obtain our trace
-	trace := executionTracer.Trace()
+	hash := utils.MessageToTransaction(msg).Hash()
+	trace := executionTracer.GetTrace(hash)
 
 	// Return the trace
 	return executionResult, trace, nil
@@ -35,14 +42,13 @@ func CallWithExecutionTrace(chain *chain.TestChain, contractDefinitions contract
 // ExecutionTracer records execution information into an ExecutionTrace, containing information about each call
 // scope entered and exited.
 type ExecutionTracer struct {
-	// callDepth refers to the current EVM depth during tracing.
-	callDepth uint64
-
 	// evm refers to the EVM instance last captured.
-	evm *vm.EVM
+	evmContext *tracing.VMContext
 
 	// trace represents the current execution trace captured by this tracer.
 	trace *ExecutionTrace
+
+	traceMap map[common.Hash]*ExecutionTrace
 
 	// currentCallFrame references the current call frame being traced.
 	currentCallFrame *CallFrame
@@ -53,11 +59,13 @@ type ExecutionTracer struct {
 	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
 	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
 
-	// onNextCaptureState refers to methods which should be executed the next time CaptureState executes.
-	// CaptureState is called prior to execution of an instruction. This allows actions to be performed
+	// onNextCaptureState refers to methods which should be executed the next time OnOpcode executes.
+	// OnOpcode is called prior to execution of an instruction. This allows actions to be performed
 	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
 	// using this structure to execute code later once the log is committed).
 	onNextCaptureState []func()
+
+	nativeTracer *chain.TestChainTracer
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
@@ -65,30 +73,59 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContra
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
 		cheatCodeContracts:  cheatCodeContracts,
+		traceMap:            make(map[common.Hash]*ExecutionTrace),
 	}
+	innerTracer := &tracers.Tracer{
+		Hooks: &tracing.Hooks{
+			OnTxStart: tracer.OnTxStart,
+			OnEnter:   tracer.OnEnter,
+			OnTxEnd:   tracer.OnTxEnd,
+			OnExit:    tracer.OnExit,
+			OnOpcode:  tracer.OnOpcode,
+		},
+	}
+	tracer.nativeTracer = &chain.TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: nil}
+
 	return tracer
 }
 
-// Trace returns the currently recording or last recorded execution trace by the tracer.
-func (t *ExecutionTracer) Trace() *ExecutionTrace {
-	return t.trace
+// NativeTracer returns the underlying TestChainTracer.
+func (t *ExecutionTracer) NativeTracer() *chain.TestChainTracer {
+	return t.nativeTracer
+
 }
 
-// CaptureTxStart is called upon the start of transaction execution, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureTxStart(gasLimit uint64) {
+// Close sets the traceMap to nil and should be called after the execution tracer is finish being used.
+func (t *ExecutionTracer) Close() {
+	t.traceMap = nil
+}
+
+// GetTrace returns the currently recording or last recorded execution trace by the tracer.
+func (t *ExecutionTracer) GetTrace(txHash common.Hash) *ExecutionTrace {
+	if trace, ok := t.traceMap[txHash]; ok {
+		return trace
+	}
+	return nil
+}
+
+// OnTxEnd is called upon the end of transaction execution, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
+	t.traceMap[receipt.TxHash] = t.trace
+}
+
+// OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.callDepth = 0
 	t.trace = newExecutionTrace(t.contractDefinitions)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
+	t.traceMap = make(map[common.Hash]*ExecutionTrace)
+
+	// Store our evm reference
+	t.evmContext = vm
 }
 
-// CaptureTxEnd is called upon the end of transaction execution, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureTxEnd(restGas uint64) {
-
-}
-
-// resolveConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
+// resolveCallFrameConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
 // the call frame provided represents a contract deployment.
 func (t *ExecutionTracer) resolveCallFrameConstructorArgs(callFrame *CallFrame, contract *contracts.Contract) {
 	// If this is a contract creation and the constructor ABI argument data has not yet been resolved, do so now.
@@ -142,6 +179,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 			if codeContract != nil {
 				callFrame.CodeContractName = codeContract.Name()
 				callFrame.CodeContractAbi = &codeContract.CompiledContract().Abi
+				callFrame.ExecutedCode = true
 			}
 		}
 	}
@@ -152,12 +190,12 @@ func (t *ExecutionTracer) captureEnteredCallFrame(fromAddress common.Address, to
 	// Create our call frame struct to track data for this call frame we entered.
 	callFrameData := &CallFrame{
 		SenderAddress:       fromAddress,
-		ToAddress:           toAddress,
+		ToAddress:           toAddress, // Note: Set temporarily, overwritten if code executes (in OnOpcode) and the contract's address is overridden by delegatecall.
 		ToContractName:      "",
 		ToContractAbi:       nil,
 		ToInitBytecode:      nil,
 		ToRuntimeBytecode:   nil,
-		CodeAddress:         toAddress, // Note: Set temporarily, overwritten if code executes (in CaptureState).
+		CodeAddress:         toAddress,
 		CodeContractName:    "",
 		CodeContractAbi:     nil,
 		CodeRuntimeBytecode: nil,
@@ -192,7 +230,7 @@ func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 	if t.currentCallFrame.ToRuntimeBytecode == nil {
 		// As long as this isn't a failed contract creation, we should be able to fetch "to" byte code on exit.
 		if !t.currentCallFrame.IsContractCreation() || err == nil {
-			t.currentCallFrame.ToRuntimeBytecode = t.evm.StateDB.GetCode(t.currentCallFrame.ToAddress)
+			t.currentCallFrame.ToRuntimeBytecode = t.evmContext.StateDB.GetCode(t.currentCallFrame.ToAddress)
 		}
 	}
 	if t.currentCallFrame.CodeRuntimeBytecode == nil {
@@ -201,7 +239,7 @@ func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 		if t.currentCallFrame.CodeAddress == t.currentCallFrame.ToAddress {
 			t.currentCallFrame.CodeRuntimeBytecode = t.currentCallFrame.ToRuntimeBytecode
 		} else {
-			t.currentCallFrame.CodeRuntimeBytecode = t.evm.StateDB.GetCode(t.currentCallFrame.CodeAddress)
+			t.currentCallFrame.CodeRuntimeBytecode = t.evmContext.StateDB.GetCode(t.currentCallFrame.CodeAddress)
 		}
 	}
 
@@ -216,41 +254,20 @@ func (t *ExecutionTracer) captureExitedCallFrame(output []byte, err error) {
 	t.currentCallFrame = t.currentCallFrame.ParentCallFrame
 }
 
-// CaptureStart initializes the tracing operation for the top of a call frame, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	// Store our evm reference
-	t.evm = env
-
+// OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, input, create, value)
+	t.captureEnteredCallFrame(from, to, input, (typ == byte(vm.CREATE) || typ == byte(vm.CREATE2)), value)
 }
 
-// CaptureEnd is called after a call to finalize tracing completes for the top of a call frame, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// Capture that the call frame was exited.
 	t.captureExitedCallFrame(output, err)
 }
 
-// CaptureEnter is called upon entering of the call frame, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Increase our call depth now that we're entering a new call frame.
-	t.callDepth++
-
-	// Capture that a new call frame was entered.
-	t.captureEnteredCallFrame(from, to, input, typ == vm.CREATE || typ == vm.CREATE2, value)
-}
-
-// CaptureExit is called upon exiting of the call frame, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	// Capture that the call frame was exited.
-	t.captureExitedCallFrame(output, err)
-
-	// Decrease our call depth now that we've exited a call frame.
-	t.callDepth--
-}
-
-// CaptureState records data from an EVM state update, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, vmErr error) {
+// OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Execute all "on next capture state" events and clear them.
 	for _, eventHandler := range t.onNextCaptureState {
 		eventHandler()
@@ -262,34 +279,27 @@ func (t *ExecutionTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	// be appropriately represented in this structure. The information populated earlier on frame enter represents
 	// the raw call data, before delegate transformations are applied, etc.
 	if !t.currentCallFrame.ExecutedCode {
-		t.currentCallFrame.SenderAddress = scope.Contract.CallerAddress
-		t.currentCallFrame.ToAddress = scope.Contract.Address()
-		if scope.Contract.CodeAddr != nil {
-			t.currentCallFrame.CodeAddress = *scope.Contract.CodeAddr
-		}
-
+		t.currentCallFrame.SenderAddress = scope.Caller()
+		// This is not always the "to" address, but the current address e.g. for delegatecall.
+		t.currentCallFrame.ToAddress = scope.Address()
 		// Mark code as having executed in this scope, so we don't set these values again (as cheat codes may affect it).
 		// We also want to know if a given call scope executed code, or simply represented a value transfer call.
 		t.currentCallFrame.ExecutedCode = true
 	}
 
 	// If we encounter a SELFDESTRUCT operation, record the operation.
-	if op == vm.SELFDESTRUCT {
+	if op == byte(vm.SELFDESTRUCT) {
 		t.currentCallFrame.SelfDestructed = true
 	}
 
 	// If a log operation occurred, add a deferred operation to capture it.
-	if op == vm.LOG0 || op == vm.LOG1 || op == vm.LOG2 || op == vm.LOG3 || op == vm.LOG4 {
+	// TODO: Move this to OnLog
+	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evm.StateDB.(*state.StateDB).Logs()
+			logs := t.evmContext.StateDB.(*state.StateDB).Logs()
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
 			}
 		})
 	}
-}
-
-// CaptureFault records an execution fault, as defined by vm.EVMLogger.
-func (t *ExecutionTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-
 }

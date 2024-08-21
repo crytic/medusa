@@ -2,9 +2,10 @@ package types
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"strconv"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
@@ -47,8 +48,8 @@ type SourceMapElement struct {
 	// Length refers to the byte length of the source range the instruction maps to.
 	Length int
 
-	// FileID refers to an identifier for the CompiledSource file which houses the relevant source code.
-	FileID int
+	// SourceUnitID refers to an identifier for the CompiledSource file which houses the relevant source code.
+	SourceUnitID int
 
 	// JumpType refers to the SourceMapJumpType which provides information about any type of jump that occurred.
 	JumpType SourceMapJumpType
@@ -83,7 +84,7 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 		Index:         -1,
 		Offset:        -1,
 		Length:        -1,
-		FileID:        -1,
+		SourceUnitID:  -1,
 		JumpType:      "",
 		ModifierDepth: 0,
 	}
@@ -120,7 +121,7 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 		// If the source file identifier exists, update our current element data.
 		if len(fields) > 2 && fields[2] != "" {
-			current.FileID, err = strconv.Atoi(fields[2])
+			current.SourceUnitID, err = strconv.Atoi(fields[2])
 			if err != nil {
 				return nil, err
 			}
