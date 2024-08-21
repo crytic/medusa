@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
@@ -270,17 +271,31 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 	return element, nil
 }
 
-// generateNewElement generates a new call sequence element which targets a state changing method in a contract
+// generateNewElement generates a new call sequence element which targets a method in a contract
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
-	// Verify we have state changing methods to call
-	if len(g.worker.stateChangingMethods) == 0 {
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
+	// Check to make sure that we have any functions to call
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) == 0 {
+		return nil, fmt.Errorf("cannot generate fuzzed call as there are no methods to call")
 	}
 
-	// Select a random method and sender
-	selectedMethod := &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	// Only call view functions if there are no state-changing methods
+	var callOnlyPureFunctions bool
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) > 0 {
+		callOnlyPureFunctions = true
+	}
+
+	// Select a random method
+	// There is a 1/100 chance that a pure method will be invoked or if there are only pure functions that are callable
+	var selectedMethod *contracts.DeployedContractMethod
+	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0) || callOnlyPureFunctions {
+		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
+	} else {
+		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	}
+
+	// Select a random sender
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
@@ -457,5 +472,8 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}
+	// Re-encode the message's calldata
+	element.Call.WithDataAbiValues(abiValuesMsgData)
+
 	return nil
 }

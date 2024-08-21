@@ -3,14 +3,15 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"os"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
-	"math/big"
-	"os"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -61,6 +62,10 @@ type FuzzingConfig struct {
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
+
+	// PredeployedContracts are contracts that can be deterministically deployed at a specific address. It maps the
+	// contract name to the deployment address
+	PredeployedContracts map[string]string `json:"predeployedContracts"`
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
@@ -136,6 +141,48 @@ type TestingConfig struct {
 
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
+
+	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
+
+	// ExcludeFunctionSignatures is a list of function signatures that will be excluded from call sequences.
+	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+	ExcludeFunctionSignatures []string `json:"excludeFunctionSignatures"`
+}
+
+// Validate validates that the TestingConfig meets certain requirements.
+func (testCfg *TestingConfig) Validate() error {
+	// Verify that target and exclude function signatures are used mutually exclusive.
+	if (len(testCfg.TargetFunctionSignatures) != 0) && (len(testCfg.ExcludeFunctionSignatures) != 0) {
+		return errors.New("project configuration must specify only one of blacklist or whitelist at a time")
+	}
+
+	// Verify property testing fields.
+	if testCfg.PropertyTesting.Enabled {
+		// Test prefixes must be supplied if property testing is enabled.
+		if len(testCfg.PropertyTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if property testing is enabled")
+		}
+	}
+
+	if testCfg.OptimizationTesting.Enabled {
+		// Test prefixes must be supplied if optimization testing is enabled.
+		if len(testCfg.OptimizationTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if optimization testing is enabled")
+		}
+	}
+
+	// Validate that prefixes do not overlap
+	for _, prefix := range testCfg.PropertyTesting.TestPrefixes {
+		for _, prefix2 := range testCfg.OptimizationTesting.TestPrefixes {
+			if prefix == prefix2 {
+				return errors.New("project configuration must specify unique test name prefixes for property and optimization testing")
+			}
+		}
+	}
+
+	return nil
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
@@ -211,7 +258,7 @@ type LoggingConfig struct {
 	// equivalent to enabling file logging.
 	LogDirectory string `json:"logDirectory"`
 
-	// NoColor indicates whether or not log messages should be displayed with colored formatting.
+	// NoColor indicates whether log messages should be displayed with colored formatting.
 	NoColor bool `json:"noColor"`
 }
 
@@ -234,7 +281,7 @@ type FileLoggingConfig struct {
 
 // ReadProjectConfigFromFile reads a JSON-serialized ProjectConfig from a provided file path.
 // Returns the ProjectConfig if it succeeds, or an error if one occurs.
-func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
+func ReadProjectConfigFromFile(path string, platform string) (*ProjectConfig, error) {
 	// Read our project configuration file data
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -242,7 +289,7 @@ func ReadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	}
 
 	// Parse the project configuration
-	projectConfig, err := GetDefaultProjectConfig("")
+	projectConfig, err := GetDefaultProjectConfig(platform)
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +328,11 @@ func (p *ProjectConfig) Validate() error {
 		logger = logging.GlobalLogger.NewSubLogger("module", "fuzzer config")
 	}
 
+	// Validate testing config
+	if err := p.Fuzzing.Testing.Validate(); err != nil {
+		return err
+	}
+
 	// Verify the worker count is a positive number.
 	if p.Fuzzing.Workers <= 0 {
 		return errors.New("project configuration must specify a positive number for the worker count")
@@ -288,7 +340,7 @@ func (p *ProjectConfig) Validate() error {
 
 	// Verify that the sequence length is a positive number
 	if p.Fuzzing.CallSequenceLength <= 0 {
-		return errors.New("project configuration must specify a positive number for the transaction sequence lengt")
+		return errors.New("project configuration must specify a positive number for the transaction sequence length")
 	}
 
 	// Verify the worker reset limit is a positive number
@@ -330,6 +382,13 @@ func (p *ProjectConfig) Validate() error {
 	// Verify that deployer is a well-formed address
 	if _, err := utils.HexStringToAddress(p.Fuzzing.DeployerAddress); err != nil {
 		return errors.New("project configuration must specify only a well-formed deployer address")
+	}
+
+	// Verify that addresses of predeployed contracts are well-formed
+	for _, addr := range p.Fuzzing.PredeployedContracts {
+		if _, err := utils.HexStringToAddress(addr); err != nil {
+			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
+		}
 	}
 
 	// Ensure that the log level is a valid one

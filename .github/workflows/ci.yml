@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
           # disable caching during release (tag) builds
           cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
@@ -87,7 +87,6 @@ jobs:
           inputs: ./medusa-*.tar.gz
 
       - name: Upload artifact
-        if: github.ref == 'refs/heads/master' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         uses: actions/upload-artifact@v4
         with:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
@@ -129,7 +128,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
 
       - name: Actionlint
         run: |
@@ -156,6 +155,13 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run --timeout 5m0s
 
+      - name: Gencodec
+        run: |
+          go get github.com/fjl/gencodec 
+          pushd fuzzing/config
+          go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
+          git diff --exit-code -- .
+          popd
   test:
     strategy:
       matrix:
@@ -197,7 +203,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
 
       - uses: actions/setup-node@v4
         with:
