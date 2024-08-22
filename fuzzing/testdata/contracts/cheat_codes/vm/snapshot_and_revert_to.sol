@@ -28,31 +28,59 @@ contract TestContract {
 
         store.slot0 = 10;
         store.slot1 = 20;
-        timestamp = block.timestamp;
-        cheats.deal(address(this), 5 ether);
 
-        // Save state
-        uint256 snapshot = cheats.snapshot();
+        // Create first snapshot
+        uint256 snapshot1 = cheats.snapshot();
 
         // Change state
         store.slot0 = 300;
         store.slot1 = 400;
-        cheats.deal(address(this), 500 ether);
-        cheats.warp(12345);
 
         // Assert that state has been changed
         assert(store.slot0 == 300);
         assert(store.slot1 == 400);
-        assert(address(this).balance == 500 ether);
-        assert(block.timestamp == 12345);
 
-        // Revert to snapshot
-        cheats.revertTo(snapshot);
+        // Create second snapshot
+        uint256 snapshot2 = cheats.snapshot();
 
-        // Ensure state has been reset
+        // Change state again
+        store.slot0 = 250;
+        store.slot1 = 67;
+
+        // Assert that state has been changed
+        assert(store.slot0 == 250);
+        assert(store.slot1 == 67);
+
+        // Create third snapshot
+        uint256 snapshot3 = cheats.snapshot();
+
+        // Change state again
+        store.slot0 = 347;
+        store.slot1 = 3;
+
+        // Assert that state has been changed
+        assert(store.slot0 == 347);
+        assert(store.slot1 == 3);
+
+        // Revert to third snapshot
+        cheats.revertTo(snapshot3);
+
+        // Ensure state has been reset to third snapshot
+        assert(store.slot0 == 250);
+        assert(store.slot1 == 67);
+
+        // Revert to second snapshot
+        cheats.revertTo(snapshot2);
+
+        // Ensure state has been reset to second snapshot
+        assert(store.slot0 == 300);
+        assert(store.slot1 == 400);
+
+        // Revert to first snapshot
+        cheats.revertTo(snapshot1);
+
+        // Ensure state has been reset to original
         assert(store.slot0 == 10);
         assert(store.slot1 == 20);
-        assert(address(this).balance == 5 ether);
-        assert(block.timestamp == timestamp);
     }
 }

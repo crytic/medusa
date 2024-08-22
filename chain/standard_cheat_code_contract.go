@@ -285,18 +285,19 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	contract.addMethod(
 		"snapshot", abi.Arguments{}, abi.Arguments{{Type: typeUint256}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			snapshotID := tracer.chain.State().Snapshot()
+			snapshotID := tracer.chain.state.Snapshot()
+			snapshotIDBigInt := new(big.Int).SetUint64(uint64(snapshotID))
 
-			return []any{snapshotID}, nil
+			return []any{snapshotIDBigInt}, nil
 		},
 	)
 
-	// revertTo(uint256): Revert the state of the evm to a previous snapshot. Takes the snapshot id to revert to.
+	// revertTo(uint256): Restores the blockchain to a previous state by reverting to a specified snapshot, removing that snapshot and all subsequent ones (e.g.: reverting to id 2 will delete snapshots with ids 2, 3, 4, etc.)
 	contract.addMethod(
 		"revertTo", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeBool}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			snapshotID := inputs[0].(*big.Int)
-			tracer.chain.State().RevertToSnapshot(int(snapshotID.Int64()))
+			tracer.chain.state.RevertToSnapshotPersisted(int(snapshotID.Int64()), true)
 
 			return []any{true}, nil
 		},
