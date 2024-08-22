@@ -238,11 +238,11 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 					// Mark the line active/executable.
 					sourceLine.IsActive = true
 
-					// Set its coverage state
-					sourceLine.IsCovered = sourceLine.IsCovered || succHitCount > 0
-					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || revertHitCount > 0
-					sourceLine.RevertHitCount = revertHitCount
-					sourceLine.SuccessHitCount = succHitCount
+					// Set its coverage state and increment hit counts
+					sourceLine.SuccessHitCount += succHitCount
+					sourceLine.RevertHitCount += revertHitCount
+					sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
+					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.
