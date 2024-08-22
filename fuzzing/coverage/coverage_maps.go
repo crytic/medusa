@@ -229,7 +229,7 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 	for _, mapsByAddressToMerge := range cm.maps {
 		for _, contractCoverageMap := range mapsByAddressToMerge {
 			// Update our reverted coverage with the (previously thought to be) successful coverage.
-			changed, err := contractCoverageMap.revertedCoverage.copy(contractCoverageMap.successfulCoverage)
+			changed, err := contractCoverageMap.revertedCoverage.update(contractCoverageMap.successfulCoverage)
 			revertedCoverageChanged = revertedCoverageChanged || changed
 			if err != nil {
 				return revertedCoverageChanged, err
@@ -359,31 +359,6 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 		// Update the hit count in both maps
 		cm.executedFlags[i] += coverageMap.executedFlags[i]
 		coverageMap.executedFlags[i] += cm.executedFlags[i]
-	}
-	return changed, nil
-}
-
-// copy
-func (cm *CoverageMapBytecodeData) copy(coverageMap *CoverageMapBytecodeData) (bool, error) {
-	// If the coverage map execution data provided is nil, exit early
-	if coverageMap.executedFlags == nil {
-		return false, nil
-	}
-
-	// If the current map has no execution data, simply set it to the provided one.
-	if cm.executedFlags == nil {
-		cm.executedFlags = coverageMap.executedFlags
-		return true, nil
-	}
-
-	// Update each byte which represents a position in the bytecode which was covered.
-	changed := false
-	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
-		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
-			changed = true
-		}
-		cm.executedFlags[i] += coverageMap.executedFlags[i]
-		coverageMap.executedFlags[i] = 0
 	}
 	return changed, nil
 }
