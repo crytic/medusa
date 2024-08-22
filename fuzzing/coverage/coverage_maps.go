@@ -351,11 +351,10 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
 	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
-		// Only update the map if we haven't seen this coverage before
-		if atomic.LoadUint64(&cm.executedFlags[i]) == 0 && atomic.LoadUint64(&coverageMap.executedFlags[i]) != 0 {
-			atomic.AddUint64(&cm.executedFlags[i], atomic.LoadUint64(&coverageMap.executedFlags[i]))
-			changed = true
-		}
+		// Update the map
+		atomic.AddUint64(&cm.executedFlags[i], coverageMap.executedFlags[i])
+		changed = true
+
 	}
 	return changed, nil
 }
