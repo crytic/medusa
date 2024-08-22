@@ -221,8 +221,8 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		succHitCount := uint(0)
-		revertHitCount := uint(0)
+		succHitCount := uint64(0)
+		revertHitCount := uint64(0)
 		if contractCoverageData != nil {
 			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
 			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])

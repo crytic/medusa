@@ -3,6 +3,7 @@ package coverage
 import (
 	"golang.org/x/exp/slices"
 	"sync"
+	"sync/atomic"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
@@ -297,7 +298,7 @@ func (cm *ContractCoverageMap) updateCoveredAt(codeSize int, pc uint64) (bool, e
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
 // or runtime bytecode.
 type CoverageMapBytecodeData struct {
-	executedFlags []uint
+	executedFlags []uint64
 }
 
 // Reset resets the bytecode coverage map data to be empty.
@@ -318,7 +319,7 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 
 // HitCount returns the number of times that the provided program counter (PC) has been hit. If zero is returned, then
 // the PC has not been hit, the map is empty, or the PC is out-of-bounds
-func (cm *CoverageMapBytecodeData) HitCount(pc int) uint {
+func (cm *CoverageMapBytecodeData) HitCount(pc int) uint64 {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return 0
@@ -351,8 +352,8 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	changed := false
 	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
 		// Only update the map if we haven't seen this coverage before
-		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
-			cm.executedFlags[i] += coverageMap.executedFlags[i]
+		if atomic.LoadUint64(&cm.executedFlags[i]) == 0 && atomic.LoadUint64(&coverageMap.executedFlags[i]) != 0 {
+			atomic.AddUint64(&cm.executedFlags[i], atomic.LoadUint64(&coverageMap.executedFlags[i]))
 			changed = true
 		}
 	}
@@ -364,16 +365,16 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
 	// If the execution flags don't exist, create them for this code size.
 	if cm.executedFlags == nil {
-		cm.executedFlags = make([]uint, codeSize)
+		cm.executedFlags = make([]uint64, codeSize)
 	}
 
 	// If our program counter is in range, determine if we achieved new coverage for the first time or increment the hit counter.
 	if pc < uint64(len(cm.executedFlags)) {
-		// Increment the hit counter
-		cm.executedFlags[pc] += 1
+		// Increment the hit counter atomically
+		atomic.AddUint64(&cm.executedFlags[pc], 1)
 
 		// This is the first time we have hit this PC, so return true
-		if cm.executedFlags[pc] == 1 {
+		if atomic.LoadUint64(&cm.executedFlags[pc]) == 1 {
 			return true, nil
 		}
 		// We have seen this PC before, return false
