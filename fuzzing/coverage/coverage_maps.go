@@ -2,12 +2,12 @@ package coverage
 
 import (
 	"golang.org/x/exp/slices"
-	"sync"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -212,6 +212,7 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 
 	// Set our coverage in the map and return our change state
 	changedInMap, err = coverageMap.updateCoveredAt(codeSize, pc)
+
 	return addedNewMap || changedInMap, err
 }
 
@@ -243,6 +244,37 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 	return revertedCoverageChanged, nil
 }
 
+// UniquePCs is a function that returns the total number of unique program counters (PCs)
+func (cm *CoverageMaps) UniquePCs() uint64 {
+	uniquePCs := uint64(0)
+	// Iterate across each contract deployment
+	for _, mapsByAddress := range cm.maps {
+		for _, contractCoverageMap := range mapsByAddress {
+			// TODO: Note we are not checking for nil dereference here because we are guaranteed that the successful
+			//  coverage and reverted coverage arrays have been instantiated if we are iterating over it
+
+			// Iterate across each PC in the successful coverage array
+			// We do not separately iterate over the reverted coverage array because if there is no data about a
+			// successful PC execution, then it is not possible for that PC to have ever reverted either
+			for i, hits := range contractCoverageMap.successfulCoverage.executedFlags {
+				// If we hit the PC at least once, we have a unique PC hit
+				if hits != 0 {
+					uniquePCs++
+
+					// Do not count both success and revert
+					continue
+				}
+
+				// This is only executed if the PC was not executed successfully
+				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
+					uniquePCs++
+				}
+			}
+		}
+	}
+	return uniquePCs
+}
+
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
 type ContractCoverageMap struct {
 	// successfulCoverage represents coverage for the contract bytecode, which did not encounter a revert and was
@@ -268,7 +300,7 @@ func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
 }
 
-// update creates updates the current ContractCoverageMap with the provided one.
+// update updates the current ContractCoverageMap with the provided one.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
 func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, bool, error) {
 	// Update our success coverage data
