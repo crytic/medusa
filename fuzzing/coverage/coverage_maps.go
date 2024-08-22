@@ -250,7 +250,12 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 	// Iterate across each contract deployment
 	for _, mapsByAddress := range cm.maps {
 		for _, contractCoverageMap := range mapsByAddress {
+			// TODO: Note we are not checking for nil dereference here because we are guaranteed that the successful
+			//  coverage and reverted coverage arrays have been instantiated if we are iterating over it
+
 			// Iterate across each PC in the successful coverage array
+			// We do not separately iterate over the reverted coverage array because if there is no data about a
+			// successful PC execution, then it is not possible for that PC to have ever reverted either
 			for i, hits := range contractCoverageMap.successfulCoverage.executedFlags {
 				// If we hit the PC at least once, we have a unique PC hit
 				if hits != 0 {
