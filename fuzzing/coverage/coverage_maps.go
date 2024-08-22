@@ -2,11 +2,12 @@ package coverage
 
 import (
 	"bytes"
+	"sync"
+
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -240,6 +241,25 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 		}
 	}
 	return revertedCoverageChanged, nil
+}
+
+func (cm *CoverageMaps) UniquePCs() uint64 {
+	uniquePCs := uint64(0)
+	for _, mapsByAddress := range cm.maps {
+		for _, contractCoverageMap := range mapsByAddress {
+			// TODO nil check?
+			for i, executedFlag := range contractCoverageMap.successfulCoverage.executedFlags {
+				if executedFlag != 0 {
+					uniquePCs++
+					continue // Do not count both success and revert
+				}
+				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
+					uniquePCs++
+				}
+			}
+		}
+	}
+	return uniquePCs
 }
 
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
