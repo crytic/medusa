@@ -179,7 +179,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
-		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start))
+		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
@@ -755,7 +755,7 @@ func (f *Fuzzer) Start() error {
 		}
 		return err
 	}
-	f.logger.Info("Finished setting up test chain in ", time.Since(start))
+	f.logger.Info("Finished setting up test chain")
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
@@ -765,7 +765,7 @@ func (f *Fuzzer) Start() error {
 	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if corpusTotalSequences > 0 {
-		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime))
+		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
 	}
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
