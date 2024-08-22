@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"golang.org/x/exp/slices"
 	"sync"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"
@@ -312,12 +313,7 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 	smallestSize := utils.Min(len(cm.executedFlags), len(b.executedFlags))
 	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
 	//  it may make sense to just check that both of them are greater than zero
-	for i := 0; i < smallestSize; i++ {
-		if cm.executedFlags[i] != b.executedFlags[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(cm.executedFlags[:smallestSize], b.executedFlags[:smallestSize])
 }
 
 // HitCount returns the number of times that the provided program counter (PC) has been hit. If zero is returned, then
