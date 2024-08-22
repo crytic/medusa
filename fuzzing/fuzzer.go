@@ -720,7 +720,6 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set up the corpus
-	// TODO check if dir exists
 	f.logger.Info("Initializing corpus")
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
@@ -760,11 +759,14 @@ func (f *Fuzzer) Start() error {
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
-	// TODO check if there is even a corpus before logging this
-	f.logger.Info("Running call sequences in the corpus...")
+	if f.corpus.CallSequenceEntryCount(true, true, true) > 0 {
+		f.logger.Info("Running call sequences in the corpus...")
+	}
 	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
-	f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime))
+	if corpusTotalSequences > 0 {
+		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime))
+	}
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
@@ -888,12 +890,12 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer := logging.NewLogBuffer()
 		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
 		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
-		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", call/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().UniquePCs()), colors.Reset)
 		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
+		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
 			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)

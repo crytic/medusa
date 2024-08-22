@@ -301,6 +301,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
+		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, big.NewInt(int64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed)))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -313,10 +315,6 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 	// Execute our call sequence.
 	testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
-
-	for _, elem := range testedCallSequence {
-		fw.workerMetrics().gasTested.Add(fw.workerMetrics().gasTested, big.NewInt(int64(elem.ChainReference.Block.MessageResults[elem.ChainReference.TransactionIndex].Receipt.GasUsed)))
-	}
 
 	// If we encountered an error, report it.
 	if err != nil {

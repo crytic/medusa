@@ -20,7 +20,7 @@ type fuzzerWorkerMetrics struct {
 	// callsTested is the amount of transactions/calls the fuzzer executed and ran tests against.
 	callsTested *big.Int
 
-	// gasTested is the amount of gas the fuzzer executed and ran tests against.
+	// gasUsed is the amount of gas the fuzzer executed and ran tests against.
 	gasUsed *big.Int
 
 	// workerStartupCount is the amount of times the worker was generated, or re-generated for this index.
