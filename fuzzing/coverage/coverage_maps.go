@@ -210,7 +210,7 @@ func (cm *CoverageMaps) SetAt(codeAddress common.Address, codeLookupHash common.
 	}
 
 	// Set our coverage in the map and return our change state
-	changedInMap, err = coverageMap.setCoveredAt(codeSize, pc)
+	changedInMap, err = coverageMap.updateCoveredAt(codeSize, pc)
 	return addedNewMap || changedInMap, err
 }
 
@@ -285,12 +285,12 @@ func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, b
 	return successfulCoverageChanged, revertedCoverageChanged, nil
 }
 
-// setCoveredAt sets the coverage state at a given program counter location within a ContractCoverageMap used for
+// updateCoveredAt updates the hit counter at a given program counter location within a ContractCoverageMap used for
 // "successful" coverage (non-reverted).
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *ContractCoverageMap) setCoveredAt(codeSize int, pc uint64) (bool, error) {
+func (cm *ContractCoverageMap) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
 	// Set our coverage data for the successful path.
-	return cm.successfulCoverage.setCoveredAt(codeSize, pc)
+	return cm.successfulCoverage.updateCoveredAt(codeSize, pc)
 }
 
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
@@ -320,21 +320,21 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 	return true
 }
 
-// IsCovered checks if a given program counter location is covered by the map.
-// Returns a boolean indicating if the program counter was executed on this map.
-func (cm *CoverageMapBytecodeData) IsCovered(pc int) (bool, uint) {
+// HitCount returns the number of times that the provided program counter (PC) has been hit. If zero is returned, then
+// the PC has not been hit, the map is empty, or the PC is out-of-bounds
+func (cm *CoverageMapBytecodeData) HitCount(pc int) uint {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
-		return false, 0
+		return 0
 	}
 
 	// If this map has no execution data or is out of bounds, it is not covered.
 	if cm.executedFlags == nil || len(cm.executedFlags) <= pc {
-		return false, 0
+		return 0
 	}
 
-	// Otherwise, return the execution flag
-	return cm.executedFlags[pc] != 0, cm.executedFlags[pc]
+	// Otherwise, return the hit count
+	return cm.executedFlags[pc]
 }
 
 // update merges the hit count of the current CoverageMapBytecodeData with the provided one.
@@ -365,22 +365,24 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	return changed, nil
 }
 
-// setCoveredAt sets the coverage state at a given program counter location within a CoverageMapBytecodeData.
+// updateCoveredAt updates the hit count at a given program counter location within a CoverageMapBytecodeData.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *CoverageMapBytecodeData) setCoveredAt(codeSize int, pc uint64) (bool, error) {
+func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
 	// If the execution flags don't exist, create them for this code size.
 	if cm.executedFlags == nil {
 		cm.executedFlags = make([]uint, codeSize)
 	}
 
-	// If our program counter is in range, determine if we achieved new coverage for the first time, and update it.
+	// If our program counter is in range, determine if we achieved new coverage for the first time or increment the hit counter.
 	if pc < uint64(len(cm.executedFlags)) {
-		if cm.executedFlags[pc] == 0 {
-			cm.executedFlags[pc] = 1
+		// Increment the hit counter
+		cm.executedFlags[pc] += 1
+
+		// This is the first time we have hit this PC, so return true
+		if cm.executedFlags[pc] == 1 {
 			return true, nil
-		} else {
-			cm.executedFlags[pc] += 1
 		}
+		// We have seen this PC before, return false
 		return false, nil
 	}
 
