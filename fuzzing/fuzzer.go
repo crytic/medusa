@@ -870,7 +870,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		// Obtain our metrics
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
-		gasUsed := f.metrics.GasTested()
+		gasUsed := f.metrics.GasUsed()
 		failedSequences := f.metrics.FailedSequences()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 		workersShrinking := f.metrics.WorkersShrinkingCount()
@@ -891,8 +891,8 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", call/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().UniquePCs()), colors.Reset)
 		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
-		logBuffer.Append(", instrs: ", colors.Bold, fmt.Sprintf("%d", f.corpus.UniquePCs()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
 			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)

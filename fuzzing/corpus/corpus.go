@@ -235,10 +235,6 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 	return nil
 }
 
-func (c *Corpus) UniquePCs() uint64 {
-	return c.coverageMaps.UniquePCs()
-}
-
 // Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
 // (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
 // Returns the active number of corpus items, total number of corpus items, or an error if one occurred. If an error

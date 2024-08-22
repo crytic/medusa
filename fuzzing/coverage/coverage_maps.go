@@ -212,6 +212,7 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 
 	// Set our coverage in the map and return our change state
 	changedInMap, err = coverageMap.updateCoveredAt(codeSize, pc)
+
 	return addedNewMap || changedInMap, err
 }
 
@@ -243,16 +244,23 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 	return revertedCoverageChanged, nil
 }
 
+// UniquePCs is a function that returns the total number of unique program counters (PCs)
 func (cm *CoverageMaps) UniquePCs() uint64 {
 	uniquePCs := uint64(0)
+	// Iterate across each contract deployment
 	for _, mapsByAddress := range cm.maps {
 		for _, contractCoverageMap := range mapsByAddress {
-			// TODO nil check?
-			for i, executedFlag := range contractCoverageMap.successfulCoverage.executedFlags {
-				if executedFlag != 0 {
+			// Iterate across each PC in the successful coverage array
+			for i, hits := range contractCoverageMap.successfulCoverage.executedFlags {
+				// If we hit the PC at least once, we have a unique PC hit
+				if hits != 0 {
 					uniquePCs++
-					continue // Do not count both success and revert
+
+					// Do not count both success and revert
+					continue
 				}
+
+				// This is only executed if the PC was not executed successfully
 				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
 					uniquePCs++
 				}
@@ -287,7 +295,7 @@ func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
 }
 
-// update creates updates the current ContractCoverageMap with the provided one.
+// update updates the current ContractCoverageMap with the provided one.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
 func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, bool, error) {
 	// Update our success coverage data
