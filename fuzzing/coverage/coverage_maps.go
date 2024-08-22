@@ -169,8 +169,8 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 	return successCoverageChanged, revertedCoverageChanged, nil
 }
 
-// SetAt sets the coverage state of a given program counter location within code coverage data.
-func (cm *CoverageMaps) SetAt(codeAddress common.Address, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
+// UpdateAt updates the hit count of a given program counter location within code coverage data.
+func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
 	// If the code size is zero, do nothing
 	if codeSize == 0 {
 		return false, nil
@@ -333,7 +333,7 @@ func (cm *CoverageMapBytecodeData) HitCount(pc int) uint {
 	return cm.executedFlags[pc]
 }
 
-// update merges the hit count of the current CoverageMapBytecodeData with the provided one.
+// update updates the hit count of the current CoverageMapBytecodeData with the provided one.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one was encountered.
 func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) (bool, error) {
 	// If the coverage map execution data provided is nil, exit early
@@ -350,13 +350,11 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
 	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
-		// Only add to the corpus if we haven't seen this coverage before
+		// Only update the map if we haven't seen this coverage before
 		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
+			cm.executedFlags[i] += coverageMap.executedFlags[i]
 			changed = true
 		}
-		// Update the hit count in both maps
-		cm.executedFlags[i] += coverageMap.executedFlags[i]
-		coverageMap.executedFlags[i] += cm.executedFlags[i]
 	}
 	return changed, nil
 }
