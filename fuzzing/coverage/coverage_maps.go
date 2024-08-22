@@ -310,6 +310,8 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 	// Return an equality comparison on the data, ignoring size checks by stopping at the end of the shortest slice.
 	// We do this to avoid comparing arbitrary length constructor arguments appended to init bytecode.
 	smallestSize := utils.Min(len(cm.executedFlags), len(b.executedFlags))
+	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
+	//  it may make sense to just check that both of them are greater than zero
 	for i := 0; i < smallestSize; i++ {
 		if cm.executedFlags[i] != b.executedFlags[i] {
 			return false
