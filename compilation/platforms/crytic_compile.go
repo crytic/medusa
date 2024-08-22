@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 )
 
@@ -114,6 +115,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
+	logging.GlobalLogger.Info("Running command:\n", cmd.String())
 
 	// Install a specific `solc` version if requested in the config
 	if c.SolcVersion != "" {

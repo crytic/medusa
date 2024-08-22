@@ -314,6 +314,10 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	// Execute our call sequence.
 	testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
+	for _, elem := range testedCallSequence {
+		fw.workerMetrics().gasTested.Add(fw.workerMetrics().gasTested, big.NewInt(int64(elem.ChainReference.Block.MessageResults[elem.ChainReference.TransactionIndex].Receipt.GasUsed)))
+	}
+
 	// If we encountered an error, report it.
 	if err != nil {
 		return nil, nil, err
@@ -425,6 +429,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
+		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(callSequence)))
+
 		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
 				// Recreate our current optimized sequence without the item at this index

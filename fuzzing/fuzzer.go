@@ -173,11 +173,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Compilation != nil {
 		// Compile the targets specified in the compilation config
 		fuzzer.logger.Info("Compiling targets with ", colors.Bold, fuzzer.config.Compilation.Platform, colors.Reset)
+		start := time.Now()
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
 			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
+		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start))
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
@@ -191,8 +193,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
 	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
-		// TODO: Remove this warning when call sequence shrinking is improved
-		fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
 	return fuzzer, nil
@@ -720,6 +720,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set up the corpus
+	// TODO check if dir exists
 	f.logger.Info("Initializing corpus")
 	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
@@ -744,7 +745,8 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
-	f.logger.Info("Setting up base chain")
+	f.logger.Info("Setting up test chain")
+	start := time.Now()
 	trace, err := f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		if trace != nil {
@@ -754,11 +756,15 @@ func (f *Fuzzer) Start() error {
 		}
 		return err
 	}
+	f.logger.Info("Finished setting up test chain in ", time.Since(start))
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
-	f.logger.Info("Initializing and validating corpus call sequences")
+	// TODO check if there is even a corpus before logging this
+	f.logger.Info("Running call sequences in the corpus...")
+	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
+	f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime))
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
@@ -857,12 +863,14 @@ func (f *Fuzzer) printMetricsLoop() {
 	lastCallsTested := big.NewInt(0)
 	lastSequencesTested := big.NewInt(0)
 	lastWorkerStartupCount := big.NewInt(0)
+	lastGasUsed := big.NewInt(0)
 
 	lastPrintedTime := time.Time{}
 	for !utils.CheckContextDone(f.ctx) {
 		// Obtain our metrics
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
+		gasUsed := f.metrics.GasTested()
 		failedSequences := f.metrics.FailedSequences()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 		workersShrinking := f.metrics.WorkersShrinkingCount()
@@ -880,12 +888,13 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer := logging.NewLogBuffer()
 		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
 		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
-		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", call/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
-		logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
+		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
+			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		}
@@ -895,6 +904,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		lastPrintedTime = time.Now()
 		lastCallsTested = callsTested
 		lastSequencesTested = sequencesTested
+		lastGasUsed = gasUsed
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt
