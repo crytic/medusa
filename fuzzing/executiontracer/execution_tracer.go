@@ -1,6 +1,7 @@
 package executiontracer
 
 import (
+	"github.com/crytic/medusa/logging"
 	"math/big"
 
 	"github.com/crytic/medusa/chain"
@@ -110,6 +111,9 @@ func (t *ExecutionTracer) GetTrace(txHash common.Hash) *ExecutionTrace {
 
 // OnTxEnd is called upon the end of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
+	if err != nil {
+		logging.GlobalLogger.Panic("transaction failed to execute", err)
+	}
 	t.traceMap[receipt.TxHash] = t.trace
 }
 
