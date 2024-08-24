@@ -11,7 +11,7 @@ contract TestContract {
         paidAmount2 = msg.value;
     }
 
-    function fuzz_never_pay_exact_amounts() public view returns (bool) {
+    function property_never_pay_exact_amounts() public view returns (bool) {
         // ASSERTION: paid amounts should never equal the exact numbers below.
         return !(paidAmount == 7777 && paidAmount2 == 8888);
     }

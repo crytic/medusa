@@ -3,6 +3,8 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
+
 	"github.com/crytic/medusa/chain"
 	chainTypes "github.com/crytic/medusa/chain/types"
 	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -13,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"strconv"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
@@ -205,7 +206,17 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	if cse.Contract == nil {
 		return nil, nil
 	}
-	return cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
+
+	// If we have a method resolved, return it.
+	if cse.Call != nil && cse.Call.DataAbiValues != nil {
+		if cse.Call.DataAbiValues.Method != nil {
+			return cse.Call.DataAbiValues.Method, nil
+		}
+	}
+
+	// Try to resolve the method by ID from the call data.
+	method, err := cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
+	return method, err
 }
 
 // String returns a displayable string representing the CallSequenceElement.
@@ -220,7 +231,7 @@ func (cse *CallSequenceElement) String() string {
 	method, err := cse.Method()
 	methodName := "<unresolved method>"
 	if err == nil && method != nil {
-		methodName = method.Name
+		methodName = method.Sig
 	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
@@ -266,14 +277,9 @@ func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, con
 		return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
 	}
 
-	// Obtain the state prior to executing this transaction.
-	state, err := chain.StateFromRoot(cse.ChainReference.MessageResults().PreStateRoot)
-	if err != nil {
-		return fmt.Errorf("failed to resolve execution trace due to error loading root hash from database: %v", err)
-	}
-
+	var err error
 	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), state)
+	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
 	}

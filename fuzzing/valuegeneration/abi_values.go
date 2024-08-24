@@ -443,21 +443,17 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		}
 		return strconv.QuoteToASCII(str), nil
 	case abi.BytesTy:
-		// Prepare a byte array. Return as a string enclosed with "". The returned string uses Go escape
-		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		b, ok := value.([]byte)
 		if !ok {
 			return "", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
 		}
-		return strconv.QuoteToASCII(string(b)), nil
+		// Convert the fixed byte array to a hex string
+		return hex.EncodeToString(b), nil
 	case abi.FixedBytesTy:
-		// Prepare a fixed-size byte array. Return as a string enclosed with "". The returned string uses Go escape
-		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
-
 		// TODO: Error checking to ensure `value` is of the correct type.
 		b := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
-		// Convert the byte array to a string and use the QuoteToASCII method to format the string with Go escape sequences.
-		return strconv.QuoteToASCII(string(b)), nil
+		// Convert the byte array to a hex string
+		return hex.EncodeToString(b), nil
 	case abi.ArrayTy:
 		// Prepare an array. Return as a string enclosed with [], where specific elements are comma-separated.
 		reflectedArray := reflect.ValueOf(value)
@@ -679,7 +675,7 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 	for i, input := range inputs {
 		value, ok := values[input.Name]
 		if !ok {
-			err := fmt.Errorf("constructor argument not provided for: name: %v", input.Name)
+			err := fmt.Errorf("value not not provided for argument: name: %v", input.Name)
 			return nil, err
 		}
 		arg, err := decodeJSONArgument(&input.Type, value, deployedContractAddr)
