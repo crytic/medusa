@@ -11,7 +11,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/maps"
 )
@@ -43,9 +42,6 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
-
-	// methodChooser uses a weighted selection algorithm to choose a method to call, prioritizing state changing methods over pure ones.
-	methodChooser *randomutils.WeightedRandomChooser[fuzzerTypes.DeployedContractMethod]
 
 	// randomProvider provides random data as inputs to decisions throughout the worker.
 	randomProvider *rand.Rand
@@ -90,10 +86,10 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		fuzzer:               fuzzer,
 		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
+		pureMethods:          make([]fuzzerTypes.DeployedContractMethod, 0),
 		coverageTracer:       nil,
 		randomProvider:       randomProvider,
 		valueSet:             valueSet,
-		methodChooser:        randomutils.NewWeightedRandomChooser[fuzzerTypes.DeployedContractMethod](),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -239,19 +235,15 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
 		// If we deployed the contract, also enumerate property tests and state changing methods.
-		for _, method := range contractDefinition.CompiledContract().Abi.Methods {
-			// skip setUp method
-			if method.Name == "setUp" {
-				continue
-			}
+		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
-			// We favor calling state changing methods over view methods.
 			if method.IsConstant() {
-				fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(1)))
+				// Only track the pure/view method if testing view methods is enabled
+				if fw.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+					fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
+				}
 			} else {
 				fw.stateChangingMethods = append(fw.stateChangingMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
-				fw.methodChooser.AddChoices(randomutils.NewWeightedRandomChoice(fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method}, big.NewInt(100)))
 			}
 		}
 	}
@@ -309,6 +301,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
+		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -433,6 +427,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
+		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(callSequence)))
+
 		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
 				// Recreate our current optimized sequence without the item at this index
@@ -512,8 +508,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 	}
 
-	// We have a finalized call sequence, re-execute it, so our current chain state is representative of post-execution.
-	_, err := calls.ExecuteCallSequence(fw.chain, optimizedSequence)
+	// Reset our state before running tracing in FinishedCallback.
+	err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -521,15 +517,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
 	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
 	// test providers choose to attach themselves.
-	if fw.fuzzer.config.Fuzzing.Testing.TraceAll {
-		err = optimizedSequence.AttachExecutionTraces(fw.chain, fw.fuzzer.contractDefinitions)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// After we finished shrinking, report our result and return it.
-	err = shrinkRequest.FinishedCallback(fw, optimizedSequence)
+	err = shrinkRequest.FinishedCallback(fw, optimizedSequence, fw.fuzzer.config.Fuzzing.Testing.TraceAll)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +554,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// If we have coverage-guided fuzzing enabled, create a tracer to collect coverage and connect it to the chain.
 		if fw.fuzzer.config.Fuzzing.CoverageEnabled {
 			fw.coverageTracer = coverage.NewCoverageTracer()
-			initializedChain.AddTracer(fw.coverageTracer, true, false)
+			initializedChain.AddTracer(fw.coverageTracer.NativeTracer(), true, false)
 		}
 		return nil
 	})

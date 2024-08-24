@@ -1,6 +1,10 @@
 package contracts
 
 import (
+	"strings"
+
+	"golang.org/x/exp/slices"
+
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,7 +16,7 @@ type Contracts []*Contract
 // ContractSetupHook describes a contract setup hook
 type ContractSetupHook struct {
 	// Method represents the setup function
-	Method abi.Method
+	Method *abi.Method
 
 	// DeployerAddress represents the fuzzer's deployer address, to be used when calling the setup hook.
 	DeployerAddress common.Address
@@ -48,18 +52,54 @@ type Contract struct {
 	compilation *types.Compilation
 
 	// setupHook describes the contract's setup hook, if it exists.
-	setupHook *ContractSetupHook
+	SetupHook *ContractSetupHook
+
+	// PropertyTestMethods are the methods that are property tests.
+	PropertyTestMethods []abi.Method
+
+	// OptimizationTestMethods are the methods that are optimization tests.
+	OptimizationTestMethods []abi.Method
+
+	// AssertionTestMethods are ALL other methods that are not property or optimization tests by default.
+	// If configured, the methods will be targeted or excluded based on the targetFunctionSignatures
+	// and excludedFunctionSignatures, respectively.
+	AssertionTestMethods []abi.Method
 }
 
 // NewContract returns a new Contract instance with the provided information.
-func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation, setupHook *ContractSetupHook) *Contract {
+func NewContract(name string, sourcePath string, compiledContract *types.CompiledContract, compilation *types.Compilation) *Contract {
 	return &Contract{
 		name:             name,
 		sourcePath:       sourcePath,
 		compiledContract: compiledContract,
 		compilation:      compilation,
-		setupHook:        setupHook,
 	}
+}
+
+// WithTargetedAssertionMethods filters the assertion test methods to those in the target list.
+func (c *Contract) WithTargetedAssertionMethods(target []string) *Contract {
+	var candidateMethods []abi.Method
+	for _, method := range c.AssertionTestMethods {
+		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")
+		if slices.Contains(target, canonicalSig) {
+			candidateMethods = append(candidateMethods, method)
+		}
+	}
+	c.AssertionTestMethods = candidateMethods
+	return c
+}
+
+// WithExcludedAssertionMethods filters the assertion test methods to all methods not in excluded list.
+func (c *Contract) WithExcludedAssertionMethods(excludedMethods []string) *Contract {
+	var candidateMethods []abi.Method
+	for _, method := range c.AssertionTestMethods {
+		canonicalSig := strings.Join([]string{c.name, method.Sig}, ".")
+		if !slices.Contains(excludedMethods, canonicalSig) {
+			candidateMethods = append(candidateMethods, method)
+		}
+	}
+	c.AssertionTestMethods = candidateMethods
+	return c
 }
 
 // Name returns the name of the contract.
@@ -80,9 +120,4 @@ func (c *Contract) CompiledContract() *types.CompiledContract {
 // Compilation returns the compilation which contains the CompiledContract.
 func (c *Contract) Compilation() *types.Compilation {
 	return c.compilation
-}
-
-// SetupHook returns the contract's setup hook, if exists.
-func (c *Contract) SetupHook() *ContractSetupHook {
-	return c.setupHook
 }

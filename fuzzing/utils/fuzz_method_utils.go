@@ -1,8 +1,10 @@
 package utils
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
+
+	compilationTypes "github.com/crytic/medusa/compilation/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to
@@ -33,9 +35,11 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 	}
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
-		// The property test must simply have the right prefix and take no inputs
-		if strings.HasPrefix(method.Name, prefix) && len(method.Inputs) == 0 {
-			return true
+		// The property test must simply have the right prefix and take no inputs and return a boolean
+		if strings.HasPrefix(method.Name, prefix) {
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+				return true
+			}
 		}
 	}
 	return false
@@ -44,4 +48,20 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 // IsSetupHook checks whether the method is a setup hook
 func IsSetupHook(method abi.Method) bool {
 	return method.Name == "setUp"
+}
+
+// BinTestByType sorts a contract's methods by whether they are the contract's setup hook,assertion, property, or optimization tests.
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method, setupHook *abi.Method) {
+	for _, method := range contract.Abi.Methods {
+		if IsSetupHook(method) {
+			setupHook = &method
+		} else if IsPropertyTest(method, propertyTestPrefixes) {
+			propertyTests = append(propertyTests, method)
+		} else if IsOptimizationTest(method, optimizationTestPrefixes) {
+			optimizationTests = append(optimizationTests, method)
+		} else if !method.IsConstant() || testViewMethods {
+			assertionTests = append(assertionTests, method)
+		}
+	}
+	return assertionTests, propertyTests, optimizationTests, setupHook
 }

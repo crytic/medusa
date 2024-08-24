@@ -1,14 +1,15 @@
 package fuzzing
 
 import (
+	"math/big"
+	"sync"
+
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/fuzzing/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+
 	"golang.org/x/exp/slices"
-	"sync"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -40,27 +41,6 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
 	return t
-}
-
-// isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
-// Returns true if this target should be tested, false otherwise.
-func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
-	// Don't register setup hook as a test case
-	if utils.IsSetupHook(method) {
-		return false
-	}
-	// Do not test optimization tests
-	if utils.IsOptimizationTest(method, t.fuzzer.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes) {
-		return false
-	}
-
-	// Do not test property tests
-	if utils.IsPropertyTest(method, t.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestPrefixes) {
-		return false
-	}
-
-	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
 }
 
 // checkAssertionFailures checks the results of the last call for assertion failures.
@@ -107,12 +87,7 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 			continue
 		}
 
-		for _, method := range contract.CompiledContract().Abi.Methods {
-			// Verify this method is an assertion testable method
-			if !t.isTestableMethod(method) {
-				continue
-			}
-
+		for _, method := range contract.AssertionTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method
@@ -226,10 +201,10 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-				// When we're finished shrinking, attach an execution trace to the last call
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+				// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 				if len(shrunkenCallSequence) > 0 {
-					err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
 					if err != nil {
 						return err
 					}
@@ -238,6 +213,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// Update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
+				worker.workerMetrics().failedSequences.Add(worker.workerMetrics().failedSequences, big.NewInt(1))
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil
 			},

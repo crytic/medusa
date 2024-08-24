@@ -3,9 +3,10 @@ package coverage
 import (
 	"bytes"
 	"fmt"
+	"sort"
+
 	"github.com/crytic/medusa/compilation/types"
 	"golang.org/x/exp/maps"
-	"sort"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -102,6 +103,12 @@ type SourceLineAnalysis struct {
 	// IsCovered indicates whether the source line has been executed without reverting.
 	IsCovered bool
 
+	// SuccessHitCount describes how many times this line was executed successfully
+	SuccessHitCount uint
+
+	// RevertHitCount describes how many times this line reverted during execution
+	RevertHitCount uint
+
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
 }
@@ -117,7 +124,7 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 
 	// Loop through all sources in all compilations to add them to our source file analysis container.
 	for _, compilation := range compilations {
-		for sourcePath := range compilation.Sources {
+		for sourcePath := range compilation.SourcePathToArtifact {
 			// If we have no source code loaded for this source, skip it.
 			if _, ok := compilation.SourceCode[sourcePath]; !ok {
 				return nil, fmt.Errorf("could not perform source code analysis, code was not cached for '%v'", sourcePath)
@@ -135,9 +142,13 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 
 	// Loop through all sources in all compilations to process coverage information.
 	for _, compilation := range compilations {
-		for _, source := range compilation.Sources {
+		for _, source := range compilation.SourcePathToArtifact {
 			// Loop for each contract in this source
 			for _, contract := range source.Contracts {
+				// Skip interfaces.
+				if contract.Kind == types.ContractKindInterface {
+					continue
+				}
 				// Obtain coverage map data for this contract.
 				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
 				if err != nil {
@@ -196,26 +207,25 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
 		// relevance to the coverage map, so we skip it.
-		if sourceMapElement.FileID == -1 {
-			continue
-		}
-
-		// Verify this file ID is not out of bounds for a source file index
-		if sourceMapElement.FileID < 0 || sourceMapElement.FileID >= len(compilation.SourceList) {
-			// TODO: We may also go out of bounds because this maps to a "generated source" which we do not have.
-			//  For now, we silently skip these cases.
+		if sourceMapElement.SourceUnitID == -1 {
 			continue
 		}
 
 		// Obtain our source for this file ID
-		sourcePath := compilation.SourceList[sourceMapElement.FileID]
+		sourcePath, idExists := compilation.SourceIdToPath[sourceMapElement.SourceUnitID]
 
-		// Check if the source map element was executed.
-		sourceMapElementCovered := false
-		sourceMapElementCoveredReverted := false
+		// TODO: We may also go out of bounds because this maps to a "generated source" which we do not have.
+		//  For now, we silently skip these cases.
+		if !idExists {
+			continue
+		}
+
+		// Capture the hit count of the source map element.
+		succHitCount := uint(0)
+		revertHitCount := uint(0)
 		if contractCoverageData != nil {
-			sourceMapElementCovered = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
-			sourceMapElementCoveredReverted = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
 		}
 
 		// Obtain the source file this element maps to.
@@ -228,9 +238,11 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 					// Mark the line active/executable.
 					sourceLine.IsActive = true
 
-					// Set its coverage state
-					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
-					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceMapElementCoveredReverted
+					// Set its coverage state and increment hit counts
+					sourceLine.SuccessHitCount += succHitCount
+					sourceLine.RevertHitCount += revertHitCount
+					sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
+					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.
@@ -258,7 +270,7 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 	// Loop for each source map entry and determine if it should be included.
 	for i, sourceMapElement := range sourceMap {
 		// Verify this file ID is not out of bounds for a source file index
-		if sourceMapElement.FileID < 0 || sourceMapElement.FileID >= len(compilation.SourceList) {
+		if _, exists := compilation.SourceIdToPath[sourceMapElement.SourceUnitID]; !exists {
 			// TODO: We may also go out of bounds because this maps to a "generated source" which we do not have.
 			//  For now, we silently skip these cases.
 			continue
@@ -267,7 +279,7 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 		// Verify this source map does not overlap another
 		encapsulatesOtherMapping := false
 		for x, sourceMapElement2 := range sourceMap {
-			if i != x && sourceMapElement.FileID == sourceMapElement2.FileID &&
+			if i != x && sourceMapElement.SourceUnitID == sourceMapElement2.SourceUnitID &&
 				!(sourceMapElement.Offset == sourceMapElement2.Offset && sourceMapElement.Length == sourceMapElement2.Length) {
 				if sourceMapElement2.Offset >= sourceMapElement.Offset &&
 					sourceMapElement2.Offset+sourceMapElement2.Length <= sourceMapElement.Offset+sourceMapElement.Length {
