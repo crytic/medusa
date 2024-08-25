@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 )
 
@@ -114,6 +115,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 	// Get main command and set working directory
 	cmd := exec.Command("crytic-compile", args...)
+	logging.GlobalLogger.Info("Running command:\n", cmd.String())
 
 	// Install a specific `solc` version if requested in the config
 	if c.SolcVersion != "" {
@@ -143,7 +145,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	var compilationList []types.Compilation
 
 	// Define the structure of our crytic-compile export data.
-	type solcExportSource struct {
+	type solcSourceUnit struct {
 		AST any `json:"AST"`
 	}
 	type solcExportContract struct {
@@ -154,9 +156,8 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		BinRuntime    string `json:"bin-runtime"`
 	}
 	type solcExportData struct {
-		Sources    map[string]solcExportSource   `json:"sources"`
-		Contracts  map[string]solcExportContract `json:"contracts"`
-		SourceList []string                      `json:"sourceList"`
+		Sources   map[string]solcSourceUnit     `json:"sources"`
+		Contracts map[string]solcExportContract `json:"contracts"`
 	}
 
 	// Loop through each .json file for compilation units.
@@ -176,14 +177,41 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 		// Create a compilation object that will store the contracts and source information.
 		compilation := types.NewCompilation()
-		compilation.SourceList = solcExport.SourceList
+
+		// Create a map of contract names to their kinds
+		contractKinds := make(map[string]types.ContractKind)
 
 		// Loop through all sources and parse them into our types.
 		for sourcePath, source := range solcExport.Sources {
-			compilation.Sources[sourcePath] = types.CompiledSource{
-				Ast:       source.AST,
-				Contracts: make(map[string]types.CompiledContract),
+			// Convert the AST into our version of the AST (types.AST)
+			var ast types.AST
+			b, err = json.Marshal(source.AST)
+			if err != nil {
+				return nil, "", fmt.Errorf("could not encode AST from sources: %v", err)
 			}
+			err = json.Unmarshal(b, &ast)
+			if err != nil {
+				return nil, "", fmt.Errorf("could not parse AST from sources: %v", err)
+			}
+
+			// From the AST, extract the contract kinds where the contract definition could be for a contract, library,
+			// or interface
+			for _, node := range ast.Nodes {
+				if node.GetNodeType() == "ContractDefinition" {
+					contractDefinition := node.(types.ContractDefinition)
+					contractKinds[contractDefinition.CanonicalName] = contractDefinition.Kind
+				}
+			}
+
+			// Retrieve the source unit ID
+			sourceUnitId := ast.GetSourceUnitID()
+			compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
+				// TODO: Our types.AST is not the same as the original AST but we could parse it and avoid using "any"
+				Ast:          source.AST,
+				Contracts:    make(map[string]types.CompiledContract),
+				SourceUnitId: sourceUnitId,
+			}
+			compilation.SourceIdToPath[sourceUnitId] = sourcePath
 		}
 
 		// Loop through all contracts and parse them into our types.
@@ -198,12 +226,12 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 
 			// Ensure a source exists for this, or create one if our path somehow differed from any
 			// path not existing in the "sources" key at the root of the export.
-			if _, ok := compilation.Sources[sourcePath]; !ok {
-				parentSource := types.CompiledSource{
+			if _, ok := compilation.SourcePathToArtifact[sourcePath]; !ok {
+				parentSource := types.SourceArtifact{
 					Ast:       nil,
 					Contracts: make(map[string]types.CompiledContract),
 				}
-				compilation.Sources[sourcePath] = parentSource
+				compilation.SourcePathToArtifact[sourcePath] = parentSource
 			}
 
 			// Parse the ABI
@@ -223,12 +251,13 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			}
 
 			// Add contract details
-			compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
+			compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
 				Abi:             *contractAbi,
 				InitBytecode:    initBytecode,
 				RuntimeBytecode: runtimeBytecode,
 				SrcMapsInit:     contract.SrcMap,
 				SrcMapsRuntime:  contract.SrcMapRuntime,
+				Kind:            contractKinds[contractName],
 			}
 		}
 
