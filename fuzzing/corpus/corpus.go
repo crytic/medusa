@@ -107,11 +107,11 @@ func (c *Corpus) migrateLegacyCorpus() error {
 
 	// Only return an error if the error is something other than "filepath does not exist"
 	mutableDirInfo, err := os.Stat(mutablePath)
-	if err != nil && err != os.ErrNotExist {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	immutableDirInfo, err := os.Stat(immutablePath)
-	if err != nil && err != os.ErrNotExist {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
