@@ -168,7 +168,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		}
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(address, *callFrameState.lookupHash, codeSize, pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, pc)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
