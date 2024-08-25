@@ -3,7 +3,9 @@ package corpus
 import (
 	"bytes"
 	"fmt"
+	"github.com/crytic/medusa/utils"
 	"math/big"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -69,6 +71,14 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 
 	// If we have a corpus directory set, parse our call sequences.
 	if corpus.storageDirectory != "" {
+		// Migrate the legacy corpus structure
+		// Note that it is important to call this first since we want to move all the call sequence files before reading
+		// them into the corpus
+		err = corpus.migrateLegacyCorpus()
+		if err != nil {
+			return nil, err
+		}
+
 		// Read call sequences.
 		corpus.callSequenceFiles.path = filepath.Join(corpus.storageDirectory, "call_sequences")
 		err = corpus.callSequenceFiles.readFiles("*.json")
@@ -85,6 +95,82 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	}
 
 	return corpus, nil
+}
+
+// migrateLegacyCorpus is used to read in the legacy corpus standard where call sequences were stored in two separate
+// directories (mutable/immutable).
+func (c *Corpus) migrateLegacyCorpus() error {
+	// Check to see if the mutable and/or the immutable directories exist
+	callSequencePath := filepath.Join(c.storageDirectory, "call_sequences")
+	mutablePath := filepath.Join(c.storageDirectory, "call_sequences", "mutable")
+	immutablePath := filepath.Join(c.storageDirectory, "call_sequences", "immutable")
+
+	// Only return an error if the error is something other than "filepath does not exist"
+	mutableDirInfo, err := os.Stat(mutablePath)
+	if err != nil && err != os.ErrNotExist {
+		return err
+	}
+	immutableDirInfo, err := os.Stat(immutablePath)
+	if err != nil && err != os.ErrNotExist {
+		return err
+	}
+
+	// Return early if these directories do not exist
+	if mutableDirInfo == nil && immutableDirInfo == nil {
+		return nil
+	}
+
+	// Now, we need to notify the user that we have detected a legacy structure
+	c.logger.Info("Detected legacy corpus structure, reading call sequences from the mutable and immutable " +
+		"directories")
+
+	// If the mutable directory exists, read in all the files and add them to the call sequence files
+	if mutableDirInfo != nil {
+		// Discover all corpus files in the given directory.
+		filePaths, err := filepath.Glob(filepath.Join(mutablePath, "*.json"))
+		if err != nil {
+			return err
+		}
+
+		// Move each file from the mutable directory to the parent call_sequences directory
+		for _, filePath := range filePaths {
+			err = utils.MoveFile(filePath, filepath.Join(callSequencePath, filepath.Base(filePath)))
+			if err != nil {
+				return err
+			}
+		}
+
+		// Delete the mutable directory
+		err = utils.DeleteDirectory(mutablePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	// If the immutable directory exists, read in all the files and add them to the call sequence files
+	if immutableDirInfo != nil {
+		// Discover all corpus files in the given directory.
+		filePaths, err := filepath.Glob(filepath.Join(immutablePath, "*.json"))
+		if err != nil {
+			return err
+		}
+
+		// Move each file from the immutable directory to the parent call_sequences directory
+		for _, filePath := range filePaths {
+			err = utils.MoveFile(filePath, filepath.Join(callSequencePath, filepath.Base(filePath)))
+			if err != nil {
+				return err
+			}
+		}
+
+		// Delete the immutable directory
+		err = utils.DeleteDirectory(immutablePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // CoverageMaps exposes coverage details for all call sequences known to the corpus.
@@ -383,7 +469,7 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 
 	// If we had an increase in non-reverted or reverted coverage, we save the sequence.
 	if coverageUpdated || revertedCoverageUpdated {
-		// If we achieved new non-reverting coverage, save this sequence for mutation purposes.
+		// If we achieved new coverage, save this sequence for mutation purposes.
 		err = c.addCallSequence(c.callSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
 			return err
