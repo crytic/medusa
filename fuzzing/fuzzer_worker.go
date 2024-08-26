@@ -443,7 +443,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 		// First, remove all reverting txs from the sequence.
 		var withoutReverts calls.CallSequence
-		for i := 0; i < len(optimizedSequence); i++ {
+		for i := 0; i < len(optimizedSequence) && !shrinkingEnded(); i++ {
 			var err error
 			withoutReverts, err = optimizedSequence.Clone()
 			if err != nil {
@@ -468,30 +468,31 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		}
 
 		for !shrinkingEnded() {
-			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
-				// Clone the optimized sequence.
-				possibleShrunkSequence, _ := optimizedSequence.Clone()
 
-				// Alternate
-				coinToss := fw.randomProvider.Int() % 2
-				if coinToss == 0 || len(possibleShrunkSequence) == 1 {
-					fw.shrinkParam(&possibleShrunkSequence)
-				} else {
-					fw.shorten(&possibleShrunkSequence)
-				}
+			// Clone the optimized sequence.
+			possibleShrunkSequence, _ := optimizedSequence.Clone()
 
-				// Test the shrunken sequence.
-				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
-				shrinkIteration++
-				if err != nil {
-					return nil, err
-				}
-
-				// If this current sequence satisfied our conditions, set it as our optimized sequence.
-				if validShrunkSequence {
-					optimizedSequence = possibleShrunkSequence
-				}
+			// Alternate
+			coinToss := fw.randomProvider.Int() % 2
+			if coinToss == 0 || len(possibleShrunkSequence) == 1 {
+				fw.shrinkParam(&possibleShrunkSequence)
+			} else {
+				fw.shorten(&possibleShrunkSequence)
 			}
+
+			// Test the shrunken sequence.
+			validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
+			shrinkIteration++
+			if err != nil {
+				return nil, err
+			}
+
+			// If this current sequence satisfied our conditions, set it as our optimized sequence.
+			if validShrunkSequence {
+				optimizedSequence = possibleShrunkSequence
+			}
+
+			shrinkLimit--
 		}
 		fw.workerMetrics().shrinking = false
 	}
