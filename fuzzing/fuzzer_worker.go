@@ -400,6 +400,22 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	return validShrunkSequence, nil
 }
 
+func (fw *FuzzerWorker) shrinkParam(callSequence *calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(*callSequence))
+	abiValuesMsgData := (*callSequence)[i].Call.DataAbiValues
+	for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
+		mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
+		abiValuesMsgData.InputValues[j] = mutatedInput
+	}
+	// Re-encode the message's calldata
+	(*callSequence)[i].Call.WithDataAbiValues(abiValuesMsgData)
+}
+
+func (fw *FuzzerWorker) shorten(callSequence *calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(*callSequence))
+	*callSequence = append((*callSequence)[:i], (*callSequence)[i+1:]...)
+}
+
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
 // calls which can be removed, and values which can be minimized, while continuing to satisfy the provided shrink
 // verifier.
@@ -445,66 +461,19 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			optimizedSequence = withoutReverts
 		}
 
-		// The first pass of shrinking is greedy towards trying to remove any unnecessary calls.
-		// For each call in the sequence, the following removal strategies are used:
-		// 1) Plain removal (lower block/time gap between surrounding blocks, maintain properties of max delay)
-		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
-		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
-		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
-			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
-				// Recreate our current optimized sequence without the item at this index
-				possibleShrunkSequence, err := optimizedSequence.Clone()
-				removedCall := possibleShrunkSequence[i]
-				if err != nil {
-					return nil, err
-				}
-				possibleShrunkSequence = append(possibleShrunkSequence[:i], possibleShrunkSequence[i+1:]...)
-
-				// Exercise the next removal strategy for this call.
-				if removalStrategy == 0 {
-					// Case 1: Plain removal.
-				} else if removalStrategy == 1 {
-					// Case 2: Add block/time delay to previous call.
-					if i > 0 {
-						possibleShrunkSequence[i-1].BlockNumberDelay += removedCall.BlockNumberDelay
-						possibleShrunkSequence[i-1].BlockTimestampDelay += removedCall.BlockTimestampDelay
-					}
-				}
-
-				// Test the shrunken sequence.
-				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
-				shrinkIteration++
-				if err != nil {
-					return nil, err
-				}
-
-				// If the current sequence satisfied our conditions, set it as our optimized sequence.
-				if validShrunkSequence {
-					optimizedSequence = possibleShrunkSequence
-				}
-			}
-		}
-
-		// The second pass of shrinking attempts to shrink values for each call in our call sequence.
-		// This is performed exhaustively in a round-robin fashion for each call, until the shrink limit is hit.
 		for !shrinkingEnded() {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
 				// Clone the optimized sequence.
 				possibleShrunkSequence, _ := optimizedSequence.Clone()
 
-				// Loop for each argument in the currently indexed call to mutate it.
-				abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
-				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
-					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
-					if err != nil {
-						return nil, fmt.Errorf("error when shrinking call sequence input argument: %v", err)
-					}
-					abiValuesMsgData.InputValues[j] = mutatedInput
+				// Alternate
+				coinToss := fw.randomProvider.Int() % 2
+				if coinToss == 0 || len(possibleShrunkSequence) == 1 {
+					fw.shrinkParam(&possibleShrunkSequence)
+				} else {
+					fw.shorten(&possibleShrunkSequence)
 				}
-
-				// Re-encode the message's calldata
-				possibleShrunkSequence[i].Call.WithDataAbiValues(abiValuesMsgData)
 
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
