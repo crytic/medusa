@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
@@ -290,13 +291,19 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		compilation := &f.compilations[len(f.compilations)-1]
 
 		// Loop for each source
-		for sourcePath, source := range compilation.Sources {
+		for sourcePath, source := range compilation.SourcePathToArtifact {
 			// Seed our base value set from every source's AST
 			f.baseValueSet.SeedFromAst(source.Ast)
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
+
+				// Skip interfaces.
+				if contract.Kind == compilationTypes.ContractKindInterface {
+					continue
+				}
+
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
@@ -394,11 +401,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
-		// TODO filter libraries
-		if len(fuzzer.contractDefinitions) == 1 {
-			fuzzer.config.Fuzzing.TargetContracts = []string{fuzzer.contractDefinitions[0].Name()}
-		} else {
-			return nil, fmt.Errorf("missing target contracts")
+		var found bool
+		for _, contract := range fuzzer.contractDefinitions {
+			// If only one contract is defined, we can infer the target contract by filtering interfaces/libraries.
+			if contract.CompiledContract().Kind == compilationTypes.ContractKindContract {
+				if !found {
+					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
+					found = true
+				} else {
+					return nil, fmt.Errorf("specify target contract(s)")
+				}
+			}
 		}
 	}
 
@@ -815,7 +828,11 @@ func (f *Fuzzer) Start() error {
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
-		f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+		if err != nil {
+			f.logger.Error("Failed to generate coverage report", err)
+		} else {
+			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+		}
 	}
 
 	// Return any encountered error.
@@ -846,6 +863,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		// Obtain our metrics
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
+		failedSequences := f.metrics.FailedSequences()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 		workersShrinking := f.metrics.WorkersShrinkingCount()
 
@@ -865,8 +883,9 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
+		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
-			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		}
