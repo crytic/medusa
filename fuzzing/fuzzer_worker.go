@@ -302,6 +302,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
+		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -436,6 +438,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.ctx)
 	}
 	if shrinkLimit > 0 {
+		fw.workerMetrics().shrinking = true
+		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(callSequence)))
 
 		// First, remove all reverting txs from the sequence.
 		var withoutReverts calls.CallSequence
@@ -451,17 +455,18 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			if lastMessageResult.Receipt.Status == types.ReceiptStatusFailed {
 				withoutReverts = append(withoutReverts[:i], withoutReverts[i+1:]...)
 			}
+			shrinkLimit--
 		}
 		// Test the sequence with all reverts removed.
 		validShrunkSequence, err := fw.testShrunkenCallSequence(withoutReverts, shrinkRequest)
 		if err != nil {
 			return nil, err
 		}
+
 		if validShrunkSequence {
 			optimizedSequence = withoutReverts
 		}
 
-		fw.workerMetrics().shrinking = true
 		for !shrinkingEnded() {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
 				// Clone the optimized sequence.
