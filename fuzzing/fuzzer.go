@@ -156,7 +156,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		ReversionStats:      reversion.CreateReversionStatistics(),
+		ReversionStats:      reversion.CreateReversionStatistics(config.Fuzzing.Testing.ReversionMeasurement),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,

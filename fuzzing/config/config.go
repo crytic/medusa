@@ -133,6 +133,9 @@ type TestingConfig struct {
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
 
+	// ReversionMeasurement describes the configuration options used for measuring reversion rates of top level calls
+	ReversionMeasurement ReversionMeasurementConfig `json:"reversionMeasurement"`
+
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
 
@@ -183,6 +186,15 @@ func (testCfg *TestingConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// ReversionMeasurementConfig describe the configuration options used for measuring reversion rates of top level calls
+type ReversionMeasurementConfig struct {
+	// Enabled describes whether reversion measurement is enabled.
+	Enabled bool `json:"enabled"`
+
+	// DisplayAfterRun configures whether reversion statistics should be printed to the console after a run.
+	DisplayAfterRun bool `json:"displayAfterRun"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing

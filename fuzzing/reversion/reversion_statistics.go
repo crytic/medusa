@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -13,13 +14,17 @@ import (
 type ReversionStatistics struct {
 	incomingReportsQueue chan *RevertReport
 
-	aggReport *RevertReport
+	aggReport       *RevertReport
+	enabled         bool
+	displayAfterRun bool
 }
 
-func CreateReversionStatistics() *ReversionStatistics {
+func CreateReversionStatistics(config config.ReversionMeasurementConfig) *ReversionStatistics {
 	return &ReversionStatistics{
 		incomingReportsQueue: make(chan *RevertReport, 100),
 		aggReport:            createRevertReport(),
+		enabled:              config.Enabled,
+		displayAfterRun:      config.DisplayAfterRun,
 	}
 }
 
@@ -39,6 +44,9 @@ func (s *ReversionStatistics) StartWorker(ctx context.Context) func() {
 }
 
 func (s *ReversionStatistics) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
+	if !s.enabled {
+		return nil
+	}
 	report := createRevertReport()
 
 	for i, msg := range event.Block.Messages {
@@ -74,6 +82,9 @@ func (s *ReversionStatistics) OnPendingBlockCommittedEvent(event chain.PendingBl
 }
 
 func (s *ReversionStatistics) PrintStats(contractDefs fuzzerTypes.Contracts) {
+	if !s.enabled || !s.displayAfterRun {
+		return
+	}
 	errorLookup := make(map[errorSelector]string)
 	functionLookup := make(map[functionSelector]string)
 
@@ -89,7 +100,7 @@ func (s *ReversionStatistics) PrintStats(contractDefs fuzzerTypes.Contracts) {
 			functionLookup[funcSel] = label
 		}
 	}
-	errorLookup[errorSelector{78, 72, 123, 113}] = "Panic()"
+	//errorLookup[errorSelector{78, 72, 123, 113}] = "Panic()"
 	s.aggReport.PrintStats(functionLookup, errorLookup)
 }
 
