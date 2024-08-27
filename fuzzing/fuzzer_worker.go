@@ -93,7 +93,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
-	worker.Events.CallSequenceTested.Subscribe(fuzzer.ReversionStats.onFuzzWorkerCallSequenceTestedEvent)
 
 	return worker, nil
 }
@@ -542,6 +541,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// Subscribe our chain event handlers
 		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
+		initializedChain.Events.PendingBlockCommitted.Subscribe(fw.Fuzzer().ReversionStats.OnPendingBlockCommittedEvent)
 
 		// Emit an event indicating the worker has created its chain.
 		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
