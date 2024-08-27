@@ -455,7 +455,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			if lastMessageResult.Receipt.Status == types.ReceiptStatusFailed {
 				withoutReverts = append(withoutReverts[:i], withoutReverts[i+1:]...)
 			}
-			shrinkLimit--
 		}
 		// Test the sequence with all reverts removed.
 		validShrunkSequence, err := fw.testShrunkenCallSequence(withoutReverts, shrinkRequest)
