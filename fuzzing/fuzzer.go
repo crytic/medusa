@@ -762,8 +762,8 @@ func (f *Fuzzer) Start() error {
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
-	if f.corpus.CallSequenceEntryCount(true, true, true) > 0 {
-		f.logger.Info("Running call sequences in the corpus...")
+	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
+		f.logger.Info("Running call sequences in the corpus")
 	}
 	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
