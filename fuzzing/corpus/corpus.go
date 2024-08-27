@@ -3,12 +3,13 @@ package corpus
 import (
 	"bytes"
 	"fmt"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -121,8 +122,7 @@ func (c *Corpus) migrateLegacyCorpus() error {
 	}
 
 	// Now, we need to notify the user that we have detected a legacy structure
-	c.logger.Info("Detected legacy corpus structure, reading call sequences from the mutable and immutable " +
-		"directories")
+	c.logger.Info("Migrating legacy corpus")
 
 	// If the mutable directory exists, read in all the files and add them to the call sequence files
 	if mutableDirInfo != nil {
