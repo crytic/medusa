@@ -7,6 +7,8 @@ contract PredeployContract {
 contract TestContract {
     PredeployContract predeploy = PredeployContract(address(0x1234));
 
+    constructor() payable {}
+    
     function testPredeploy() public {
         predeploy.triggerFailure();
     }
