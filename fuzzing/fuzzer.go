@@ -70,6 +70,8 @@ type Fuzzer struct {
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
 
+	ReversionStats *ReversionStatistics
+
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
 	randomProvider *rand.Rand
@@ -153,6 +155,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
+		ReversionStats:      CreateReversionStatistics(),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -476,7 +479,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				}
 
 				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+				err, _ = testChain.PendingBlockAddTx(msg.ToCoreMessage())
 				if err != nil {
 					return nil, err
 				}
@@ -803,12 +806,15 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
+	// Measure reversion stats across all workers
+	cleanup := f.ReversionStats.StartWorker(f.ctx)
+
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 	if err != nil {
 		f.logger.Error("Encountered an error in the main fuzzing loop", err)
 	}
-
+	cleanup()
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
@@ -827,10 +833,9 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
-
 	// Print our results on exit.
 	f.printExitingResults()
-
+	f.ReversionStats.PrintStats(f.ContractDefinitions())
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")

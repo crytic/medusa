@@ -93,6 +93,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
+	worker.Events.CallSequenceTested.Subscribe(fuzzer.ReversionStats.onFuzzWorkerCallSequenceTestedEvent)
 
 	return worker, nil
 }
@@ -615,9 +616,10 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			}
 		}
 
-		// Emit an event indicating the worker is about to test a new call sequence.
+		// Emit an event indicating the worker has completed testing a call sequence.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
-			Worker: fw,
+			Worker:   fw,
+			Sequence: callSequence,
 		})
 		if err != nil {
 			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence has concluded: %v", err)

@@ -88,7 +88,8 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			}
 
 			// Try to add our transaction to this block.
-			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
+			err, execResult := chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
+			callSequenceElement.ExecutionResult = execResult
 
 			if err != nil {
 				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
