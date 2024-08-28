@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/reversion"
 	"math/big"
 	"math/rand"
@@ -20,7 +21,6 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
-	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
@@ -156,7 +156,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		ReversionStats:      reversion.CreateReversionStatistics(config.Fuzzing.Testing.ReversionMeasurement),
+		ReversionStats:      reversion.CreateReversionStatistics(config),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -836,8 +836,14 @@ func (f *Fuzzer) Start() error {
 	}
 	// Print our results on exit.
 	f.printExitingResults()
-	f.ReversionStats.PrintStats(f.ContractDefinitions())
+
+	err = f.ReversionStats.BuildArtifactAndPrintResults(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		f.logger.Error("Failed to convert reversion metrics to an artifact", err)
+	}
+
 	// Finally, generate our coverage report if we have set a valid corpus directory.
+
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
@@ -846,6 +852,10 @@ func (f *Fuzzer) Start() error {
 		} else {
 			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
 		}
+	}
+	err = f.ReversionStats.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
+	if err != nil {
+		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}
 
 	// Return any encountered error.

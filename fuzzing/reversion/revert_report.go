@@ -3,6 +3,7 @@ package reversion
 import (
 	"fmt"
 	"github.com/crytic/medusa/compilation/abiutils"
+	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 )
 
 type functionSelector = [4]byte
@@ -69,6 +70,41 @@ func (s *RevertReport) concatReports(other *RevertReport) {
 	}
 }
 
+// ToArtifact Converts the revert report to an artifact object. Does not populate previous report data or sort the data.
+func (s *RevertReport) ToArtifact(contractDefs fuzzerTypes.Contracts) *ReportArtifact {
+	funcLookup, errLookup := buildSelectorLookups(contractDefs)
+	artifact := &ReportArtifact{}
+
+	for funcSel, runCount := range s.TotalCalls {
+		revertCount := s.RevertedCalls[funcSel]
+		funcName := funcLookup[funcSel]
+		funcArtifact := &FunctionArtifact{
+			Name:          funcName,
+			TotalCalls:    runCount,
+			TotalReverts:  revertCount,
+			RevertPct:     float64(revertCount) / float64(runCount),
+			PrevRevertPct: nil,
+			RevertReasons: []*RevertReasonArtifact{},
+		}
+
+		for errSel, errCount := range s.RevertedCallReasons[funcSel] {
+			errName, ok := errLookup[errSel]
+			if !ok {
+				errName = decodeSmuggledSolidityRevertReason(errSel)
+			}
+			revertReason := &RevertReasonArtifact{
+				Reason:            errName,
+				Total:             errCount,
+				PctAttributed:     float64(errCount) / float64(revertCount),
+				PrevPctAttributed: nil,
+			}
+			funcArtifact.RevertReasons = append(funcArtifact.RevertReasons, revertReason)
+		}
+		artifact.FunctionArtifacts = append(artifact.FunctionArtifacts, funcArtifact)
+	}
+	return artifact
+}
+
 func (s *RevertReport) PrintStats(funcLookup, errLookup map[[4]byte]string) {
 	for funcSel, runCount := range s.TotalCalls {
 		funcName := funcLookup[funcSel]
@@ -84,6 +120,25 @@ func (s *RevertReport) PrintStats(funcLookup, errLookup map[[4]byte]string) {
 			fmt.Printf("-> %0.1fpct due to %s\n", revertPct*100, errName)
 		}
 	}
+}
+
+func buildSelectorLookups(contractDefs fuzzerTypes.Contracts) (map[functionSelector]string, map[errorSelector]string) {
+	errorLookup := make(map[errorSelector]string)
+	functionLookup := make(map[functionSelector]string)
+
+	for _, contract := range contractDefs {
+		for label, detail := range contract.CompiledContract().Abi.Errors {
+			errSel := errorSelector{}
+			copy(errSel[:], detail.ID[:4])
+			errorLookup[errSel] = label
+		}
+		for label, detail := range contract.CompiledContract().Abi.Methods {
+			funcSel := functionSelector{}
+			copy(funcSel[:], detail.ID[:4])
+			functionLookup[funcSel] = label
+		}
+	}
+	return functionLookup, errorLookup
 }
 
 func decodeSmuggledSolidityRevertReason(selector [4]byte) string {

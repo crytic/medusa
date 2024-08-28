@@ -2,13 +2,17 @@ package reversion
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"os"
+	"path/filepath"
 )
 
 type ReversionStatistics struct {
@@ -17,14 +21,15 @@ type ReversionStatistics struct {
 	aggReport       *RevertReport
 	enabled         bool
 	displayAfterRun bool
+	reportArtifact  *ReportArtifact
 }
 
-func CreateReversionStatistics(config config.ReversionMeasurementConfig) *ReversionStatistics {
+func CreateReversionStatistics(config config.ProjectConfig) *ReversionStatistics {
 	return &ReversionStatistics{
 		incomingReportsQueue: make(chan *RevertReport, 100),
 		aggReport:            createRevertReport(),
-		enabled:              config.Enabled,
-		displayAfterRun:      config.DisplayAfterRun,
+		enabled:              config.Fuzzing.Testing.ReversionMeasurement.Enabled,
+		displayAfterRun:      config.Fuzzing.Testing.ReversionMeasurement.DisplayAfterRun,
 	}
 }
 
@@ -81,6 +86,42 @@ func (s *ReversionStatistics) OnPendingBlockCommittedEvent(event chain.PendingBl
 	return nil
 }
 
+func (s *ReversionStatistics) BuildArtifactAndPrintResults(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
+	if !s.enabled {
+		return nil
+	}
+	artifact, err := CreateRevertReportArtifact(logger, s.aggReport, contractDefs, corpusDir)
+	if err != nil {
+		return err
+	}
+
+	s.reportArtifact = artifact
+	if s.displayAfterRun {
+		// display
+	}
+
+	return nil
+}
+
+func (s *ReversionStatistics) WriteReport(dir string, logger *logging.Logger) error {
+	if !s.enabled {
+		return nil
+	}
+	if s.reportArtifact == nil {
+		return errors.New("report artifact missing")
+	}
+	jsonpath := filepath.Join(dir, "revert_stats.json")
+	err := s.writeReportJson(jsonpath, logger)
+	if err != nil {
+		return err
+	}
+
+	markdownpath := filepath.Join(dir, "revert_stats.html")
+	err = s.writeReportHtml(markdownpath, logger)
+
+	return err
+}
+
 func (s *ReversionStatistics) PrintStats(contractDefs fuzzerTypes.Contracts) {
 	if !s.enabled || !s.displayAfterRun {
 		return
@@ -102,6 +143,37 @@ func (s *ReversionStatistics) PrintStats(contractDefs fuzzerTypes.Contracts) {
 	}
 	//errorLookup[errorSelector{78, 72, 123, 113}] = "Panic()"
 	s.aggReport.PrintStats(functionLookup, errorLookup)
+}
+
+func (s *ReversionStatistics) writeReportHtml(path string, logger *logging.Logger) error {
+	file, err := os.Create(path)
+	defer file.Close()
+	if err != nil {
+		return err
+	}
+	err = s.reportArtifact.ConvertToHtml(file)
+
+	if err == nil {
+		logger.Info("Revert stats report written to: ", path)
+	}
+	return err
+}
+
+func (s *ReversionStatistics) writeReportJson(path string, logger *logging.Logger) error {
+	file, err := os.Create(path)
+	defer file.Close()
+	if err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(s.reportArtifact, "", "    ")
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(b)
+	if err == nil {
+		logger.Info("Revert stats written to file: ", path)
+	}
+	return err
 }
 
 func getRevertReason(result *core.ExecutionResult) errorSelector {
