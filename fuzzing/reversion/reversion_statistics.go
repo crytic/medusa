@@ -20,6 +20,7 @@ type ReversionMeasurer struct {
 
 	aggReport      *RevertReport
 	enabled        bool
+	writeReports   bool
 	reportArtifact *ReportArtifact
 }
 
@@ -29,6 +30,7 @@ func CreateReversionMeasurer(config config.ProjectConfig) *ReversionMeasurer {
 		incomingReportsQueue: make(chan *RevertReport, 100),
 		aggReport:            createRevertReport(),
 		enabled:              config.Fuzzing.Testing.ReversionMeasurement.Enabled,
+		writeReports:         config.Fuzzing.Testing.ReversionMeasurement.WriteReports,
 	}
 }
 
@@ -92,7 +94,7 @@ func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBloc
 
 // BuildArtifact converts aggregated report information into an artifact that can be easily serialized.
 func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
-	if !s.enabled {
+	if !s.enabled || !s.writeReports {
 		return nil
 	}
 	artifact, err := CreateRevertReportArtifact(logger, s.aggReport, contractDefs, corpusDir)
@@ -107,7 +109,7 @@ func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs f
 // WriteReport takes the generated reportArtifact and writes it to the provided dir. Two artifacts are written;
 // a revert statistics json file, and a user-readable html file.
 func (s *ReversionMeasurer) WriteReport(dir string, logger *logging.Logger) error {
-	if !s.enabled {
+	if !s.enabled || !s.writeReports {
 		return nil
 	}
 	if s.reportArtifact == nil {

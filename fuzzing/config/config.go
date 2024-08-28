@@ -192,6 +192,9 @@ func (testCfg *TestingConfig) Validate() error {
 type ReversionMeasurementConfig struct {
 	// Enabled describes whether reversion measurement is enabled.
 	Enabled bool `json:"enabled"`
+
+	// WriteReports describes whether reversion reports should be written
+	WriteReports bool `json:"writeReports"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
