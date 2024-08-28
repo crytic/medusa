@@ -22,10 +22,12 @@ var (
 	htmlReportTemplate []byte
 )
 
+// ReportArtifact represents a serializable reversion report
 type ReportArtifact struct {
 	FunctionArtifacts []*FunctionArtifact `json:"function_artifacts"`
 }
 
+// FunctionArtifact represents the serializable reversion metrics for a specific function
 type FunctionArtifact struct {
 	Name          string                  `json:"name"`
 	TotalCalls    uint                    `json:"total_calls"`
@@ -35,6 +37,7 @@ type FunctionArtifact struct {
 	RevertReasons []*RevertReasonArtifact `json:"revert_reasons"`
 }
 
+// RevertReasonArtifact represents the serializable reversion metrics for a specific revert reason for a specific function
 type RevertReasonArtifact struct {
 	Reason            string   `json:"reason"`
 	Total             uint     `json:"total"`
@@ -42,6 +45,8 @@ type RevertReasonArtifact struct {
 	PrevPctAttributed *float64 `json:"prev_pct_attributed"`
 }
 
+// CreateRevertReportArtifact Converts the provided RevertReport into a serializable ReportArtifact. Checks the corpusDir
+// for a previous report that can be used to populate previous-run metrics.
 func CreateRevertReportArtifact(logger *logging.Logger, report *RevertReport, contractDefs fuzzerTypes.Contracts, corpusDir string) (*ReportArtifact, error) {
 	prevReportArtifact, err := loadArtifact(logger, corpusDir)
 	if err != nil {
@@ -52,8 +57,8 @@ func CreateRevertReportArtifact(logger *logging.Logger, report *RevertReport, co
 	return artifact, nil
 }
 
+// ConvertToHtml serializes the report artifact to HTML, writing it into the provided writer.
 func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
-
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
 		"statSigThresh": func() int {
@@ -113,7 +118,7 @@ func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
 			if val < 0 {
 				return fmt.Sprintf("Decreased by %.1f%%", -val)
 			} else {
-				return fmt.Sprintf("No Change")
+				return "No Change"
 			}
 		},
 	}
@@ -127,6 +132,7 @@ func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
 	return err
 }
 
+// getFunctionArtifact obtains the specific function artifact by name
 func (r *ReportArtifact) getFunctionArtifact(funcName string) *FunctionArtifact {
 	for _, f := range r.FunctionArtifacts {
 		if f.Name == funcName {
@@ -136,6 +142,7 @@ func (r *ReportArtifact) getFunctionArtifact(funcName string) *FunctionArtifact 
 	return nil
 }
 
+// getRevertReasonArtifact obtains the specific revert reason for a function by name
 func (r *FunctionArtifact) getRevertReasonArtifact(revertReason string) *RevertReasonArtifact {
 	for _, r := range r.RevertReasons {
 		if r.Reason == revertReason {
@@ -145,6 +152,7 @@ func (r *FunctionArtifact) getRevertReasonArtifact(revertReason string) *RevertR
 	return nil
 }
 
+// loadArtifact loads the reversion stats from `dir` and returns the deserialized artifact.
 func loadArtifact(logger *logging.Logger, dir string) (*ReportArtifact, error) {
 	if dir == "" {
 		return &ReportArtifact{}, nil

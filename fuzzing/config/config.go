@@ -192,9 +192,6 @@ func (testCfg *TestingConfig) Validate() error {
 type ReversionMeasurementConfig struct {
 	// Enabled describes whether reversion measurement is enabled.
 	Enabled bool `json:"enabled"`
-
-	// DisplayAfterRun configures whether reversion statistics should be printed to the console after a run.
-	DisplayAfterRun bool `json:"displayAfterRun"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing

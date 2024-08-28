@@ -15,25 +15,27 @@ import (
 	"path/filepath"
 )
 
-type ReversionStatistics struct {
+type ReversionMeasurer struct {
 	incomingReportsQueue chan *RevertReport
 
-	aggReport       *RevertReport
-	enabled         bool
-	displayAfterRun bool
-	reportArtifact  *ReportArtifact
+	aggReport      *RevertReport
+	enabled        bool
+	reportArtifact *ReportArtifact
 }
 
-func CreateReversionStatistics(config config.ProjectConfig) *ReversionStatistics {
-	return &ReversionStatistics{
+// CreateReversionMeasurer creates a new ReversionMeasurer using the provided config
+func CreateReversionMeasurer(config config.ProjectConfig) *ReversionMeasurer {
+	return &ReversionMeasurer{
 		incomingReportsQueue: make(chan *RevertReport, 100),
 		aggReport:            createRevertReport(),
 		enabled:              config.Fuzzing.Testing.ReversionMeasurement.Enabled,
-		displayAfterRun:      config.Fuzzing.Testing.ReversionMeasurement.DisplayAfterRun,
 	}
 }
 
-func (s *ReversionStatistics) StartWorker(ctx context.Context) func() {
+// StartWorker creates a background goroutine that handles incoming reversion reports from workers.
+// The background goroutine is terminated when the provided context is terminated, or when the
+// cleanup function returned by StartWorker is called.
+func (s *ReversionMeasurer) StartWorker(ctx context.Context) func() {
 	workerCtx, done := context.WithCancel(ctx)
 	go func() {
 		for {
@@ -48,7 +50,9 @@ func (s *ReversionStatistics) StartWorker(ctx context.Context) func() {
 	return done
 }
 
-func (s *ReversionStatistics) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
+// OnPendingBlockCommittedEvent is used to identify top level calls made by the fuzzer, extract the result of those
+// calls, then add the data to a reversion report that will be submitted to the background worker via incomingReportsQueue
+func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
 	if !s.enabled {
 		return nil
 	}
@@ -86,7 +90,8 @@ func (s *ReversionStatistics) OnPendingBlockCommittedEvent(event chain.PendingBl
 	return nil
 }
 
-func (s *ReversionStatistics) BuildArtifactAndPrintResults(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
+// BuildArtifact converts aggregated report information into an artifact that can be easily serialized.
+func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
 	if !s.enabled {
 		return nil
 	}
@@ -96,14 +101,12 @@ func (s *ReversionStatistics) BuildArtifactAndPrintResults(logger *logging.Logge
 	}
 
 	s.reportArtifact = artifact
-	if s.displayAfterRun {
-		// display
-	}
-
 	return nil
 }
 
-func (s *ReversionStatistics) WriteReport(dir string, logger *logging.Logger) error {
+// WriteReport takes the generated reportArtifact and writes it to the provided dir. Two artifacts are written;
+// a revert statistics json file, and a user-readable html file.
+func (s *ReversionMeasurer) WriteReport(dir string, logger *logging.Logger) error {
 	if !s.enabled {
 		return nil
 	}
@@ -122,35 +125,14 @@ func (s *ReversionStatistics) WriteReport(dir string, logger *logging.Logger) er
 	return err
 }
 
-func (s *ReversionStatistics) PrintStats(contractDefs fuzzerTypes.Contracts) {
-	if !s.enabled || !s.displayAfterRun {
-		return
-	}
-	errorLookup := make(map[errorSelector]string)
-	functionLookup := make(map[functionSelector]string)
-
-	for _, contract := range contractDefs {
-		for label, detail := range contract.CompiledContract().Abi.Errors {
-			errSel := errorSelector{}
-			copy(errSel[:], detail.ID[:4])
-			errorLookup[errSel] = label
-		}
-		for label, detail := range contract.CompiledContract().Abi.Methods {
-			funcSel := functionSelector{}
-			copy(funcSel[:], detail.ID[:4])
-			functionLookup[funcSel] = label
-		}
-	}
-	//errorLookup[errorSelector{78, 72, 123, 113}] = "Panic()"
-	s.aggReport.PrintStats(functionLookup, errorLookup)
-}
-
-func (s *ReversionStatistics) writeReportHtml(path string, logger *logging.Logger) error {
+// writeReportHtml generates an HTML representation of the report artifact and writes it to path.
+func (s *ReversionMeasurer) writeReportHtml(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
-	defer file.Close()
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
 	err = s.reportArtifact.ConvertToHtml(file)
 
 	if err == nil {
@@ -159,12 +141,13 @@ func (s *ReversionStatistics) writeReportHtml(path string, logger *logging.Logge
 	return err
 }
 
-func (s *ReversionStatistics) writeReportJson(path string, logger *logging.Logger) error {
+// writeReportHtml generates an JSON representation of the report artifact and writes it to path.
+func (s *ReversionMeasurer) writeReportJson(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
-	defer file.Close()
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	b, err := json.MarshalIndent(s.reportArtifact, "", "    ")
 	if err != nil {
 		return err
@@ -176,6 +159,9 @@ func (s *ReversionStatistics) writeReportJson(path string, logger *logging.Logge
 	return err
 }
 
+// getRevertReason encodes the error from `result` into an errorSelector. If the error is a solidity-inserted revert,
+// the returnData is decoded to identify the type of revert, and this id is smuggled into the last byte of errorSelector.
+// These smuggled errors can be decoded using decodeSmuggledSolidityRevertReason.
 func getRevertReason(result *core.ExecutionResult) errorSelector {
 	revertReason := nilSelector
 	if len(result.ReturnData) >= 4 {

@@ -11,12 +11,14 @@ type errorSelector = [4]byte
 
 var nilSelector = errorSelector{0, 0, 0, 0}
 
+// RevertReport is used to track the reversion statistics for a given sequence or fuzzing session.
 type RevertReport struct {
 	RevertedCallReasons map[functionSelector]map[errorSelector]uint
 	RevertedCalls       map[functionSelector]uint
 	TotalCalls          map[functionSelector]uint
 }
 
+// createRevertReport initializes an empty RevertReport
 func createRevertReport() *RevertReport {
 	return &RevertReport{
 		RevertedCallReasons: make(map[functionSelector]map[errorSelector]uint),
@@ -25,6 +27,7 @@ func createRevertReport() *RevertReport {
 	}
 }
 
+// initFuncSelectorIfMissing is a utility function used to initialize RevertReport for a specific function selector
 func (s *RevertReport) initFuncSelectorIfMissing(selector functionSelector) {
 	_, ok := s.TotalCalls[selector]
 	if !ok {
@@ -34,6 +37,7 @@ func (s *RevertReport) initFuncSelectorIfMissing(selector functionSelector) {
 	}
 }
 
+// initErrSelectorIfMissing is a utility function used to initialize RevertedCallReasons for a specific error selector
 func (s *RevertReport) initErrSelectorIfMissing(funcSelector functionSelector, errSelector errorSelector) {
 	_, ok := s.RevertedCallReasons[funcSelector][errSelector]
 	if !ok {
@@ -41,10 +45,12 @@ func (s *RevertReport) initErrSelectorIfMissing(funcSelector functionSelector, e
 	}
 }
 
+// addCall is used to add a single call to the revert report
 func (s *RevertReport) addCall(funcSelector functionSelector, errSelector errorSelector, didRevert bool) {
 	s.addCallCount(funcSelector, errSelector, didRevert, 1)
 }
 
+// addCallCount is used to add one or more calls to the revert report.
 func (s *RevertReport) addCallCount(funcSelector functionSelector, errSelector errorSelector, didRevert bool, number uint) {
 	s.initFuncSelectorIfMissing(funcSelector)
 	s.TotalCalls[funcSelector] += number
@@ -55,7 +61,7 @@ func (s *RevertReport) addCallCount(funcSelector functionSelector, errSelector e
 	}
 }
 
-// Subsumes the data from the `other` report into the receiver report.
+// concatReports Subsumes the data from the `other` report into the receiver report.
 func (s *RevertReport) concatReports(other *RevertReport) {
 	for fSel, callCount := range other.TotalCalls {
 		revertCount := other.RevertedCalls[fSel]
@@ -105,23 +111,7 @@ func (s *RevertReport) ToArtifact(contractDefs fuzzerTypes.Contracts) *ReportArt
 	return artifact
 }
 
-func (s *RevertReport) PrintStats(funcLookup, errLookup map[[4]byte]string) {
-	for funcSel, runCount := range s.TotalCalls {
-		funcName := funcLookup[funcSel]
-		revertCount := s.RevertedCalls[funcSel]
-		revertPct := float32(revertCount) / float32(runCount)
-		fmt.Printf("%s called %d times. %0.1fpct reverted\n", funcName, runCount, revertPct*100)
-		for errSel, errCount := range s.RevertedCallReasons[funcSel] {
-			errName, ok := errLookup[errSel]
-			if !ok {
-				errName = decodeSmuggledSolidityRevertReason(errSel)
-			}
-			revertPct = float32(errCount) / float32(revertCount)
-			fmt.Printf("-> %0.1fpct due to %s\n", revertPct*100, errName)
-		}
-	}
-}
-
+// buildSelectorLookups is used to construct a selector->string lookup based on the provided contractDefs
 func buildSelectorLookups(contractDefs fuzzerTypes.Contracts) (map[functionSelector]string, map[errorSelector]string) {
 	errorLookup := make(map[errorSelector]string)
 	functionLookup := make(map[functionSelector]string)
@@ -141,6 +131,8 @@ func buildSelectorLookups(contractDefs fuzzerTypes.Contracts) (map[functionSelec
 	return functionLookup, errorLookup
 }
 
+// decodeSmuggledSolidityRevertReason is used to decode solidity-inserted reverts, and as a backstop for error selectors
+// that we do not have an ABI for.
 func decodeSmuggledSolidityRevertReason(selector [4]byte) string {
 	if selector[0] == 0 && selector[1] == 0 && selector[2] == 0 {
 		lastByte := selector[3]

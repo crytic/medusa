@@ -71,7 +71,7 @@ type Fuzzer struct {
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
 
-	ReversionStats *reversion.ReversionStatistics
+	ReversionStats *reversion.ReversionMeasurer
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -156,7 +156,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		ReversionStats:      reversion.CreateReversionStatistics(config),
+		ReversionStats:      reversion.CreateReversionMeasurer(config),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -837,7 +837,7 @@ func (f *Fuzzer) Start() error {
 	// Print our results on exit.
 	f.printExitingResults()
 
-	err = f.ReversionStats.BuildArtifactAndPrintResults(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
+	err = f.ReversionStats.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		f.logger.Error("Failed to convert reversion metrics to an artifact", err)
 	}
