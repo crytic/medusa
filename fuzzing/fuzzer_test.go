@@ -826,7 +826,8 @@ func TestCorpusReplayability(t *testing.T) {
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
-			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, true, true)
+			originalTotalCallSequences, originalTotalTestResults := f.fuzzer.corpus.CallSequenceEntryCount()
+			originalCorpusSequenceCount := originalTotalCallSequences + originalTotalTestResults
 
 			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
 			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
