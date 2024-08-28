@@ -14,6 +14,9 @@ type TestChainConfig struct {
 	// CheatCodeConfig indicates the configuration for EVM cheat codes to use.
 	CheatCodeConfig CheatCodeConfig `json:"cheatCodes"`
 
+	// SkipAccountChecks skips account pre-checks like nonce validation and disallowing non-EOA tx senders (this is done in eth_call, for instance).
+	SkipAccountChecks bool `json:"skipAccountChecks"`
+
 	// ContractAddressOverrides describes contracts that are going to be deployed at deterministic addresses
 	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides,omitempty"`
 }
