@@ -125,59 +125,6 @@ func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
 
 	err = tmpl.Execute(buf, r)
 	return err
-
-	/*
-		writer := md.NewMarkdown(buf)
-		writer.H1("Reversion Metrics")
-
-		for _, funcArtifact := range r.FunctionArtifacts {
-			//writer.H3(fmt.Sprintf("",funcArtifact.Name))
-
-			rows := [][]string{}
-			header := []string{
-				"Function Name",
-				"Revert Reason",
-				"Count",
-				"Percent Attributed",
-				"Change vs. Prev Run",
-				"Percent Attributed in Prev Run",
-			}
-
-			for _, revertArtifact := range funcArtifact.RevertReasons {
-				diffValue := "No prev. data"
-				prevValue := diffValue
-				if revertArtifact.PrevPctAttributed != nil {
-					prevValue = fmt.Sprintf("%0.1f%%", float64(*revertArtifact.PrevPctAttributed)*100)
-					change := (revertArtifact.PctAttributed - *revertArtifact.PrevPctAttributed) / math.Abs(*revertArtifact.PrevPctAttributed)
-					if change > 0 {
-						diffValue = fmt.Sprintf("Increased by %.1f%%", float64(change)*100)
-					} else {
-						diffValue = fmt.Sprintf("Decreased by %.1f%%", float64(change)*-100)
-					}
-				}
-
-				row := []string{
-					funcArtifact.Name,
-					revertArtifact.Reason,
-					fmt.Sprintf("%d", revertArtifact.Total),
-					fmt.Sprintf("%0.1f%%", revertArtifact.PctAttributed*100),
-					diffValue,
-					prevValue,
-				}
-				rows = append(rows, row)
-			}
-			if len(rows) > 0 {
-				writer.Table(md.TableSet{
-					Header: header,
-					Rows:   rows,
-				})
-			}
-		}
-
-		err := writer.Build()
-		return err
-
-	*/
 }
 
 func (r *ReportArtifact) getFunctionArtifact(funcName string) *FunctionArtifact {
