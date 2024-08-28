@@ -56,6 +56,9 @@ func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
 
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
+		"statSigThresh": func() int {
+			return 100
+		},
 		"add": func(x int, y int) int {
 			return x + y
 		},

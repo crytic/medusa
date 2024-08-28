@@ -36,16 +36,27 @@
             width: 23%;
         }
         .numericdata {
-            text-align: center
+            text-align: center;
         }
         hr {
-            width: 100%
+            width: 100%;
         }
+        svg{
+            vertical-align: middle;
+        }
+
 
     </style>
 </head>
 
 <body>
+<svg style="display: none;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="notstatsig" viewBox="0 0 24 24">
+    <title>Not enough samples for statistical significance</title>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zm-1.5-5.009c0-.867.659-1.491 1.491-1.491.85 0 1.509.624 1.509 1.491 0 .867-.659 1.509-1.509 1.509-.832 0-1.491-.642-1.491-1.509zM11.172 6a.5.5 0 0 0-.499.522l.306 7a.5.5 0 0 0 .5.478h1.043a.5.5 0 0 0 .5-.478l.305-7a.5.5 0 0 0-.5-.522h-1.655z" fill="#000000"/>
+    </symbol>
+</svg>
+
 <header>
     <h1>Reversion Report</h1>
 </header>
@@ -63,10 +74,10 @@
     </tr>
 {{range $funcArtifact := .FunctionArtifacts}}
     <tr>
-        <td>{{$funcArtifact.Name}}</td>
+        <td><a href="#{{$funcArtifact.Name}}">{{$funcArtifact.Name}}</a></td>
         <td class="numericdata">{{$funcArtifact.TotalCalls}}</td>
         <td class="numericdata">{{$funcArtifact.TotalReverts}}</td>
-        <td class="numericdata">{{percentageFmt $funcArtifact.RevertPct}}</td>
+        <td class="numericdata">{{percentageFmt $funcArtifact.RevertPct}}{{if lt $funcArtifact.TotalCalls statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}</td>
         <td class="numericdata">{{percentageChangeOpt $funcArtifact.PrevRevertPct $funcArtifact.RevertPct}}</td>
         <td class="numericdata">{{percentageFmtOpt $funcArtifact.PrevRevertPct}}</td>
 
@@ -77,7 +88,7 @@
 <h2>Individual Functions</h2>
 <div class="table-grid">
 {{range $funcArtifact := .FunctionArtifacts}}
-    <h3>{{$funcArtifact.Name}}</h3>
+    <h3 id="{{$funcArtifact.Name}}">{{$funcArtifact.Name}}</h3>
     <p>
     Total Calls: <strong>{{$funcArtifact.TotalCalls}}</strong> <br>
     Total Reverts: <strong>{{$funcArtifact.TotalReverts}}</strong> <br>
