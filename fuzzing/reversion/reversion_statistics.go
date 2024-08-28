@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -20,17 +21,15 @@ type ReversionMeasurer struct {
 
 	aggReport      *RevertReport
 	enabled        bool
-	writeReports   bool
 	reportArtifact *ReportArtifact
 }
 
 // CreateReversionMeasurer creates a new ReversionMeasurer using the provided config
 func CreateReversionMeasurer(config config.ProjectConfig) *ReversionMeasurer {
 	return &ReversionMeasurer{
-		incomingReportsQueue: make(chan *RevertReport, 100),
+		incomingReportsQueue: make(chan *RevertReport, 500),
 		aggReport:            createRevertReport(),
 		enabled:              config.Fuzzing.Testing.ReversionMeasurement.Enabled,
-		writeReports:         config.Fuzzing.Testing.ReversionMeasurement.WriteReports,
 	}
 }
 
@@ -38,18 +37,22 @@ func CreateReversionMeasurer(config config.ProjectConfig) *ReversionMeasurer {
 // The background goroutine is terminated when the provided context is terminated, or when the
 // cleanup function returned by StartWorker is called.
 func (s *ReversionMeasurer) StartWorker(ctx context.Context) func() {
-	workerCtx, done := context.WithCancel(ctx)
-	go func() {
-		for {
-			select {
-			case report := <-s.incomingReportsQueue:
-				s.aggReport.concatReports(report)
-			case <-workerCtx.Done():
-				break
+	if s.enabled {
+		workerCtx, done := context.WithCancel(ctx)
+		go func() {
+			for {
+				select {
+				case report := <-s.incomingReportsQueue:
+					s.aggReport.concatReports(report)
+				case <-workerCtx.Done():
+					return
+				}
 			}
-		}
-	}()
-	return done
+		}()
+		return done
+	} else {
+		return func() {}
+	}
 }
 
 // OnPendingBlockCommittedEvent is used to identify top level calls made by the fuzzer, extract the result of those
@@ -87,6 +90,9 @@ func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBloc
 			report.addCall(funcSelector, errorSelector{}, false)
 		}
 	}
+	if len(s.incomingReportsQueue) >= 95 {
+		fmt.Printf("incoming reports queue full")
+	}
 
 	s.incomingReportsQueue <- report
 	return nil
@@ -94,7 +100,7 @@ func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBloc
 
 // BuildArtifact converts aggregated report information into an artifact that can be easily serialized.
 func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
-	if !s.enabled || !s.writeReports {
+	if !s.enabled {
 		return nil
 	}
 	artifact, err := CreateRevertReportArtifact(logger, s.aggReport, contractDefs, corpusDir)
@@ -109,7 +115,7 @@ func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs f
 // WriteReport takes the generated reportArtifact and writes it to the provided dir. Two artifacts are written;
 // a revert statistics json file, and a user-readable html file.
 func (s *ReversionMeasurer) WriteReport(dir string, logger *logging.Logger) error {
-	if !s.enabled || !s.writeReports {
+	if !s.enabled {
 		return nil
 	}
 	if s.reportArtifact == nil {
