@@ -92,7 +92,7 @@
     <p>
     Total Calls: <strong>{{$funcArtifact.TotalCalls}}</strong> <br>
     Total Reverts: <strong>{{$funcArtifact.TotalReverts}}</strong> <br>
-    Percentage of calls that reverted: <strong>{{percentageFmt $funcArtifact.RevertPct}}</strong> <br>
+    Percentage of calls that reverted: <strong>{{percentageFmt $funcArtifact.RevertPct}}</strong> {{if lt $funcArtifact.TotalCalls statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}<br>
     Change in revert % since last run: <strong>{{percentageChangeOpt $funcArtifact.PrevRevertPct $funcArtifact.RevertPct}}</strong> <br>
     Percentage of calls that reverted last run: <strong>{{percentageFmtOpt $funcArtifact.PrevRevertPct}}</strong> <br>
     Revert Details for {{$funcArtifact.Name}}
@@ -109,7 +109,7 @@
         <tr>
             <td>{{$revertArtifact.Reason}}</td>
             <td class="numericdata">{{$revertArtifact.Total}}</td>
-            <td class="numericdata">{{percentageFmt $revertArtifact.PctAttributed}}</td>
+            <td class="numericdata">{{percentageFmt $revertArtifact.PctAttributed}} {{if lt $revertArtifact.Total statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}</td>
             <td class="numericdata">{{percentageChangeOpt $revertArtifact.PrevPctAttributed $revertArtifact.PctAttributed}}</td>
             <td class="numericdata">{{percentageFmtOpt $revertArtifact.PrevPctAttributed }}</td>
         </tr>
