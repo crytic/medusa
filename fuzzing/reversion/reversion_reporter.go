@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -88,9 +87,6 @@ func (s *ReversionReporter) OnPendingBlockCommittedEvent(event chain.PendingBloc
 		} else {
 			report.addCall(funcSelector, errorSelector{}, false)
 		}
-	}
-	if len(s.incomingMetricsQueue) >= 95 {
-		fmt.Printf("incoming reports queue full")
 	}
 
 	s.incomingMetricsQueue <- report
