@@ -22,6 +22,7 @@ type ReversionReporter struct {
 	aggregatedMetrics *TxCallMetrics
 	enabled           bool
 	reportArtifact    *RevertArtifact
+	cleanupWorker     func()
 }
 
 // CreateReversionReporter creates a new ReversionReporter using the provided config
@@ -36,7 +37,7 @@ func CreateReversionReporter(config config.ProjectConfig) *ReversionReporter {
 // StartWorker creates a background goroutine that handles incoming reversion reports from workers.
 // The background goroutine is terminated when the provided context is terminated, or when the
 // cleanup function returned by StartWorker is called.
-func (s *ReversionReporter) StartWorker(ctx context.Context) func() {
+func (s *ReversionReporter) StartWorker(ctx context.Context) {
 	if s.enabled {
 		workerCtx, done := context.WithCancel(ctx)
 		go func() {
@@ -49,9 +50,7 @@ func (s *ReversionReporter) StartWorker(ctx context.Context) func() {
 				}
 			}
 		}()
-		return done
-	} else {
-		return func() {}
+		s.cleanupWorker = done
 	}
 }
 
@@ -103,6 +102,9 @@ func (s *ReversionReporter) BuildArtifact(logger *logging.Logger, contractDefs f
 	if !s.enabled {
 		return nil
 	}
+	// terminate the worker to make sure all the stats are aggregated
+	s.cleanupWorker()
+
 	artifact, err := CreateRevertArtifact(logger, s.aggregatedMetrics, contractDefs, corpusDir)
 	if err != nil {
 		return err
