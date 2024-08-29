@@ -839,7 +839,7 @@ func (f *Fuzzer) Start() error {
 
 	err = f.ReversionReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
-		f.logger.Error("Failed to convert reversion metrics to an artifact", err)
+		f.logger.Error("Failed to generate reversion stats report", err)
 	}
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
