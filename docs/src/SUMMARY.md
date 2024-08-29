@@ -30,7 +30,7 @@
 - [Types of Invariants](./testing/invariants.md)
 - [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
 - [Writing System-Level Invariants (WIP)](./testing/writing-system-level-invariants.md)
-- [Coverage Reports (WIP)](./testing/coverage_reports.md)
+- [Coverage Reports](./testing/coverage_reports.md)
 
 # API
 
