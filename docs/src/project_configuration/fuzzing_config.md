@@ -141,7 +141,6 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Description**: Enable or disables the reversion reporting plugin
 - **Default**: `false`
 
-
 ## Using `constructorArgs`
 
 There might be use cases where contracts in `targetContracts` have constructors that accept arguments. The `constructorArgs`
