@@ -3,13 +3,12 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"github.com/ethereum/go-ethereum/core"
 	"strconv"
 
 	"github.com/crytic/medusa/chain"
 	chainTypes "github.com/crytic/medusa/chain/types"
 	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
@@ -165,10 +164,6 @@ type CallSequenceElement struct {
 
 	// ExecutionTrace represents a verbose execution trace collected. Nil if an execution trace was not collected.
 	ExecutionTrace *executiontracer.ExecutionTrace `json:"-"`
-
-	// ExecutionResult provides a high-level overview of the result of executing the transaction. Nil if transaction
-	// has not been executed yet, or some other, higher-level error occurred.
-	ExecutionResult *core.ExecutionResult `json:"-"`
 }
 
 // NewCallSequenceElement returns a new CallSequenceElement struct to track a single call made within a CallSequence.

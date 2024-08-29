@@ -255,7 +255,7 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		// Now add each transaction/message to it.
 		messages := t.blocks[i].Messages
 		for j := 0; j < len(messages); j++ {
-			err, _ = targetChain.PendingBlockAddTx(messages[j])
+			err = targetChain.PendingBlockAddTx(messages[j])
 			if err != nil {
 				return nil, err
 			}
@@ -727,10 +727,10 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns an error if one occurred.
-func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers ...*TestChainTracer) (error, *core.ExecutionResult) {
+func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers ...*TestChainTracer) error {
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
-		return errors.New("could not add tx to the chain's pending block because no pending block was created"), nil
+		return errors.New("could not add tx to the chain's pending block because no pending block was created")
 	}
 
 	// Create a gas pool indicating how much gas can be spent executing the transaction.
@@ -776,7 +776,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	var usedGas uint64
 	receipt, executionResult, err := vendored.EVMApplyTransaction(message, t.chainConfig, t.testChainConfig, &t.pendingBlock.Header.Coinbase, gasPool, t.state, t.pendingBlock.Header.Number, t.pendingBlock.Hash, tx, &usedGas, evm)
 	if err != nil {
-		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err), nil
+		return fmt.Errorf("test chain state write error when adding tx to pending block: %v", err)
 	}
 
 	// Create our message result
@@ -801,7 +801,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	// Emit our contract change events for this message
 	err = t.emitContractChangeEvents(false, messageResult)
 	if err != nil {
-		return err, nil
+		return err
 	}
 
 	// Emit our event for having added a new transaction to the pending block.
@@ -811,10 +811,10 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 		TransactionIndex: len(t.pendingBlock.Messages),
 	})
 	if err != nil {
-		return err, nil
+		return err
 	}
 
-	return nil, executionResult
+	return nil
 }
 
 // PendingBlockCommit commits a pending block to the chain, so it is set as the new head. The pending block is set
