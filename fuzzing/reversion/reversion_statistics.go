@@ -16,34 +16,34 @@ import (
 	"path/filepath"
 )
 
-type ReversionMeasurer struct {
-	incomingReportsQueue chan *RevertReport
+type ReversionReporter struct {
+	incomingMetricsQueue chan *TxCallMetrics
 
-	aggReport      *RevertReport
-	enabled        bool
-	reportArtifact *ReportArtifact
+	aggregatedMetrics *TxCallMetrics
+	enabled           bool
+	reportArtifact    *RevertArtifact
 }
 
-// CreateReversionMeasurer creates a new ReversionMeasurer using the provided config
-func CreateReversionMeasurer(config config.ProjectConfig) *ReversionMeasurer {
-	return &ReversionMeasurer{
-		incomingReportsQueue: make(chan *RevertReport, 500),
-		aggReport:            createRevertReport(),
-		enabled:              config.Fuzzing.Testing.ReversionMeasurement.Enabled,
+// CreateReversionReporter creates a new ReversionReporter using the provided config
+func CreateReversionReporter(config config.ProjectConfig) *ReversionReporter {
+	return &ReversionReporter{
+		incomingMetricsQueue: make(chan *TxCallMetrics, 500),
+		aggregatedMetrics:    createTxCallMetrics(),
+		enabled:              config.Fuzzing.ReversionReporterEnabled,
 	}
 }
 
 // StartWorker creates a background goroutine that handles incoming reversion reports from workers.
 // The background goroutine is terminated when the provided context is terminated, or when the
 // cleanup function returned by StartWorker is called.
-func (s *ReversionMeasurer) StartWorker(ctx context.Context) func() {
+func (s *ReversionReporter) StartWorker(ctx context.Context) func() {
 	if s.enabled {
 		workerCtx, done := context.WithCancel(ctx)
 		go func() {
 			for {
 				select {
-				case report := <-s.incomingReportsQueue:
-					s.aggReport.concatReports(report)
+				case report := <-s.incomingMetricsQueue:
+					s.aggregatedMetrics.concatReports(report)
 				case <-workerCtx.Done():
 					return
 				}
@@ -56,12 +56,12 @@ func (s *ReversionMeasurer) StartWorker(ctx context.Context) func() {
 }
 
 // OnPendingBlockCommittedEvent is used to identify top level calls made by the fuzzer, extract the result of those
-// calls, then add the data to a reversion report that will be submitted to the background worker via incomingReportsQueue
-func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
+// calls, then add the data to a reversion report that will be submitted to the background worker via incomingMetricsQueue
+func (s *ReversionReporter) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
 	if !s.enabled {
 		return nil
 	}
-	report := createRevertReport()
+	report := createTxCallMetrics()
 
 	for i, msg := range event.Block.Messages {
 		msgResult := event.Block.MessageResults[i]
@@ -90,20 +90,20 @@ func (s *ReversionMeasurer) OnPendingBlockCommittedEvent(event chain.PendingBloc
 			report.addCall(funcSelector, errorSelector{}, false)
 		}
 	}
-	if len(s.incomingReportsQueue) >= 95 {
+	if len(s.incomingMetricsQueue) >= 95 {
 		fmt.Printf("incoming reports queue full")
 	}
 
-	s.incomingReportsQueue <- report
+	s.incomingMetricsQueue <- report
 	return nil
 }
 
 // BuildArtifact converts aggregated report information into an artifact that can be easily serialized.
-func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
+func (s *ReversionReporter) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
 	if !s.enabled {
 		return nil
 	}
-	artifact, err := CreateRevertReportArtifact(logger, s.aggReport, contractDefs, corpusDir)
+	artifact, err := CreateRevertArtifact(logger, s.aggregatedMetrics, contractDefs, corpusDir)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (s *ReversionMeasurer) BuildArtifact(logger *logging.Logger, contractDefs f
 
 // WriteReport takes the generated reportArtifact and writes it to the provided dir. Two artifacts are written;
 // a revert statistics json file, and a user-readable html file.
-func (s *ReversionMeasurer) WriteReport(dir string, logger *logging.Logger) error {
+func (s *ReversionReporter) WriteReport(dir string, logger *logging.Logger) error {
 	if !s.enabled {
 		return nil
 	}
@@ -134,7 +134,7 @@ func (s *ReversionMeasurer) WriteReport(dir string, logger *logging.Logger) erro
 }
 
 // writeReportHtml generates an HTML representation of the report artifact and writes it to path.
-func (s *ReversionMeasurer) writeReportHtml(path string, logger *logging.Logger) error {
+func (s *ReversionReporter) writeReportHtml(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -150,7 +150,7 @@ func (s *ReversionMeasurer) writeReportHtml(path string, logger *logging.Logger)
 }
 
 // writeReportHtml generates an JSON representation of the report artifact and writes it to path.
-func (s *ReversionMeasurer) writeReportJson(path string, logger *logging.Logger) error {
+func (s *ReversionReporter) writeReportJson(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err

@@ -51,11 +51,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				"0x20000",
 				"0x30000",
 			},
-			DeployerAddress:        "0x30000",
-			MaxBlockNumberDelay:    60480,
-			MaxBlockTimestampDelay: 604800,
-			BlockGasLimit:          125_000_000,
-			TransactionGasLimit:    12_500_000,
+			DeployerAddress:          "0x30000",
+			MaxBlockNumberDelay:      60480,
+			MaxBlockTimestampDelay:   604800,
+			BlockGasLimit:            125_000_000,
+			TransactionGasLimit:      12_500_000,
+			ReversionReporterEnabled: false,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
@@ -64,9 +65,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				TraceAll:                     false,
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
-				ReversionMeasurement: ReversionMeasurementConfig{
-					Enabled: false,
-				},
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         true,
 					TestViewMethods: false,

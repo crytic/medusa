@@ -11,24 +11,24 @@ type errorSelector = [4]byte
 
 var nilSelector = errorSelector{0, 0, 0, 0}
 
-// RevertReport is used to track the reversion statistics for a given sequence or fuzzing session.
-type RevertReport struct {
+// TxCallMetrics is used to track the reversion statistics for a given sequence or fuzzing session.
+type TxCallMetrics struct {
 	RevertedCallReasons map[functionSelector]map[errorSelector]uint
 	RevertedCalls       map[functionSelector]uint
 	TotalCalls          map[functionSelector]uint
 }
 
-// createRevertReport initializes an empty RevertReport
-func createRevertReport() *RevertReport {
-	return &RevertReport{
+// createTxCallMetrics initializes an empty TxCallMetrics
+func createTxCallMetrics() *TxCallMetrics {
+	return &TxCallMetrics{
 		RevertedCallReasons: make(map[functionSelector]map[errorSelector]uint),
 		RevertedCalls:       make(map[functionSelector]uint),
 		TotalCalls:          make(map[functionSelector]uint),
 	}
 }
 
-// initFuncSelectorIfMissing is a utility function used to initialize RevertReport for a specific function selector
-func (s *RevertReport) initFuncSelectorIfMissing(selector functionSelector) {
+// initFuncSelectorIfMissing is a utility function used to initialize TxCallMetrics for a specific function selector
+func (s *TxCallMetrics) initFuncSelectorIfMissing(selector functionSelector) {
 	_, ok := s.TotalCalls[selector]
 	if !ok {
 		s.TotalCalls[selector] = 0
@@ -38,7 +38,7 @@ func (s *RevertReport) initFuncSelectorIfMissing(selector functionSelector) {
 }
 
 // initErrSelectorIfMissing is a utility function used to initialize RevertedCallReasons for a specific error selector
-func (s *RevertReport) initErrSelectorIfMissing(funcSelector functionSelector, errSelector errorSelector) {
+func (s *TxCallMetrics) initErrSelectorIfMissing(funcSelector functionSelector, errSelector errorSelector) {
 	_, ok := s.RevertedCallReasons[funcSelector][errSelector]
 	if !ok {
 		s.RevertedCallReasons[funcSelector][errSelector] = 0
@@ -46,12 +46,12 @@ func (s *RevertReport) initErrSelectorIfMissing(funcSelector functionSelector, e
 }
 
 // addCall is used to add a single call to the revert report
-func (s *RevertReport) addCall(funcSelector functionSelector, errSelector errorSelector, didRevert bool) {
+func (s *TxCallMetrics) addCall(funcSelector functionSelector, errSelector errorSelector, didRevert bool) {
 	s.addCallCount(funcSelector, errSelector, didRevert, 1)
 }
 
 // addCallCount is used to add one or more calls to the revert report.
-func (s *RevertReport) addCallCount(funcSelector functionSelector, errSelector errorSelector, didRevert bool, number uint) {
+func (s *TxCallMetrics) addCallCount(funcSelector functionSelector, errSelector errorSelector, didRevert bool, number uint) {
 	s.initFuncSelectorIfMissing(funcSelector)
 	s.TotalCalls[funcSelector] += number
 	if didRevert {
@@ -62,7 +62,7 @@ func (s *RevertReport) addCallCount(funcSelector functionSelector, errSelector e
 }
 
 // concatReports Subsumes the data from the `other` report into the receiver report.
-func (s *RevertReport) concatReports(other *RevertReport) {
+func (s *TxCallMetrics) concatReports(other *TxCallMetrics) {
 	for fSel, callCount := range other.TotalCalls {
 		revertCount := other.RevertedCalls[fSel]
 		revertReasons := other.RevertedCallReasons[fSel]
@@ -76,10 +76,10 @@ func (s *RevertReport) concatReports(other *RevertReport) {
 	}
 }
 
-// ToArtifact Converts the revert report to an artifact object. Does not populate previous report data or sort the data.
-func (s *RevertReport) ToArtifact(contractDefs fuzzerTypes.Contracts) *ReportArtifact {
+// ToRevertArtifact Converts the revert report to a revert artifact object. Does not populate previous report data or sort the data.
+func (s *TxCallMetrics) ToRevertArtifact(contractDefs fuzzerTypes.Contracts) *RevertArtifact {
 	funcLookup, errLookup := buildSelectorLookups(contractDefs)
-	artifact := &ReportArtifact{}
+	artifact := &RevertArtifact{}
 
 	for funcSel, runCount := range s.TotalCalls {
 		revertCount := s.RevertedCalls[funcSel]
@@ -136,28 +136,7 @@ func buildSelectorLookups(contractDefs fuzzerTypes.Contracts) (map[functionSelec
 func decodeSmuggledSolidityRevertReason(selector [4]byte) string {
 	if selector[0] == 0 && selector[1] == 0 && selector[2] == 0 {
 		lastByte := selector[3]
-		switch lastByte {
-		case abiutils.PanicCodeCompilerInserted:
-			return "Solidity: genericPanic"
-		case abiutils.PanicCodeAssertFailed:
-			return "Solidity: assertFailure"
-		case abiutils.PanicCodeArithmeticUnderOverflow:
-			return "Solidity: uncheckedOver/Underflow"
-		case abiutils.PanicCodeDivideByZero:
-			return "Solidity: Divide or Mod by zero"
-		case abiutils.PanicCodeEnumTypeConversionOutOfBounds:
-			return "Solidity: Converted too large a value into enum type"
-		case abiutils.PanicCodeIncorrectStorageAccess:
-			return "Solidity: Accessed a storage byte array with incorrect encoding"
-		case abiutils.PanicCodePopEmptyArray:
-			return "Solidity: Called .pop() on empty array"
-		case abiutils.PanicCodeOutOfBoundsArrayAccess:
-			return "Solidity: Accessed array with out of bounds index"
-		case abiutils.PanicCodeAllocateTooMuchMemory:
-			return "Solidity: Allocated too much memory"
-		case abiutils.PanicCodeCallUninitializedVariable:
-			return "Solidity: Called a zero-initialized variable of internal function type"
-		}
+		return abiutils.GetPanicReason(uint64(lastByte))
 	}
 	return fmt.Sprintf("Unknown %v", selector)
 }

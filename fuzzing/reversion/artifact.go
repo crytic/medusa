@@ -22,8 +22,8 @@ var (
 	htmlReportTemplate []byte
 )
 
-// ReportArtifact represents a serializable reversion report
-type ReportArtifact struct {
+// RevertArtifact represents a serializable reversion report
+type RevertArtifact struct {
 	FunctionArtifacts []*FunctionArtifact `json:"function_artifacts"`
 }
 
@@ -45,20 +45,20 @@ type RevertReasonArtifact struct {
 	PrevPctAttributed *float64 `json:"prev_pct_attributed"`
 }
 
-// CreateRevertReportArtifact Converts the provided RevertReport into a serializable ReportArtifact. Checks the corpusDir
+// CreateRevertArtifact Converts the provided TxCallMetrics into a serializable RevertArtifact. Checks the corpusDir
 // for a previous report that can be used to populate previous-run metrics.
-func CreateRevertReportArtifact(logger *logging.Logger, report *RevertReport, contractDefs fuzzerTypes.Contracts, corpusDir string) (*ReportArtifact, error) {
+func CreateRevertArtifact(logger *logging.Logger, report *TxCallMetrics, contractDefs fuzzerTypes.Contracts, corpusDir string) (*RevertArtifact, error) {
 	prevReportArtifact, err := loadArtifact(logger, corpusDir)
 	if err != nil {
 		return nil, err
 	}
 
-	artifact := convertReportToArtifact(report, contractDefs, prevReportArtifact)
+	artifact := convertMetricsToRevertArtifact(report, contractDefs, prevReportArtifact)
 	return artifact, nil
 }
 
 // ConvertToHtml serializes the report artifact to HTML, writing it into the provided writer.
-func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
+func (r *RevertArtifact) ConvertToHtml(buf io.Writer) error {
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
 		"statSigThresh": func() int {
@@ -133,7 +133,7 @@ func (r *ReportArtifact) ConvertToHtml(buf io.Writer) error {
 }
 
 // getFunctionArtifact obtains the specific function artifact by name
-func (r *ReportArtifact) getFunctionArtifact(funcName string) *FunctionArtifact {
+func (r *RevertArtifact) getFunctionArtifact(funcName string) *FunctionArtifact {
 	for _, f := range r.FunctionArtifacts {
 		if f.Name == funcName {
 			return f
@@ -153,9 +153,9 @@ func (r *FunctionArtifact) getRevertReasonArtifact(revertReason string) *RevertR
 }
 
 // loadArtifact loads the reversion stats from `dir` and returns the deserialized artifact.
-func loadArtifact(logger *logging.Logger, dir string) (*ReportArtifact, error) {
+func loadArtifact(logger *logging.Logger, dir string) (*RevertArtifact, error) {
 	if dir == "" {
-		return &ReportArtifact{}, nil
+		return &RevertArtifact{}, nil
 	}
 
 	filePath := filepath.Join(dir, "revert_stats.json")
@@ -163,13 +163,13 @@ func loadArtifact(logger *logging.Logger, dir string) (*ReportArtifact, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			logger.Warn("No previous reversion statistics found at ", filePath)
-			return &ReportArtifact{}, nil
+			return &RevertArtifact{}, nil
 		} else {
 			return nil, err
 		}
 	}
 
-	var artifact ReportArtifact
+	var artifact RevertArtifact
 	err = json.Unmarshal(b, &artifact)
 	if err != nil {
 		return nil, err
@@ -201,13 +201,13 @@ func updateRevertReasons(prevFuncArtifact, newFuncArtifact *FunctionArtifact) {
 	}
 }
 
-// convertReportToArtifact takes a report, and converts it to an artifact with fully populated previous run metrics
-func convertReportToArtifact(
-	stats *RevertReport,
+// convertMetricsToRevertArtifact takes a report, and converts it to an artifact with fully populated previous run metrics
+func convertMetricsToRevertArtifact(
+	stats *TxCallMetrics,
 	contractDefs fuzzerTypes.Contracts,
-	prevArtifact *ReportArtifact) *ReportArtifact {
+	prevArtifact *RevertArtifact) *RevertArtifact {
 
-	artifact := stats.ToArtifact(contractDefs)
+	artifact := stats.ToRevertArtifact(contractDefs)
 
 	// iterate over the fields of the previous artifact to populate the prev fields of the new artifact
 	for _, prevFuncArtifact := range prevArtifact.FunctionArtifacts {

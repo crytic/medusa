@@ -135,6 +135,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
 - **Default**: `12_500_000`
 
+### `reversionReporterEnabled`
+
+- **Type**: Boolean
+- **Description**: Enable or disables the reversion reporting plugin
+- **Default**: `false`
+
+
 ## Using `constructorArgs`
 
 There might be use cases where contracts in `targetContracts` have constructors that accept arguments. The `constructorArgs`

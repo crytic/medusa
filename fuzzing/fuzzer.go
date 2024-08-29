@@ -71,7 +71,8 @@ type Fuzzer struct {
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
 
-	ReversionStats *reversion.ReversionMeasurer
+	// ReversionReporter tracks per-function reversion metrics, if enabled
+	ReversionReporter *reversion.ReversionReporter
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -156,7 +157,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		ReversionStats:      reversion.CreateReversionMeasurer(config),
+		ReversionReporter:   reversion.CreateReversionReporter(config),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -808,7 +809,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Measure reversion stats across all workers
-	cleanup := f.ReversionStats.StartWorker(f.ctx)
+	cleanup := f.ReversionReporter.StartWorker(f.ctx)
 
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
@@ -837,7 +838,7 @@ func (f *Fuzzer) Start() error {
 	// Print our results on exit.
 	f.printExitingResults()
 
-	err = f.ReversionStats.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
+	err = f.ReversionReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		f.logger.Error("Failed to convert reversion metrics to an artifact", err)
 	}
@@ -853,7 +854,7 @@ func (f *Fuzzer) Start() error {
 			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
 		}
 	}
-	err = f.ReversionStats.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
+	err = f.ReversionReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
 	if err != nil {
 		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}

@@ -97,6 +97,9 @@ type FuzzingConfig struct {
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
+	// ReversionReporterEnabled determines whether reversion metrics should be collected and reported.
+	ReversionReporterEnabled bool `json:"reversionReporterEnabled"`
+
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
 
@@ -132,9 +135,6 @@ type TestingConfig struct {
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
 	// even if this option is not enabled.
 	TraceAll bool `json:"traceAll"`
-
-	// ReversionMeasurement describes the configuration options used for measuring reversion rates of top level calls
-	ReversionMeasurement ReversionMeasurementConfig `json:"reversionMeasurement"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
@@ -186,12 +186,6 @@ func (testCfg *TestingConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// ReversionMeasurementConfig describe the configuration options used for measuring reversion rates of top level calls
-type ReversionMeasurementConfig struct {
-	// Enabled describes whether reversion measurement is enabled.
-	Enabled bool `json:"enabled"`
 }
 
 // AssertionTestingConfig describes the configuration options used for assertion testing
