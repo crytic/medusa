@@ -65,7 +65,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
 				ReversionMeasurement: ReversionMeasurementConfig{
-					Enabled: true,
+					Enabled: false,
 				},
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         true,
