@@ -402,20 +402,20 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	return validShrunkSequence, nil
 }
 
-func (fw *FuzzerWorker) shrinkParam(callSequence *calls.CallSequence) {
-	i := fw.randomProvider.Intn(len(*callSequence))
-	abiValuesMsgData := (*callSequence)[i].Call.DataAbiValues
+func (fw *FuzzerWorker) shrinkParam(callSequence calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(callSequence))
+	abiValuesMsgData := callSequence[i].Call.DataAbiValues
 	for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 		mutatedInput, _ := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 		abiValuesMsgData.InputValues[j] = mutatedInput
 	}
 	// Re-encode the message's calldata
-	(*callSequence)[i].Call.WithDataAbiValues(abiValuesMsgData)
+	callSequence[i].Call.WithDataAbiValues(abiValuesMsgData)
 }
 
-func (fw *FuzzerWorker) shorten(callSequence *calls.CallSequence) {
-	i := fw.randomProvider.Intn(len(*callSequence))
-	*callSequence = append((*callSequence)[:i], (*callSequence)[i+1:]...)
+func (fw *FuzzerWorker) shorten(callSequence calls.CallSequence) {
+	i := fw.randomProvider.Intn(len(callSequence))
+	callSequence = append(callSequence[:i], callSequence[i+1:]...)
 }
 
 // shrinkCallSequence takes a provided call sequence and attempts to shrink it by looking for redundant
@@ -474,9 +474,9 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 			// Alternate
 			coinToss := fw.randomProvider.Int() % 2
 			if coinToss == 0 || len(possibleShrunkSequence) == 1 {
-				fw.shrinkParam(&possibleShrunkSequence)
+				fw.shrinkParam(possibleShrunkSequence)
 			} else {
-				fw.shorten(&possibleShrunkSequence)
+				fw.shorten(possibleShrunkSequence)
 			}
 
 			// Test the shrunken sequence.
