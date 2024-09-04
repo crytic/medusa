@@ -173,11 +173,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Compilation != nil {
 		// Compile the targets specified in the compilation config
 		fuzzer.logger.Info("Compiling targets with ", colors.Bold, fuzzer.config.Compilation.Platform, colors.Reset)
+		start := time.Now()
 		compilations, _, err := (*fuzzer.config.Compilation).Compile()
 		if err != nil {
 			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
+		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
@@ -191,8 +193,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		attachAssertionTestCaseProvider(fuzzer)
 	}
 	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
-		// TODO: Remove this warning when call sequence shrinking is improved
-		fuzzer.logger.Warn("Currently, optimization mode's call sequence shrinking is inefficient; this may lead to minor performance issues")
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
 	return fuzzer, nil
@@ -419,10 +419,14 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
+	balances := make([]*big.Int, 0)
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
+		// Preserve index of target contract balances
+		balances = append(balances, big.NewInt(0))
 	}
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
+	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
 
 	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
@@ -460,8 +464,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
-				if len(fuzzer.config.Fuzzing.TargetContractsBalances) > i {
-					contractBalance = new(big.Int).Set(fuzzer.config.Fuzzing.TargetContractsBalances[i])
+				if len(balances) > i {
+					contractBalance = new(big.Int).Set(balances[i])
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
@@ -744,7 +748,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Set it up with our deployment/setup strategy defined by the fuzzer.
-	f.logger.Info("Setting up base chain")
+	f.logger.Info("Setting up test chain")
 	trace, err := f.Hooks.ChainSetupFunc(f, baseTestChain)
 	if err != nil {
 		if trace != nil {
@@ -754,11 +758,18 @@ func (f *Fuzzer) Start() error {
 		}
 		return err
 	}
+	f.logger.Info("Finished setting up test chain")
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
-	f.logger.Info("Initializing and validating corpus call sequences")
+	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
+		f.logger.Info("Running call sequences in the corpus")
+	}
+	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
+	if corpusTotalSequences > 0 {
+		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
+	}
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
@@ -857,12 +868,14 @@ func (f *Fuzzer) printMetricsLoop() {
 	lastCallsTested := big.NewInt(0)
 	lastSequencesTested := big.NewInt(0)
 	lastWorkerStartupCount := big.NewInt(0)
+	lastGasUsed := big.NewInt(0)
 
 	lastPrintedTime := time.Time{}
 	for !utils.CheckContextDone(f.ctx) {
 		// Obtain our metrics
 		callsTested := f.metrics.CallsTested()
 		sequencesTested := f.metrics.SequencesTested()
+		gasUsed := f.metrics.GasUsed()
 		failedSequences := f.metrics.FailedSequences()
 		workerStartupCount := f.metrics.WorkerStartupCount()
 		workersShrinking := f.metrics.WorkersShrinkingCount()
@@ -882,10 +895,12 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
-		logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
+		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().UniquePCs()), colors.Reset)
+		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
+		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
+			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		}
@@ -895,6 +910,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		lastPrintedTime = time.Now()
 		lastCallsTested = callsTested
 		lastSequencesTested = sequencesTested
+		lastGasUsed = gasUsed
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt

@@ -110,6 +110,12 @@ func (t *ExecutionTracer) GetTrace(txHash common.Hash) *ExecutionTrace {
 
 // OnTxEnd is called upon the end of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
+	// We avoid storing the trace for this transaction. An error should realistically only occur if we hit a block gas
+	// limit error. In this case, the transaction will be retried in the next block and we can retrieve the trace at
+	// that time.
+	if err != nil || receipt == nil {
+		return
+	}
 	t.traceMap[receipt.TxHash] = t.trace
 }
 
