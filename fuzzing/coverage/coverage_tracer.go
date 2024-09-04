@@ -157,18 +157,24 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	address := scope.Address()
 	// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 	scopeContext := scope.(*vm.ScopeContext)
+	gethCodeHash := scopeContext.Contract.CodeHash
 	code := scopeContext.Contract.Code
 	codeSize := len(code)
 	if codeSize > 0 {
 
 		// Obtain our contract coverage map lookup hash.
 		if callFrameState.lookupHash == nil {
-			lookupHash := getContractCoverageMapHash(code, callFrameState.create)
-			callFrameState.lookupHash = &lookupHash
+			if callFrameState.pendingCoverageMap.cachedGethCodeHash == gethCodeHash {
+				lookupHash := callFrameState.pendingCoverageMap.cachedCodeHash
+				callFrameState.lookupHash = &lookupHash
+			} else {
+				lookupHash := getContractCoverageMapHash(code, callFrameState.create)
+				callFrameState.lookupHash = &lookupHash
+			}
 		}
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, gethCodeHash, *callFrameState.lookupHash, codeSize, pc)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
