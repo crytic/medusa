@@ -52,6 +52,9 @@ type CoverageTracer struct {
 
 	// nativeTracer is the underlying tracer used to capture EVM execution.
 	nativeTracer *chain.TestChainTracer
+
+	// TODO comment
+	gethCodeHashToCodeHash map[common.Hash]*common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -69,8 +72,9 @@ type coverageTracerCallFrameState struct {
 // NewCoverageTracer returns a new CoverageTracer.
 func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
-		coverageMaps:    NewCoverageMaps(),
-		callFrameStates: make([]*coverageTracerCallFrameState, 0),
+		coverageMaps:           NewCoverageMaps(),
+		gethCodeHashToCodeHash: make(map[common.Hash]*common.Hash),
+		callFrameStates:        make([]*coverageTracerCallFrameState, 0),
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -167,9 +171,15 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 			if callFrameState.pendingCoverageMap.cachedGethCodeHash == gethCodeHash {
 				lookupHash := callFrameState.pendingCoverageMap.cachedCodeHash
 				callFrameState.lookupHash = &lookupHash
+			} else if t.gethCodeHashToCodeHash[gethCodeHash] != nil {
+				callFrameState.lookupHash = t.gethCodeHashToCodeHash[gethCodeHash]
+			} else if callFrameState.pendingCoverageMap.gethCodeHashToCodeHash[gethCodeHash] != nil {
+				callFrameState.lookupHash = t.gethCodeHashToCodeHash[gethCodeHash]
 			} else {
 				lookupHash := getContractCoverageMapHash(code, callFrameState.create)
 				callFrameState.lookupHash = &lookupHash
+				t.gethCodeHashToCodeHash[gethCodeHash] = &lookupHash
+				callFrameState.pendingCoverageMap.gethCodeHashToCodeHash[gethCodeHash] = &lookupHash
 			}
 		}
 

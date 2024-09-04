@@ -18,6 +18,10 @@ type CoverageMaps struct {
 
 	// TODO comment this
 	// The assumption here is that geth codehash matches if and only if codehash matches
+	gethCodeHashToCodeHash map[common.Hash]*common.Hash
+
+	// TODO comment this
+	// The assumption here is that geth codehash matches if and only if codehash matches
 	cachedGethCodeHash common.Hash
 
 	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
@@ -40,7 +44,9 @@ type CoverageMaps struct {
 
 // NewCoverageMaps initializes a new CoverageMaps object.
 func NewCoverageMaps() *CoverageMaps {
-	maps := &CoverageMaps{}
+	maps := &CoverageMaps{
+		gethCodeHashToCodeHash: make(map[common.Hash]*common.Hash),
+	}
 	maps.Reset()
 	return maps
 }
