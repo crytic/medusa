@@ -53,8 +53,12 @@ type CoverageTracer struct {
 	// nativeTracer is the underlying tracer used to capture EVM execution.
 	nativeTracer *chain.TestChainTracer
 
-	// TODO comment
-	gethCodeHashToCodeHash map[common.Hash]*common.Hash
+	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
+	// so that this expensive calculation doesn't need to be done every opcode.
+	// The Hash key is a contract's codehash (which uniquely identifies it),
+	// and the bool key is whether we're in contract init (true) or runtime (false)
+	// (since init vs runtime produces different results from getContractCoverageMapHash).
+	codeHashCache map[bool]map[common.Hash]common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -72,9 +76,9 @@ type coverageTracerCallFrameState struct {
 // NewCoverageTracer returns a new CoverageTracer.
 func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
-		coverageMaps:           NewCoverageMaps(),
-		gethCodeHashToCodeHash: make(map[common.Hash]*common.Hash),
-		callFrameStates:        make([]*coverageTracerCallFrameState, 0),
+		coverageMaps:    NewCoverageMaps(),
+		callFrameStates: make([]*coverageTracerCallFrameState, 0),
+		codeHashCache:   map[bool]map[common.Hash]common.Hash{false: make(map[common.Hash]common.Hash), true: make(map[common.Hash]common.Hash)},
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -161,30 +165,24 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	address := scope.Address()
 	// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 	scopeContext := scope.(*vm.ScopeContext)
-	gethCodeHash := scopeContext.Contract.CodeHash
 	code := scopeContext.Contract.Code
 	codeSize := len(code)
+	isCreate := callFrameState.create
+	gethCodeHash := scopeContext.Contract.CodeHash
 	if codeSize > 0 {
 
 		// Obtain our contract coverage map lookup hash.
 		if callFrameState.lookupHash == nil {
-			if callFrameState.pendingCoverageMap.cachedGethCodeHash == gethCodeHash {
-				lookupHash := callFrameState.pendingCoverageMap.cachedCodeHash
-				callFrameState.lookupHash = &lookupHash
-			} else if t.gethCodeHashToCodeHash[gethCodeHash] != nil {
-				callFrameState.lookupHash = t.gethCodeHashToCodeHash[gethCodeHash]
-			} else if callFrameState.pendingCoverageMap.gethCodeHashToCodeHash[gethCodeHash] != nil {
-				callFrameState.lookupHash = t.gethCodeHashToCodeHash[gethCodeHash]
-			} else {
-				lookupHash := getContractCoverageMapHash(code, callFrameState.create)
-				callFrameState.lookupHash = &lookupHash
-				t.gethCodeHashToCodeHash[gethCodeHash] = &lookupHash
-				callFrameState.pendingCoverageMap.gethCodeHashToCodeHash[gethCodeHash] = &lookupHash
+			lookupHash, cacheHit := t.codeHashCache[isCreate][gethCodeHash]
+			if !cacheHit {
+				lookupHash = getContractCoverageMapHash(code, isCreate)
+				t.codeHashCache[isCreate][gethCodeHash] = lookupHash
 			}
+			callFrameState.lookupHash = &lookupHash
 		}
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, gethCodeHash, *callFrameState.lookupHash, codeSize, pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, pc)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}

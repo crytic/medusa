@@ -16,14 +16,6 @@ type CoverageMaps struct {
 	// maps represents a structure used to track every ContractCoverageMap by a given deployed address/lookup hash.
 	maps map[common.Hash]map[common.Address]*ContractCoverageMap
 
-	// TODO comment this
-	// The assumption here is that geth codehash matches if and only if codehash matches
-	gethCodeHashToCodeHash map[common.Hash]*common.Hash
-
-	// TODO comment this
-	// The assumption here is that geth codehash matches if and only if codehash matches
-	cachedGethCodeHash common.Hash
-
 	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
 	// expensive lookup in maps. If cachedCodeHash does not match the current code address for which we are updating
 	// coverage for, it, along with other cache variables are updated.
@@ -44,9 +36,7 @@ type CoverageMaps struct {
 
 // NewCoverageMaps initializes a new CoverageMaps object.
 func NewCoverageMaps() *CoverageMaps {
-	maps := &CoverageMaps{
-		gethCodeHashToCodeHash: make(map[common.Hash]*common.Hash),
-	}
+	maps := &CoverageMaps{}
 	maps.Reset()
 	return maps
 }
@@ -56,7 +46,6 @@ func (cm *CoverageMaps) Reset() {
 	cm.maps = make(map[common.Hash]map[common.Address]*ContractCoverageMap)
 	cm.cachedCodeAddress = common.Address{}
 	cm.cachedCodeHash = common.Hash{}
-	cm.cachedGethCodeHash = common.Hash{}
 	cm.cachedMap = nil
 }
 
@@ -181,7 +170,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 }
 
 // UpdateAt updates the hit count of a given program counter location within code coverage data.
-func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, gethCodeHash common.Hash, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
+func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
 	// If the code size is zero, do nothing
 	if codeSize == 0 {
 		return false, nil
@@ -196,7 +185,7 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, gethCodeHash common
 	)
 
 	// Try to obtain a coverage map from our cache
-	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeLookupHash && cm.cachedGethCodeHash == gethCodeHash {
+	if cm.cachedMap != nil && cm.cachedCodeAddress == codeAddress && cm.cachedCodeHash == codeLookupHash {
 		coverageMap = cm.cachedMap
 	} else {
 		// If a coverage map lookup for this code hash doesn't exist, create the mapping.
@@ -218,7 +207,6 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, gethCodeHash common
 		// Set our cached variables for faster coverage setting next time this method is called.
 		cm.cachedMap = coverageMap
 		cm.cachedCodeHash = codeLookupHash
-		cm.cachedGethCodeHash = gethCodeHash
 		cm.cachedCodeAddress = codeAddress
 	}
 
