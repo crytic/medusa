@@ -403,6 +403,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(1)}
 			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -825,7 +826,8 @@ func TestCorpusReplayability(t *testing.T) {
 
 			// Cache current coverage maps
 			originalCoverage := f.fuzzer.corpus.CoverageMaps()
-			originalCorpusSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, true, true)
+			originalTotalCallSequences, originalTotalTestResults := f.fuzzer.corpus.CallSequenceEntryCount()
+			originalCorpusSequenceCount := originalTotalCallSequences + originalTotalTestResults
 
 			// Next, set the fuzzer worker count to one, this allows us to count the call sequences executed before
 			// solving a problem. We will verify the problem is solved with less or equal sequences tested, than
