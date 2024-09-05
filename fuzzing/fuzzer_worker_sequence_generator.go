@@ -321,6 +321,10 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		InputValues: args,
 	})
 
+	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {
+		msg.SkipAccountChecks = true
+	}
+
 	// Determine our delay values for this element
 	blockNumberDelay := uint64(0)
 	blockTimestampDelay := uint64(0)
