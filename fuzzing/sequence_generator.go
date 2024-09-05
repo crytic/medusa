@@ -8,6 +8,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
+	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 )
 
@@ -98,7 +99,7 @@ type CallSequenceGeneratorConfig struct {
 // CallSequenceGeneratorFunc defines a method used to populate a provided call sequence with generated calls.
 // Returns an optional PrefetchModifyCallFunc to be executed prior to the fetching of each element, or an error if
 // one occurs.
-type CallSequenceGeneratorFunc func(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error
+type CallSequenceGeneratorFunc func(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error
 
 // PrefetchModifyCallFunc defines a method used to modify a call sequence element before being fetched from this
 // provider for use.
@@ -241,7 +242,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 		// If we have a corpus mutation method, call it to generate our base sequence, then set the pre-fetch modify
 		// call function.
 		if corpusMutationFunc != nil && corpusMutationFunc.CallSequenceGeneratorFunc != nil {
-			err = corpusMutationFunc.CallSequenceGeneratorFunc(g, g.baseSequence)
+			err = corpusMutationFunc.CallSequenceGeneratorFunc(g.worker.randomProvider, g.worker.fuzzer.corpus.RandomMutationTargetSequence, g.baseSequence)
 			if err != nil {
 				return true, fmt.Errorf("could not generate a corpus mutation derived call sequence due to an error executing a mutation method: %v", err)
 			}
@@ -364,118 +365,6 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	return calls.NewCallSequenceElement(selectedMethod.Contract, msg, blockNumberDelay, blockTimestampDelay), nil
 }
 
-func callSeqSwapRandomElement(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Swap the element
-	swappedSequence := swapRandList(sequence)
-
-	copy(sequence, swappedSequence)
-
-	return nil
-}
-
-func callSeqDeleteRandomElement(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Delete the element
-	deletedSequence := deleteRandList(sequence)
-
-	copy(sequence, deletedSequence)
-
-	return nil
-}
-
-// callSeqGenFuncCorpusHead is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a sequence
-// whose head is based off of an existing corpus call sequence.
-// Returns an error if one occurs.
-func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Obtain a call sequence from the corpus
-	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for head mutation: %v", err)
-	}
-
-	// Append the new calls to the end of the corpus sequence
-	spliced := append(corpusSequence, sequence...)
-
-	copy(sequence, spliced)
-
-	return nil
-}
-
-// callSeqGenFuncCorpusTail is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a sequence
-// whose tail is based off of an existing corpus call sequence.
-// Returns an error if one occurs.
-func callSeqGenFuncCorpusTail(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Obtain a call sequence from the corpus
-	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
-	}
-
-	// Prepend the new calls to the start of the corpus sequence
-	spliced := append(sequence, corpusSequence...)
-
-	copy(sequence, spliced)
-
-	return nil
-}
-
-// callSeqGenFuncExpansion is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
-// sequence which is expanded up to 30 times by replicating an existing call sequence element at a random position.
-func callSeqGenFuncExpansion(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-
-	// Expand the sequence
-	expandedSequence := expandRandList(sequence)
-
-	copy(sequence, expandedSequence)
-
-	return nil
-}
-
-// callSeqGenFuncSpliceAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
-// sequence which is based off of two corpus call sequence entries, from which a random length head and tail are
-// respectively sliced and joined together.
-// Returns an error if one occurs.
-func callSeqGenFuncSpliceAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Obtain two corpus call sequence entries
-	headSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain head corpus call sequence for splice-at-random corpus mutation: %v", err)
-	}
-	tailSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
-	}
-
-	// Splice the two sequences
-	splicedSequence := spliceAtRandom(headSequence, tailSequence)
-
-	copy(sequence, splicedSequence)
-
-	return nil
-}
-
-// callSeqGenFuncInterleaveAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
-// sequence which is based off of two corpus call sequence entries, from which a random number of transactions are
-// taken and interleaved (each element of one sequence will be followed by an element of the other).
-// Returns an error if one occurs.
-func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, sequence calls.CallSequence) error {
-	// Obtain two corpus call sequence entries
-	firstSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
-	}
-	secondSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
-	if err != nil {
-		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
-	}
-
-	// Interleave the two sequences
-	interleavedSequence := interleaveAtRandom(firstSequence, secondSequence)
-
-	copy(sequence, interleavedSequence)
-
-	return nil
-}
-
 // prefetchModifyCallFuncMutate is a PrefetchModifyCallFunc, called by a CallSequenceGenerator to apply mutations
 // to a call sequence element, prior to it being fetched.
 // Returns an error if one occurs.
@@ -500,8 +389,123 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 	return nil
 }
 
+func callSeqSwapRandomElement(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Swap the element
+	swappedSequence := swapRandList(provider, sequence)
+
+	copy(sequence, swappedSequence)
+
+	return nil
+}
+
+func callSeqDeleteRandomElement(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Delete the element
+	deletedSequence := deleteRandList(provider, sequence)
+
+	copy(sequence, deletedSequence)
+
+	return nil
+}
+
+// callSeqGenFuncCorpusHead is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a sequence
+// whose head is based off of an existing corpus call sequence.
+// Returns an error if one occurs.
+func callSeqGenFuncCorpusHead(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Obtain a call sequence from the corpus
+	corpusSequence, err := sequenceGenerator()
+	if err != nil {
+		return fmt.Errorf("could not obtain corpus call sequence for head mutation: %v", err)
+	}
+
+	// Prepend the new calls to the end of the corpus sequence
+	i := provider.Intn(len(corpusSequence)) + 1
+	spliced := append(corpusSequence[:i], sequence...)
+
+	copy(sequence, spliced)
+
+	return nil
+}
+
+// callSeqGenFuncCorpusTail is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a sequence
+// whose tail is based off of an existing corpus call sequence.
+// Returns an error if one occurs.
+func callSeqGenFuncCorpusTail(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Obtain a call sequence from the corpus
+	corpusSequence, err := sequenceGenerator()
+	if err != nil {
+		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+	}
+
+	maxLength := utils.Min(len(sequence), len(corpusSequence))
+	i := provider.Intn(maxLength) + 1
+	fmt.Println("i: ", i)
+	// Append the new calls to the end of the corpus sequence
+	spliced := append(sequence[i:], corpusSequence...)
+
+	copy(sequence, spliced)
+
+	return nil
+}
+
+// callSeqGenFuncExpansion is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is expanded up to 30 times by replicating an existing call sequence element at a random position.
+func callSeqGenFuncExpansion(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+
+	// Expand the sequence
+	expandedSequence := expandRandList(provider, sequence)
+
+	copy(sequence, expandedSequence)
+
+	return nil
+}
+
+// callSeqGenFuncSpliceAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is based off of two corpus call sequence entries, from which a random length head and tail are
+// respectively sliced and joined together.
+// Returns an error if one occurs.
+func callSeqGenFuncSpliceAtRandom(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Obtain two corpus call sequence entries
+	headSequence, err := sequenceGenerator()
+	if err != nil {
+	}
+	tailSequence, err := sequenceGenerator()
+	if err != nil {
+		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
+	}
+
+	// Splice the two sequences
+	splicedSequence := spliceAtRandom(provider, headSequence, tailSequence)
+
+	copy(sequence, splicedSequence)
+
+	return nil
+}
+
+// callSeqGenFuncInterleaveAtRandom is a CallSequenceGeneratorFunc which prepares a CallSequenceGenerator to generate a
+// sequence which is based off of two corpus call sequence entries, from which a random number of transactions are
+// taken and interleaved (each element of one sequence will be followed by an element of the other).
+// Returns an error if one occurs.
+func callSeqGenFuncInterleaveAtRandom(provider *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error {
+	// Obtain two corpus call sequence entries
+	firstSequence, err := sequenceGenerator()
+	if err != nil {
+		return fmt.Errorf("could not obtain first corpus call sequence for interleave-at-random corpus mutation: %v", err)
+	}
+	secondSequence, err := sequenceGenerator()
+	if err != nil {
+		return fmt.Errorf("could not obtain second corpus call sequence for interleave-at-random corpus mutation: %v", err)
+	}
+
+	// Interleave the two sequences
+	interleavedSequence := interleaveAtRandom(provider, firstSequence, secondSequence)
+
+	copy(sequence, interleavedSequence)
+
+	return nil
+}
+
 // expandAt expands the element at index k by t times.
-func expandAt[T any](xs []T, k int, t int) []T {
+func expandAt[T any](xs []*T, k int, t int) []*T {
 	if len(xs) == 0 {
 		return xs
 	}
@@ -509,8 +513,8 @@ func expandAt[T any](xs []T, k int, t int) []T {
 }
 
 // repeat replicates an element t times.
-func repeat[T any](v T, t int) []T {
-	res := make([]T, t)
+func repeat[T any](v *T, t int) []*T {
+	res := make([]*T, t)
 	for i := range res {
 		res[i] = v
 	}
@@ -518,38 +522,39 @@ func repeat[T any](v T, t int) []T {
 }
 
 // expandRandList expands a random element of the list by 1 to 32 times.
-func expandRandList[T any](xs []T) []T {
+func expandRandList[T any](provider *rand.Rand, xs []*T) []*T {
 	l := len(xs)
 	if l == 0 || l >= 32 {
 		return xs
 	}
-	k := rand.Intn(l)
-	t := rand.Intn(min(32, l)) + 1
+	k := provider.Intn(l)
+	t := provider.Intn(min(32, l)) + 1
 	return expandAt(xs, k, t)
 }
 
 // deleteAt deletes the element at the given index.
-func deleteAt[T any](xs []T, n int) []T {
-	return append(xs[:n], xs[n+1:]...)
+func deleteAt[T any](xs []*T, n int) []*T {
+	xs[n] = nil
+	return xs
 }
 
 // deleteRandList deletes a random element from the list.
-func deleteRandList[T any](xs []T) []T {
+func deleteRandList[T any](provider *rand.Rand, xs []*T) []*T {
 	if len(xs) == 0 {
 		return xs
 	}
-	k := rand.Intn(len(xs))
+	k := provider.Intn(len(xs))
 	return deleteAt(xs, k)
 }
 
 // swapAt swaps two elements in the list.
-func swapAt[T any](xs []T, i, j int) []T {
+func swapAt[T any](xs []*T, i, j int) []*T {
 	xs[i], xs[j] = xs[j], xs[i]
 	return xs
 }
 
 // swapRandList swaps two random elements in the list.
-func swapRandList[T any](xs []T) []T {
+func swapRandList[T any](provider *rand.Rand, xs []*T) []*T {
 	if len(xs) == 0 {
 		return xs
 	}
@@ -558,26 +563,26 @@ func swapRandList[T any](xs []T) []T {
 }
 
 // spliceAtRandom splices two lists at random positions.
-func spliceAtRandom[T any](xs1, xs2 []T) []T {
+func spliceAtRandom[T any](provider *rand.Rand, xs1, xs2 []*T) []*T {
 	idx1, idx2 := rand.Intn(len(xs1)), rand.Intn(len(xs2))
 	return append(xs1[:idx1], xs2[idx2:]...)
 }
 
 // interleaveAtRandom interleaves two lists at random positions.
-func interleaveAtRandom[T any](xs1, xs2 []T) []T {
+func interleaveAtRandom[T any](provider *rand.Rand, xs1, xs2 []*T) []*T {
 	idx1, idx2 := rand.Intn(len(xs1)), rand.Intn(len(xs2))
 	return interleaveLL(xs1[:idx1], xs2[:idx2])
 }
 
 // interleaveLL interleaves two lists.
-func interleaveLL[T any](a, b []T) []T {
+func interleaveLL[T any](a, b []*T) []*T {
 	if len(a) == 0 {
 		return b
 	}
 	if len(b) == 0 {
 		return a
 	}
-	return append([]T{a[0], b[0]}, interleaveLL(a[1:], b[1:])...)
+	return append([]*T{a[0], b[0]}, interleaveLL(a[1:], b[1:])...)
 }
 
 // min returns the smaller of two integers.
