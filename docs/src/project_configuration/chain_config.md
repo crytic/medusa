@@ -9,6 +9,12 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
 - > 🚩 Setting `codeSizeCheckDisabled` to `false` is not recommended since it complicates the fuzz testing process.
 - **Default**: `true`
 
+### `skipAccountChecks`
+
+- **Type**: Boolean
+- **Description**: If `true`, account-related checks (nonce validation, transaction origin must be an EOA) are disabled in `go-ethereum`.
+- **Default**: `true`
+
 ## Cheatcode Configuration
 
 ### `cheatCodesEnabled`

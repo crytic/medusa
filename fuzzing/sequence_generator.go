@@ -341,6 +341,10 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		InputValues: args,
 	})
 
+	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {
+		msg.SkipAccountChecks = true
+	}
+
 	// Determine our delay values for this element
 	blockNumberDelay := uint64(0)
 	blockTimestampDelay := uint64(0)
@@ -467,6 +471,7 @@ func callSeqGenFuncSpliceAtRandom(provider *rand.Rand, sequenceGenerator func() 
 	// Obtain two corpus call sequence entries
 	headSequence, err := sequenceGenerator()
 	if err != nil {
+		return fmt.Errorf("could not obtain tail corpus call sequence for splice-at-random corpus mutation: %v", err)
 	}
 	tailSequence, err := sequenceGenerator()
 	if err != nil {
