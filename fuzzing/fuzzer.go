@@ -570,8 +570,8 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	// Create a sequence generator config which uses the created value generator.
 	sequenceGenConfig := &CallSequenceGeneratorConfig{
 		NewSequenceProbability: 0.3,
-		Prepend:                800,
-		Append:                 200,
+		Append:                 800,
+		Prepend:                200,
 		Splice:                 100,
 		Interleave:             100,
 		PrependAndMutate:       100,
