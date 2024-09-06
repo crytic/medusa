@@ -444,7 +444,7 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	})
 }
 
-// TestDeploymentsInnerDeployments runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
+// TestDeploymentsSelfDestruct runs a test to ensure dynamically deployed contracts are detected by the Fuzzer and
 // their properties are tested appropriately.
 func TestDeploymentsSelfDestruct(t *testing.T) {
 	// These contracts provide functions to deploy inner contracts which have properties that will produce a failure.
