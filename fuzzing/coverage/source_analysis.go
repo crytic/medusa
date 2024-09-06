@@ -90,24 +90,17 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 				return file.CumulativeOffsetByLine[i] > byteStart+length
 			})
 
-			instrumented := 0
 			hit := 0
-			count := 0
 			for i := startLine; i < endLine; i++ {
 				// index iz zero based, line numbers are 1 based
-				if file.Lines[i-1].IsActive {
-					instrumented++
-					if file.Lines[i-1].IsCovered {
-						hit++
-					}
+				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
+					hit++
 				}
-			}
-			if hit == instrumented {
-				count = 1
+
 			}
 
 			buffer.WriteString(fmt.Sprintf("FN:%d,%s\n", startLine, fn.Name))
-			buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", count, fn.Name))
+			buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", hit, fn.Name))
 		}
 	}
 
