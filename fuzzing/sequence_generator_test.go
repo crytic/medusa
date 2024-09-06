@@ -52,13 +52,10 @@ func getMockCallSequenceElementCall(data int) *calls.CallMessage {
 
 func TestSplice(t *testing.T) {
 	strategies := map[string]func(rand *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error{
-		// "interleave": callSeqGenFuncInterleaveAtRandom,
-		// "splice":     callSeqGenFuncSpliceAtRandom,
-		// "expansion":  callSeqGenFuncExpansion,
-		"prepend": callSeqGenFuncCorpusHead,
-		"apppend": callSeqGenFuncCorpusTail,
-		// "delete":     callSeqDeleteRandomElement,
-		// "swap": callSeqSwapRandomElement,
+		"interleave": interleaveCorpus,
+		"splice":     spliceCorpus,
+		"prepend":    prependFromCorpus,
+		"append":     appendFromCorpus,
 	}
 	// Seed the PRNG to make the randomness deterministic
 
@@ -66,10 +63,9 @@ func TestSplice(t *testing.T) {
 	// expectedSize := 8 // Adjust based on the expected interleave size in your scenario
 
 	// Prepare a source sequence (with the expected size)
-
 	for name, strategyFn := range strategies {
 		// Call the function under test
-		sourceSequence := []calls.CallSequence{getMockCallSequence(1, 1), getMockCallSequence(1, 5)}
+		sourceSequence := []calls.CallSequence{getMockCallSequence(4, 1), getMockCallSequence(4, 5)}
 		i := 0
 		sequence := getMockCallSequence(4, 7)
 		sequence = append(sequence, getMockCallSequence(4, 9)...)
