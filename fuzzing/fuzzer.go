@@ -837,8 +837,12 @@ func (f *Fuzzer) Start() error {
 	f.printExitingResults()
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-	if err == nil && f.config.Fuzzing.CorpusDirectory != "" && len(f.config.Fuzzing.CoverageReports) > 0 {
-		coverageReportDir := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+	if err == nil && len(f.config.Fuzzing.CoverageReports) > 0 {
+		// Write to the default directory if we have no corpus directory set.
+		coverageReportDir := filepath.Join("crytic-export", "coverage")
+		if f.config.Fuzzing.CorpusDirectory != "" {
+			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		}
 		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
 
 		if err != nil {

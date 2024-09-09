@@ -397,9 +397,6 @@ func (p *ProjectConfig) Validate() error {
 
 	// The coverage report format must be either "lcov" or "html"
 	if p.Fuzzing.CoverageReports != nil {
-		if p.Fuzzing.CorpusDirectory == "" {
-			return errors.New("project configuration must specify a corpus directory if coverage reports are enabled")
-		}
 		for _, report := range p.Fuzzing.CoverageReports {
 			if report != "lcov" && report != "html" {
 				return errors.New(fmt.Sprintf("project configuration must specify only valid coverage reports (lcov, html): %s", report))
