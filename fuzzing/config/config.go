@@ -61,8 +61,8 @@ type FuzzingConfig struct {
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
 
-	// CoverageReports indicate which reports to generate: "lcov" and "html" are supported.
-	CoverageReports []string `json:"coverageReports"`
+	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
+	CoverageFormats []string `json:"coverageFormats"`
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
@@ -396,8 +396,8 @@ func (p *ProjectConfig) Validate() error {
 	}
 
 	// The coverage report format must be either "lcov" or "html"
-	if p.Fuzzing.CoverageReports != nil {
-		for _, report := range p.Fuzzing.CoverageReports {
+	if p.Fuzzing.CoverageFormats != nil {
+		for _, report := range p.Fuzzing.CoverageFormats {
 			if report != "lcov" && report != "html" {
 				return fmt.Errorf("project configuration must specify only valid coverage reports (lcov, html): %s", report)
 			}

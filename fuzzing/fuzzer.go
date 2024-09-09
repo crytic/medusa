@@ -837,7 +837,7 @@ func (f *Fuzzer) Start() error {
 	f.printExitingResults()
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-	if err == nil && len(f.config.Fuzzing.CoverageReports) > 0 {
+	if err == nil && len(f.config.Fuzzing.CoverageFormats) > 0 {
 		// Write to the default directory if we have no corpus directory set.
 		coverageReportDir := filepath.Join("crytic-export", "coverage")
 		if f.config.Fuzzing.CorpusDirectory != "" {
@@ -849,7 +849,7 @@ func (f *Fuzzer) Start() error {
 			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
 			var path string
-			for _, reportType := range f.config.Fuzzing.CoverageReports {
+			for _, reportType := range f.config.Fuzzing.CoverageFormats {
 				switch reportType {
 				case "html":
 					path, err = coverage.WriteHTMLReport(sourceAnalysis, coverageReportDir)
