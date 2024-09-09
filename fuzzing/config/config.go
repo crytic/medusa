@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 
@@ -59,6 +60,9 @@ type FuzzingConfig struct {
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
+
+	// CoverageReports indicate which reports to generate: "lcov" and "html" are supported.
+	CoverageReports []string `json:"coverageReports"`
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
@@ -388,6 +392,18 @@ func (p *ProjectConfig) Validate() error {
 	for _, addr := range p.Fuzzing.PredeployedContracts {
 		if _, err := utils.HexStringToAddress(addr); err != nil {
 			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
+		}
+	}
+
+	// The coverage report format must be either "lcov" or "html"
+	if p.Fuzzing.CoverageReports != nil {
+		if p.Fuzzing.CorpusDirectory == "" {
+			return errors.New("project configuration must specify a corpus directory if coverage reports are enabled")
+		}
+		for _, report := range p.Fuzzing.CoverageReports {
+			if report != "lcov" && report != "html" {
+				return errors.New(fmt.Sprintf("project configuration must specify only valid coverage reports (lcov, html): %s", report))
+			}
 		}
 	}
 

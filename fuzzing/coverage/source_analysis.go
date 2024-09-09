@@ -80,8 +80,8 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 		// FN:<line number>,<function name>
 		// FNDA:<execution count>,<function name>
 		for _, fn := range file.Functions {
-			byteStart := fn.GetStart()
-			length := fn.GetLength()
+			byteStart := types.GetSrcMapStart(fn.Src)
+			length := types.GetSrcMapLength(fn.Src)
 
 			startLine := sort.Search(len(file.CumulativeOffsetByLine), func(i int) bool {
 				return file.CumulativeOffsetByLine[i] > byteStart
@@ -90,21 +90,26 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 				return file.CumulativeOffsetByLine[i] > byteStart+length
 			})
 
+			// We are treating any line hit in the definition as a hit for the function.
 			hit := 0
 			for i := startLine; i < endLine; i++ {
 				// index iz zero based, line numbers are 1 based
 				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
-					hit++
+					hit = 1
 				}
 
 			}
 
-			buffer.WriteString(fmt.Sprintf("FN:%d,%s\n", startLine, fn.Name))
-			buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", hit, fn.Name))
+			// TODO: handle fallback, receive, and constructor
+			if fn.Name != "" {
+				buffer.WriteString(fmt.Sprintf("FN:%d,%s\n", startLine, fn.Name))
+				buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", hit, fn.Name))
+			}
+
 		}
+		buffer.WriteString("end_of_record\n")
 	}
 
-	buffer.WriteString("end_of_record\n")
 	return buffer.String()
 }
 
@@ -114,12 +119,14 @@ type SourceFileAnalysis struct {
 	Path string
 
 	// CumulativeOffsetByLine describes the cumulative byte offset for each line in the source file.
-	// For example, for a file with 5 lines, your list might look like: [0, 45, 98, 132, 189], where each number is the cumulative byte offset at the beginning of each line.
+	// For example, for a file with 5 lines, the list might look like: [0, 45, 98, 132, 189], where each number is the byte offset of the line's starting position
+	// This allows us to quickly determine which line a given byte offset falls within using a binary search.
 	CumulativeOffsetByLine []int
 
 	// Lines describes information about a given source line and its coverage.
 	Lines []*SourceLineAnalysis
 
+	// Functions is a list of functions defined in the source file
 	Functions []*types.FunctionDefinition
 }
 

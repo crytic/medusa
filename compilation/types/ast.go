@@ -20,6 +20,7 @@ const (
 
 // Node interface represents a generic AST node
 type Node interface {
+	// GetNodeType returns solc's node type e.g. FunctionDefinition, ContractDefinition.
 	GetNodeType() string
 }
 
@@ -36,34 +37,6 @@ func (s FunctionDefinition) GetNodeType() string {
 	return s.NodeType
 }
 
-func (s FunctionDefinition) GetStart() int {
-	// 95:42:0 returns 95
-	re := regexp.MustCompile(`([0-9]*):[0-9]*:[0-9]*`)
-	startCandidates := re.FindStringSubmatch(s.Src)
-
-	if len(startCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
-		start, err := strconv.Atoi(startCandidates[1])
-		if err == nil {
-			return start
-		}
-	}
-	return -1
-}
-
-func (s FunctionDefinition) GetLength() int {
-	// 95:42:0 returns 42
-	re := regexp.MustCompile(`[0-9]*:([0-9]*):[0-9]*`)
-	endCandidates := re.FindStringSubmatch(s.Src)
-
-	if len(endCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
-		end, err := strconv.Atoi(endCandidates[1])
-		if err == nil {
-			return end
-		}
-	}
-	return -1
-}
-
 // ContractDefinition is the contract definition node
 type ContractDefinition struct {
 	// NodeType represents the node type (currently we only evaluate source unit node types)
@@ -78,7 +51,6 @@ type ContractDefinition struct {
 	Kind ContractKind `json:"contractKind,omitempty"`
 }
 
-// GetNodeType implements the Node interface and returns the node type for the contract definition
 func (s ContractDefinition) GetNodeType() string {
 	return s.NodeType
 }
@@ -136,7 +108,6 @@ type AST struct {
 	Src string `json:"src"`
 }
 
-// UnmarshalJSON unmarshals from JSON
 func (a *AST) UnmarshalJSON(data []byte) error {
 	// Unmarshal the top-level AST into our own representation. Defer the unmarshaling of all the individual nodes until later
 	type Alias AST
@@ -188,15 +159,45 @@ func (a *AST) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// GetSourceUnitID returns the source unit ID based on the source of the AST
-func (a *AST) GetSourceUnitID() int {
+// GetSrcMapSourceUnitID returns the source unit ID based on the source of the AST
+func GetSrcMapSourceUnitID(src string) int {
 	re := regexp.MustCompile(`[0-9]*:[0-9]*:([0-9]*)`)
-	sourceUnitCandidates := re.FindStringSubmatch(a.Src)
+	sourceUnitCandidates := re.FindStringSubmatch(src)
 
 	if len(sourceUnitCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
 		sourceUnit, err := strconv.Atoi(sourceUnitCandidates[1])
 		if err == nil {
 			return sourceUnit
+		}
+	}
+	return -1
+}
+
+// GetSrcMapStart returns the byte offset where the function definition starts in the source file
+func GetSrcMapStart(src string) int {
+	// 95:42:0 returns 95
+	re := regexp.MustCompile(`([0-9]*):[0-9]*:[0-9]*`)
+	startCandidates := re.FindStringSubmatch(src)
+
+	if len(startCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
+		start, err := strconv.Atoi(startCandidates[1])
+		if err == nil {
+			return start
+		}
+	}
+	return -1
+}
+
+// GetSrcMapLength returns the length of the function definition in bytes
+func GetSrcMapLength(src string) int {
+	// 95:42:0 returns 42
+	re := regexp.MustCompile(`[0-9]*:([0-9]*):[0-9]*`)
+	endCandidates := re.FindStringSubmatch(src)
+
+	if len(endCandidates) == 2 { // FindStringSubmatch includes the whole match as the first element
+		end, err := strconv.Atoi(endCandidates[1])
+		if err == nil {
+			return end
 		}
 	}
 	return -1

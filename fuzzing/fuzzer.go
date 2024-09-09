@@ -837,14 +837,29 @@ func (f *Fuzzer) Start() error {
 	f.printExitingResults()
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
-		// TODO don't overwrite the coverage report if it already exists and support toggling to LCOV
-		err = coverage.GenerateReports(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+	if err == nil && f.config.Fuzzing.CorpusDirectory != "" && len(f.config.Fuzzing.CoverageReports) > 0 {
+		coverageReportDir := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
+
 		if err != nil {
-			f.logger.Error("Failed to generate coverage report", err)
+			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
-			f.logger.Info("Coverage report(s) saved to: ", colors.Bold, coverageReportPath, colors.Reset)
+			var path string
+			for _, reportType := range f.config.Fuzzing.CoverageReports {
+				switch reportType {
+				case "html":
+					path, err = coverage.WriteHTMLReport(sourceAnalysis, coverageReportDir)
+				case "lcov":
+					path, err = coverage.WriteLCOVReport(sourceAnalysis, coverageReportDir)
+				default:
+					err = fmt.Errorf("unsupported coverage report type: %s", reportType)
+				}
+				if err != nil {
+					f.logger.Error(fmt.Sprintf("Failed to generate %s coverage report", reportType), err)
+				} else {
+					f.logger.Info(fmt.Sprintf("%s report(s) saved to: %s", reportType, path), colors.Bold, colors.Reset)
+				}
+			}
 		}
 	}
 
