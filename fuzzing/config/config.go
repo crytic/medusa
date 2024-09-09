@@ -399,7 +399,7 @@ func (p *ProjectConfig) Validate() error {
 	if p.Fuzzing.CoverageReports != nil {
 		for _, report := range p.Fuzzing.CoverageReports {
 			if report != "lcov" && report != "html" {
-				return errors.New(fmt.Sprintf("project configuration must specify only valid coverage reports (lcov, html): %s", report))
+				return fmt.Errorf("project configuration must specify only valid coverage reports (lcov, html): %s", report)
 			}
 		}
 	}
