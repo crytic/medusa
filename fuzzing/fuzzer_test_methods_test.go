@@ -56,6 +56,7 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	assert.NoError(t, err)
 	projectConfig.Compilation = compilationConfig
 	projectConfig.Fuzzing.Workers = 3
+	projectConfig.Fuzzing.ReversionReporterEnabled = true
 	projectConfig.Fuzzing.WorkerResetLimit = 50
 	projectConfig.Fuzzing.Timeout = 0
 	projectConfig.Fuzzing.TestLimit = 1_500_000

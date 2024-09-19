@@ -541,6 +541,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// Subscribe our chain event handlers
 		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
+		initializedChain.Events.PendingBlockCommitted.Subscribe(fw.Fuzzer().ReversionReporter.OnPendingBlockCommittedEvent)
 
 		// Emit an event indicating the worker has created its chain.
 		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
@@ -615,9 +616,10 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			}
 		}
 
-		// Emit an event indicating the worker is about to test a new call sequence.
+		// Emit an event indicating the worker has completed testing a call sequence.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
-			Worker: fw,
+			Worker:   fw,
+			Sequence: callSequence,
 		})
 		if err != nil {
 			return false, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing of a new call sequence has concluded: %v", err)

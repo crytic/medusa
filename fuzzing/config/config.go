@@ -97,6 +97,9 @@ type FuzzingConfig struct {
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
+	// ReversionReporterEnabled determines whether reversion metrics should be collected and reported.
+	ReversionReporterEnabled bool `json:"reversionReporterEnabled"`
+
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
 

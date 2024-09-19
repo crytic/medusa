@@ -1,0 +1,151 @@
+<html lang=en>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reversion Report</title>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            padding: 1px;
+            padding-left: 4px;
+            padding-right: 4px;
+            white-space: nowrap;
+        }
+        .table-grid{
+            display: grid;
+            grid-template-columns: 1fr;
+            width: max-content;
+        }
+        .table-grid th.col-name {
+            width: 10%;
+        }
+        .table-grid th.col-reason {
+            width: 40%;
+        }
+        .table-grid th.col-count {
+            width: 6%;
+        }
+        .table-grid th.col-pct-attrib {
+            width: 13%;
+        }
+        .table-grid th.col-pct-attrib2 {
+            width: 13%;
+        }
+        .table-grid th.col-pct-change {
+            width: 23%;
+        }
+        .numericdata {
+            text-align: center;
+        }
+        hr {
+            width: 100%;
+        }
+        svg{
+            vertical-align: middle;
+        }
+
+
+    </style>
+</head>
+
+<body>
+<svg style="display: none;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="notstatsig" viewBox="0 0 24 24">
+    <title>Not enough samples for statistical significance</title>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zm-1.5-5.009c0-.867.659-1.491 1.491-1.491.85 0 1.509.624 1.509 1.491 0 .867-.659 1.509-1.509 1.509-.832 0-1.491-.642-1.491-1.509zM11.172 6a.5.5 0 0 0-.499.522l.306 7a.5.5 0 0 0 .5.478h1.043a.5.5 0 0 0 .5-.478l.305-7a.5.5 0 0 0-.5-.522h-1.655z" fill="#000000"/>
+    </symbol>
+</svg>
+
+<header>
+    <h1>Reversion Report</h1>
+</header>
+<hr/>
+
+<h2>Summary</h2>
+<table>
+    <tr>
+        <th>Function</th>
+        <th>Call Count</th>
+        <th>Revert Count</th>
+        <th>Percent Reverted</th>
+        <th>Change vs. Prev Run</th>
+        <th>Percent Reverted Prev</th>
+    </tr>
+{{range $funcArtifact := .FunctionArtifacts}}
+    <tr>
+        <td><a href="#{{$funcArtifact.Name}}">{{$funcArtifact.Name}}</a></td>
+        <td class="numericdata">{{$funcArtifact.TotalCalls}}</td>
+        <td class="numericdata">{{$funcArtifact.TotalReverts}}</td>
+        <td class="numericdata">{{percentageFmt $funcArtifact.RevertPct}}{{if lt $funcArtifact.TotalCalls statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}</td>
+        <td class="numericdata">{{percentageChangeOpt $funcArtifact.PrevRevertPct $funcArtifact.RevertPct}}</td>
+        <td class="numericdata">{{percentageFmtOpt $funcArtifact.PrevRevertPct}}</td>
+
+    </tr>
+{{end}}
+</table>
+
+<h2>Individual Functions</h2>
+<p>Be aware that reversions may come from call frames or contracts below the top level call.</p>
+<div class="table-grid">
+{{range $funcArtifact := .FunctionArtifacts}}
+    <h3 id="{{$funcArtifact.Name}}">{{$funcArtifact.Name}}</h3>
+    <p>
+    Total Calls: <strong>{{$funcArtifact.TotalCalls}}</strong> <br>
+    Total Reverts: <strong>{{$funcArtifact.TotalReverts}}</strong> <br>
+    Percentage of calls that reverted: <strong>{{percentageFmt $funcArtifact.RevertPct}}</strong> {{if lt $funcArtifact.TotalCalls statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}<br>
+    Change in revert % since last run: <strong>{{percentageChangeOpt $funcArtifact.PrevRevertPct $funcArtifact.RevertPct}}</strong> <br>
+    Percentage of calls that reverted last run: <strong>{{percentageFmtOpt $funcArtifact.PrevRevertPct}}</strong> <br>
+    Revert Details for {{$funcArtifact.Name}}
+    </p>
+    <table>
+        <tr>
+            <th class="col-reason">Revert Reason</th>
+            <th class="col-count">Count</th>
+            <th class="col-pct-attrib2">Percent Attributed</th>
+            <th class="col-pct-change">Change vs. Prev Run</th>
+            <th class="col-pct-attrib">Percent Attributed Prev.</th>
+        </tr>
+        {{range $revertArtifact := $funcArtifact.RevertReasons}}
+        <tr>
+            <td>{{$revertArtifact.Reason}}</td>
+            <td class="numericdata">{{$revertArtifact.Total}}</td>
+            <td class="numericdata">{{percentageFmt $revertArtifact.PctAttributed}} {{if lt $revertArtifact.Total statSigThresh}}<svg width="16px" height="16px"><use href="#notstatsig" /></svg>{{end}}</td>
+            <td class="numericdata">{{percentageChangeOpt $revertArtifact.PrevPctAttributed $revertArtifact.PctAttributed}}</td>
+            <td class="numericdata">{{percentageFmtOpt $revertArtifact.PrevPctAttributed }}</td>
+        </tr>
+        {{end}}
+    </table>
+    <hr/>
+{{end}}
+</div>
+
+<script>
+    // Add event listeners for collapsible sections to collapse/expand on click.
+    const collapsibleHeaders = document.getElementsByClassName("collapsible");
+    let i;
+    for (i = 0; i < collapsibleHeaders.length; i++) {
+        collapsibleHeaders[i].addEventListener("click", function() {
+            this.classList.toggle("collapsible-active");
+
+        });
+    }
+
+    // If there's only one item and that item has 0% coverage, expand it by default.
+    if (collapsibleHeaders.length === 1 && !collapsibleHeaders.className.contains("collapsible-active")) {
+        collapsibleHeaders[0].click();
+    }
+</script>
+
+<hr/>
+<footer>
+    <center>
+        Report generated by medusa
+        <br />
+        {{timeNow.UTC}}
+        <br />
+        <a href="https://github.com/crytic/medusa">github.com/crytic/medusa</a>
+    </center>
+</footer>
+</body>
+</html>

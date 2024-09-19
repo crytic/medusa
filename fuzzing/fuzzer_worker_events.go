@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
+	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -93,4 +94,6 @@ type FuzzerWorkerCallSequenceTestingEvent struct {
 type FuzzerWorkerCallSequenceTestedEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker
+	// Sequence represents the call sequence that was tested
+	Sequence calls.CallSequence
 }

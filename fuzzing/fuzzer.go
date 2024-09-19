@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/fuzzing/reversion"
 	"math/big"
 	"math/rand"
 	"os"
@@ -19,7 +21,6 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
-	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
@@ -69,6 +70,9 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
+
+	// ReversionReporter tracks per-function reversion metrics, if enabled
+	ReversionReporter *reversion.ReversionReporter
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -153,6 +157,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
+		ReversionReporter:   reversion.CreateReversionReporter(config),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -807,12 +812,14 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
+	// Measure reversion stats across all workers
+	f.ReversionReporter.StartWorker(f.ctx)
+
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
 	if err != nil {
 		f.logger.Error("Encountered an error in the main fuzzing loop", err)
 	}
-
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
@@ -831,11 +838,16 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
-
 	// Print our results on exit.
 	f.printExitingResults()
 
+	err = f.ReversionReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		f.logger.Error("Failed to generate reversion stats report", err)
+	}
+
 	// Finally, generate our coverage report if we have set a valid corpus directory.
+
 	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
 		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
 		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
@@ -844,6 +856,10 @@ func (f *Fuzzer) Start() error {
 		} else {
 			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
 		}
+	}
+	err = f.ReversionReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
+	if err != nil {
+		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}
 
 	// Return any encountered error.
