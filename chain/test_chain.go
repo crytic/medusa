@@ -729,6 +729,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 // with relevant execution information. If a pending block was not created, an error is returned.
 // Returns an error if one occurred.
 func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers ...*TestChainTracer) error {
+	fmt.Println("PendingBlockAddTx")
 	// If we don't have a pending block, return an error
 	if t.pendingBlock == nil {
 		return errors.New("could not add tx to the chain's pending block because no pending block was created")
@@ -828,6 +829,7 @@ func (t *TestChain) PendingBlockCommit() error {
 
 	// Perform a state commit to obtain the root hash for our block.
 	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true)
+	fmt.Println(root)
 	t.pendingBlock.Header.Root = root
 
 	if err != nil {
@@ -837,6 +839,7 @@ func (t *TestChain) PendingBlockCommit() error {
 	// Committing the state invalidates the cached tries and we need to reload the state.
 	// Otherwise, methods such as FillFromTestChainProperties will not work correctly.
 	t.state, err = state.New(root, t.stateDatabase, nil)
+	fmt.Println("t.state,", t.state.GetTrie().Hash())
 	if err != nil {
 		return err
 	}

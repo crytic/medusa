@@ -16,7 +16,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
@@ -45,12 +47,15 @@ import (
 
 type Alloc map[common.Address]types.Account
 
-func (g Alloc) OnRoot(common.Hash) {}
+func (g Alloc) OnRoot(common.Hash) {
+	fmt.Println("OnRoot")
+}
 
 func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	if addr == nil {
 		return
 	}
+	fmt.Println("OnAccount")
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
@@ -414,19 +419,99 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	return testChain, err
 }
 
-func (f *Fuzzer) CreateTestChainWithAllocFile() (*chain.TestChain, error) {
-	inFile, err := os.Open("alloc.json")
-	if err != nil {
-		return nil, err
-	}
-	defer inFile.Close()
-	decoder := json.NewDecoder(inFile)
-	var genesisAlloc types.GenesisAlloc
-	if err := decoder.Decode(&genesisAlloc); err != nil {
-		return nil, err
-	}
-	fmt.Println("Genesis alloc loaded from alloc.json")
+type CheatcodeStateDump struct {
+	Accounts types.GenesisAlloc
+}
 
+func (d *CheatcodeStateDump) UnmarshalJSON(b []byte) error {
+	type forgeAllocAccount struct {
+		Balance hexutil.U256                `json:"balance"`
+		Nonce   hexutil.Uint64              `json:"nonce"`
+		Code    hexutil.Bytes               `json:"code,omitempty"`
+		Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	}
+	var allocs map[common.UnprefixedAddress]forgeAllocAccount
+	if err := json.Unmarshal(b, &allocs); err != nil {
+		return err
+	}
+	d.Accounts = make(types.GenesisAlloc, len(allocs))
+	for addr, acc := range allocs {
+		acc := acc
+		d.Accounts[common.Address(addr)] = types.Account{
+			Code:       acc.Code,
+			Storage:    acc.Storage,
+			Balance:    (*uint256.Int)(&acc.Balance).ToBig(),
+			Nonce:      (uint64)(acc.Nonce),
+			PrivateKey: nil,
+		}
+	}
+	return nil
+}
+
+type AnvilStateDump struct {
+	Accounts types.GenesisAlloc
+}
+
+func (d *AnvilStateDump) UnmarshalJSON(b []byte) error {
+	// Anvil uses a uint64 for its nonce but otherwise is the same account format as the state dump cheatcode
+	type forgeAllocAccount struct {
+		Balance hexutil.U256                `json:"balance"`
+		Nonce   uint64                      `json:"nonce"`
+		Code    hexutil.Bytes               `json:"code,omitempty"`
+		Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	}
+	var allocs map[common.UnprefixedAddress]forgeAllocAccount
+	if err := json.Unmarshal(b, &allocs); err != nil {
+		return err
+	}
+	d.Accounts = make(types.GenesisAlloc, len(allocs))
+	for addr, acc := range allocs {
+		acc := acc
+		d.Accounts[common.Address(addr)] = types.Account{
+			Code:       acc.Code,
+			Storage:    acc.Storage,
+			Balance:    (*uint256.Int)(&acc.Balance).ToBig(),
+			Nonce:      (uint64)(acc.Nonce),
+			PrivateKey: nil,
+		}
+	}
+	return nil
+}
+
+func (f *Fuzzer) CreateTestChainWithAllocFile() (*chain.TestChain, error) {
+	data, _ := os.ReadFile("alloc.json")
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, err
+	}
+
+	var genesisAlloc types.GenesisAlloc
+	var anvilFormat bool
+	for k, _ := range obj {
+		if k == "accounts" {
+			b := obj[k]
+			// var anvilAlloc AnvilStateDump
+			if err := genesisAlloc.UnmarshalJSON(b); err != nil {
+				panic(err)
+			}
+			// genesisAlloc = anvilAlloc.Accounts
+			fmt.Println("Genesis alloc loaded from anvil alloc.json")
+			anvilFormat = true
+			break
+		}
+	}
+	if !anvilFormat {
+		// var cheatcodeAlloc CheatcodeStateDump
+		if err := genesisAlloc.UnmarshalJSON(data); err != nil {
+			return nil, err
+		}
+		// genesisAlloc = cheatcodeAlloc.Accounts
+		fmt.Println("Genesis alloc loaded from cheatcode alloc.json")
+	}
+
+	if genesisAlloc == nil {
+		return nil, errors.New("no genesis alloc found in alloc.json")
+	}
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
@@ -565,11 +650,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		}
 	}
 
-	// Write the state after deployment to alloc.json
-	dumpdb := testChain.State().Copy()
+	// It's important to use `New` here as calls to `Commit` and `Copy` will not properly dump the state
+	statedb, err := state.New(testChain.Head().Header.Root, testChain.State().Database(), nil)
 	collector := make(Alloc)
-	dumpdb.DumpToCollector(collector, nil)
+	statedb.DumpToCollector(collector, nil)
 	b, err := json.MarshalIndent(collector, "", " ")
+	// Write the state after deployment to alloc.json
 	os.WriteFile("alloc.json", b, 0644)
 
 	if err != nil {
@@ -784,7 +870,11 @@ func (f *Fuzzer) Start() error {
 	f.testCasesFinished = make(map[string]TestCase)
 	f.testCasesLock.Unlock()
 
-	// Create our test chain
+	// // Create our test chain
+	// if alloc {
+	// 	CreateTestChainWithAllocFile()
+	// }
+
 	baseTestChain, err := f.createTestChain()
 	if err != nil {
 		f.logger.Error("Failed to create the test chain", err)
