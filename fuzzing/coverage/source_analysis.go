@@ -103,12 +103,6 @@ type SourceLineAnalysis struct {
 	// IsCovered indicates whether the source line has been executed without reverting.
 	IsCovered bool
 
-	// SuccessHitCount describes how many times this line was executed successfully
-	SuccessHitCount uint
-
-	// RevertHitCount describes how many times this line reverted during execution
-	RevertHitCount uint
-
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
 }
@@ -220,12 +214,12 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 			continue
 		}
 
-		// Capture the hit count of the source map element.
-		succHitCount := uint(0)
-		revertHitCount := uint(0)
+		// Check if the source map element was executed.
+		sourceMapElementCovered := false
+		sourceMapElementCoveredReverted := false
 		if contractCoverageData != nil {
-			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
-			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+			sourceMapElementCovered = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			sourceMapElementCoveredReverted = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
 		}
 
 		// Obtain the source file this element maps to.
@@ -238,11 +232,9 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 					// Mark the line active/executable.
 					sourceLine.IsActive = true
 
-					// Set its coverage state and increment hit counts
-					sourceLine.SuccessHitCount += succHitCount
-					sourceLine.RevertHitCount += revertHitCount
-					sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
-					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
+					// Set its coverage state
+					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
+					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceMapElementCoveredReverted
 
 					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
 					// early.
