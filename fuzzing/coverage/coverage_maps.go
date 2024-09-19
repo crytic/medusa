@@ -3,11 +3,12 @@ package coverage
 import (
 	"golang.org/x/exp/slices"
 
+	"sync"
+
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -270,6 +271,8 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 					uniquePCs++
 				}
 			}
+			// We have seen one coveragemap for the codehash and do not want to double count
+			break
 		}
 	}
 	return uniquePCs
