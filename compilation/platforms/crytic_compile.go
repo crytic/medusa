@@ -204,7 +204,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			}
 
 			// Retrieve the source unit ID
-			sourceUnitId := ast.GetSourceUnitID()
+			sourceUnitId := types.GetSrcMapSourceUnitID(ast.Src)
 			compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
 				// TODO: Our types.AST is not the same as the original AST but we could parse it and avoid using "any"
 				Ast:          source.AST,
