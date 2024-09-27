@@ -21,6 +21,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
 
 type ProjectConfig struct {
+	ShrinkConfig ShrinkConfig `json:"shrink"`
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
 
@@ -29,6 +30,10 @@ type ProjectConfig struct {
 
 	// Logging describes the configuration used for logging to file and console
 	Logging LoggingConfig `json:"logging"`
+}
+
+type ShrinkConfig struct {
+	ShrinkTimeout int `json:"shrink-timeout"`
 }
 
 // FuzzingConfig describes the configuration options used by the fuzzing.Fuzzer.

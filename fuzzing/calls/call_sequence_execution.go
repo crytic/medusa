@@ -57,7 +57,8 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		// If we encounter an error on an empty block, we throw the error as there is nothing more we can do.
 		for {
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
-			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
+			x := callSequenceElement.BlockNumberDelay > 0
+			if chain.PendingBlock() != nil && x {
 				err := chain.PendingBlockCommit()
 				if err != nil {
 					return callSequenceExecuted, err

@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -482,6 +483,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 				// Add our transaction to the block
 				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+
 				if err != nil {
 					return nil, err
 				}
@@ -703,6 +705,72 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}
 	}
 	return err
+}
+
+// Shrink
+func (f *Fuzzer) Shrink(filePath string) error {
+	// While we're shrinking, we'll want to have an initialized random provider.
+	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// If we set a timeout, create the timeout context now, as we're about to begin shrinking.
+	f.logger.Info("Running with a shrink timeout of ", colors.Bold, f.config.ShrinkConfig.ShrinkTimeout, " seconds")
+	f.ctx, f.ctxCancelFunc = context.WithTimeout(context.Background(), time.Duration(f.config.ShrinkConfig.ShrinkTimeout)*time.Second)
+
+	// if f.config.Fuzzing.CorpusDirectory we are shrinking for coverage
+
+	// if f.config.Fuzzing.CorpusDirectory/test-results we are shrinking for failure
+
+	// Create our test chain
+	baseTestChain, err := f.createTestChain()
+	if err != nil {
+		return err
+	}
+
+	// Set it up with our deployment/setup strategy defined by the fuzzer.
+	f.logger.Info("Setting up test chain")
+	trace, err := f.Hooks.ChainSetupFunc(f, baseTestChain)
+	if err != nil {
+		if trace != nil {
+			f.logger.Error("Failed to initialize the test chain", err, errors.New(trace.Log().ColorString()))
+		} else {
+			f.logger.Error("Failed to initialize the test chain", err)
+		}
+		return err
+	}
+	f.logger.Info("Finished setting up test chain")
+
+	fw, err := newFuzzerWorker(f, 0, f.randomProvider)
+	fw.chain = baseTestChain
+	fw.testingBaseBlockNumber = baseTestChain.HeadBlockNumber()
+	// corpus.callSequenceFiles.path = filepath.Join(corpus.storageDirectory, "call_sequences")
+	// err = corpus.callSequenceFiles.readFiles("*.json")
+	if err != nil {
+		return err
+	}
+
+	// // Read test case provider related call sequences (test failures, etc).
+	// corpus.testResultSequenceFiles.path = filepath.Join(corpus.storageDirectory, "test_results")
+	// err = corpus.testResultSequenceFiles.readFiles("*.json")
+
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the call sequence data.
+	var fileData calls.CallSequence
+	err = json.Unmarshal(b, &fileData)
+	if err != nil {
+		return err
+	}
+
+	for !utils.CheckContextDone(f.ctx) {
+		fmt.Println("Shrinking")
+		fw.shrinkSequence(baseTestChain, fileData)
+	}
+
+	return nil
+
 }
 
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error

@@ -337,6 +337,59 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	return testedCallSequence, shrinkCallSequenceRequests, nil
 }
 
+func (fw *FuzzerWorker) shrinkSequence(testChain *chain.TestChain, sequence calls.CallSequence) {
+	// Define our shrink requests we'll collect during execution.
+	shrinkVerifiers := make([]ShrinkCallSequenceRequest, 0)
+
+	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
+	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		return sequence[currentIndex], nil
+	}
+
+	// Our "post execution check function" method will check coverage and call all testing functions. If one returns a
+	// request for a shrunk call sequence, we exit our call sequence execution immediately to go fulfill the shrink
+	// request.
+	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
+		// Check for updates to coverage and corpus.
+		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
+		// TODO Check coverage
+		// err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		// if err != nil {
+		// 	return true, err
+		// }
+
+		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
+		// this call sequence.
+		for _, callSequenceTestFunc := range fw.fuzzer.Hooks.CallSequenceTestFuncs {
+			newShrinkRequests, err := callSequenceTestFunc(fw, currentlyExecutedSequence)
+			if err != nil {
+				return true, err
+			}
+			shrinkVerifiers = append(shrinkVerifiers, newShrinkRequests...)
+		}
+
+		// If our fuzzer context is done, exit out immediately without results.
+		if utils.CheckContextDone(fw.fuzzer.ctx) {
+			return true, nil
+		}
+
+		// If we have shrink requests, it means we violated a test, so we quit at this point
+		return len(shrinkVerifiers) > 0, nil
+	}
+
+	// Execute our call sequence.
+	testedCallSequence, _ := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+
+	// If we have any requests to shrink call sequences, do so now.
+	for _, shrinkVerifier := range shrinkVerifiers {
+		shrunkenSequence, err := fw.shrinkCallSequence(testedCallSequence, shrinkVerifier)
+		if err != nil {
+			// return false, err
+		}
+		sequence = shrunkenSequence
+	}
+}
+
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
 // shrink verifier. Chain state is reverted to the testing base prior to returning.
 // Returns a boolean indicating if the shrunken call sequence is valid for a given shrink request, or an error if one occurred.
