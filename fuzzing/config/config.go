@@ -203,6 +203,9 @@ type AssertionTestingConfig struct {
 
 // PanicCodeConfig describes the various panic codes that can be enabled and be treated as a failing assertion test
 type PanicCodeConfig struct {
+	// FailOnRevert describes whether a revert should be treated as a failing case
+	FailOnRevert bool `json:"failOnRevert"`
+
 	// FailOnCompilerInsertedPanic describes whether a generic compiler inserted panic should be treated as a failing case
 	FailOnCompilerInsertedPanic bool `json:"failOnCompilerInsertedPanic"`
 
