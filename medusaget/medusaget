@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+set -e
+
+print_flag() {
+  printf "
+
+=========================================================================================
+
+  __  __          _
+ |  \/  |        | |        ____
+ | \  / | ___  __| | _   _ / ___/  ____   
+ | |\/| |/ _ \/ _  || | | |\___ \ /    |
+ | |  | |  __/ (_| || |_| | ___) || () |     
+ |_|  |_|\___|\____| \___/ |____/ |_/|_|
+
+ 
+      Parallelized, coverage-guided, mutational Solidity smart contract fuzzing.
+
+
+==========================================================================================
+
+Repo       : https://github.com/crytic/medusa/
+License    : AGPL-3.0
+Latest     : $(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+Support    : https://github.com/crytic/medusa/issues
+Contribute : https://github.com/crytic/medusa/contribute
+
+==========================================================================================
+
+"
+}
+
+show_help() {
+  cat 1>&2 <<EOF
+The installer for medusa.
+
+Easily update or install a specific version of medusa.
+
+USAGE:
+    medusaget <OPTIONS>
+
+OPTIONS:
+    -h, --help      Print help information
+    -v, --version   Install a specific version
+    -b, --branch    Install a specific branch
+    -P, --pr        Install a specific pull request
+    -c, --commit    Install a specific commit
+    -r, --repo      Install a remote repository
+    -p, --path      Install a local repository
+EOF
+}
+
+log() { echo "INFO: $1"; }
+error() { echo "ERROR: $1"; exit 1; }
+
+validate_deps() {
+  for cmd in go git pip3 curl; do
+    if ! command -v $cmd &>/dev/null; then
+      error "Missing $cmd."
+    fi
+  done
+}
+
+get_go_version() { go version | cut -d ' ' -f3 | tr -d 'go'; }
+
+validate_go_version() {
+  [[ $(get_go_version) < 1.18 ]] && error "Go 1.18+ required."
+}
+
+install_crytic_compile() {
+  pip3 show crytic-compile &> /dev/null || pip3 install crytic-compile
+}
+
+validate_solidity_compiler() {
+  for cmd in solc hardhat truffle brownie foundry; do
+    if command -v $cmd &>/dev/null; then
+      return 0
+    fi
+  done
+  error "No Solidity compiler found."
+}
+
+check_platform_and_arch() {
+  local platform=$(uname -s)
+  local architecture=$(uname -m)
+
+  case $platform in
+    Linux) platform="linux" ;;
+    Darwin) platform="mac" ;;
+    MINGW*) platform="win" ;;
+    *) error "Unsupported platform"; ;;
+  esac
+
+  case $architecture in
+    x86_64) architecture="x64" ;;
+    arm64) architecture="arm64" ;;
+    *) error "Unsupported architecture: $architecture"; ;;
+  esac
+}
+
+main() {
+  # Parse args
+  while (( "$#" )); do
+    case "$1" in
+      -v|--version) version="$2"; shift ;;
+      -b|--branch)  branch="$2";  shift ;;
+      -P|--pr)      pr="$2";      shift ;;
+      -c|--commit)  commit="$2";  shift ;;
+      -r|--repo)    repo="$2";    shift ;;
+      -p|--path)    path="$2";    shift ;;
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      *) error "Unknown $1"; shift ;;
+    esac
+    shift
+  done
+
+  # Invalid Multiple Targets Check
+  if [ -n "$version" ] || [ -n "$pr" ] || [ -n "$commit" ]; then
+    if [ -n "$repo" ] || [ -n "$branch" ]; then
+      error "Invalid combo. Only --repo and --branch can be combined."
+      exit 1
+    fi
+  fi
+
+  # Setup
+  base="${XDG_CONFIG_HOME:-$HOME}"; bin="$base/.medusa/bin"; clone="$base/.medusa/src"
+  mkdir -p "$bin"
+  check_platform_and_arch; validate_deps; validate_solidity_compiler; print_flag 
+
+  # Install from path
+  if [ -n "$path" ]; then
+    log "Installing local repository at $path"
+    cd "$path"
+    go build -v -o "$bin/medusa"
+    exit 0
+  fi
+
+  # Clone medusa repo
+  [ ! -d $clone ] && git clone "${repo:-https://github.com/crytic/medusa.git}" "$clone"
+  cd $clone
+
+  # Fetch target
+  remote_url="https://github.com/${repo:-crytic/medusa}.git"
+  git remote set-url origin "$remote_url"
+  fetch_target="${branch:-${pr:+pull/$pr/head:pr$pr}${version:+refs/tags/$version}}"
+  if [ -n "$commit" ]; then
+    git fetch origin
+  elif [ -n "$fetch_target" ]; then
+    git fetch origin $fetch_target
+  else
+    git fetch origin master
+  fi
+
+  # If the active branch is not the target, switch to master
+  latest_version=$(curl --silent "https://api.github.com/repos/crytic/medusa/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+  target="${version:-${branch:-${pr:+pr$pr}${commit:-$latest_version}}}"
+  active_branch=$(git symbolic-ref HEAD 2>/dev/null | cut -d'/' -f 3)
+  [ "$active_branch" != "$target" ] && git checkout master
+  
+  # Cleanup old branches
+  old_branches=$(git for-each-ref --format '%(refname:short)' refs/heads/)
+  for old in $old_branches; do
+    [ "$old" != "master" ] && git branch -D $old
+  done
+
+  # Checkout target
+  if [ -n "$branch" ]; then
+    git checkout -b "$branch" --track "origin/$branch"
+  elif [ -n "$pr" ]; then
+    git checkout pr$pr
+  elif [ -n "$commit" ]; then
+    git checkout "$commit"
+  elif [ -n "$version" ]; then
+    git checkout "tags/$version" 
+  fi
+
+  # Update PATH
+  add="export PATH=\$PATH:$bin"
+  grep -qF "$add" ~/.${SHELL##*/}rc || echo "$add" >> ~/.${SHELL##*/}rc
+
+  # Build
+  go build -v -o "$bin/medusa"
+
+  log "medusa installed."
+}
+
+main "$@"
+
