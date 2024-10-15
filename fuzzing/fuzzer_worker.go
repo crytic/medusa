@@ -159,6 +159,8 @@ func (fw *FuzzerWorker) getNewCorpusCallSequenceWeight() *big.Int {
 func (fw *FuzzerWorker) onChainContractDeploymentAddedEvent(event chain.ContractDeploymentsAddedEvent) error {
 	// Do not track the deployed contract if the contract deployment was a dynamic one and testAllContracts is false
 	if !fw.fuzzer.config.Fuzzing.Testing.TestAllContracts && event.DynamicDeployment {
+		// Add the contract address to our value set so our generator can use it in calls.
+		fw.valueSet.AddAddress(event.Contract.Address)
 		return nil
 	}
 
@@ -301,6 +303,8 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 		// Update our metrics
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
+		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
 
 		// If our fuzzer context is done, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -425,6 +429,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
+		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(callSequence)))
+
 		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
 				// Recreate our current optimized sequence without the item at this index

@@ -79,6 +79,35 @@ func CopyFile(sourcePath string, targetPath string) error {
 	return os.Chmod(targetPath, sourceInfo.Mode())
 }
 
+// MoveFile will move a given file from the source path to the target path. Returns an error if one occured.
+func MoveFile(sourcePath string, targetPath string) error {
+	// Obtain file info for the source file
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	// If the path refers to a directory, return an error
+	if sourceInfo.IsDir() {
+		return fmt.Errorf("could not copy file from '%s' to '%s' because the source path refers to a directory", sourcePath, targetPath)
+	}
+
+	// Ensure the existence of the directory we wish to copy to.
+	targetDirectory := filepath.Dir(targetPath)
+	err = os.MkdirAll(targetDirectory, 0777)
+	if err != nil {
+		return err
+	}
+
+	// Move the file from the source path to the target path
+	err = os.Rename(sourcePath, targetPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetFileNameWithoutExtension obtains a filename without the extension. This does not contain any preceding directory
 // paths.
 func GetFileNameWithoutExtension(filePath string) string {

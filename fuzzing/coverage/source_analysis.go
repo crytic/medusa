@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -55,13 +56,78 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 	return count
 }
 
+// GenerateLCOVReport generates an LCOV report from the source analysis.
+// The spec of the format is here https://github.com/linux-test-project/lcov/blob/07a1127c2b4390abf4a516e9763fb28a956a9ce4/man/geninfo.1#L989
+func (s *SourceAnalysis) GenerateLCOVReport() string {
+	var linesHit, linesInstrumented int
+	var buffer bytes.Buffer
+	buffer.WriteString("TN:\n")
+	for _, file := range s.SortedFiles() {
+		// SF:<path to the source file>
+		buffer.WriteString(fmt.Sprintf("SF:%s\n", file.Path))
+		for idx, line := range file.Lines {
+			if line.IsActive {
+				// DA:<line number>,<execution count>
+				if line.IsCovered {
+					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, line.SuccessHitCount))
+					linesHit++
+				} else {
+					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, 0))
+				}
+				linesInstrumented++
+			}
+		}
+		// FN:<line number>,<function name>
+		// FNDA:<execution count>,<function name>
+		for _, fn := range file.Functions {
+			byteStart := types.GetSrcMapStart(fn.Src)
+			length := types.GetSrcMapLength(fn.Src)
+
+			startLine := sort.Search(len(file.CumulativeOffsetByLine), func(i int) bool {
+				return file.CumulativeOffsetByLine[i] > byteStart
+			})
+			endLine := sort.Search(len(file.CumulativeOffsetByLine), func(i int) bool {
+				return file.CumulativeOffsetByLine[i] > byteStart+length
+			})
+
+			// We are treating any line hit in the definition as a hit for the function.
+			hit := 0
+			for i := startLine; i < endLine; i++ {
+				// index iz zero based, line numbers are 1 based
+				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
+					hit = 1
+				}
+
+			}
+
+			// TODO: handle fallback, receive, and constructor
+			if fn.Name != "" {
+				buffer.WriteString(fmt.Sprintf("FN:%d,%s\n", startLine, fn.Name))
+				buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", hit, fn.Name))
+			}
+
+		}
+		buffer.WriteString("end_of_record\n")
+	}
+
+	return buffer.String()
+}
+
 // SourceFileAnalysis describes coverage information for a given source file.
 type SourceFileAnalysis struct {
 	// Path describes the file path of the source file. This is kept here for access during report generation.
 	Path string
 
+	// CumulativeOffsetByLine describes the cumulative byte offset for each line in the source file.
+	// For example, for a file with 5 lines, the list might look like: [0, 45, 98, 132, 189], where each number is the byte offset of the line's starting position
+	// This allows us to quickly determine which line a given byte offset falls within using a binary search.
+	CumulativeOffsetByLine []int
+
 	// Lines describes information about a given source line and its coverage.
 	Lines []*SourceLineAnalysis
+
+	// Functions is a list of functions defined in the source file
+	Functions []*types.FunctionDefinition
 }
 
 // ActiveLineCount returns the count of lines that are marked executable/active within the source file.
@@ -103,6 +169,12 @@ type SourceLineAnalysis struct {
 	// IsCovered indicates whether the source line has been executed without reverting.
 	IsCovered bool
 
+	// SuccessHitCount describes how many times this line was executed successfully
+	SuccessHitCount uint
+
+	// RevertHitCount describes how many times this line reverted during execution
+	RevertHitCount uint
+
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
 }
@@ -124,13 +196,50 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				return nil, fmt.Errorf("could not perform source code analysis, code was not cached for '%v'", sourcePath)
 			}
 
+			lines, cumulativeOffset := parseSourceLines(compilation.SourceCode[sourcePath])
+			funcs := make([]*types.FunctionDefinition, 0)
+
+			var ast types.AST
+			b, err := json.Marshal(compilation.SourcePathToArtifact[sourcePath].Ast)
+			if err != nil {
+				return nil, fmt.Errorf("could not encode AST from sources: %v", err)
+			}
+			err = json.Unmarshal(b, &ast)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse AST from sources: %v", err)
+			}
+
+			for _, node := range ast.Nodes {
+
+				if node.GetNodeType() == "FunctionDefinition" {
+					fn := node.(types.FunctionDefinition)
+					funcs = append(funcs, &fn)
+				}
+				if node.GetNodeType() == "ContractDefinition" {
+					contract := node.(types.ContractDefinition)
+					if contract.Kind == types.ContractKindInterface {
+						continue
+					}
+					for _, subNode := range contract.Nodes {
+						if subNode.GetNodeType() == "FunctionDefinition" {
+							fn := subNode.(types.FunctionDefinition)
+							funcs = append(funcs, &fn)
+						}
+					}
+				}
+
+			}
+
 			// Obtain the parsed source code lines for this source.
 			if _, ok := sourceAnalysis.Files[sourcePath]; !ok {
 				sourceAnalysis.Files[sourcePath] = &SourceFileAnalysis{
-					Path:  sourcePath,
-					Lines: parseSourceLines(compilation.SourceCode[sourcePath]),
+					Path:                   sourcePath,
+					CumulativeOffsetByLine: cumulativeOffset,
+					Lines:                  lines,
+					Functions:              funcs,
 				}
 			}
+
 		}
 	}
 
@@ -214,34 +323,37 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 			continue
 		}
 
-		// Check if the source map element was executed.
-		sourceMapElementCovered := false
-		sourceMapElementCoveredReverted := false
+		// Capture the hit count of the source map element.
+		succHitCount := uint(0)
+		revertHitCount := uint(0)
 		if contractCoverageData != nil {
-			sourceMapElementCovered = contractCoverageData.successfulCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
-			sourceMapElementCoveredReverted = contractCoverageData.revertedCoverage.IsCovered(instructionOffsetLookup[sourceMapElement.Index])
+			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
 		}
 
 		// Obtain the source file this element maps to.
 		if sourceFile, ok := sourceAnalysis.Files[sourcePath]; ok {
 			// Mark all lines which fall within this range.
-			matchedSourceLine := false
-			for _, sourceLine := range sourceFile.Lines {
-				// Check if the line is within range
-				if sourceMapElement.Offset >= sourceLine.Start && sourceMapElement.Offset < sourceLine.End {
-					// Mark the line active/executable.
-					sourceLine.IsActive = true
+			start := sourceMapElement.Offset
 
-					// Set its coverage state
-					sourceLine.IsCovered = sourceLine.IsCovered || sourceMapElementCovered
-					sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceMapElementCoveredReverted
+			startLine := sort.Search(len(sourceFile.CumulativeOffsetByLine), func(i int) bool {
+				return sourceFile.CumulativeOffsetByLine[i] > start
+			})
 
-					// Indicate we matched a source line, so when we stop matching sequentially, we know we can exit
-					// early.
-					matchedSourceLine = true
-				} else if matchedSourceLine {
-					break
-				}
+			// index iz zero based, line numbers are 1 based
+			sourceLine := sourceFile.Lines[startLine-1]
+
+			// Check if the line is within range
+			if sourceMapElement.Offset < sourceLine.End {
+				// Mark the line active/executable.
+				sourceLine.IsActive = true
+
+				// Set its coverage state and increment hit counts
+				sourceLine.SuccessHitCount += succHitCount
+				sourceLine.RevertHitCount += revertHitCount
+				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
+				sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
+
 			}
 		} else {
 			return fmt.Errorf("could not perform source code analysis, missing source '%v'", sourcePath)
@@ -290,10 +402,11 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 
 // parseSourceLines splits the provided source code into SourceLineAnalysis objects.
 // Returns the SourceLineAnalysis objects.
-func parseSourceLines(sourceCode []byte) []*SourceLineAnalysis {
+func parseSourceLines(sourceCode []byte) ([]*SourceLineAnalysis, []int) {
 	// Create our lines and a variable to track where our current line start offset is.
 	var lines []*SourceLineAnalysis
 	var lineStart int
+	var cumulativeOffset []int
 
 	// Split the source code on new line characters
 	sourceCodeLinesBytes := bytes.Split(sourceCode, []byte("\n"))
@@ -309,9 +422,10 @@ func parseSourceLines(sourceCode []byte) []*SourceLineAnalysis {
 			IsCovered:         false,
 			IsCoveredReverted: false,
 		})
+		cumulativeOffset = append(cumulativeOffset, int(lineStart))
 		lineStart = lineEnd
 	}
 
 	// Return the resulting lines
-	return lines
+	return lines, cumulativeOffset
 }

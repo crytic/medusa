@@ -52,6 +52,13 @@ type CoverageTracer struct {
 
 	// nativeTracer is the underlying tracer used to capture EVM execution.
 	nativeTracer *chain.TestChainTracer
+
+	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
+	// so that this expensive calculation doesn't need to be done every opcode.
+	// The [2] array is to differentiate between contract init (0) vs runtime (1),
+	// since init vs runtime produces different results from getContractCoverageMapHash.
+	// The Hash key is a contract's codehash, which uniquely identifies it.
+	codeHashCache [2]map[common.Hash]common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -71,6 +78,7 @@ func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
 		coverageMaps:    NewCoverageMaps(),
 		callFrameStates: make([]*coverageTracerCallFrameState, 0),
+		codeHashCache:   [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -159,16 +167,28 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	scopeContext := scope.(*vm.ScopeContext)
 	code := scopeContext.Contract.Code
 	codeSize := len(code)
+	isCreate := callFrameState.create
+	gethCodeHash := scopeContext.Contract.CodeHash
+
+	cacheArrayKey := 1
+	if isCreate {
+		cacheArrayKey = 0
+	}
+
 	if codeSize > 0 {
 
 		// Obtain our contract coverage map lookup hash.
 		if callFrameState.lookupHash == nil {
-			lookupHash := getContractCoverageMapHash(code, callFrameState.create)
+			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+			if !cacheHit {
+				lookupHash = getContractCoverageMapHash(code, isCreate)
+				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+			}
 			callFrameState.lookupHash = &lookupHash
 		}
 
 		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(address, *callFrameState.lookupHash, codeSize, pc)
+		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, pc)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}

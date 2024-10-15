@@ -4,10 +4,12 @@
     "workerResetLimit": 50,
     "timeout": 0,
     "testLimit": 0,
+    "shrinkLimit": 5000,
     "callSequenceLength": 100,
     "corpusDirectory": "",
     "coverageEnabled": true,
     "targetContracts": [],
+    "predeployedContracts": {},
     "targetContractsBalances": [],
     "constructorArgs": {},
     "deployerAddress": "0x30000",
@@ -45,14 +47,17 @@
       "optimizationTesting": {
         "enabled": true,
         "testPrefixes": ["optimize_"]
-      }
+      },
+      "targetFunctionSignatures": [],
+      "excludeFunctionSignatures": []
     },
     "chainConfig": {
       "codeSizeCheckDisabled": true,
       "cheatCodes": {
         "cheatCodesEnabled": true,
         "enableFFI": false
-      }
+      },
+      "skipAccountChecks": true
     }
   },
   "compilation": {
