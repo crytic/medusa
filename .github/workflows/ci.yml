@@ -92,7 +92,7 @@ jobs:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
           path: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   release:
     needs: [build]
