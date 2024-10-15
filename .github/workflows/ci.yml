@@ -117,7 +117,7 @@ jobs:
           name: "${{ github.ref_name }}"
           files: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   lint:
     runs-on: ubuntu-latest
