@@ -539,7 +539,7 @@ func TestChainCloning(t *testing.T) {
 	})
 }
 
-// TestCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
+// TestChainCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
 // it replays the same sequence on. It ensures that the ending state is the same.
 // Note: this does not set block timestamps or other data that might be non-deterministic.
 // This does not test replaying with a previous call sequence with different timestamps, etc. It expects the TestChain

@@ -409,6 +409,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
 					found = true
 				} else {
+					// TODO list options for the user to choose from
 					return nil, fmt.Errorf("specify target contract(s)")
 				}
 			}
@@ -419,10 +420,14 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
+	balances := make([]*big.Int, 0)
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
+		// Preserve index of target contract balances
+		balances = append(balances, big.NewInt(0))
 	}
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
+	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
 
 	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
@@ -460,8 +465,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
-				if len(fuzzer.config.Fuzzing.TargetContractsBalances) > i {
-					contractBalance = new(big.Int).Set(fuzzer.config.Fuzzing.TargetContractsBalances[i])
+				if len(balances) > i {
+					contractBalance = new(big.Int).Set(balances[i])
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
@@ -758,8 +763,8 @@ func (f *Fuzzer) Start() error {
 
 	// Initialize our coverage maps by measuring the coverage we get from the corpus.
 	var corpusActiveSequences, corpusTotalSequences int
-	if f.corpus.CallSequenceEntryCount(true, true, true) > 0 {
-		f.logger.Info("Running call sequences in the corpus...")
+	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
+		f.logger.Info("Running call sequences in the corpus")
 	}
 	startTime := time.Now()
 	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
@@ -832,13 +837,33 @@ func (f *Fuzzer) Start() error {
 	f.printExitingResults()
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
-		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+	if err == nil && len(f.config.Fuzzing.CoverageFormats) > 0 {
+		// Write to the default directory if we have no corpus directory set.
+		coverageReportDir := filepath.Join("crytic-export", "coverage")
+		if f.config.Fuzzing.CorpusDirectory != "" {
+			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		}
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
+
 		if err != nil {
-			f.logger.Error("Failed to generate coverage report", err)
+			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
-			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+			var path string
+			for _, reportType := range f.config.Fuzzing.CoverageFormats {
+				switch reportType {
+				case "html":
+					path, err = coverage.WriteHTMLReport(sourceAnalysis, coverageReportDir)
+				case "lcov":
+					path, err = coverage.WriteLCOVReport(sourceAnalysis, coverageReportDir)
+				default:
+					err = fmt.Errorf("unsupported coverage report type: %s", reportType)
+				}
+				if err != nil {
+					f.logger.Error(fmt.Sprintf("Failed to generate %s coverage report", reportType), err)
+				} else {
+					f.logger.Info(fmt.Sprintf("%s report(s) saved to: %s", reportType, path), colors.Bold, colors.Reset)
+				}
+			}
 		}
 	}
 
