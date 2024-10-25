@@ -72,13 +72,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
-	// Warp: Sets VM timestamp
+	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp!
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			originalTime := tracer.chain.pendingBlockContext.Time
-
 			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
 			newTime := inputs[0].(*big.Int)
 			if newTime.Cmp(MaxUint64) > 0 {
@@ -87,10 +84,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Set the time
 			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				// Reset the time
-				tracer.chain.pendingBlockContext.Time = originalTime
-			})
 			return nil, nil
 		},
 	)
