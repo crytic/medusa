@@ -111,7 +111,7 @@ jobs:
           merge-multiple: true
 
       - name: Create GitHub release and upload binaries
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        uses: softprops/action-gh-release@e7a8f85e1c67a31e6ed99a94b41bd0b71bbee6b8 # v2.0.9
         with:
           draft: true
           name: "${{ github.ref_name }}"
