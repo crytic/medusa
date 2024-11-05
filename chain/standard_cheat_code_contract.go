@@ -88,16 +88,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Roll: Sets VM block number
+	// Roll: Sets VM block number. Note that this _permanently_ updates the block number!
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			original := new(big.Int).Set(tracer.chain.pendingBlockContext.BlockNumber)
+			// Update the block number
 			tracer.chain.pendingBlockContext.BlockNumber.Set(inputs[0].(*big.Int))
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.chain.pendingBlockContext.BlockNumber.Set(original)
-			})
 			return nil, nil
 		},
 	)
