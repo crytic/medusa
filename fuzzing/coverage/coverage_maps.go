@@ -266,7 +266,7 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 				}
 
 				// This is only executed if the PC was not executed successfully
-				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
+				if contractCoverageMap.revertedCoverage.executedFlags != nil && i < len(contractCoverageMap.revertedCoverage.executedFlags) && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
 					uniquePCs++
 				}
 			}
