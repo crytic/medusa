@@ -2,11 +2,13 @@ package fuzzing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -285,6 +287,26 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
 	// Loop for each contract in each compilation and deploy it to the test chain
+	
+	var seedFromAST bool
+	// TODO slither should be run on the target in the config not with "."
+	out, err := exec.Command("slither", ".", "--ignore-compile", "--print", "echidna", "--json", "-" ).CombinedOutput()
+	
+	if err != nil {
+		// Fallback to using seed from ast
+		seedFromAST = true
+	}
+	var slither compilationTypes.Slither
+	err = json.Unmarshal(out, &slither)
+	if err != nil || slither.Error != "" {
+		// Fallback to using seed from ast
+		seedFromAST = true
+	}
+	if !seedFromAST {
+		// Seed our base value set with the constants extracted by Slither
+		f.baseValueSet.SeedFromSlither(slither.ConstantsUsed)
+	}
+	
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -292,9 +314,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 
 		// Loop for each source
 		for sourcePath, source := range compilation.SourcePathToArtifact {
-			// Seed our base value set from every source's AST
-			f.baseValueSet.SeedFromAst(source.Ast)
-
+			if seedFromAST {
+				// Seed our base value set from every source's AST
+				f.baseValueSet.SeedFromAst(source.Ast)
+			}
+			
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]
