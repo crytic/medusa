@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"math/big"
+	"math/bits"
 
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/logging"
@@ -173,8 +174,8 @@ func (t *CoverageTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	// uuid.Xor(scope.Contract.Address().Big(), callFrameState.lookupHash.Big())
 	if pos != nil {
 
-		marker := pc ^ pos.Uint64()
-		logging.GlobalLogger.Info("tracer: pc ", pc, " pos ", pos, "op ", op, " marker", marker)
+		marker := bits.RotateLeft64(pc, 32) ^ pos.Uint64()
+		//logging.GlobalLogger.Info("tracer: pc ", pc, " pos ", pos, "op ", op, " marker", marker)
 
 		// Record coverage for this location in our map.
 		_, coverageUpdateErr := callFrameState.pendingCoverageMap.SetAt(scope.Contract.Address(), *callFrameState.lookupHash, len(scope.Contract.Code), marker)

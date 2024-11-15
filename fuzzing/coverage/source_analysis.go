@@ -198,7 +198,7 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup map[int][]int, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup map[int][]uint64, contractCoverageData *ContractCoverageMap) error {
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no

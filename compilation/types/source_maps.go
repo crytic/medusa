@@ -1,6 +1,8 @@
 package types
 
 import (
+	"math/bits"
+
 	"fmt"
 	"strconv"
 	"strings"
@@ -152,9 +154,9 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 // GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
 // and the element of the slice represents the instruction offset.
 // Returns the slice lookup, or an error if one occurs.
-func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][]int, error) {
+func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][]uint64, error) {
 	// Create our resulting lookup
-	indexToOffsetLookup := make(map[int][]int)
+	indexToOffsetLookup := make(map[int][]uint64)
 	// Loop through all byte code
 
 	// for i := 0; i < len(bytecode); i++ {
@@ -164,12 +166,15 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][
 	// }
 	var jumpdests []int
 	for i := 0; i < len(bytecode); i++ {
+		// TODO ideally we should use operations rather than bytes here
 
 		// Obtain the indexed instruction and add the current offset to our lookup at this index.
 		op := vm.OpCode(bytecode[i])
 		if op == vm.JUMPDEST {
 
 			jumpdests = append(jumpdests, i)
+		} else if op == vm.JUMPI {
+			jumpdests = append(jumpdests, i+1) // TODO this wastes compute time but it doesn't really matter much
 		}
 	}
 	currentOffset := 0
@@ -206,11 +211,11 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][
 		if op == vm.JUMPI || op == vm.JUMP {
 
 			for j := 0; j < len(jumpdests); j++ {
-				marker := currentOffset ^ jumpdests[j]
+				marker := bits.RotateLeft64(uint64(currentOffset), 32) ^ uint64(jumpdests[j])
 				logging.GlobalLogger.Info("source: pc ", currentOffset, " pos ", jumpdests[j], "marker ", marker)
 
 				if indexToOffsetLookup[currentOffset] == nil {
-					indexToOffsetLookup[currentOffset] = []int{marker}
+					indexToOffsetLookup[currentOffset] = []uint64{marker}
 				} else {
 					indexToOffsetLookup[currentOffset] = append(indexToOffsetLookup[currentOffset], marker)
 				}
@@ -221,7 +226,7 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) (map[int][
 
 		} else if lastJump != 0 {
 			// for j := 0; j < len(jumpdests); j++ {
-			// 	marker := currentOffset ^ jumpdests[j]
+			// 	marker := bits.RotateLeft64(currentOffset, 32) ^ jumpdests[j]
 			// 	for k := currentOffset; k > lastJump; k-- {
 			// 		op2 := vm.OpCode(bytecode[k])
 			// 		if op2 == vm.JUMPI || op2 == vm.JUMP {

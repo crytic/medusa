@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/logging"
+	//"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -307,11 +307,13 @@ func (cm *CoverageMapBytecodeData) Reset() {
 // Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
-	// Return an equality comparison on the data, ignoring size checks by stopping at the end of the shortest slice.
-	// We do this to avoid comparing arbitrary length constructor arguments appended to init bytecode.
 	for marker, hitcount := range cm.executedFlags {
-		// TODO check all keys
 		if b.executedFlags[marker] != hitcount {
+			return false
+		}
+	}
+	for marker, hitcount := range b.executedFlags {
+		if cm.executedFlags[marker] != hitcount {
 			return false
 		}
 	}
@@ -320,7 +322,7 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 
 // IsCovered checks if a given program counter location is covered by the map.
 // Returns a boolean indicating if the program counter was executed on this map.
-func (cm *CoverageMapBytecodeData) IsCovered(markers []int) (bool, uint) {
+func (cm *CoverageMapBytecodeData) IsCovered(markers []uint64) (bool, uint) {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return false, 0
@@ -339,7 +341,7 @@ func (cm *CoverageMapBytecodeData) IsCovered(markers []int) (bool, uint) {
 		marker := markers[i]
 		// Otherwise, return the execution flag
 
-		if cm.executedFlags[uint64(marker)] > 0 {
+		if cm.executedFlags[marker] > 0 {
 			return true, cm.executedFlags[uint64(marker)]
 
 		}
@@ -366,8 +368,8 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	//TODO
 	for marker, hitcount := range coverageMap.executedFlags {
 		if hitcount != 0 {
-			cm.executedFlags[marker] += hitcount
-			logging.GlobalLogger.Info("marker ", marker, " hitcount ", cm.executedFlags[marker]) // cm.executedFlags[marker] ", cm.executedFlags[marker])
+			cm.executedFlags[marker] += hitcount // TODO this might overflow on 32 bit machines
+			//logging.GlobalLogger.Info("marker ", marker, " hitcount ", cm.executedFlags[marker]) // cm.executedFlags[marker] ", cm.executedFlags[marker])
 			changed = true
 		}
 	}
