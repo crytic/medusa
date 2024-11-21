@@ -8,6 +8,7 @@ import (
 
 	"github.com/crytic/medusa/compilation/types"
 	"golang.org/x/exp/maps"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -272,26 +273,16 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime source map: %v", err)
 				}
 
-				// Parse our instruction index to offset lookups
-				initInstructionOffsetLookup, err := initSourceMap.GetInstructionIndexToOffsetLookup(contract.InitBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
-				}
-				runtimeInstructionOffsetLookup, err := runtimeSourceMap.GetInstructionIndexToOffsetLookup(contract.RuntimeBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
-				}
-
 				// Filter our source maps
 				initSourceMap = filterSourceMaps(compilation, initSourceMap)
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, initInstructionOffsetLookup, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData, true)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData, false)
 				if err != nil {
 					return nil, err
 				}
@@ -305,7 +296,15 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup []int, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
+	var succHitCounts, revertHitCounts []uint
+	if len(bytecode) > 0 && contractCoverageData != nil {
+		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, isInit)
+	} else { // Probably because we didn't hit this contract at all...
+		succHitCounts = nil
+		revertHitCounts = nil
+	}
+
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
@@ -324,11 +323,16 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		succHitCount := uint(0)
-		revertHitCount := uint(0)
-		if contractCoverageData != nil {
-			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
-			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+		var succHitCount, revertHitCount uint
+		if succHitCounts != nil {
+			succHitCount = succHitCounts[sourceMapElement.Index]
+		} else {
+			succHitCount = 0
+		}
+		if revertHitCounts != nil {
+			revertHitCount = revertHitCounts[sourceMapElement.Index]
+		} else {
+			revertHitCount = 0
 		}
 
 		// Obtain the source file this element maps to.
@@ -349,7 +353,9 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				sourceLine.IsActive = true
 
 				// Set its coverage state and increment hit counts
-				sourceLine.SuccessHitCount += succHitCount
+				if succHitCount > sourceLine.SuccessHitCount {
+					sourceLine.SuccessHitCount = succHitCount
+				}
 				sourceLine.RevertHitCount += revertHitCount
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
 				sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
@@ -361,6 +367,108 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 
 	}
 	return nil
+}
+
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
+	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
+
+	execFlags := cm.coverage.executedFlags
+	execFlagsSrcDst, execFlagsDstSrc := getExecFlagsMapping(execFlags)
+
+	successfulHits := make([]uint, len(indexToOffset))
+	revertedHits := make([]uint, len(indexToOffset))
+
+	hit := uint(0)
+	for idx, pc := range indexToOffset {
+		enterCount := uint(0)
+		revertCount := uint(0)
+		allLeaveCount := uint(0)
+
+		if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
+			for _, hitHere := range flagsHere {
+				enterCount += hitHere
+			}
+		}
+		if flagsHere, ok := execFlagsSrcDst[uint64(pc)]; ok {
+			revertCount = flagsHere[REVERT_MARKER_XOR]
+			for _, hitHere := range flagsHere {
+				allLeaveCount += hitHere
+			}
+		}
+
+		// Test some conditions that should always hold.........
+		if hit + enterCount < revertCount {
+			fmt.Println("WARNING: Overflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
+		}
+		if hit + enterCount < allLeaveCount {
+			fmt.Println("WARNING: Overflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
+		}
+		op := vm.OpCode(bytecode[pc])
+		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP
+		if isJumpOrReturn && hit + enterCount != allLeaveCount {
+			fmt.Println("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
+		}
+		if allLeaveCount - revertCount > 0 && hit + enterCount != allLeaveCount {
+			fmt.Println("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
+		}
+
+		hit += enterCount
+		successfulHits[idx] = hit - revertCount
+		revertedHits[idx] = revertCount
+		hit -= allLeaveCount
+	}
+
+	return successfulHits, revertedHits
+}
+
+// GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
+// and the element of the slice represents the instruction offset.
+// Returns the slice lookup, or an error if one occurs.
+func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
+	// Create our resulting lookup
+	indexToOffsetLookup := make([]int, 0, len(bytecode)/2)
+
+	// Loop through all byte code
+	currentOffset := 0
+	for currentOffset < len(bytecode) {
+		// Obtain the indexed instruction and add the current offset to our lookup at this index.
+		op := vm.OpCode(bytecode[currentOffset])
+		indexToOffsetLookup = append(indexToOffsetLookup, currentOffset)
+
+		// Next, calculate the length of data that follows this instruction.
+		operandCount := 0
+		if op.IsPush() {
+			if op == vm.PUSH0 {
+				operandCount = 0
+			} else {
+				operandCount = int(op) - int(vm.PUSH1) + 1
+			}
+		}
+
+		// Advance the offset past this instruction and its operands.
+		currentOffset += operandCount + 1
+	}
+	return indexToOffsetLookup
+}
+
+func getExecFlagsMapping(execFlags map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
+	execFlagsSrcDst := make(map[uint64]map[uint64]uint)
+	execFlagsDstSrc := make(map[uint64]map[uint64]uint)
+
+	for marker, hitCount := range execFlags {
+		dst := marker & 0xFFFFFFFF
+		src := marker >> 32
+		if _, ok := execFlagsSrcDst[src]; !ok {
+			execFlagsSrcDst[src] = make(map[uint64]uint, 1)
+		}
+		if _, ok := execFlagsDstSrc[dst]; !ok {
+			execFlagsDstSrc[dst] = make(map[uint64]uint, 1)
+		}
+		execFlagsSrcDst[src][dst] = hitCount
+		execFlagsDstSrc[dst][src] = hitCount
+	}
+
+	return execFlagsSrcDst, execFlagsDstSrc
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are removed.
