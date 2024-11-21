@@ -100,7 +100,15 @@ type Fuzzer struct {
 
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
+
+	// lastPCsLogMsg records the last time we logged total PCs hit.
+	// It takes a decent amount of time to calculate, so we only log once a minute,
+	// and only when debug logging is enabled.
+	lastPCsLogMsg time.Time
 }
+
+// Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
+const timeBetweenPCsLogMsgs = time.Minute
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
@@ -973,7 +981,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().UniquePCs()), colors.Reset)
+		logBuffer.Append(", branches hit: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
 		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
@@ -981,6 +989,18 @@ func (f *Fuzzer) printMetricsLoop() {
 			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+
+			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
+				start := time.Now()
+				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps())
+				// This is just for a log message. This shouldn't error but if it does we don't need to exit out
+				if err == nil {
+					end := time.Now()
+					f.lastPCsLogMsg = end
+					logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
+					logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
+				}
+			}
 		}
 		f.logger.Info(logBuffer.Elements()...)
 
