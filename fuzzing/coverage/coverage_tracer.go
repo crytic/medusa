@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"math/big"
+	"math/bits"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
@@ -158,6 +159,23 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	var pos uint64
+	switch vm.OpCode(op) {
+	case vm.JUMPI:
+		stackData := scope.StackData()
+		cond := stackData[1] // TODO correct?
+		if cond.IsZero() {
+			pos = stackData[0].Uint64() // TODO correct?
+		} else {
+			pos = pc + 1
+		}
+	case vm.JUMP:
+		pos = scope.StackData()[0].Uint64() // TODO correct?
+	default:
+		return
+	}
+	marker := bits.RotateLeft64(pc, 32) ^ pos
+
 	// Obtain our call frame state tracking struct
 	callFrameState := t.callFrameStates[t.callDepth]
 
@@ -175,24 +193,20 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		cacheArrayKey = 0
 	}
 
-	if codeSize > 0 {
+	// TODO used to have a codeSize > 0 check here
 
-		// Obtain our contract coverage map lookup hash.
-		if callFrameState.lookupHash == nil {
-			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-			if !cacheHit {
-				lookupHash = getContractCoverageMapHash(code, isCreate)
-				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
-			}
-			callFrameState.lookupHash = &lookupHash
+	// Obtain our contract coverage map lookup hash.
+	if callFrameState.lookupHash == nil {
+		lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+		if !cacheHit {
+			lookupHash = getContractCoverageMapHash(code, isCreate)
+			t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
 		}
-
-		// Record coverage for this location in our map.
-		_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, pc)
-		if coverageUpdateErr != nil {
-			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
-		}
+		callFrameState.lookupHash = &lookupHash
 	}
+
+	// Record coverage for this location in our map.
+	callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, marker)
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

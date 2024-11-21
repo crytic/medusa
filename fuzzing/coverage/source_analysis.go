@@ -273,11 +273,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				}
 
 				// Parse our instruction index to offset lookups
-				initInstructionOffsetLookup, err := initSourceMap.GetInstructionIndexToOffsetLookup(contract.InitBytecode)
+				initInstructionMarkersLookup, err := initSourceMap.GetInstructionIndexToMarkersLookup(contract.InitBytecode)
 				if err != nil {
 					return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
 				}
-				runtimeInstructionOffsetLookup, err := runtimeSourceMap.GetInstructionIndexToOffsetLookup(contract.RuntimeBytecode)
+				runtimeInstructionMarkersLookup, err := runtimeSourceMap.GetInstructionIndexToMarkersLookup(contract.RuntimeBytecode)
 				if err != nil {
 					return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
 				}
@@ -287,11 +287,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, initInstructionOffsetLookup, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, initInstructionMarkersLookup, initCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, runtimeInstructionMarkersLookup, runtimeCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
@@ -305,7 +305,7 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup []int, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionMarkersLookup map[int][]uint64, contractCoverageData *ContractCoverageMap) error {
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
@@ -327,8 +327,10 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		succHitCount := uint(0)
 		revertHitCount := uint(0)
 		if contractCoverageData != nil {
-			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
-			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+			for _, marker := range instructionMarkersLookup[sourceMapElement.Index] {
+				succHitCount += contractCoverageData.successfulCoverage.HitCount(marker) // TODO might overflow on 32 bit
+				revertHitCount += contractCoverageData.revertedCoverage.HitCount(marker)
+			}
 		}
 
 		// Obtain the source file this element maps to.

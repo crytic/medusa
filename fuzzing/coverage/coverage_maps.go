@@ -1,10 +1,7 @@
 package coverage
 
 import (
-	"golang.org/x/exp/slices"
-
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
@@ -256,18 +253,14 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 			// Iterate across each PC in the successful coverage array
 			// We do not separately iterate over the reverted coverage array because if there is no data about a
 			// successful PC execution, then it is not possible for that PC to have ever reverted either
-			for i, hits := range contractCoverageMap.successfulCoverage.executedFlags {
-				// If we hit the PC at least once, we have a unique PC hit
-				if hits != 0 {
-					uniquePCs++
+			uniquePCs += uint64(len(contractCoverageMap.successfulCoverage.executedFlags))
 
-					// Do not count both success and revert
-					continue
-				}
-
-				// This is only executed if the PC was not executed successfully
-				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
-					uniquePCs++
+			if contractCoverageMap.revertedCoverage.executedFlags != nil {
+				for i, hits := range contractCoverageMap.revertedCoverage.executedFlags {
+					// This is only executed if the PC was not executed successfully
+					if contractCoverageMap.successfulCoverage.executedFlags[i] == 0 && hits != 0 {
+						uniquePCs++
+					}
 				}
 			}
 		}
@@ -329,7 +322,7 @@ func (cm *ContractCoverageMap) updateCoveredAt(codeSize int, pc uint64) (bool, e
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
 // or runtime bytecode.
 type CoverageMapBytecodeData struct {
-	executedFlags []uint
+	executedFlags map[uint64]uint
 }
 
 // Reset resets the bytecode coverage map data to be empty.
@@ -340,29 +333,34 @@ func (cm *CoverageMapBytecodeData) Reset() {
 // Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
-	// Return an equality comparison on the data, ignoring size checks by stopping at the end of the shortest slice.
-	// We do this to avoid comparing arbitrary length constructor arguments appended to init bytecode.
-	smallestSize := utils.Min(len(cm.executedFlags), len(b.executedFlags))
-	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
-	//  it may make sense to just check that both of them are greater than zero
-	return slices.Equal(cm.executedFlags[:smallestSize], b.executedFlags[:smallestSize])
+	for marker, hitcount := range cm.executedFlags {
+		if b.executedFlags[marker] != hitcount {
+			return false
+		}
+	}
+	for marker, hitcount := range b.executedFlags {
+		if cm.executedFlags[marker] != hitcount {
+			return false
+		}
+	}
+	return true
 }
 
 // HitCount returns the number of times that the provided program counter (PC) has been hit. If zero is returned, then
 // the PC has not been hit, the map is empty, or the PC is out-of-bounds
-func (cm *CoverageMapBytecodeData) HitCount(pc int) uint {
+func (cm *CoverageMapBytecodeData) HitCount(marker uint64) uint {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return 0
 	}
 
 	// If this map has no execution data or is out of bounds, it is not covered.
-	if cm.executedFlags == nil || len(cm.executedFlags) <= pc {
+	if cm.executedFlags == nil {
 		return 0
 	}
 
 	// Otherwise, return the hit count
-	return cm.executedFlags[pc]
+	return cm.executedFlags[marker]
 }
 
 // update updates the hit count of the current CoverageMapBytecodeData with the provided one.
@@ -381,11 +379,10 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
-	for i := 0; i < len(cm.executedFlags) && i < len(coverageMap.executedFlags); i++ {
-		// Only update the map if we haven't seen this coverage before
-		if cm.executedFlags[i] == 0 && coverageMap.executedFlags[i] != 0 {
-			cm.executedFlags[i] += coverageMap.executedFlags[i]
-			changed = true
+	for marker, hitcount := range coverageMap.executedFlags {
+		if hitcount != 0 {
+			changed = changed || cm.executedFlags[marker] == 0
+			cm.executedFlags[marker] += hitcount // TODO this might overflow on 32 bit machines
 		}
 	}
 	return changed, nil
@@ -393,26 +390,13 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 
 // updateCoveredAt updates the hit count at a given program counter location within a CoverageMapBytecodeData.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
+func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, marker uint64) (bool, error) {
 	// If the execution flags don't exist, create them for this code size.
 	if cm.executedFlags == nil {
-		cm.executedFlags = make([]uint, codeSize)
+		cm.executedFlags = map[uint64]uint{}
 	}
 
-	// If our program counter is in range, determine if we achieved new coverage for the first time or increment the hit counter.
-	if pc < uint64(len(cm.executedFlags)) {
-		// Increment the hit counter
-		cm.executedFlags[pc] += 1
-
-		// This is the first time we have hit this PC, so return true
-		if cm.executedFlags[pc] == 1 {
-			return true, nil
-		}
-		// We have seen this PC before, return false
-		return false, nil
-	}
-
-	// Since it is possible that the program counter is larger than the code size (e.g., malformed bytecode), we will
-	// simply return false with no error
-	return false, nil
+	newCoverage := cm.executedFlags[marker] == 0
+	cm.executedFlags[marker]++
+	return newCoverage, nil
 }

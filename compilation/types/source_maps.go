@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"math/bits"
 
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -181,4 +182,44 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, er
 		currentOffset += operandCount + 1
 	}
 	return indexToOffsetLookup, nil
+}
+
+func (s SourceMap) GetInstructionIndexToMarkersLookup(bytecode []byte) (map[int][]uint64, error) {
+	indexToOffsetLookup, err := s.GetInstructionIndexToOffsetLookup(bytecode)
+	if err != nil {
+		return nil, err
+	}
+
+	jumpDests := make([]uint64, 0)
+	for _, opOffset := range indexToOffsetLookup {
+		op := vm.OpCode(bytecode[opOffset])
+		if op == vm.JUMPDEST {
+			jumpDests = append(jumpDests, uint64(opOffset))
+		}
+	}
+
+	indexToMarkerLookup := make(map[int][]uint64)
+
+	for opNum, opOffset := range indexToOffsetLookup {
+		op := vm.OpCode(bytecode[opOffset])
+
+		if op == vm.JUMP || op == vm.JUMPI {
+			xorWith := bits.RotateLeft64(uint64(opOffset), 32)
+			var list []uint64
+			if op == vm.JUMPI && opNum < len(indexToOffsetLookup) - 1 {
+				list = make([]uint64, len(jumpDests)+1)
+				list[len(list)-1] = xorWith ^ uint64(indexToOffsetLookup[opNum+1])
+			} else {
+				list = make([]uint64, len(jumpDests))
+			}
+
+			for i, jumpDest := range jumpDests {
+				list[i] = xorWith ^ jumpDest
+			}
+
+			indexToMarkerLookup[opOffset] = list
+		}
+	}
+
+	return indexToMarkerLookup, nil
 }
