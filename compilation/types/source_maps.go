@@ -1,12 +1,12 @@
 package types
 
 import (
-	"fmt"
+	// "fmt"
 	"strconv"
 	"strings"
-	"math/bits"
+	// "math/bits"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	// "github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
@@ -149,10 +149,11 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 	return sourceMap, nil
 }
 
+/*
 // GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
 // and the element of the slice represents the instruction offset.
 // Returns the slice lookup, or an error if one occurs.
-func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, error) {
+func GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, error) {
 	// Create our resulting lookup
 	indexToOffsetLookup := make([]int, len(s))
 
@@ -184,7 +185,7 @@ func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, er
 	return indexToOffsetLookup, nil
 }
 
-func (s SourceMap) GetInstructionIndexToMarkersLookup(bytecode []byte) (map[int][]uint64, error) {
+func GetJumpToMarkers(bytecode []byte) (map[int][]uint64, error) {
 	indexToOffsetLookup, err := s.GetInstructionIndexToOffsetLookup(bytecode)
 	if err != nil {
 		return nil, err
@@ -222,4 +223,4 @@ func (s SourceMap) GetInstructionIndexToMarkersLookup(bytecode []byte) (map[int]
 	}
 
 	return indexToMarkerLookup, nil
-}
+} */

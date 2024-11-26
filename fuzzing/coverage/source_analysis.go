@@ -8,6 +8,8 @@ import (
 
 	"github.com/crytic/medusa/compilation/types"
 	"golang.org/x/exp/maps"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"math/bits"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -272,26 +274,26 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime source map: %v", err)
 				}
 
-				// Parse our instruction index to offset lookups
-				initInstructionMarkersLookup, err := initSourceMap.GetInstructionIndexToMarkersLookup(contract.InitBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
-				}
-				runtimeInstructionMarkersLookup, err := runtimeSourceMap.GetInstructionIndexToMarkersLookup(contract.RuntimeBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
-				}
+				// // Parse our instruction index to offset lookups
+				// initInstructionMarkersLookup, err := initSourceMap.GetInstructionIndexToMarkersLookup(contract.InitBytecode)
+				// if err != nil {
+				// 	return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
+				// }
+				// runtimeInstructionMarkersLookup, err := runtimeSourceMap.GetInstructionIndexToMarkersLookup(contract.RuntimeBytecode)
+				// if err != nil {
+				// 	return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
+				// }
 
 				// Filter our source maps
 				initSourceMap = filterSourceMaps(compilation, initSourceMap)
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, initInstructionMarkersLookup, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.InitBytecode, initCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, runtimeInstructionMarkersLookup, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, /*runtimeInstructionMarkersLookup,*/ contract.RuntimeBytecode, runtimeCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
@@ -305,9 +307,18 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionMarkersLookup map[int][]uint64, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, /*instructionMarkersLookup map[int][]uint64,*/ bytecode []byte, contractCoverageData *ContractCoverageMap) error {
+	if len(bytecode) == 0 { return nil } // TODO
+	if contractCoverageData == nil { return nil } // TODO
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode)
+	if succHitCounts == nil {
+		fmt.Println("weird err")
+		return nil
+	}
+
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
+		//fmt.Println(idx, sourceMapElement.Index, len(succHitCounts), len(bytecode))
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
 		// relevance to the coverage map, so we skip it.
 		if sourceMapElement.SourceUnitID == -1 {
@@ -324,14 +335,15 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		succHitCount := uint(0)
-		revertHitCount := uint(0)
-		if contractCoverageData != nil {
+		succHitCount := succHitCounts[sourceMapElement.Index]
+		revertHitCount := revertHitCounts[sourceMapElement.Index]
+		// TODO this is where we do stuff
+		/* if contractCoverageData != nil {
 			for _, marker := range instructionMarkersLookup[sourceMapElement.Index] {
 				succHitCount += contractCoverageData.successfulCoverage.HitCount(marker) // TODO might overflow on 32 bit
 				revertHitCount += contractCoverageData.revertedCoverage.HitCount(marker)
 			}
-		}
+		} */
 
 		// Obtain the source file this element maps to.
 		if sourceFile, ok := sourceAnalysis.Files[sourcePath]; ok {
@@ -363,6 +375,196 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 
 	}
 	return nil
+}
+
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []uint) {
+	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
+	jumpIndices := getJumpIndices(bytecode, indexToOffset)
+	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset) // btw 0 should always go here, and the ones after jmps
+	jumpToMarkers := getJumpToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
+	jumpDestToMarkers := getJumpDestToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
+	pcToRevertMarker := getRevertMarkers(indexToOffset)
+	pcToReturnMarker := getReturnMarkers(indexToOffset)
+	// interestingIndices := getInterestingIndices(indexToOffset, jumpIndices, jumpDestIndices, pcToRevertMarker, pcToReturnMarker, cm.successfulCoverage.executedFlags)
+
+	fmt.Println(jumpIndices)
+	fmt.Println(jumpDestIndices)
+
+	execFlags := cm.successfulCoverage.executedFlags
+	fmt.Println("-------------------")
+	for k, v := range execFlags {
+		fmt.Println(bits.RotateLeft64(k, 32) & 0xFFFFFFFF, k & 0xFFFFFFFF, v)
+	}
+	fmt.Println("===================")
+
+	// panic("")
+
+	successfulHits := make([]uint, len(indexToOffset))
+	revertedHits := make([]uint, len(indexToOffset))
+
+	hit := uint(0)
+	fmt.Println("begin")
+	for idx, pc := range indexToOffset {
+		// if !interestingIndices[idx] { continue }
+		if jumpDestIndices[idx] || jumpIndices[idx] {
+			if jumpDestIndices[idx] { fmt.Println("jumpdest", hit, idx, bytecode[pc]) }
+			if jumpIndices[idx] { fmt.Println("jump", hit, idx, bytecode[pc]) }
+			hit = uint(0)
+		} else {
+			subtractOff := execFlags[pcToRevertMarker[idx]]
+			if subtractOff > hit { // TODO if it's > that means we coded smth wrong
+				fmt.Println("BAD CASE")
+			}
+			if subtractOff > 0 { fmt.Println("positive subtractoff", subtractOff, hit, idx) }
+			hit -= subtractOff
+		}
+
+		if jumpDestIndices[idx] {
+			for _, marker := range jumpDestToMarkers[idx] {
+				hit += execFlags[marker]
+				if execFlags[marker] > 0 { fmt.Println("positive jumpdest marker", execFlags[marker], hit, idx) }
+			}
+			/*for traverseIdx := idx+1; traverseIdx < len(indexToOffset) && !jumpIndices[traverseIdx] && !jumpDestIndices[traverseIdx]; traverseIdx++ {
+				subtractOff := execFlags[pcToRevertMarker[traverseIdx]] + execFlags[pcToReturnMarker[traverseIdx]]
+				if subtractOff >= hit { // TODO if it's > that means we coded smth wrong
+					break
+				}
+				hit -= subtractOff
+				successfulHits[traverseIdx] = hit
+			}*/
+		}
+		if jumpIndices[idx] {
+			for _, marker := range jumpToMarkers[idx] {
+				hit += execFlags[marker]
+				if execFlags[marker] > 0 { fmt.Println("positive jump marker", execFlags[marker], hit, idx) }
+			}
+		}
+
+		hit += execFlags[uint64(pc)] // special case for when we just start out, TODO make this nicer
+		if execFlags[uint64(pc)] > 0 { fmt.Println("positive zero", execFlags[uint64(pc)], hit, idx) }
+
+		successfulHits[idx] = hit
+		revertedHits[idx] = execFlags[pcToRevertMarker[idx]]
+	
+		subtractOff2 := execFlags[pcToReturnMarker[idx]]
+		if subtractOff2 > 0 { fmt.Println("positive subtractoff2", subtractOff2, hit, idx) }
+		if subtractOff2 > hit { // TODO if it's > that means we coded smth wrong
+			fmt.Println("BAD CASE")
+		}
+		hit -= subtractOff2
+	}
+
+	return successfulHits, revertedHits
+}
+
+// GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
+// and the element of the slice represents the instruction offset.
+// Returns the slice lookup, or an error if one occurs.
+func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
+	// Create our resulting lookup
+	indexToOffsetLookup := make([]int, 0, len(bytecode)/2)
+
+	// Loop through all byte code
+	currentOffset := 0
+	for currentOffset < len(bytecode) {
+		// Obtain the indexed instruction and add the current offset to our lookup at this index.
+		op := vm.OpCode(bytecode[currentOffset])
+		indexToOffsetLookup = append(indexToOffsetLookup, currentOffset)
+
+		// Next, calculate the length of data that follows this instruction.
+		operandCount := 0
+		if op.IsPush() {
+			if op == vm.PUSH0 {
+				operandCount = 0 
+			} else {
+				operandCount = int(op) - int(vm.PUSH1) + 1 
+			}   
+		}   
+
+		// Advance the offset past this instruction and its operands.
+		currentOffset += operandCount + 1 
+	}   
+	return indexToOffsetLookup
+}
+
+func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
+        jumps := map[int]bool{}
+	jumps[0] = true
+        for idx, pc := range indexToOffset {
+                op := vm.OpCode(bytecode[pc])
+                if op == vm.JUMP || op == vm.JUMPI {
+                        jumps[idx] = true
+		}
+        }
+	return jumps
+}
+
+func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
+        jumpDests := map[int]bool{}
+	if len(indexToOffset) > 0 {
+		jumpDests[0] = true
+	}
+        for idx, pc := range indexToOffset {
+                op := vm.OpCode(bytecode[pc])
+                if op == vm.JUMPDEST {
+                        jumpDests[idx] = true
+                } else if op == vm.JUMPI && idx < len(indexToOffset) {
+                        jumpDests[idx+1] = true
+		}
+        }
+	return jumpDests
+}
+
+func getJumpToMarkers(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool) map[int][]uint64 {
+	markers := map[int][]uint64{}
+	// fmt.Println(jumpDestIndices)
+	for jmp, _ := range jumpIndices {
+		markersHere := make([]uint64, 0, len(jumpDestIndices))
+		for dst, _ := range jumpDestIndices {
+			// fmt.Println(indexToOffset, jmp, dst)
+			markersHere = append(markersHere, bits.RotateLeft64(uint64(indexToOffset[jmp]), 32) ^ uint64(indexToOffset[dst]))
+		}
+		markers[jmp] = markersHere
+	}
+	return markers
+}
+
+func getJumpDestToMarkers(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool) map[int][]uint64 {
+	markers := map[int][]uint64{}
+	for dst, _ := range jumpDestIndices {
+		markersHere := make([]uint64, 0, len(jumpIndices))
+		for jmp, _ := range jumpIndices {
+			markersHere = append(markersHere, bits.RotateLeft64(uint64(indexToOffset[jmp]), 32) ^ uint64(indexToOffset[dst]))
+		}
+		markers[dst] = markersHere
+	}
+	return markers
+}
+
+func getRevertMarkers(indexToOffset []int) []uint64 {
+	markers := make([]uint64, len(indexToOffset))
+	for idx, _ := range indexToOffset {
+		markers[idx] = bits.RotateLeft64(uint64(idx), 32) ^ 0x40000000
+	}
+	return markers
+}
+
+func getReturnMarkers(indexToOffset []int) []uint64 {
+	markers := make([]uint64, len(indexToOffset))
+	for idx, _ := range indexToOffset {
+		markers[idx] = bits.RotateLeft64(uint64(idx), 32) ^ 0x80000000
+	}
+	return markers
+}
+
+func getInterestingIndices(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool, pcToRevertMarker []uint64, pcToReturnMarker []uint64, executedFlags map[uint64]uint) map[int]bool {
+	indices := map[int]bool{}
+	for idx, _ := range indexToOffset {
+		if jumpIndices[idx] || jumpDestIndices[idx] || executedFlags[pcToRevertMarker[idx]] > 0 || executedFlags[pcToReturnMarker[idx]] > 0 {
+			indices[idx] = true
+		}
+	}
+	return indices
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are removed.

@@ -3,6 +3,7 @@ package coverage
 import (
 	"math/big"
 	"math/bits"
+	"fmt"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
@@ -72,6 +73,10 @@ type coverageTracerCallFrameState struct {
 
 	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
 	lookupHash *common.Hash
+
+	lastPC uint64
+	address common.Address
+	codeSize int
 }
 
 // NewCoverageTracer returns a new CoverageTracer.
@@ -125,18 +130,38 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 	})
 }
 
+func (t *CoverageTracer) recordExit(reverted bool) {
+	callFrameState := t.callFrameStates[t.callDepth]
+	var markerXor uint64
+	if reverted {
+		markerXor = 0x40000000
+	} else {
+		markerXor = 0x80000000
+	}
+	marker := bits.RotateLeft64(callFrameState.lastPC, 32) ^ markerXor
+	if callFrameState == nil {
+		// fmt.Printf("err 1")
+	} else if callFrameState.lookupHash == nil {
+		// fmt.Printf("err 2") // TODO this is the one that gets hit
+	} else {
+		callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, callFrameState.codeSize, marker)
+	}
+}
+
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	t.recordExit(reverted)
+
 	// Check to see if this is the top level call frame
 	isTopLevelFrame := depth == 0
 
 	// If we encountered an error in this call frame, mark all coverage as reverted.
-	if err != nil {
-		_, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll()
-		if revertCoverageErr != nil {
-			logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", revertCoverageErr)
-		}
-	}
+	// if err != nil {
+		// _, revertCoverageErr := t.callFrameStates[t.callDepth].pendingCoverageMap.RevertAll() // TODO remove RevertAll fn
+		// if revertCoverageErr != nil {
+		// 	logging.GlobalLogger.Panic("Coverage tracer failed to update revert coverage map during capture end", revertCoverageErr)
+		// }
+	// }
 
 	// Commit all our coverage maps up one call frame.
 	var coverageUpdateErr error
@@ -159,25 +184,73 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	fmt.Println(pc, op)
+
+	// Obtain our call frame state tracking struct
+	callFrameState := t.callFrameStates[t.callDepth]
+
+	firstOpcode := callFrameState.codeSize == 0
+
+	callFrameState.lastPC = pc
+	callFrameState.address = scope.Address() // TODO
+	callFrameState.codeSize = len(scope.(*vm.ScopeContext).Contract.Code) // TODO
+
+	if firstOpcode {
+		// TODO need to refactor
+
+		// If there is code we're executing, collect coverage.
+		address := scope.Address()
+		// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+		scopeContext := scope.(*vm.ScopeContext)
+		code := scopeContext.Contract.Code
+		codeSize := len(code)
+		isCreate := callFrameState.create
+		gethCodeHash := scopeContext.Contract.CodeHash
+
+		cacheArrayKey := 1
+		if isCreate {
+			cacheArrayKey = 0
+		}
+
+		// TODO used to have a codeSize > 0 check here
+
+		// Obtain our contract coverage map lookup hash.
+		if callFrameState.lookupHash == nil {
+			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+			if !cacheHit {
+				lookupHash = getContractCoverageMapHash(code, isCreate)
+				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+			}
+			callFrameState.lookupHash = &lookupHash
+		}
+
+		// Record coverage for this location in our map.
+		callFrameState.pendingCoverageMap.UpdateAt(address, *callFrameState.lookupHash, codeSize, uint64(pc))
+	}
+
 	var pos uint64
 	switch vm.OpCode(op) {
 	case vm.JUMPI:
 		stackData := scope.StackData()
+		fmt.Println("jumpi pc",pc,"stackdata",stackData)
 		cond := stackData[1] // TODO correct?
+		// cond := stackData[len(stackData)-2] // TODO correct?
 		if cond.IsZero() {
-			pos = stackData[0].Uint64() // TODO correct?
+			// pos = stackData[0].Uint64() // TODO correct?
+			pos = stackData[len(stackData)-1].Uint64() // TODO correct?
 		} else {
 			pos = pc + 1
+			// return
 		}
 	case vm.JUMP:
-		pos = scope.StackData()[0].Uint64() // TODO correct?
+		fmt.Println("jump pc",pc,"stackdata",scope.StackData())
+		// pos = scope.StackData()[0].Uint64() // TODO correct?
+		stackData := scope.StackData()
+		pos = stackData[len(stackData)-1].Uint64() // TODO correct?
 	default:
 		return
 	}
 	marker := bits.RotateLeft64(pc, 32) ^ pos
-
-	// Obtain our call frame state tracking struct
-	callFrameState := t.callFrameStates[t.callDepth]
 
 	// If there is code we're executing, collect coverage.
 	address := scope.Address()
