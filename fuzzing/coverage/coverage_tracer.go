@@ -3,7 +3,7 @@ package coverage
 import (
 	"math/big"
 	"math/bits"
-	"fmt"
+	//"fmt"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
@@ -184,7 +184,7 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	fmt.Println(pc, op)
+	//fmt.Println(pc, op)
 
 	// Obtain our call frame state tracking struct
 	callFrameState := t.callFrameStates[t.callDepth]
@@ -232,18 +232,18 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	switch vm.OpCode(op) {
 	case vm.JUMPI:
 		stackData := scope.StackData()
-		fmt.Println("jumpi pc",pc,"stackdata",stackData)
-		cond := stackData[1] // TODO correct?
-		// cond := stackData[len(stackData)-2] // TODO correct?
+		//fmt.Println("jumpi pc",pc,"stackdata",stackData)
+		// cond := stackData[1] // TODO correct?
+		cond := stackData[len(stackData)-2] // TODO correct?
 		if cond.IsZero() {
-			// pos = stackData[0].Uint64() // TODO correct?
-			pos = stackData[len(stackData)-1].Uint64() // TODO correct?
-		} else {
 			pos = pc + 1
 			// return
+		} else {
+			// pos = stackData[0].Uint64() // TODO correct?
+			pos = stackData[len(stackData)-1].Uint64() // TODO correct?
 		}
 	case vm.JUMP:
-		fmt.Println("jump pc",pc,"stackdata",scope.StackData())
+		//fmt.Println("jump pc",pc,"stackdata",scope.StackData())
 		// pos = scope.StackData()[0].Uint64() // TODO correct?
 		stackData := scope.StackData()
 		pos = stackData[len(stackData)-1].Uint64() // TODO correct?
