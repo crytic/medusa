@@ -3,7 +3,7 @@ package coverage
 import (
 	"math/big"
 	"math/bits"
-	//"fmt"
+	"fmt"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
@@ -75,6 +75,7 @@ type coverageTracerCallFrameState struct {
 	lookupHash *common.Hash
 
 	lastPC uint64
+	lastOp byte
 	address common.Address
 	codeSize int
 }
@@ -128,6 +129,7 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 		create:             typ == byte(vm.CREATE) || typ == byte(vm.CREATE2),
 		pendingCoverageMap: NewCoverageMaps(),
 	})
+	fmt.Println("enter", depth, len(t.callFrameStates)-1)
 }
 
 func (t *CoverageTracer) recordExit(reverted bool) {
@@ -150,6 +152,8 @@ func (t *CoverageTracer) recordExit(reverted bool) {
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	fmt.Println("exit", depth, t.callDepth, err != nil, reverted, t.callFrameStates[t.callDepth].lastPC, t.callFrameStates[t.callDepth].codeSize, "lastOp", fmt.Sprintf("%x", t.callFrameStates[t.callDepth].lastOp))
+
 	t.recordExit(reverted)
 
 	// Check to see if this is the top level call frame
@@ -192,6 +196,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	firstOpcode := callFrameState.codeSize == 0
 
 	callFrameState.lastPC = pc
+	callFrameState.lastOp = op
 	callFrameState.address = scope.Address() // TODO
 	callFrameState.codeSize = len(scope.(*vm.ScopeContext).Contract.Code) // TODO
 

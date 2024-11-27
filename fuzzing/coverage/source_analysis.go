@@ -363,8 +363,17 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				sourceLine.IsActive = true
 
 				// Set its coverage state and increment hit counts
-				sourceLine.SuccessHitCount += succHitCount
-				sourceLine.RevertHitCount += revertHitCount
+				// sourceLine.SuccessHitCount += succHitCount
+				// sourceLine.RevertHitCount += revertHitCount
+				if succHitCount > sourceLine.SuccessHitCount {
+					sourceLine.SuccessHitCount = succHitCount // TODO this isnt exactly correct, eg in the case that we have a jmp
+				}
+				if revertHitCount > 0 {
+					sourceLine.SuccessHitCount = 0 // TODO this isnt exactly correct, eg in the case that we have a jmp
+				}
+				if revertHitCount > sourceLine.RevertHitCount {
+					sourceLine.RevertHitCount = revertHitCount // TODO this should almost definitely be additive
+				}
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
 				sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
 
@@ -405,33 +414,19 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []
 	hit := uint(0)
 	fmt.Println("------------------------------------ begin ---------------------------------------------")
 	for idx, pc := range indexToOffset {
-		// if !interestingIndices[idx] { continue }
-		if jumpDestIndices[idx] || jumpIndices[idx] {
-			if jumpDestIndices[idx] { fmt.Println("jumpdest", "hit", hit, "idx", idx, "op", bytecode[pc]) }
-			if jumpIndices[idx] { fmt.Println("jump", "hit", hit, "idx", idx, "op", bytecode[pc]) }
-			if jumpIndices[idx] {
-				hit = uint(0)
-			}
-		}
-
-		if jumpDestIndices[idx] {
-			for _, marker := range jumpDestToMarkers[idx] {
-				hit += execFlags[marker]
-				if execFlags[marker] > 0 { fmt.Println("positive jumpdest marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
-			}
-			/*for traverseIdx := idx+1; traverseIdx < len(indexToOffset) && !jumpIndices[traverseIdx] && !jumpDestIndices[traverseIdx]; traverseIdx++ {
-				subtractOff := execFlags[pcToRevertMarker[traverseIdx]] + execFlags[pcToReturnMarker[traverseIdx]]
-				if subtractOff >= hit { // TODO if it's > that means we coded smth wrong
-					break
-				}
-				hit -= subtractOff
-				successfulHits[traverseIdx] = hit
-			}*/
-		}
 		if jumpIndices[idx] {
+			hit = uint(0) // TODO correct?
+			fmt.Println("jump", "hit", hit, "idx", idx, "op", bytecode[pc])
 			for _, marker := range jumpToMarkers[idx] {
 				hit += execFlags[marker]
 				if execFlags[marker] > 0 { fmt.Println("positive jump marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
+			}
+		} else if jumpDestIndices[idx] { // TODO is this "else" correct?
+			hit = uint(0) // TODO correct?
+			fmt.Println("jumpdest", "hit", hit, "idx", idx, "op", bytecode[pc])
+			for _, marker := range jumpDestToMarkers[idx] {
+				hit += execFlags[marker]
+				if execFlags[marker] > 0 { fmt.Println("positive jumpdest marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
 			}
 		}
 
@@ -439,7 +434,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []
 		if execFlags[uint64(pc)] > 0 { fmt.Println("positive zero", "adding", execFlags[uint64(pc)], "hit", hit, "idx", idx) }
 
 		subtractOff := execFlags[pcToRevertMarker[idx]]
-		if subtractOff > 0 { fmt.Println("positive subtractoff", "so", subtractOff, "hit", hit, "idx", idx, "op", bytecode[pc]) }
+		if subtractOff > 0 { fmt.Println("positive subtractoff", "so", subtractOff, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
 		if subtractOff > hit { // TODO if it's > that means we coded smth wrong
 			fmt.Println("BAD CASE 1")
 		}
@@ -449,7 +444,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []
 		revertedHits[idx] = execFlags[pcToRevertMarker[idx]]
 	
 		subtractOff2 := execFlags[pcToReturnMarker[idx]]
-		if subtractOff2 > 0 { fmt.Println("positive subtractoff2", "so2", subtractOff2, "hit", hit, "idx", idx, "op", bytecode[pc]) }
+		if subtractOff2 > 0 { fmt.Println("positive subtractoff2", "so2", subtractOff2, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
 		if subtractOff2 > hit { // TODO if it's > that means we coded smth wrong
 			fmt.Println("BAD CASE 2")
 		}
@@ -496,7 +491,7 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 
 func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
         jumps := map[int]bool{}
-	jumps[0] = true
+	// jumps[0] = true
         for idx, pc := range indexToOffset {
                 op := vm.OpCode(bytecode[pc])
                 if op == vm.JUMP || op == vm.JUMPI {
@@ -508,9 +503,9 @@ func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
 
 func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
         jumpDests := map[int]bool{}
-	if len(indexToOffset) > 0 {
-		jumpDests[0] = true
-	}
+	// if len(indexToOffset) > 0 {
+	// 	jumpDests[0] = true
+	// }
         for idx, pc := range indexToOffset {
                 op := vm.OpCode(bytecode[pc])
                 if op == vm.JUMPDEST {
