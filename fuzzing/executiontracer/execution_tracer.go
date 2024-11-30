@@ -1,6 +1,7 @@
 package executiontracer
 
 import (
+	"github.com/crytic/medusa/chain/types"
 	"math/big"
 
 	"github.com/crytic/medusa/chain"
@@ -8,7 +9,6 @@ import (
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	coretypes "github.com/ethereum/go-ethereum/core/types"
 
@@ -20,7 +20,7 @@ import (
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
 	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
 	defer executionTracer.Close()
@@ -302,7 +302,7 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	// TODO: Move this to OnLog
 	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evmContext.StateDB.(*state.StateDB).Logs()
+			logs := t.evmContext.StateDB.(types.MedusaStateDB).Logs()
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
 			}

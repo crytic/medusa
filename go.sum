@@ -48,6 +48,10 @@ github.com/crate-crypto/go-kzg-4844 v1.0.0/go.mod h1:1kMhvPgI0Ky3yIa+9lFySEBUBXk
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/crytic/medusa-geth v0.0.0-20240919134035-0fd368c28419 h1:MJXzWPObZtF0EMRqX64JkzJDj+GMLPxg3XK5xb12FFU=
 github.com/crytic/medusa-geth v0.0.0-20240919134035-0fd368c28419/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241130173605-b90d9e750c68 h1:omfbSnk8EEIr/B+Sv1iHqTK5sZPw4JfNojbAgFMR9g4=
+github.com/crytic/medusa-geth v0.0.0-20241130173605-b90d9e750c68/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241130192903-8ab947767bf4 h1:hUCM94+Pa65FkkRynJUktVinTHvAdxxcIeuLEkC1/bc=
+github.com/crytic/medusa-geth v0.0.0-20241130192903-8ab947767bf4/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

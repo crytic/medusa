@@ -40,7 +40,7 @@ func (s *RemoteStateProvider) ImportStateObject(addr common.Address, snapId int)
 	}
 
 	bal, nonce, code, err := s.cache.GetStateObject(addr)
-	if err != nil {
+	if err == nil {
 		s.recordImportedStateObject(addr, snapId)
 		return bal, nonce, code, nil
 	} else {
@@ -60,7 +60,7 @@ func (s *RemoteStateProvider) ImportStorageAt(addr common.Address, slot common.H
 		}
 	}
 	data, err := s.cache.GetStorageAt(addr, slot)
-	if err != nil {
+	if err == nil {
 		s.recordImportedStateSlot(addr, slot, snapId)
 		return data, nil
 	} else {
