@@ -204,7 +204,7 @@ func TestChainBlockNumberJumping(t *testing.T) {
 // verifies have no registered contract deployments.
 func TestChainDynamicDeployments(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_with_inner.sol")
+	contractPath := testutils.CopyToTesDirectory(t, "testdata/contracts/deployment_with_inner.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -318,7 +318,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 // have no registered contract deployments.
 func TestChainDeploymentWithArgs(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_with_args.sol")
+	contractPath := testutils.CopyToTesDirectory(t, "testdata/contracts/deployment_with_args.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -450,7 +450,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 // that the ending state is the same.
 func TestChainCloning(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
+	contractPath := testutils.CopyToTesDirectory(t, "testdata/contracts/deployment_single.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {
@@ -546,7 +546,7 @@ func TestChainCloning(t *testing.T) {
 // semantics to be the same whenever run with the same messages being sent for all the same blocks.
 func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 	// Copy our testdata over to our testing directory
-	contractPath := testutils.CopyToTestDirectory(t, "testdata/contracts/deployment_single.sol")
+	contractPath := testutils.CopyToTesDirectory(t, "testdata/contracts/deployment_single.sol")
 
 	// Execute our tests in the given test path
 	testutils.ExecuteInDirectory(t, contractPath, func() {

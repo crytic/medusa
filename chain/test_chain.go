@@ -3,6 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/chain/fork"
 	"math/big"
 	"sort"
 
@@ -63,10 +64,10 @@ type TestChain struct {
 	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
 	genesisDefinition *core.Genesis
 
-	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
-	// and is the subject of state changes when executing new transactions. This does not track the current block
-	// head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
-	state *state.StateDB
+	// state represents the current Ethereum world (interface implementing state.StateDB). It tracks all state across
+	// the chain and dummyChain and is the subject of state changes when executing new transactions. This does not
+	// track the current block head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
+	state chainTypes.MedusaStateDB
 
 	// stateDatabase refers to the database object which state uses to store data. It is constructed over db.
 	stateDatabase state.Database
@@ -85,6 +86,10 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	// stateDbFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
+	// fork mode.
+	stateDbFactory *fork.MedusaStateFactory
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -179,6 +184,11 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	transactionTracerRouter := NewTestChainTracerRouter()
 	callTracerRouter := NewTestChainTracerRouter()
 
+	// Set up the state factory
+	remoteCache := fork.EmptyRemoteStateCache{}
+	rspf := fork.NewRemoteStateProviderFactory(remoteCache)
+	sf := fork.NewMedusaStateFactory(rspf)
+
 	// Create our instance
 	chain := &TestChain{
 		genesisDefinition:       genesisDefinition,
@@ -193,6 +203,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
+		stateDbFactory:          sf,
 	}
 
 	// Add our internal tracers to this chain.
@@ -297,7 +308,7 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 }
 
 // State returns the current state.StateDB of the chain.
-func (t *TestChain) State() *state.StateDB {
+func (t *TestChain) State() chainTypes.MedusaStateDB {
 	return t.state
 }
 
@@ -460,9 +471,9 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 
 // StateFromRoot obtains a state from a given state root hash.
 // Returns the state, or an error if one occurred.
-func (t *TestChain) StateFromRoot(root common.Hash) (*state.StateDB, error) {
+func (t *TestChain) StateFromRoot(root common.Hash) (chainTypes.MedusaStateDB, error) {
 	// Load our state from the database
-	stateDB, err := state.New(root, t.stateDatabase, nil)
+	stateDB, err := t.stateDbFactory.New(root, t.stateDatabase)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +497,7 @@ func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, 
 
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
 // number. Returns the state, or an error if one occurs.
-func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
+func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (chainTypes.MedusaStateDB, error) {
 	// Obtain our block's post-execution state root hash
 	root, err := t.StateRootAfterBlockNumber(blockNumber)
 	if err != nil {
@@ -558,7 +569,7 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg *core.Message, state chainTypes.MedusaStateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state

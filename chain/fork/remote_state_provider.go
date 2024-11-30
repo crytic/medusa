@@ -2,24 +2,11 @@ package fork
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/holiman/uint256"
 )
-
-/*
-type MedusaStateDB interface {
-	vm.StateDB
-
-	// add the extra methods that Medusa uses.
-	IntermediateRoot(bool) common.Hash
-	Finalise(bool)
-	GetLogs(common.Hash, uint64, common.Hash) []*types.Log
-	TxIndex() int
-	SetBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
-	SetTxContext(common.Hash, int)
-	Commit(uint64, bool) common.Hash
-}*/
 
 var _ state.RemoteStateProvider = (*RemoteStateProvider)(nil)
 var _ state.RemoteStateProviderFactory = (*RemoteStateProviderFactory)(nil)
@@ -160,6 +147,22 @@ type RemoteStateProviderFactory struct {
 	RemoteStateCache
 }
 
+func NewRemoteStateProviderFactory(cache RemoteStateCache) *RemoteStateProviderFactory {
+	return &RemoteStateProviderFactory{cache}
+}
+
 func (r RemoteStateProviderFactory) New() state.RemoteStateProvider {
 	return newRemoteStateProvider(r.RemoteStateCache)
+}
+
+type MedusaStateFactory struct {
+	*RemoteStateProviderFactory
+}
+
+func NewMedusaStateFactory(remoteStateFactory *RemoteStateProviderFactory) *MedusaStateFactory {
+	return &MedusaStateFactory{remoteStateFactory}
+}
+
+func (f *MedusaStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
+	return state.NewProxyDB(root, db, f.RemoteStateProviderFactory)
 }
