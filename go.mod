@@ -88,4 +88,4 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20240919134035-0fd368c28419
+replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20241130173605-b90d9e750c68
