@@ -11,6 +11,12 @@ func DefaultTestChainConfig() (*TestChainConfig, error) {
 			EnableFFI:         false,
 		},
 		SkipAccountChecks: true,
+		ForkConfig: ForkConfig{
+			ForkModeEnabled: true,
+			RpcUrl:          "http://localhost:8080/v2/ju1AhO8KhGNGQ4wOSRjTBaVFOY9_cORj",
+			RpcBlock:        21310796,
+			PoolSize:        5,
+		},
 	}
 
 	// Return the generated configuration.

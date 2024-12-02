@@ -3,7 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
-	"reflect"
+	"fmt"
 )
 
 type PendingResult struct {
@@ -22,10 +22,11 @@ func (p *PendingResult) GetResultBlocking(result interface{}) error {
 		if p.request.Error != nil {
 			return p.request.Error
 		} else {
-			// There's probably a way to do this with generics, but after suffering go's type system for so long, f it.
-			resultValuePointer := reflect.ValueOf(result).Elem()
-			resultValuePointer.Set(reflect.ValueOf(p.request.Result).Elem())
-			return nil
+			err := json.Unmarshal(p.request.Result, result)
+			if err != nil {
+				fmt.Sprintf("hi")
+			}
+			return err
 		}
 	case <-p.request.Context.Done():
 		return p.request.Context.Err()
@@ -51,6 +52,6 @@ type inflightRequest struct {
 	// Done is used to signal to each interested worker that the request is completed (possibly with error).
 	Done    chan struct{}
 	Error   error
-	Result  interface{}
+	Result  []byte
 	Context context.Context
 }

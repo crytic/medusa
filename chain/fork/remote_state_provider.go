@@ -2,17 +2,15 @@ package fork
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/holiman/uint256"
 )
 
 var _ state.RemoteStateProvider = (*RemoteStateProvider)(nil)
-var _ state.RemoteStateProviderFactory = (*RemoteStateProviderFactory)(nil)
 
 type RemoteStateProvider struct {
-	cache RemoteStateCache
+	stateQuerier RemoteStateQuery
 
 	stateObjBySnapshot  map[int][]common.Address
 	stateSlotBySnapshot map[int]map[common.Address][]common.Hash
@@ -21,9 +19,9 @@ type RemoteStateProvider struct {
 	stateSlotsImported map[common.Address]map[common.Hash]struct{}
 }
 
-func newRemoteStateProvider(cache RemoteStateCache) *RemoteStateProvider {
+func newRemoteStateProvider(stateQuerier RemoteStateQuery) *RemoteStateProvider {
 	return &RemoteStateProvider{
-		cache:               cache,
+		stateQuerier:        stateQuerier,
 		stateObjBySnapshot:  make(map[int][]common.Address),
 		stateSlotBySnapshot: make(map[int]map[common.Address][]common.Hash),
 		stateObjsImported:   make(map[common.Address]struct{}),
@@ -39,7 +37,7 @@ func (s *RemoteStateProvider) ImportStateObject(addr common.Address, snapId int)
 		}
 	}
 
-	bal, nonce, code, err := s.cache.GetStateObject(addr)
+	bal, nonce, code, err := s.stateQuerier.GetStateObject(addr)
 	if err == nil {
 		s.recordImportedStateObject(addr, snapId)
 		return bal, nonce, code, nil
@@ -59,7 +57,7 @@ func (s *RemoteStateProvider) ImportStorageAt(addr common.Address, slot common.H
 			Error:                fmt.Errorf("state slot %s of address %s was already imported in snapshot %d", slot.Hex(), addr.Hex(), snapId),
 		}
 	}
-	data, err := s.cache.GetStorageAt(addr, slot)
+	data, err := s.stateQuerier.GetStorageAt(addr, slot)
 	if err == nil {
 		s.recordImportedStateSlot(addr, slot, snapId)
 		return data, nil
@@ -141,28 +139,4 @@ func (s *RemoteStateProvider) recordImportedStateSlot(addr common.Address, slot 
 		s.stateSlotBySnapshot[snapId][addr] = make([]common.Hash, 0)
 	}
 	s.stateSlotBySnapshot[snapId][addr] = append(s.stateSlotBySnapshot[snapId][addr], slot)
-}
-
-type RemoteStateProviderFactory struct {
-	RemoteStateCache
-}
-
-func NewRemoteStateProviderFactory(cache RemoteStateCache) *RemoteStateProviderFactory {
-	return &RemoteStateProviderFactory{cache}
-}
-
-func (r RemoteStateProviderFactory) New() state.RemoteStateProvider {
-	return newRemoteStateProvider(r.RemoteStateCache)
-}
-
-type MedusaStateFactory struct {
-	*RemoteStateProviderFactory
-}
-
-func NewMedusaStateFactory(remoteStateFactory *RemoteStateProviderFactory) *MedusaStateFactory {
-	return &MedusaStateFactory{remoteStateFactory}
-}
-
-func (f *MedusaStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
-	return state.NewProxyDB(root, db, f.RemoteStateProviderFactory)
 }

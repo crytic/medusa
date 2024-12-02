@@ -587,7 +587,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
-	// this worker with a fresh memory database.
+	// this context.WithValue(fuzzer.ctx, "workerIndex", workerIndex) with a fresh memory database.
 	sequencesTested := 0
 	for sequencesTested <= fw.fuzzer.config.Fuzzing.WorkerResetLimit {
 		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.

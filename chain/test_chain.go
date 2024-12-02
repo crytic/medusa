@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/crytic/medusa/chain/fork"
+	"golang.org/x/net/context"
 	"math/big"
 	"sort"
 
@@ -87,15 +88,54 @@ type TestChain struct {
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
 
-	// stateDbFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
+	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
-	stateDbFactory *fork.MedusaStateFactory
+	stateFactory fork.MedusaStateFactory
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
 // If a nil config is provided, a default one is used.
-func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+// Additional TestChain objects should be obtained via calling Clone on the original, as this allows cloned chains to
+// benefit from shared RPC caching and certain kinds of state memoization that may be implemented in the future.
+func NewTestChain(
+	fuzzerContext context.Context,
+	genesisAlloc types.GenesisAlloc,
+	testChainConfig *config.TestChainConfig) (*TestChain, error) {
+
+	// Use a default config if we were not provided one
+	var err error
+	if testChainConfig == nil {
+		testChainConfig, err = config.DefaultTestChainConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
+	var stateFactory fork.MedusaStateFactory
+	if testChainConfig.ForkConfig.ForkModeEnabled {
+		provider, err := fork.NewRemoteStateRPCQuery(
+			fuzzerContext,
+			testChainConfig.ForkConfig.RpcUrl,
+			testChainConfig.ForkConfig.RpcBlock,
+			testChainConfig.ForkConfig.PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		stateFactory = fork.NewForkedStateFactory(provider)
+	} else {
+		stateFactory = fork.NewUnbackedStateFactory()
+	}
+
+	return newTestChainWithStateFactory(genesisAlloc, testChainConfig, stateFactory)
+}
+
+// newTestChainWithStateFactory creates a simulated backend, using the provided stateFactory for optionally fetching
+// remote state if RPC mode is configured.
+func newTestChainWithStateFactory(
+	genesisAlloc types.GenesisAlloc,
+	testChainConfig *config.TestChainConfig,
+	stateFactory fork.MedusaStateFactory) (*TestChain, error) {
+
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -128,14 +168,6 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		GasUsed:    0,
 		ParentHash: common.Hash{},
 		BaseFee:    big.NewInt(0),
-	}
-
-	// Use a default config if we were not provided one
-	if testChainConfig == nil {
-		testChainConfig, err = config.DefaultTestChainConfig()
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	// Obtain our VM extensions from our config
@@ -184,11 +216,6 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	transactionTracerRouter := NewTestChainTracerRouter()
 	callTracerRouter := NewTestChainTracerRouter()
 
-	// Set up the state factory
-	remoteCache := fork.EmptyRemoteStateCache{}
-	rspf := fork.NewRemoteStateProviderFactory(remoteCache)
-	sf := fork.NewMedusaStateFactory(rspf)
-
 	// Create our instance
 	chain := &TestChain{
 		genesisDefinition:       genesisDefinition,
@@ -203,7 +230,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
-		stateDbFactory:          sf,
+		stateFactory:            stateFactory,
 	}
 
 	// Add our internal tracers to this chain.
@@ -240,7 +267,7 @@ func (t *TestChain) Close() {
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
 	// Create a new chain with the same genesis definition and config
-	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig)
+	targetChain, err := newTestChainWithStateFactory(t.genesisDefinition.Alloc, t.testChainConfig, t.stateFactory)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +500,7 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 // Returns the state, or an error if one occurred.
 func (t *TestChain) StateFromRoot(root common.Hash) (chainTypes.MedusaStateDB, error) {
 	// Load our state from the database
-	stateDB, err := t.stateDbFactory.New(root, t.stateDatabase)
+	stateDB, err := t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
 		return nil, err
 	}

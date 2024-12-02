@@ -1,8 +1,6 @@
 package rpc
 
 import (
-	"fmt"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 	"sync"
@@ -12,10 +10,9 @@ import (
 const maxRetries = 3
 
 type ClientPool struct {
-	clients     []*ethclient.Client
-	rpcClients  []*rpc.Client
-	clientReady []bool
-	lock        sync.Mutex
+	rpcClients       []*rpc.Client
+	currentClientIdx int
+	clientLock       sync.Mutex
 
 	inflightRequests map[requestKey]*inflightRequest
 	inflightLock     sync.Mutex
@@ -24,34 +21,30 @@ type ClientPool struct {
 	maxRetries int
 }
 
-func NewClientPool(endpoint string, poolSize int) (*ClientPool, error) {
+func NewClientPool(endpoint string, poolSize uint) (*ClientPool, error) {
 	pool := &ClientPool{
-		clients:          make([]*ethclient.Client, poolSize),
 		rpcClients:       make([]*rpc.Client, poolSize),
-		lock:             sync.Mutex{},
+		clientLock:       sync.Mutex{},
 		inflightRequests: make(map[requestKey]*inflightRequest),
 		inflightLock:     sync.Mutex{},
 		endpoint:         endpoint,
 		maxRetries:       maxRetries,
 	}
 
-	for i := 0; i < poolSize; i++ {
-		rpcClient, err := rpc.Dial(endpoint)
+	// dial out
+	for i := uint(0); i < poolSize; i++ {
+		client, err := rpc.Dial(endpoint)
 		if err != nil {
-			// todo: we may want to close the clients in this error case and generally
-			return nil, fmt.Errorf("error when creating rpc client: %w", err)
+			return nil, err
 		}
-
-		client := ethclient.NewClient(rpcClient)
-		pool.clients[i] = client
-		pool.rpcClients[i] = rpcClient
-		pool.clientReady[i] = true
+		pool.rpcClients[i] = client
 	}
+
 	return pool, nil
 }
 
 func (c *ClientPool) ExecuteRequestBlocking(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	pending, err := c.ExecuteRequestAsync(ctx, method, args)
+	pending, err := c.ExecuteRequestAsync(ctx, method, args...)
 	if err != nil {
 		return err
 	} else {
@@ -78,21 +71,21 @@ func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, arg
 		}
 		c.inflightRequests[key] = inflight
 		c.inflightLock.Unlock()
+		client := c.getClient()
 
-		go c.launchRequest(c.getClient(ctx), inflight, method, args)
+		go c.launchRequest(client, inflight, method, args...)
 		return newPendingResult(inflight), nil
 	}
 }
 
-func (c *ClientPool) getClient(ctx context.Context) *rpc.Client {
-	workerIndex := ctx.Value("workerIndex").(int)
+func (c *ClientPool) getClient() *rpc.Client {
+	c.clientLock.Lock()
+	defer c.clientLock.Unlock()
 
-	// defensive code
-	if workerIndex >= len(c.clients) {
-		panic("worker index out of range")
-	}
+	client := c.rpcClients[c.currentClientIdx]
+	c.currentClientIdx = (c.currentClientIdx + 1) % len(c.rpcClients)
 
-	return c.rpcClients[workerIndex]
+	return client
 }
 
 func (c *ClientPool) launchRequest(
@@ -103,11 +96,11 @@ func (c *ClientPool) launchRequest(
 	defer close(request.Done)
 
 	var err error
-	var result interface{}
+	var result string
 	for attempt := 0; attempt < c.maxRetries; attempt++ {
-		err = client.CallContext(request.Context, result, method, args...)
+		err = client.CallContext(request.Context, &result, method, args...)
 		if err == nil {
-			request.Result = result
+			request.Result = []byte("\"" + result + "\"")
 			return
 		}
 		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)

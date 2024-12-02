@@ -5,14 +5,14 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var _ RemoteStateQuery = (*DummyRemoteStateQuery)(nil)
+var _ RemoteStateQuery = (*RemoteStateDummyQuery)(nil)
 
-type DummyRemoteStateQuery struct{}
+type RemoteStateDummyQuery struct{}
 
-func (d DummyRemoteStateQuery) GetStorageAt(address common.Address, hash common.Hash) (common.Hash, error) {
+func (d RemoteStateDummyQuery) GetStorageAt(address common.Address, hash common.Hash) (common.Hash, error) {
 	return common.Hash{}, nil
 }
 
-func (d DummyRemoteStateQuery) GetStateObject(address common.Address) (*uint256.Int, uint64, []byte, error) {
+func (d RemoteStateDummyQuery) GetStateObject(address common.Address) (*uint256.Int, uint64, []byte, error) {
 	return uint256.NewInt(0), 0, nil, nil
 }
