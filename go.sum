@@ -52,6 +52,14 @@ github.com/crytic/medusa-geth v0.0.0-20241130173605-b90d9e750c68 h1:omfbSnk8EEIr
 github.com/crytic/medusa-geth v0.0.0-20241130173605-b90d9e750c68/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
 github.com/crytic/medusa-geth v0.0.0-20241130192903-8ab947767bf4 h1:hUCM94+Pa65FkkRynJUktVinTHvAdxxcIeuLEkC1/bc=
 github.com/crytic/medusa-geth v0.0.0-20241130192903-8ab947767bf4/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241130223329-b8c833750e4a h1:VWfzFlV7cQkRa4LcD8DVNuidx84O5CrDEpepVc63Vvs=
+github.com/crytic/medusa-geth v0.0.0-20241130223329-b8c833750e4a/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241202194344-8d0a0447d06d h1:axsr7JIMaXydl/bRPZSY5yegUtL3DRwA379KisG0+Lo=
+github.com/crytic/medusa-geth v0.0.0-20241202194344-8d0a0447d06d/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241202194551-913f01e4bd56 h1:ujrqP47PDWJvBx4D+CKCseIutAExZdoVZUYxSXcBlKc=
+github.com/crytic/medusa-geth v0.0.0-20241202194551-913f01e4bd56/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241202200656-3fa6ec50dc89 h1:1KskdZSvJhuHf3EGA1siq75atMeMZKbLr8zxMbQT+SY=
+github.com/crytic/medusa-geth v0.0.0-20241202200656-3fa6ec50dc89/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
