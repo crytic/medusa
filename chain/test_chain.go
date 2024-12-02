@@ -3,7 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/chain/fork"
+	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"
 	"math/big"
 	"sort"
@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
+	gethState "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -71,7 +71,7 @@ type TestChain struct {
 	state chainTypes.MedusaStateDB
 
 	// stateDatabase refers to the database object which state uses to store data. It is constructed over db.
-	stateDatabase state.Database
+	stateDatabase gethState.Database
 
 	// db represents the in-memory database used by the TestChain and its underlying chain to store state changes.
 	// This is constructed over the kvstore.
@@ -90,7 +90,7 @@ type TestChain struct {
 
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
-	stateFactory fork.MedusaStateFactory
+	stateFactory state.MedusaStateFactory
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -111,9 +111,9 @@ func NewTestChain(
 			return nil, err
 		}
 	}
-	var stateFactory fork.MedusaStateFactory
+	var stateFactory state.MedusaStateFactory
 	if testChainConfig.ForkConfig.ForkModeEnabled {
-		provider, err := fork.NewRemoteStateRPCQuery(
+		provider, err := state.NewRemoteStateRPCQuery(
 			fuzzerContext,
 			testChainConfig.ForkConfig.RpcUrl,
 			testChainConfig.ForkConfig.RpcBlock,
@@ -121,9 +121,9 @@ func NewTestChain(
 		if err != nil {
 			return nil, err
 		}
-		stateFactory = fork.NewForkedStateFactory(provider)
+		stateFactory = state.NewForkedStateFactory(provider)
 	} else {
-		stateFactory = fork.NewUnbackedStateFactory()
+		stateFactory = state.NewUnbackedStateFactory()
 	}
 
 	return newTestChainWithStateFactory(genesisAlloc, testChainConfig, stateFactory)
@@ -134,7 +134,7 @@ func NewTestChain(
 func newTestChainWithStateFactory(
 	genesisAlloc types.GenesisAlloc,
 	testChainConfig *config.TestChainConfig,
-	stateFactory fork.MedusaStateFactory) (*TestChain, error) {
+	stateFactory state.MedusaStateFactory) (*TestChain, error) {
 
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
@@ -210,7 +210,7 @@ func newTestChainWithStateFactory(
 	testChainGenesisBlock := chainTypes.NewBlock(genesisBlock.Header())
 
 	// Create our state database over-top our database.
-	stateDatabase := state.NewDatabaseWithConfig(db, dbConfig)
+	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
 
 	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
 	transactionTracerRouter := NewTestChainTracerRouter()
@@ -873,7 +873,7 @@ func (t *TestChain) PendingBlockCommit() error {
 
 	// Committing the state invalidates the cached tries and we need to reload the state.
 	// Otherwise, methods such as FillFromTestChainProperties will not work correctly.
-	t.state, err = state.New(root, t.stateDatabase, nil)
+	t.state, err = t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
 		return err
 	}

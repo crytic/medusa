@@ -1,4 +1,4 @@
-package fork
+package state
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 var _ state.RemoteStateProvider = (*RemoteStateProvider)(nil)
 
 type RemoteStateProvider struct {
-	stateQuerier RemoteStateQuery
+	stateQuerier StateBackend
 
 	stateObjBySnapshot  map[int][]common.Address
 	stateSlotBySnapshot map[int]map[common.Address][]common.Hash
@@ -19,7 +19,7 @@ type RemoteStateProvider struct {
 	stateSlotsImported map[common.Address]map[common.Hash]struct{}
 }
 
-func newRemoteStateProvider(stateQuerier RemoteStateQuery) *RemoteStateProvider {
+func newRemoteStateProvider(stateQuerier StateBackend) *RemoteStateProvider {
 	return &RemoteStateProvider{
 		stateQuerier:        stateQuerier,
 		stateObjBySnapshot:  make(map[int][]common.Address),

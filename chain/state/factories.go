@@ -1,4 +1,4 @@
-package fork
+package state
 
 import (
 	"github.com/crytic/medusa/chain/types"
@@ -7,18 +7,20 @@ import (
 )
 
 type MedusaStateFactory interface {
+	// New initializes a new state
 	New(root common.Hash, db state.Database) (types.MedusaStateDB, error)
 }
 
 var _ MedusaStateFactory = (*UnbackedStateFactory)(nil)
 var _ MedusaStateFactory = (*ForkedStateFactory)(nil)
+var _ MedusaStateFactory = (*GethStateFactory)(nil)
 
 // ForkedStateFactory is used to build StateDBs that are backed by a remote RPC
 type ForkedStateFactory struct {
-	globalRemoteStateQuery RemoteStateQuery
+	globalRemoteStateQuery StateBackend
 }
 
-func NewForkedStateFactory(globalCache RemoteStateQuery) *ForkedStateFactory {
+func NewForkedStateFactory(globalCache StateBackend) *ForkedStateFactory {
 	return &ForkedStateFactory{globalCache}
 }
 
@@ -36,11 +38,12 @@ func NewUnbackedStateFactory() *UnbackedStateFactory {
 }
 
 func (f *UnbackedStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
-	remoteStateProvider := newRemoteStateProvider(RemoteStateDummyQuery{})
+	remoteStateProvider := newRemoteStateProvider(EmptyBackend{})
 	return state.NewForkedStateDb(root, db, remoteStateProvider)
 }
 
-// GethStateFactory is used to build vanilla StateDBs that perfectly reproduce geth's statedb behavior.
+// GethStateFactory is used to build vanilla StateDBs that perfectly reproduce geth's statedb behavior. Only intended
+// to be used for differential testing against the unbacked state factory.
 type GethStateFactory struct{}
 
 func (f *GethStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
