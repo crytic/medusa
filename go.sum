@@ -60,6 +60,8 @@ github.com/crytic/medusa-geth v0.0.0-20241202194551-913f01e4bd56 h1:ujrqP47PDWJv
 github.com/crytic/medusa-geth v0.0.0-20241202194551-913f01e4bd56/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
 github.com/crytic/medusa-geth v0.0.0-20241202200656-3fa6ec50dc89 h1:1KskdZSvJhuHf3EGA1siq75atMeMZKbLr8zxMbQT+SY=
 github.com/crytic/medusa-geth v0.0.0-20241202200656-3fa6ec50dc89/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
+github.com/crytic/medusa-geth v0.0.0-20241202203125-0a5639524f29 h1:HcdaXrtqJC6IhZUMClVxf1KCcqEd1FHhJvOk9dnUtEg=
+github.com/crytic/medusa-geth v0.0.0-20241202203125-0a5639524f29/go.mod h1:ajGCVsk6ctffGwe9TSDQqj4HIUUQ1WdUit5tWFNl8Tw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
