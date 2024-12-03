@@ -10,7 +10,7 @@ import (
 var _ state.RemoteStateProvider = (*RemoteStateProvider)(nil)
 
 type RemoteStateProvider struct {
-	stateQuerier StateBackend
+	stateBackend StateBackend
 
 	stateObjBySnapshot  map[int][]common.Address
 	stateSlotBySnapshot map[int]map[common.Address][]common.Hash
@@ -22,9 +22,9 @@ type RemoteStateProvider struct {
 	contractsDeployedBySnapshot map[int][]common.Address
 }
 
-func newRemoteStateProvider(stateQuerier StateBackend) *RemoteStateProvider {
+func newRemoteStateProvider(stateBackend StateBackend) *RemoteStateProvider {
 	return &RemoteStateProvider{
-		stateQuerier:                stateQuerier,
+		stateBackend:                stateBackend,
 		stateObjBySnapshot:          make(map[int][]common.Address),
 		stateSlotBySnapshot:         make(map[int]map[common.Address][]common.Hash),
 		stateObjsImported:           make(map[common.Address]struct{}),
@@ -42,7 +42,7 @@ func (s *RemoteStateProvider) ImportStateObject(addr common.Address, snapId int)
 		}
 	}
 
-	bal, nonce, code, err := s.stateQuerier.GetStateObject(addr)
+	bal, nonce, code, err := s.stateBackend.GetStateObject(addr)
 	if err == nil {
 		s.recordImportedStateObject(addr, snapId)
 		return bal, nonce, code, nil
@@ -70,7 +70,7 @@ func (s *RemoteStateProvider) ImportStorageAt(addr common.Address, slot common.H
 			Error:                fmt.Errorf("state slot %s of address %s was already imported in snapshot %d", slot.Hex(), addr.Hex(), snapId),
 		}
 	}
-	data, err := s.stateQuerier.GetStorageAt(addr, slot)
+	data, err := s.stateBackend.GetStorageAt(addr, slot)
 	if err == nil {
 		s.recordImportedStateSlot(addr, slot, snapId)
 		return data, nil

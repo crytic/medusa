@@ -25,4 +25,5 @@ type MedusaStateDB interface {
 	SetTxContext(common.Hash, int)
 	Commit(uint64, bool) (common.Hash, error)
 	SetLogger(*tracing.Hooks)
+	Error() error
 }

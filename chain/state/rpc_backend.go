@@ -62,7 +62,7 @@ func (q *RPCBackend) GetStorageAt(addr common.Address, slot common.Hash) (common
 func (q *RPCBackend) GetStateObject(addr common.Address) (*uint256.Int, uint64, []byte, error) {
 	obj, err := q.stateObjectCache.GetStateObject(addr)
 	if err == nil {
-		return obj.Balance, uint64(obj.Nonce), obj.Code, nil
+		return obj.Balance, obj.Nonce, obj.Code, nil
 	} else {
 		balance := hexutil.Big{}
 		nonce := hexutil.Uint(0)
