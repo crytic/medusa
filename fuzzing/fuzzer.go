@@ -384,6 +384,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 	// Update the test chain config with the contract address overrides
 	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
+
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 

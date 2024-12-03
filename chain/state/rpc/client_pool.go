@@ -9,6 +9,9 @@ import (
 
 const maxRetries = 3
 
+/*
+ClientPool is an Ethereum JSON-RPC provider that provides automatic connection pooling and request deduplication.
+*/
 type ClientPool struct {
 	rpcClients       []*rpc.Client
 	currentClientIdx int
@@ -43,6 +46,11 @@ func NewClientPool(endpoint string, poolSize uint) (*ClientPool, error) {
 	return pool, nil
 }
 
+/*
+ExecuteRequestBlocking makes a blocking RPC request and stores the result in the result interface pointer.
+If there is an existing request on the wire with the same method/args, the calling thread will be blocked until it has
+completed.
+*/
 func (c *ClientPool) ExecuteRequestBlocking(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	pending, err := c.ExecuteRequestAsync(ctx, method, args...)
 	if err != nil {
@@ -52,6 +60,11 @@ func (c *ClientPool) ExecuteRequestBlocking(ctx context.Context, result interfac
 	}
 }
 
+/*
+ExecuteRequestAsync makes a non-blocking RPC request whose result may be obtained from interacting with *PendingResult.
+If there is an existing request on the wire with the same method/args, this function will return a PendingResult linked
+to that request.
+*/
 func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, args ...interface{}) (*PendingResult, error) {
 	key, err := makeRequestKey(method, args...)
 	if err != nil {
@@ -78,6 +91,7 @@ func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, arg
 	}
 }
 
+// getClient obtains the next client in the round-robin of clients in the pool
 func (c *ClientPool) getClient() *rpc.Client {
 	c.clientLock.Lock()
 	defer c.clientLock.Unlock()
@@ -88,6 +102,7 @@ func (c *ClientPool) getClient() *rpc.Client {
 	return client
 }
 
+// launchRequest performs the actual RPC request, storing the results of the request in the inflightRequest
 func (c *ClientPool) launchRequest(
 	client *rpc.Client,
 	request *inflightRequest,

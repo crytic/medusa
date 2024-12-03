@@ -8,11 +8,19 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type StateBackend interface {
+/*
+stateBackend defines an interface for fetching arbitrary state from a different source such as a remote RPC server or
+K/V store.
+*/
+type stateBackend interface {
 	GetStorageAt(common.Address, common.Hash) (common.Hash, error)
 	GetStateObject(common.Address) (*uint256.Int, uint64, []byte, error)
 }
 
+/*
+RPCBackend defines a stateBackend for fetching state from a remote RPC server. It is locked to a single block height,
+and caches data in-memory with no expiry.
+*/
 type RPCBackend struct {
 	context    context.Context
 	clientPool *rpc.ClientPool
@@ -22,7 +30,7 @@ type RPCBackend struct {
 	stateObjectCache *stateObjectCacheThreadSafe
 }
 
-func NewRemoteStateRPCQuery(
+func NewRPCBackend(
 	ctx context.Context,
 	url string,
 	height uint64,
@@ -41,6 +49,12 @@ func NewRemoteStateRPCQuery(
 	}, nil
 }
 
+/*
+GetStorageAt returns data stored in the remote RPC for the given address/slot.
+Note that Ethereum RPC will return zero for slots that have never been written to or are associated with undeployed
+contracts.
+Errors may be network errors or a context cancelled error when the fuzzer is shutting down.
+*/
 func (q *RPCBackend) GetStorageAt(addr common.Address, slot common.Hash) (common.Hash, error) {
 	data, err := q.slotCache.GetSlotData(addr, slot)
 	if err == nil {
@@ -59,6 +73,11 @@ func (q *RPCBackend) GetStorageAt(addr common.Address, slot common.Hash) (common
 	}
 }
 
+/*
+GetStateObject returns the data stored in the remote RPC for the specified state object
+Note that the Ethereum RPC will return zero for accounts that do not exist.
+Errors may be network errors or a context cancelled error when the fuzzer is shutting down.
+*/
 func (q *RPCBackend) GetStateObject(addr common.Address) (*uint256.Int, uint64, []byte, error) {
 	obj, err := q.stateObjectCache.GetStateObject(addr)
 	if err == nil {

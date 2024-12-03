@@ -7,12 +7,14 @@ import (
 	"sync"
 )
 
+// remoteStateObject gives us a way to store state objects without the overhead of using geth's stateObject
 type remoteStateObject struct {
 	Balance *uint256.Int
 	Nonce   uint64
 	Code    []byte
 }
 
+// stateObjectCacheThreadSafe provides a thread-safe cache for storing state objects.
 type stateObjectCacheThreadSafe struct {
 	lock  sync.RWMutex
 	cache map[common.Address]*remoteStateObject
@@ -25,6 +27,7 @@ func newStateObjectCache() *stateObjectCacheThreadSafe {
 	}
 }
 
+// GetStateObject checks if the addr is present in the cache, and if not, returns an error
 func (s *stateObjectCacheThreadSafe) GetStateObject(addr common.Address) (*remoteStateObject, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -42,6 +45,7 @@ func (s *stateObjectCacheThreadSafe) WriteStateObject(addr common.Address, data 
 	s.cache[addr] = &data
 }
 
+// slotCacheThreadSafe provides a thread-safe cache for storing data in an account's storage
 type slotCacheThreadSafe struct {
 	lock  sync.RWMutex
 	cache map[common.Address]map[common.Hash]common.Hash
@@ -54,6 +58,7 @@ func newSlotCache() *slotCacheThreadSafe {
 	}
 }
 
+// GetSlotData checks if the specified data is stored in the cache, and if not, returns an error.
 func (s *slotCacheThreadSafe) GetSlotData(addr common.Address, slot common.Hash) (common.Hash, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

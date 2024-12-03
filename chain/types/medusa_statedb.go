@@ -12,10 +12,13 @@ import (
 var _ MedusaStateDB = (*state.StateDB)(nil)
 var _ MedusaStateDB = (*state.ForkStateDb)(nil)
 
+/*
+MedusaStateDB provides an interface that supersedes the stateDB interface exposed by geth. All of these functions are
+implemented by the vanilla geth statedb.
+This interface allows the TestChain to use a forked statedb and native geth statedb interoperably.
+*/
 type MedusaStateDB interface {
 	vm.StateDB
-	// geth's built-in statedb interface is not complete.
-	// We need to add the extra methods that Medusa uses.
 	IntermediateRoot(bool) common.Hash
 	Finalise(bool)
 	Logs() []*types.Log

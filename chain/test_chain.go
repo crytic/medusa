@@ -16,14 +16,14 @@ import (
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 
-	chainTypes "github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	gethState "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
@@ -35,10 +35,10 @@ type TestChain struct {
 	// blocks represents the blocks created on the current chain. If blocks are sent to the chain which skip some
 	// block numbers, any block in that gap will not be committed here and its block hash and other parameters
 	// will be spoofed when requested through the API, for efficiency.
-	blocks []*chainTypes.Block
+	blocks []*types.Block
 
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
-	pendingBlock *chainTypes.Block
+	pendingBlock *types.Block
 
 	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used by cheatcodes to override the EVM
 	// interpreter's behavior. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
@@ -68,7 +68,7 @@ type TestChain struct {
 	// state represents the current Ethereum world (interface implementing state.StateDB). It tracks all state across
 	// the chain and dummyChain and is the subject of state changes when executing new transactions. This does not
 	// track the current block head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
-	state chainTypes.MedusaStateDB
+	state types.MedusaStateDB
 
 	// stateDatabase refers to the database object which state uses to store data. It is constructed over db.
 	stateDatabase gethState.Database
@@ -100,7 +100,7 @@ type TestChain struct {
 // benefit from shared RPC caching and certain kinds of state memoization that may be implemented in the future.
 func NewTestChain(
 	fuzzerContext context.Context,
-	genesisAlloc types.GenesisAlloc,
+	genesisAlloc gethTypes.GenesisAlloc,
 	testChainConfig *config.TestChainConfig) (*TestChain, error) {
 
 	// Use a default config if we were not provided one
@@ -113,7 +113,7 @@ func NewTestChain(
 	}
 	var stateFactory state.MedusaStateFactory
 	if testChainConfig.ForkConfig.ForkModeEnabled {
-		provider, err := state.NewRemoteStateRPCQuery(
+		provider, err := state.NewRPCBackend(
 			fuzzerContext,
 			testChainConfig.ForkConfig.RpcUrl,
 			testChainConfig.ForkConfig.RpcBlock,
@@ -132,7 +132,7 @@ func NewTestChain(
 // newTestChainWithStateFactory creates a simulated backend, using the provided stateFactory for optionally fetching
 // remote state if RPC mode is configured.
 func newTestChainWithStateFactory(
-	genesisAlloc types.GenesisAlloc,
+	genesisAlloc gethTypes.GenesisAlloc,
 	testChainConfig *config.TestChainConfig,
 	stateFactory state.MedusaStateFactory) (*TestChain, error) {
 
@@ -186,7 +186,7 @@ func newTestChainWithStateFactory(
 			return nil, err
 		}
 		for _, cheatContract := range cheatContracts {
-			genesisDefinition.Alloc[cheatContract.address] = types.Account{
+			genesisDefinition.Alloc[cheatContract.address] = gethTypes.Account{
 				Balance: big.NewInt(0),
 				Code:    []byte{0xFF},
 			}
@@ -207,7 +207,7 @@ func newTestChainWithStateFactory(
 	genesisBlock := genesisDefinition.MustCommit(db, trieDB)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
-	testChainGenesisBlock := chainTypes.NewBlock(genesisBlock.Header())
+	testChainGenesisBlock := types.NewBlock(genesisBlock.Header())
 
 	// Create our state database over-top our database.
 	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
@@ -220,7 +220,7 @@ func newTestChainWithStateFactory(
 	chain := &TestChain{
 		genesisDefinition:       genesisDefinition,
 		BlockGasLimit:           genesisBlock.Header().GasLimit,
-		blocks:                  []*chainTypes.Block{testChainGenesisBlock},
+		blocks:                  []*types.Block{testChainGenesisBlock},
 		pendingBlock:            nil,
 		db:                      db,
 		state:                   nil,
@@ -335,7 +335,7 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 }
 
 // State returns the current state.StateDB of the chain.
-func (t *TestChain) State() chainTypes.MedusaStateDB {
+func (t *TestChain) State() types.MedusaStateDB {
 	return t.state
 }
 
@@ -357,12 +357,12 @@ func (t *TestChain) CheatCodeContracts() map[common.Address]*CheatCodeContract {
 
 // CommittedBlocks returns the real blocks which were committed to the chain, where methods such as BlockFromNumber
 // return the simulated chain state with intermediate blocks injected for block number jumps, etc.
-func (t *TestChain) CommittedBlocks() []*chainTypes.Block {
+func (t *TestChain) CommittedBlocks() []*types.Block {
 	return t.blocks
 }
 
 // Head returns the head of the chain (the latest block).
-func (t *TestChain) Head() *chainTypes.Block {
+func (t *TestChain) Head() *types.Block {
 	return t.blocks[len(t.blocks)-1]
 }
 
@@ -375,7 +375,7 @@ func (t *TestChain) HeadBlockNumber() uint64 {
 // When the TestChain creates a new block that jumps the block number forward, the existence of any intermediate
 // block will be spoofed based off of the closest preceding internally committed block.
 // Returns the index of the closest preceding block in blocks and the Block itself.
-func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTypes.Block) {
+func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *types.Block) {
 	// Perform a binary search for this exact block number, or the closest preceding block we committed.
 	k := sort.Search(len(t.blocks), func(n int) bool {
 		return t.blocks[n].Header.Number.Uint64() >= blockNumber
@@ -403,7 +403,7 @@ func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *chainTy
 // the TestChain skip block numbers, this method will simulate the existence of well-formed intermediate blocks to
 // ensure chain validity throughout. Thus, this is a "simulated" chain API method.
 // Returns the block, or an error if one occurs.
-func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
+func (t *TestChain) BlockFromNumber(blockNumber uint64) (*types.Block, error) {
 	// If the block number is past our current head, return an error.
 	if blockNumber > t.HeadBlockNumber() {
 		return nil, fmt.Errorf("could not obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
@@ -441,14 +441,14 @@ func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, erro
 	// - Reuses gas limit from last committed block.
 	// - We reuse the previous timestamp and add 1 for every block generated (blocks must have different timestamps)
 	//   - Note: This means that we must check that our timestamp jump >= block number jump when committing a new block.
-	blockHeader := &types.Header{
+	blockHeader := &gethTypes.Header{
 		ParentHash:  previousBlockHash,
-		UncleHash:   types.EmptyUncleHash,
+		UncleHash:   gethTypes.EmptyUncleHash,
 		Coinbase:    common.Address{},
 		Root:        closestBlock.Header.Root,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-		Bloom:       types.Bloom{},
+		TxHash:      gethTypes.EmptyRootHash,
+		ReceiptHash: gethTypes.EmptyRootHash,
+		Bloom:       gethTypes.Bloom{},
 		Difficulty:  common.Big0,
 		Number:      big.NewInt(int64(blockNumber)),
 		GasLimit:    closestBlock.Header.GasLimit,
@@ -456,12 +456,12 @@ func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, erro
 		Time:        closestBlock.Header.Time + (blockNumber - closestBlockNumber),
 		Extra:       []byte{},
 		MixDigest:   previousBlockHash,
-		Nonce:       types.BlockNonce{},
+		Nonce:       gethTypes.BlockNonce{},
 		BaseFee:     closestBlock.Header.BaseFee,
 	}
 
 	// Create our new empty block with our provided header and return it.
-	block := chainTypes.NewBlock(blockHeader)
+	block := types.NewBlock(blockHeader)
 	block.Hash = blockHash // we patch our block hash with our spoofed one immediately
 	return block, nil
 }
@@ -498,7 +498,7 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 
 // StateFromRoot obtains a state from a given state root hash.
 // Returns the state, or an error if one occurred.
-func (t *TestChain) StateFromRoot(root common.Hash) (chainTypes.MedusaStateDB, error) {
+func (t *TestChain) StateFromRoot(root common.Hash) (types.MedusaStateDB, error) {
 	// Load our state from the database
 	stateDB, err := t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
@@ -524,7 +524,7 @@ func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, 
 
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
 // number. Returns the state, or an error if one occurs.
-func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (chainTypes.MedusaStateDB, error) {
+func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (types.MedusaStateDB, error) {
 	// Obtain our block's post-execution state root hash
 	root, err := t.StateRootAfterBlockNumber(blockNumber)
 	if err != nil {
@@ -596,7 +596,7 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg *core.Message, state chainTypes.MedusaStateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state
@@ -645,11 +645,11 @@ func (t *TestChain) CallContract(msg *core.Message, state chainTypes.MedusaState
 	state.RevertToSnapshot(snapshot)
 
 	// Gather receipt for OnTxEnd
-	receipt := &types.Receipt{Type: tx.Type()}
+	receipt := &gethTypes.Receipt{Type: tx.Type()}
 	if msgResult.Failed() {
-		receipt.Status = types.ReceiptStatusFailed
+		receipt.Status = gethTypes.ReceiptStatusFailed
 	} else {
-		receipt.Status = types.ReceiptStatusSuccessful
+		receipt.Status = gethTypes.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = msgResult.UsedGas
@@ -665,14 +665,14 @@ func (t *TestChain) CallContract(msg *core.Message, state chainTypes.MedusaState
 
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
 // This may be nil if no pending block was created.
-func (t *TestChain) PendingBlock() *chainTypes.Block {
+func (t *TestChain) PendingBlock() *types.Block {
 	return t.pendingBlock
 }
 
 // PendingBlockCreate constructs an empty block which is pending addition to the chain. The block produces by this
 // method will have a block number and timestamp that is greater by the current chain head by 1.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockCreate() (*chainTypes.Block, error) {
+func (t *TestChain) PendingBlockCreate() (*types.Block, error) {
 	// Create a block with default parameters
 	blockNumber := t.HeadBlockNumber() + 1
 	timestamp := t.Head().Header.Time + 1
@@ -684,7 +684,7 @@ func (t *TestChain) PendingBlockCreate() (*chainTypes.Block, error) {
 // previous block). Providing a block number that is greater than the previous block number plus one will simulate empty
 // blocks between.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*chainTypes.Block, error) {
+func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*types.Block, error) {
 	// If we already have a pending block, return an error.
 	if t.pendingBlock != nil {
 		return nil, fmt.Errorf("could not create a new pending block for chain, as a block is already pending")
@@ -726,14 +726,14 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 	// - GasUsed is aggregated for each transaction in the block (for now zero).
 	// - Mix digest is only useful for randomness, so we just fake randomness by using the previous block hash.
 	// - TODO: BaseFee should be revisited/checked.
-	header := &types.Header{
+	header := &gethTypes.Header{
 		ParentHash:  parentBlockHash,
-		UncleHash:   types.EmptyUncleHash,
+		UncleHash:   gethTypes.EmptyUncleHash,
 		Coinbase:    t.Head().Header.Coinbase,
 		Root:        t.Head().Header.Root,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-		Bloom:       types.Bloom{},
+		TxHash:      gethTypes.EmptyRootHash,
+		ReceiptHash: gethTypes.EmptyRootHash,
+		Bloom:       gethTypes.Bloom{},
 		Difficulty:  common.Big0,
 		Number:      big.NewInt(int64(blockNumber)),
 		GasLimit:    *blockGasLimit,
@@ -741,12 +741,12 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		Time:        blockTime,
 		Extra:       []byte{},
 		MixDigest:   parentBlockHash,
-		Nonce:       types.BlockNonce{},
+		Nonce:       gethTypes.BlockNonce{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 
 	// Create a new block for our test node
-	t.pendingBlock = chainTypes.NewBlock(header)
+	t.pendingBlock = types.NewBlock(header)
 	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 
 	// Emit our event for the pending block being created
@@ -818,7 +818,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	}
 
 	// Create our message result
-	messageResult := &chainTypes.MessageResults{
+	messageResult := &types.MessageResults{
 		PostStateRoot:     common.BytesToHash(receipt.PostState),
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
@@ -944,7 +944,7 @@ func (t *TestChain) PendingBlockDiscard() error {
 
 // emitContractChangeEvents emits events for contract deployments being added or removed by playing through a list
 // of provided message results. If reverting, the inverse events are emitted.
-func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*chainTypes.MessageResults) error {
+func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*types.MessageResults) error {
 	// If we're not reverting, we simply play events for our contract deployment changes in order. If we are, inverse
 	// all the events.
 	var err error

@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 )
 
+/*
+PendingResult defines an object that can be returned when calling the RPC asynchronously. It's kinda like a promise as
+seen in other languages.
+*/
 type PendingResult struct {
 	request *inflightRequest
 }
@@ -15,6 +19,11 @@ func newPendingResult(request *inflightRequest) *PendingResult {
 	}
 }
 
+/*
+GetResultBlocking obtains the result from the client, blocking until the result or an error is available. Callers must
+pass a pointer to their data through result. Note that if the fuzzer is shutting down, an error may be returned to
+signify the context has been cancelled.
+*/
 func (p *PendingResult) GetResultBlocking(result interface{}) error {
 	select {
 	case <-p.request.Done:
@@ -29,6 +38,7 @@ func (p *PendingResult) GetResultBlocking(result interface{}) error {
 	}
 }
 
+// requestKey defines a struct that can uniquely identify an Ethereum RPC request for request deduplication purposes.
 type requestKey struct {
 	Method string
 	Args   string
@@ -44,6 +54,7 @@ func makeRequestKey(method string, args ...interface{}) (requestKey, error) {
 
 }
 
+// inflightRequest represents an HTTP-JSON request that is currently traversing the network.
 type inflightRequest struct {
 	// Done is used to signal to each interested worker that the request is completed (possibly with error).
 	Done    chan struct{}

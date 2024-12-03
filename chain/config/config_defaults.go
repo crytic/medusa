@@ -14,8 +14,8 @@ func DefaultTestChainConfig() (*TestChainConfig, error) {
 		ForkConfig: ForkConfig{
 			ForkModeEnabled: false,
 			RpcUrl:          "",
-			RpcBlock:        0,
-			PoolSize:        0,
+			RpcBlock:        1,
+			PoolSize:        20,
 		},
 	}
 

@@ -10,7 +10,7 @@ import (
 
 /* This file is exclusively for test fixtures. */
 
-var _ StateBackend = (*prePopulatedBackend)(nil)
+var _ stateBackend = (*prePopulatedBackend)(nil)
 
 // prePopulatedBackend is an offline-only backend used for testing.
 type prePopulatedBackend struct {
