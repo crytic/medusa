@@ -13,7 +13,6 @@ type MedusaStateFactory interface {
 
 var _ MedusaStateFactory = (*UnbackedStateFactory)(nil)
 var _ MedusaStateFactory = (*ForkedStateFactory)(nil)
-var _ MedusaStateFactory = (*GethStateFactory)(nil)
 
 // ForkedStateFactory is used to build StateDBs that are backed by a remote RPC
 type ForkedStateFactory struct {
@@ -40,12 +39,4 @@ func NewUnbackedStateFactory() *UnbackedStateFactory {
 func (f *UnbackedStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
 	remoteStateProvider := newRemoteStateProvider(EmptyBackend{})
 	return state.NewForkedStateDb(root, db, remoteStateProvider)
-}
-
-// GethStateFactory is used to build vanilla StateDBs that perfectly reproduce geth's statedb behavior. Only intended
-// to be used for differential testing against the unbacked state factory.
-type GethStateFactory struct{}
-
-func (f *GethStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
-	return state.New(root, db, nil)
 }

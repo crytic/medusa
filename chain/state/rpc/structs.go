@@ -3,7 +3,6 @@ package rpc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 )
 
 type PendingResult struct {
@@ -23,9 +22,6 @@ func (p *PendingResult) GetResultBlocking(result interface{}) error {
 			return p.request.Error
 		} else {
 			err := json.Unmarshal(p.request.Result, result)
-			if err != nil {
-				fmt.Sprintf("hi")
-			}
 			return err
 		}
 	case <-p.request.Context.Done():

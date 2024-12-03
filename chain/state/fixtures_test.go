@@ -1,8 +1,11 @@
 package state
 
 import (
+	types2 "github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 /* This file is exclusively for test fixtures. */
@@ -121,4 +124,25 @@ func newPrePopulatedBackendFixture() *prepopulatedBackendFixture {
 		StateObjectEmpty:           stateObjectEmpty,
 		StateObjectEmptyAddress:    emptyAddress,
 	}
+}
+
+// verifyAgainstState is used by the test suite to verify the statedb is pulling fields from the
+// prepopulated fixture
+func (p *prepopulatedBackendFixture) verifyAgainstState(t *testing.T, stateDb types2.MedusaStateDB) {
+	checkAccountAgainstFixture(t, stateDb, p.StateObjectContractAddress, p.StateObjectContract)
+	checkAccountAgainstFixture(t, stateDb, p.StateObjectEOAAddress, p.StateObjectEOA)
+	checkAccountAgainstFixture(t, stateDb, p.StateObjectEmptyAddress, p.StateObjectEmpty)
+}
+
+// checkAccountAgainstFixture is used by the test suite to verify an account in the stateDB matches the provided fixture
+func checkAccountAgainstFixture(t *testing.T, stateDb types2.MedusaStateDB, addr common.Address, fixture remoteStateObject) {
+	bal := stateDb.GetBalance(addr)
+	assert.NoError(t, stateDb.Error())
+	assert.EqualValues(t, bal, fixture.Balance)
+	nonce := stateDb.GetNonce(addr)
+	assert.NoError(t, stateDb.Error())
+	assert.EqualValues(t, nonce, fixture.Nonce)
+	code := stateDb.GetCode(addr)
+	assert.NoError(t, stateDb.Error())
+	assert.EqualValues(t, code, fixture.Code)
 }

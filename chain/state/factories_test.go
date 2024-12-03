@@ -31,21 +31,7 @@ func TestForkedStateDB(t *testing.T) {
 	assert.True(t, stateDb1.Exist(fixture.StateObjectEOAAddress))
 	assert.False(t, stateDb1.Exist(fixture.StateObjectEmptyAddress))
 
-	checkAccountAgainstFixture := func(stateDb types2.MedusaStateDB, addr common.Address, fixture remoteStateObject) {
-		bal := stateDb.GetBalance(addr)
-		assert.NoError(t, stateDb.Error())
-		assert.EqualValues(t, bal, fixture.Balance)
-		nonce := stateDb.GetNonce(addr)
-		assert.NoError(t, stateDb.Error())
-		assert.EqualValues(t, nonce, fixture.Nonce)
-		code := stateDb.GetCode(addr)
-		assert.NoError(t, stateDb.Error())
-		assert.EqualValues(t, code, fixture.Code)
-	}
-
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectContractAddress, fixture.StateObjectContract)
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectEOAAddress, fixture.StateObjectEOA)
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectEmptyAddress, fixture.StateObjectEmpty)
+	fixture.verifyAgainstState(t, stateDb1)
 
 	/* write some new data and make sure it's readable */
 	newAccount := common.BytesToAddress([]byte{1, 2, 3, 4, 5, 6})
@@ -59,14 +45,12 @@ func TestForkedStateDB(t *testing.T) {
 	assert.True(t, stateDb1.Exist(newAccount))
 	stateDb1.SetCode(newAccount, newAccountData.Code)
 	stateDb1.SetBalance(newAccount, newAccountData.Balance, tracing.BalanceChangeUnspecified)
-	checkAccountAgainstFixture(stateDb1, newAccount, newAccountData)
+	checkAccountAgainstFixture(t, stateDb1, newAccount, newAccountData)
 
 	/* roll back to snapshot, ensure fork data still queryable and newly added data was purged */
 	stateDb1.Snapshot()
 	stateDb1.RevertToSnapshot(genesisSnap)
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectContractAddress, fixture.StateObjectContract)
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectEOAAddress, fixture.StateObjectEOA)
-	checkAccountAgainstFixture(stateDb1, fixture.StateObjectEmptyAddress, fixture.StateObjectEmpty)
+	fixture.verifyAgainstState(t, stateDb1)
 	assert.False(t, stateDb1.Exist(newAccount))
 
 	/* now we want to test to verify our fork-populated data is being persisted */
@@ -75,9 +59,7 @@ func TestForkedStateDB(t *testing.T) {
 	stateDb2, err := factory.New(root, cachingDb)
 	assert.NoError(t, err)
 
-	checkAccountAgainstFixture(stateDb2, fixture.StateObjectContractAddress, fixture.StateObjectContract)
-	checkAccountAgainstFixture(stateDb2, fixture.StateObjectEOAAddress, fixture.StateObjectEOA)
-	checkAccountAgainstFixture(stateDb2, fixture.StateObjectEmptyAddress, fixture.StateObjectEmpty)
+	fixture.verifyAgainstState(t, stateDb2)
 }
 
 /*
@@ -89,11 +71,175 @@ func TestForkedStateFactory(t *testing.T) {
 	fixture := newPrePopulatedBackendFixture()
 	factory := NewForkedStateFactory(fixture.Backend)
 
-	db1 := rawdb.NewMemoryDatabase()
-	tdb1 := triedb.NewDatabase(db1, nil)
-	cachingDb1 := gethstate.NewDatabaseWithNodeDB(db1, tdb1)
-
-	stateDb1, err := factory.New(types.EmptyRootHash, cachingDb1)
+	stateDb1, err := createEmptyStateDb(factory)
 	assert.NoError(t, err)
-	_ = stateDb1
+	stateDb1.Snapshot()
+
+	stateDb2, err := createEmptyStateDb(factory)
+	assert.NoError(t, err)
+	stateDb2.Snapshot()
+
+	/* naive check to ensure they're both pulling from the same remote */
+	fixture.verifyAgainstState(t, stateDb1)
+	fixture.verifyAgainstState(t, stateDb2)
+
+	// snapshot and roll em back
+	stateDb1.Snapshot()
+	stateDb2.Snapshot()
+	stateDb1.RevertToSnapshot(0)
+	stateDb2.RevertToSnapshot(0)
+
+	/* now we'll mutate a cold account in one stateDB and ensure the mutation doesn't propagate */
+	valueAdded := uint256.NewInt(100)
+	expectedSum := uint256.NewInt(0).Add(fixture.StateObjectEOA.Balance, valueAdded)
+	stateDb1.AddBalance(fixture.StateObjectEOAAddress, valueAdded, tracing.BalanceChangeUnspecified)
+	bal := stateDb1.GetBalance(fixture.StateObjectEOAAddress)
+	assert.Equal(t, expectedSum, bal)
+
+	// check the other statedb
+	bal = stateDb2.GetBalance(fixture.StateObjectEOAAddress)
+	assert.Equal(t, bal, fixture.StateObjectEOA.Balance)
+
+	// just in case there's some weird pointer issue that was introduced, create a new stateDB and check it as well
+	stateDb3, err := createEmptyStateDb(factory)
+	assert.NoError(t, err)
+	bal = stateDb3.GetBalance(fixture.StateObjectEOAAddress)
+	assert.Equal(t, bal, fixture.StateObjectEOA.Balance)
+
+	/*
+		now we'll emulate one stateDB obtaining a new piece of data from RPC and ensuring the other stateDB loads
+		the same data
+	*/
+	newAccount := common.BytesToAddress([]byte{1, 2, 3, 4, 5, 6})
+	slotKey := common.BytesToHash([]byte{5, 5, 5, 5, 5, 5, 5})
+	slotData := common.BytesToHash([]byte{6, 6, 6, 6, 6, 6, 6})
+
+	fixture.Backend.SetStorageAt(newAccount, slotKey, slotData)
+	data := stateDb1.GetState(newAccount, slotKey)
+	assert.EqualValues(t, slotData, data)
+
+	// do it again with a fresh stateDB
+	stateDb4, err := createEmptyStateDb(factory)
+	assert.NoError(t, err)
+	data = stateDb4.GetState(newAccount, slotKey)
+	assert.EqualValues(t, slotData, data)
+}
+
+/*
+TestEmptyBackendFactoryDifferential tests the differential properties between a stateDB using an empty forked backend
+versus directly using geth's statedb.
+*/
+func TestEmptyBackendFactoryDifferential(t *testing.T) {
+	gethFactory := &gethStateFactory{}
+	unbackedFactory := NewUnbackedStateFactory()
+
+	gethStateDb, err := createEmptyStateDb(gethFactory)
+	assert.NoError(t, err)
+
+	unbackedStateDb, err := createEmptyStateDb(unbackedFactory)
+	assert.NoError(t, err)
+
+	/* start with existence/empty of an existing object. should be identical. */
+	addr := common.BytesToAddress([]byte{1})
+	gethStateDb.SetNonce(addr, 5)
+	unbackedStateDb.SetNonce(addr, 5)
+	assert.EqualValues(t, gethStateDb.Exist(addr), unbackedStateDb.Exist(addr))
+	assert.EqualValues(t, gethStateDb.Empty(addr), unbackedStateDb.Empty(addr))
+
+	/* existence/empty of a non-existing object, should be identical. */
+	nonExistentStateObjAddr := common.BytesToAddress([]byte{5, 5, 5, 5, 5})
+	assert.EqualValues(t, gethStateDb.Exist(nonExistentStateObjAddr), unbackedStateDb.Exist(nonExistentStateObjAddr))
+	assert.EqualValues(t, gethStateDb.Empty(nonExistentStateObjAddr), unbackedStateDb.Empty(nonExistentStateObjAddr))
+
+	emptyStateObjectAddr := common.BytesToAddress([]byte{6, 7, 8, 9, 10})
+	value := uint256.NewInt(5000)
+	gethStateDb.SetBalance(emptyStateObjectAddr, value, tracing.BalanceChangeUnspecified)
+	unbackedStateDb.SetBalance(emptyStateObjectAddr, value, tracing.BalanceChangeUnspecified)
+
+	/* existence/empty of an empty object, should be identical. */
+	gethStateDb.SubBalance(emptyStateObjectAddr, value, tracing.BalanceChangeUnspecified)
+	unbackedStateDb.SubBalance(emptyStateObjectAddr, value, tracing.BalanceChangeUnspecified)
+	assert.EqualValues(t, gethStateDb.Exist(emptyStateObjectAddr), unbackedStateDb.Exist(emptyStateObjectAddr))
+	assert.EqualValues(t, gethStateDb.Empty(emptyStateObjectAddr), unbackedStateDb.Empty(emptyStateObjectAddr))
+}
+
+/*
+TestForkedBackendDifferential tests the differential properties between a stateDB using a forked backend
+versus directly using geth's statedb. Consider this test a canonical definition of how our forked stateDB acts
+differently from geth's.
+Good place for future fuzz testing if we run into issues.
+*/
+func TestForkedBackendDifferential(t *testing.T) {
+	fixture := newPrePopulatedBackendFixture()
+	factory := NewForkedStateFactory(fixture.Backend)
+	forkedStateDb, err := createEmptyStateDb(factory)
+	assert.NoError(t, err)
+
+	gethFactory := &gethStateFactory{}
+	gethStateDb, err := createEmptyStateDb(gethFactory)
+	assert.NoError(t, err)
+
+	// modify the geth statedb to reflect the fixture's different accounts
+	// contract
+	gethStateDb.SetBalance(
+		fixture.StateObjectContractAddress,
+		fixture.StateObjectContract.Balance,
+		tracing.BalanceChangeUnspecified)
+	gethStateDb.SetNonce(fixture.StateObjectContractAddress, fixture.StateObjectContract.Nonce)
+	gethStateDb.SetCode(fixture.StateObjectContractAddress, fixture.StateObjectContract.Code)
+	// eoa
+	gethStateDb.SetBalance(
+		fixture.StateObjectEOAAddress,
+		fixture.StateObjectEOA.Balance,
+		tracing.BalanceChangeUnspecified)
+	gethStateDb.SetNonce(fixture.StateObjectEOAAddress, fixture.StateObjectEOA.Nonce)
+	// do not set the empty account. On a live geth node, the empty account will be pruned.
+
+	// check exist/empty equivalence for the contract account
+	assert.EqualValues(
+		t,
+		gethStateDb.Exist(fixture.StateObjectContractAddress),
+		forkedStateDb.Exist(fixture.StateObjectContractAddress))
+	assert.EqualValues(
+		t,
+		gethStateDb.Empty(fixture.StateObjectContractAddress),
+		forkedStateDb.Empty(fixture.StateObjectContractAddress))
+
+	// check exist/empty equivalence for the eoa account
+	assert.EqualValues(
+		t,
+		gethStateDb.Exist(fixture.StateObjectEOAAddress),
+		forkedStateDb.Exist(fixture.StateObjectEOAAddress))
+	assert.EqualValues(
+		t,
+		gethStateDb.Empty(fixture.StateObjectEOAAddress),
+		forkedStateDb.Empty(fixture.StateObjectEOAAddress))
+
+	// check exist/empty equivalence for the empty account
+	assert.EqualValues(
+		t,
+		gethStateDb.Empty(fixture.StateObjectEmptyAddress),
+		forkedStateDb.Empty(fixture.StateObjectEmptyAddress))
+	// note how this is _not_ EqualValues. As far as we know, this is the only place where the forked state provider
+	// diverges from geth's behavior.
+	assert.NotEqualValues(
+		t,
+		gethStateDb.Exist(fixture.StateObjectEmptyAddress),
+		forkedStateDb.Exist(fixture.StateObjectEmptyAddress))
+}
+
+// createEmptyStateDb creates an empty stateDB using the provided factory. Intended for tests only.
+func createEmptyStateDb(factory MedusaStateFactory) (types2.MedusaStateDB, error) {
+	db := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db, nil)
+	cachingDb := gethstate.NewDatabaseWithNodeDB(db, tdb)
+	return factory.New(types.EmptyRootHash, cachingDb)
+}
+
+// GethStateFactory is used to build vanilla StateDBs that perfectly reproduce geth's statedb behavior. Only intended
+// to be used for differential testing against the unbacked state factory.
+type gethStateFactory struct{}
+
+func (f *gethStateFactory) New(root common.Hash, db gethstate.Database) (types2.MedusaStateDB, error) {
+	return gethstate.New(root, db, nil)
 }
