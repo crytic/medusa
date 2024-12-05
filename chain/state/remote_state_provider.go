@@ -65,7 +65,7 @@ func (s *RemoteStateProvider) ImportStateObject(
 
 	bal, nonce, code, err := s.stateBackend.GetStateObject(addr)
 	if err == nil {
-		s.recordImportedStateObject(addr, snapId)
+		s.recordDirtyStateObject(addr, snapId)
 		return bal, nonce, code, nil
 	} else {
 		return uint256.NewInt(0), 0, nil, &gethState.RemoteStateError{
@@ -113,7 +113,7 @@ func (s *RemoteStateProvider) ImportStorageAt(
 	}
 	data, err := s.stateBackend.GetStorageAt(addr, slot)
 	if err == nil {
-		s.recordImportedStateSlot(addr, slot, snapId)
+		s.recordDirtyStateSlot(addr, slot, snapId)
 		return data, nil
 	} else {
 		return common.Hash{}, &gethState.RemoteStorageError{
@@ -129,7 +129,7 @@ As long as the snapshot indicated by snapId is not reverted, the provider will n
 called for the slot in the future.
 */
 func (s *RemoteStateProvider) MarkSlotWritten(addr common.Address, slot common.Hash, snapId int) {
-	s.recordImportedStateSlot(addr, slot, snapId)
+	s.recordDirtyStateSlot(addr, slot, snapId)
 }
 
 /*
@@ -205,7 +205,7 @@ func (s *RemoteStateProvider) isStateSlotImported(addr common.Address, slot comm
 	}
 }
 
-func (s *RemoteStateProvider) recordImportedStateObject(addr common.Address, snapId int) {
+func (s *RemoteStateProvider) recordDirtyStateObject(addr common.Address, snapId int) {
 	s.stateObjsImported[addr] = struct{}{}
 	if _, ok := s.stateObjBySnapshot[snapId]; !ok {
 		s.stateObjBySnapshot[snapId] = make([]common.Address, 0)
@@ -213,10 +213,17 @@ func (s *RemoteStateProvider) recordImportedStateObject(addr common.Address, sna
 	s.stateObjBySnapshot[snapId] = append(s.stateObjBySnapshot[snapId], addr)
 }
 
-func (s *RemoteStateProvider) recordImportedStateSlot(addr common.Address, slot common.Hash, snapId int) {
+func (s *RemoteStateProvider) recordDirtyStateSlot(addr common.Address, slot common.Hash, snapId int) {
 	if _, ok := s.stateSlotsImported[addr]; !ok {
 		s.stateSlotsImported[addr] = make(map[common.Hash]struct{})
 	}
+	// If this slot has already been marked dirty, we don't want to do it again or overwrite the old snapId.
+	// We only want to track the oldest snapId that made a slot dirty, since that is the only snapId that should
+	// change the RemoteStateProvider's import behavior if reverted.
+	if _, exists := s.stateSlotsImported[addr][slot]; exists {
+		return
+	}
+
 	s.stateSlotsImported[addr][slot] = struct{}{}
 	if _, ok := s.stateSlotBySnapshot[snapId]; !ok {
 		s.stateSlotBySnapshot[snapId] = make(map[common.Address][]common.Hash)
@@ -224,6 +231,7 @@ func (s *RemoteStateProvider) recordImportedStateSlot(addr common.Address, slot 
 	if _, ok := s.stateSlotBySnapshot[snapId][addr]; !ok {
 		s.stateSlotBySnapshot[snapId][addr] = make([]common.Hash, 0)
 	}
+
 	s.stateSlotBySnapshot[snapId][addr] = append(s.stateSlotBySnapshot[snapId][addr], slot)
 }
 

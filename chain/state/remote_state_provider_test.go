@@ -99,6 +99,39 @@ func TestRemoteStateProvider_MarkSlotWritten(t *testing.T) {
 	stateProvider.NotifyRevertedToSnapshot(snapId - 1)
 	_, err = stateProvider.ImportStorageAt(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, snapId)
 	assert.Nil(t, err)
+
+	/*
+		If a slot is written to twice in two successive snapshots, reverting one of the snapshots should not make the
+		value readable from the remoteStateProvider.
+	*/
+	initSnapId := snapId - 2
+	stateProvider.NotifyRevertedToSnapshot(initSnapId)
+	_, err = stateProvider.ImportStorageAt(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, initSnapId)
+	assert.Nil(t, err)
+
+	// first write
+	stateProvider.MarkSlotWritten(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, initSnapId)
+	_, err = stateProvider.ImportStorageAt(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, initSnapId)
+	assert.NotNil(t, err)
+	assert.Error(t, err.Error)
+	assert.True(t, err.CannotQueryDirtySlot)
+
+	// second write
+	secondSnapId := initSnapId + 1
+	stateProvider.MarkSlotWritten(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, secondSnapId)
+	_, err = stateProvider.ImportStorageAt(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, secondSnapId)
+	assert.NotNil(t, err)
+	assert.Error(t, err.Error)
+	assert.True(t, err.CannotQueryDirtySlot)
+
+	// revert to initSnapId
+	stateProvider.NotifyRevertedToSnapshot(initSnapId)
+
+	// ensure it's still dirty
+	_, err = stateProvider.ImportStorageAt(fixture.StateObjectContractAddress, fixture.StorageSlotPopulatedKey, initSnapId)
+	assert.NotNil(t, err)
+	assert.Error(t, err.Error)
+	assert.True(t, err.CannotQueryDirtySlot)
 }
 
 func TestRemoteStateProvider_MarkContractDeployed(t *testing.T) {
