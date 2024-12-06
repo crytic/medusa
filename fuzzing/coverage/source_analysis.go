@@ -289,11 +289,12 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.InitBytecode, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.InitBytecode, initCoverageMapData, true)
+				// err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.RuntimeBytecode, initCoverageMapData, true)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, /*runtimeInstructionMarkersLookup,*/ contract.RuntimeBytecode, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, /*runtimeInstructionMarkersLookup,*/ contract.RuntimeBytecode, runtimeCoverageMapData, false)
 				if err != nil {
 					return nil, err
 				}
@@ -307,10 +308,10 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, /*instructionMarkersLookup map[int][]uint64,*/ bytecode []byte, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, /*instructionMarkersLookup map[int][]uint64,*/ bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
 	if len(bytecode) == 0 { return nil } // TODO
 	if contractCoverageData == nil { return nil } // TODO
-	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode)
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
 	if succHitCounts == nil {
 		fmt.Println("weird err")
 		return nil
@@ -386,7 +387,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 	return nil
 }
 
-func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []uint) {
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 	jumpIndices := getJumpIndices(bytecode, indexToOffset)
 	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset) // btw 0 should always go here, and the ones after jmps
@@ -411,6 +412,8 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []
 	successfulHits := make([]uint, len(indexToOffset))
 	revertedHits := make([]uint, len(indexToOffset))
 
+	markersUsed := map[uint64]bool{}
+
 	hit := uint(0)
 	fmt.Println("------------------------------------ begin ---------------------------------------------")
 	for idx, pc := range indexToOffset {
@@ -419,41 +422,73 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []
 			fmt.Println("jump", "hit", hit, "idx", idx, "op", bytecode[pc])
 			for _, marker := range jumpToMarkers[idx] {
 				hit += execFlags[marker]
+				markersUsed[marker] = true
 				if execFlags[marker] > 0 { fmt.Println("positive jump marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
 			}
 		} else if jumpDestIndices[idx] { // TODO is this "else" correct?
-			hit = uint(0) // TODO correct?
+			if idx > 0 && jumpIndices[idx-1] {
+				hit = uint(0) // TODO correct?
+			}
 			fmt.Println("jumpdest", "hit", hit, "idx", idx, "op", bytecode[pc])
 			for _, marker := range jumpDestToMarkers[idx] {
 				hit += execFlags[marker]
+				markersUsed[marker] = true
 				if execFlags[marker] > 0 { fmt.Println("positive jumpdest marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
 			}
 		}
 
 		hit += execFlags[uint64(pc)] // special case for when we just start out, TODO make this nicer, also TODO this gets triple counted
+		markersUsed[uint64(pc)] = true
 		if execFlags[uint64(pc)] > 0 { fmt.Println("positive zero", "adding", execFlags[uint64(pc)], "hit", hit, "idx", idx) }
 
 		subtractOff := execFlags[pcToRevertMarker[idx]]
+		markersUsed[pcToRevertMarker[idx]] = true
 		if subtractOff > 0 { fmt.Println("positive subtractoff", "so", subtractOff, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
 		if subtractOff > hit { // TODO if it's > that means we coded smth wrong
-			fmt.Println("BAD CASE 1")
+			fmt.Println("BAD CASE 1", isInit)
 		}
 		hit -= subtractOff
 
 		successfulHits[idx] = hit
 		revertedHits[idx] = execFlags[pcToRevertMarker[idx]]
-	
+
 		subtractOff2 := execFlags[pcToReturnMarker[idx]]
+		markersUsed[pcToReturnMarker[idx]] = true
 		if subtractOff2 > 0 { fmt.Println("positive subtractoff2", "so2", subtractOff2, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
 		if subtractOff2 > hit { // TODO if it's > that means we coded smth wrong
-			fmt.Println("BAD CASE 2")
+			fmt.Println("BAD CASE 2", isInit)
 		}
 		hit -= subtractOff2
 
 		if jumpIndices[idx] {
 			hit = uint(0)
-			hit += execFlags[uint64(pc)] // TODO lol
+			hit += execFlags[uint64(pc)] // TODO this almost definitely should be removed
 		}
+	}
+
+	isAligned := map[int]bool{}
+	for _, pc := range indexToOffset {
+		isAligned[pc] = true
+	}
+	noUnused := true
+	for k, v := range execFlags {
+		if !markersUsed[k] {
+			a := bits.RotateLeft64(k, 32) & 0xFFFFFFFF
+			b := k & 0xFFFFFFFF
+			bca := "NA"
+			if a < uint64(len(bytecode)) {
+				bca = fmt.Sprintf("%d", int(bytecode[a]))
+			}
+			bcb := "NA"
+			if b < uint64(len(bytecode)) {
+				bcb = fmt.Sprintf("%d", int(bytecode[b]))
+			}
+			noUnused = false
+			fmt.Println("UNUSED MARKER", "k", k, "a", a, "b", b, "v", v, "bca", bca, "bcb", bcb, "isaligned a", isAligned[int(a)], "isaligned b", isAligned[int(b)], "isInit", isInit, "lenbc", len(bytecode))
+		}
+	}
+	if noUnused {
+		fmt.Println("ALL MARKERS USED", isInit)
 	}
 
 	return successfulHits, revertedHits

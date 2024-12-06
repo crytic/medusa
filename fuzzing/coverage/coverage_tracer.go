@@ -172,6 +172,9 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	if isTopLevelFrame {
 		// Update the final coverage map if this is the top level call frame
 		_, _, coverageUpdateErr = t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+		// just added; TODO
+		t.callFrameStates = t.callFrameStates[:t.callDepth]
+		t.callDepth--
 	} else {
 		// Move coverage up one call frame
 		_, _, coverageUpdateErr = t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
@@ -221,12 +224,17 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 
 		// Obtain our contract coverage map lookup hash.
 		if callFrameState.lookupHash == nil {
-			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-			if !cacheHit {
-				lookupHash = getContractCoverageMapHash(code, isCreate)
-				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+			if isCreate { // TODO
+				lookupHash := getContractCoverageMapHash(code, isCreate)
+				callFrameState.lookupHash = &lookupHash
+			} else {
+				lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+				if !cacheHit {
+					lookupHash = getContractCoverageMapHash(code, isCreate)
+					t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+				}
+				callFrameState.lookupHash = &lookupHash
 			}
-			callFrameState.lookupHash = &lookupHash
 		}
 
 		// Record coverage for this location in our map.
@@ -271,16 +279,25 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		cacheArrayKey = 0
 	}
 
+	if marker == 2027224566372 || marker == 725849473960 {
+		fmt.Println("FOUND IT", "marker", marker, "pc", pc, "pos", pos, "op", op, "bclen", len(scope.(*vm.ScopeContext).Contract.Code), "code at pc", scope.(*vm.ScopeContext).Contract.Code[pc], "code at pos", scope.(*vm.ScopeContext).Contract.Code[pos], "lookupHash", callFrameState.lookupHash, "isCreate", isCreate, "current hash", getContractCoverageMapHash(code, isCreate))
+	}
+
 	// TODO used to have a codeSize > 0 check here
 
 	// Obtain our contract coverage map lookup hash.
 	if callFrameState.lookupHash == nil {
-		lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-		if !cacheHit {
-			lookupHash = getContractCoverageMapHash(code, isCreate)
-			t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+		if isCreate { // TODO
+			lookupHash := getContractCoverageMapHash(code, isCreate)
+			callFrameState.lookupHash = &lookupHash
+		} else {
+			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+			if !cacheHit {
+				lookupHash = getContractCoverageMapHash(code, isCreate)
+				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+			}
+			callFrameState.lookupHash = &lookupHash
 		}
-		callFrameState.lookupHash = &lookupHash
 	}
 
 	// Record coverage for this location in our map.

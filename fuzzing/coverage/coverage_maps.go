@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
+	"fmt"
+	"bytes"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -83,14 +85,23 @@ func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
 		if metadata != nil {
 			metadataHash := metadata.ExtractBytecodeHash()
 			if metadataHash != nil {
-				return common.BytesToHash(metadataHash)
+				hash := common.BytesToHash(metadataHash)
+				fmt.Println("CALCULATING FOR RUNTIME", hash)
+				return hash
 			}
 		}
 	}
 
 	// Otherwise, we use the hash of the bytecode after attempting to strip metadata (and constructor args).
 	strippedBytecode := compilationTypes.RemoveContractMetadata(bytecode)
-	return crypto.Keccak256Hash(strippedBytecode)
+	hash := crypto.Keccak256Hash(strippedBytecode)
+	if init {
+		hash[0] = hash[0] ^ 1
+		fmt.Println("CALCULATING FOR INIT", "hash", hash, "strippedBytecode==bytecode", bytes.Equal(strippedBytecode, bytecode), "len(stripped)", len(strippedBytecode), "len(bytecode)", len(bytecode))
+	} else {
+		fmt.Println("CALCULATING FOR RUNTIME", "hash", hash, "strippedBytecode==bytecode", bytes.Equal(strippedBytecode, bytecode), "len(stripped)", len(strippedBytecode), "len(bytecode)", len(bytecode))
+	}
+	return hash
 }
 
 // GetContractCoverageMap obtains a total coverage map representing coverage for the provided bytecode.
