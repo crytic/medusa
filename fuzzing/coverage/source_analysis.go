@@ -313,13 +313,12 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 	if contractCoverageData == nil { return nil } // TODO
 	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
 	if succHitCounts == nil {
-		fmt.Println("weird err")
+		fmt.Println("weird err") // TODO
 		return nil
 	}
 
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
-		//fmt.Println(idx, sourceMapElement.Index, len(succHitCounts), len(bytecode))
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
 		// relevance to the coverage map, so we skip it.
 		if sourceMapElement.SourceUnitID == -1 {
@@ -395,55 +394,31 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 	jumpDestToMarkers := getJumpDestToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
 	pcToRevertMarker := getRevertMarkers(indexToOffset)
 	pcToReturnMarker := getReturnMarkers(indexToOffset)
-	// interestingIndices := getInterestingIndices(indexToOffset, jumpIndices, jumpDestIndices, pcToRevertMarker, pcToReturnMarker, cm.successfulCoverage.executedFlags)
 
-	//fmt.Println(jumpIndices)
-	//fmt.Println(jumpDestIndices)
-
-	execFlags := cm.successfulCoverage.executedFlags
-	//fmt.Println("-------------------")
-	//for k, v := range execFlags {
-	//	fmt.Println(bits.RotateLeft64(k, 32) & 0xFFFFFFFF, k & 0xFFFFFFFF, v)
-	//}
-	//fmt.Println("===================")
-
-	// panic("")
+	execFlags := cm.coverage.executedFlags
 
 	successfulHits := make([]uint, len(indexToOffset))
 	revertedHits := make([]uint, len(indexToOffset))
 
-	markersUsed := map[uint64]bool{}
-
 	hit := uint(0)
-	fmt.Println("------------------------------------ begin ---------------------------------------------")
 	for idx, pc := range indexToOffset {
 		if jumpIndices[idx] {
-			hit = uint(0) // TODO correct?
-			fmt.Println("jump", "hit", hit, "idx", idx, "op", bytecode[pc])
+			hit = uint(0)
 			for _, marker := range jumpToMarkers[idx] {
 				hit += execFlags[marker]
-				markersUsed[marker] = true
-				if execFlags[marker] > 0 { fmt.Println("positive jump marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
 			}
-		} else if jumpDestIndices[idx] { // TODO is this "else" correct?
+		} else if jumpDestIndices[idx] {
 			if idx > 0 && jumpIndices[idx-1] {
-				hit = uint(0) // TODO correct?
+				hit = uint(0)
 			}
-			fmt.Println("jumpdest", "hit", hit, "idx", idx, "op", bytecode[pc])
 			for _, marker := range jumpDestToMarkers[idx] {
 				hit += execFlags[marker]
-				markersUsed[marker] = true
-				if execFlags[marker] > 0 { fmt.Println("positive jumpdest marker", "adding", execFlags[marker], "hit", hit, "idx", idx) }
 			}
 		}
 
 		hit += execFlags[uint64(pc)] // special case for when we just start out, TODO make this nicer, also TODO this gets triple counted
-		markersUsed[uint64(pc)] = true
-		if execFlags[uint64(pc)] > 0 { fmt.Println("positive zero", "adding", execFlags[uint64(pc)], "hit", hit, "idx", idx) }
 
 		subtractOff := execFlags[pcToRevertMarker[idx]]
-		markersUsed[pcToRevertMarker[idx]] = true
-		if subtractOff > 0 { fmt.Println("positive subtractoff", "so", subtractOff, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
 		if subtractOff > hit { // TODO if it's > that means we coded smth wrong
 			fmt.Println("BAD CASE 1", isInit)
 		}
@@ -452,9 +427,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 		successfulHits[idx] = hit
 		revertedHits[idx] = execFlags[pcToRevertMarker[idx]]
 
-		subtractOff2 := execFlags[pcToReturnMarker[idx]]
-		markersUsed[pcToReturnMarker[idx]] = true
-		if subtractOff2 > 0 { fmt.Println("positive subtractoff2", "so2", subtractOff2, "hit", hit, "idx", idx, "op", fmt.Sprintf("%x", bytecode[pc])) }
+		subtractOff2 := execFlags[pcToReturnMarker[idx]] // TODO rename
 		if subtractOff2 > hit { // TODO if it's > that means we coded smth wrong
 			fmt.Println("BAD CASE 2", isInit)
 		}
@@ -464,31 +437,6 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 			hit = uint(0)
 			hit += execFlags[uint64(pc)] // TODO this almost definitely should be removed
 		}
-	}
-
-	isAligned := map[int]bool{}
-	for _, pc := range indexToOffset {
-		isAligned[pc] = true
-	}
-	noUnused := true
-	for k, v := range execFlags {
-		if !markersUsed[k] {
-			a := bits.RotateLeft64(k, 32) & 0xFFFFFFFF
-			b := k & 0xFFFFFFFF
-			bca := "NA"
-			if a < uint64(len(bytecode)) {
-				bca = fmt.Sprintf("%d", int(bytecode[a]))
-			}
-			bcb := "NA"
-			if b < uint64(len(bytecode)) {
-				bcb = fmt.Sprintf("%d", int(bytecode[b]))
-			}
-			noUnused = false
-			fmt.Println("UNUSED MARKER", "k", k, "a", a, "b", b, "v", v, "bca", bca, "bcb", bcb, "isaligned a", isAligned[int(a)], "isaligned b", isAligned[int(b)], "isInit", isInit, "lenbc", len(bytecode))
-		}
-	}
-	if noUnused {
-		fmt.Println("ALL MARKERS USED", isInit)
 	}
 
 	return successfulHits, revertedHits
@@ -554,11 +502,9 @@ func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
 
 func getJumpToMarkers(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool) map[int][]uint64 {
 	markers := map[int][]uint64{}
-	// fmt.Println(jumpDestIndices)
 	for jmp, _ := range jumpIndices {
 		markersHere := make([]uint64, 0, len(jumpDestIndices))
 		for dst, _ := range jumpDestIndices {
-			// fmt.Println(indexToOffset, jmp, dst)
 			markersHere = append(markersHere, bits.RotateLeft64(uint64(indexToOffset[jmp]), 32) ^ uint64(indexToOffset[dst]))
 		}
 		markers[jmp] = markersHere

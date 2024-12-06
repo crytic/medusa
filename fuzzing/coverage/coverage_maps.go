@@ -5,8 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
-	"fmt"
-	"bytes"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -85,9 +83,7 @@ func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
 		if metadata != nil {
 			metadataHash := metadata.ExtractBytecodeHash()
 			if metadataHash != nil {
-				hash := common.BytesToHash(metadataHash)
-				fmt.Println("CALCULATING FOR RUNTIME", hash)
-				return hash
+				return common.BytesToHash(metadataHash)
 			}
 		}
 	}
@@ -97,9 +93,6 @@ func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
 	hash := crypto.Keccak256Hash(strippedBytecode)
 	if init {
 		hash[0] = hash[0] ^ 1
-		fmt.Println("CALCULATING FOR INIT", "hash", hash, "strippedBytecode==bytecode", bytes.Equal(strippedBytecode, bytecode), "len(stripped)", len(strippedBytecode), "len(bytecode)", len(bytecode))
-	} else {
-		fmt.Println("CALCULATING FOR RUNTIME", "hash", hash, "strippedBytecode==bytecode", bytes.Equal(strippedBytecode, bytecode), "len(stripped)", len(strippedBytecode), "len(bytecode)", len(bytecode))
 	}
 	return hash
 }
@@ -119,7 +112,7 @@ func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte, init bool) (*Con
 	if coverageByAddresses, ok := cm.maps[hash]; ok {
 		totalCoverage := newContractCoverageMap()
 		for _, coverage := range coverageByAddresses {
-			_, _, err := totalCoverage.update(coverage)
+			_, err := totalCoverage.update(coverage)
 			if err != nil {
 				return nil, err
 			}
@@ -132,10 +125,10 @@ func (cm *CoverageMaps) GetContractCoverageMap(bytecode []byte, init bool) (*Con
 
 // Update updates the current coverage maps with the provided ones.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one occurred.
-func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
+func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	// If our maps provided are nil, do nothing
 	if coverageMaps == nil {
-		return false, false, nil
+		return false, nil
 	}
 
 	// Acquire our thread lock and defer our unlocking for when we exit this method
@@ -143,8 +136,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 	defer cm.updateLock.Unlock()
 
 	// Create a boolean indicating whether we achieved new coverage
-	successCoverageChanged := false
-	revertedCoverageChanged := false
+	coverageChanged := false
 
 	// Loop for each coverage map provided
 	for codeHash, mapsByAddressToMerge := range coverageMaps.maps {
@@ -159,22 +151,20 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, bool, error) {
 			// If a coverage map for this address already exists in our current mapping, update it with the one
 			// to merge. If it doesn't exist, set it to the one to merge.
 			if existingCoverageMap, codeAddressExists := mapsByAddress[codeAddress]; codeAddressExists {
-				sChanged, rChanged, err := existingCoverageMap.update(coverageMapToMerge)
-				successCoverageChanged = successCoverageChanged || sChanged
-				revertedCoverageChanged = revertedCoverageChanged || rChanged
+				changed, err := existingCoverageMap.update(coverageMapToMerge)
+				coverageChanged = coverageChanged || changed
 				if err != nil {
-					return successCoverageChanged, revertedCoverageChanged, err
+					return coverageChanged, err
 				}
 			} else {
 				mapsByAddress[codeAddress] = coverageMapToMerge
-				successCoverageChanged = coverageMapToMerge.successfulCoverage != nil
-				revertedCoverageChanged = coverageMapToMerge.revertedCoverage != nil
+				coverageChanged = coverageMapToMerge.coverage != nil
 			}
 		}
 	}
 
 	// Return our results
-	return successCoverageChanged, revertedCoverageChanged, nil
+	return coverageChanged, nil
 }
 
 // UpdateAt updates the hit count of a given program counter location within code coverage data.
@@ -224,35 +214,8 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 	return addedNewMap || changedInMap, err
 }
 
-// RevertAll sets all coverage in the coverage map as reverted coverage. Reverted coverage is updated with successful
-// coverage, the successful coverage is cleared.
-// Returns a boolean indicating whether reverted coverage increased, and an error if one occurred.
-func (cm *CoverageMaps) RevertAll() (bool, error) {
-	// Acquire our thread lock and defer our unlocking for when we exit this method
-	cm.updateLock.Lock()
-	defer cm.updateLock.Unlock()
-
-	// Define a variable to track if our reverted coverage changed.
-	revertedCoverageChanged := false
-
-	// Loop for each coverage map provided
-	for _, mapsByAddressToMerge := range cm.maps {
-		for _, contractCoverageMap := range mapsByAddressToMerge {
-			// Update our reverted coverage with the (previously thought to be) successful coverage.
-			changed, err := contractCoverageMap.revertedCoverage.update(contractCoverageMap.successfulCoverage)
-			revertedCoverageChanged = revertedCoverageChanged || changed
-			if err != nil {
-				return revertedCoverageChanged, err
-			}
-
-			// Clear our successful coverage, as these maps were marked as reverted.
-			contractCoverageMap.successfulCoverage.Reset()
-		}
-	}
-	return revertedCoverageChanged, nil
-}
-
 // UniquePCs is a function that returns the total number of unique program counters (PCs)
+// TODO we probably want to remove this entirely
 func (cm *CoverageMaps) UniquePCs() uint64 {
 	uniquePCs := uint64(0)
 	// Iterate across each contract deployment
@@ -264,16 +227,16 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 			// Iterate across each PC in the successful coverage array
 			// We do not separately iterate over the reverted coverage array because if there is no data about a
 			// successful PC execution, then it is not possible for that PC to have ever reverted either
-			uniquePCs += uint64(len(contractCoverageMap.successfulCoverage.executedFlags))
+			uniquePCs += uint64(len(contractCoverageMap.coverage.executedFlags))
 
-			if contractCoverageMap.revertedCoverage.executedFlags != nil {
-				for i, hits := range contractCoverageMap.revertedCoverage.executedFlags {
-					// This is only executed if the PC was not executed successfully
-					if contractCoverageMap.successfulCoverage.executedFlags[i] == 0 && hits != 0 {
-						uniquePCs++
-					}
-				}
-			}
+			// if contractCoverageMap.revertedCoverage.executedFlags != nil {
+			// 	for i, hits := range contractCoverageMap.revertedCoverage.executedFlags {
+			// 		// This is only executed if the PC was not executed successfully
+			// 		if contractCoverageMap.successfulCoverage.executedFlags[i] == 0 && hits != 0 {
+			// 			uniquePCs++
+			// 		}
+			// 	}
+			// }
 		}
 	}
 	return uniquePCs
@@ -281,19 +244,14 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
 type ContractCoverageMap struct {
-	// successfulCoverage represents coverage for the contract bytecode, which did not encounter a revert and was
-	// deemed successful.
-	successfulCoverage *CoverageMapBytecodeData
-
-	// revertedCoverage represents coverage for the contract bytecode, which encountered a revert.
-	revertedCoverage *CoverageMapBytecodeData
+	// coverage represents coverage for the contract bytecode, TODO
+	coverage *CoverageMapBytecodeData
 }
 
 // newContractCoverageMap creates and returns a new ContractCoverageMap.
 func newContractCoverageMap() *ContractCoverageMap {
 	return &ContractCoverageMap{
-		successfulCoverage: &CoverageMapBytecodeData{},
-		revertedCoverage:   &CoverageMapBytecodeData{},
+		coverage: &CoverageMapBytecodeData{},
 	}
 }
 
@@ -301,25 +259,15 @@ func newContractCoverageMap() *ContractCoverageMap {
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	// Compare both our underlying bytecode coverage maps.
-	return cm.successfulCoverage.Equal(b.successfulCoverage) && cm.revertedCoverage.Equal(b.revertedCoverage)
+	return cm.coverage.Equal(b.coverage)
 }
 
 // update updates the current ContractCoverageMap with the provided one.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
-func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, bool, error) {
+func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
 	// Update our success coverage data
-	successfulCoverageChanged, err := cm.successfulCoverage.update(coverageMap.successfulCoverage)
-	if err != nil {
-		return false, false, err
-	}
-
-	// Update our reverted coverage data
-	revertedCoverageChanged, err := cm.revertedCoverage.update(coverageMap.revertedCoverage)
-	if err != nil {
-		return successfulCoverageChanged, false, err
-	}
-
-	return successfulCoverageChanged, revertedCoverageChanged, nil
+	coverageChanged, err := cm.coverage.update(coverageMap.coverage)
+	return coverageChanged, err
 }
 
 // updateCoveredAt updates the hit counter at a given program counter location within a ContractCoverageMap used for
@@ -327,7 +275,7 @@ func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, b
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
 func (cm *ContractCoverageMap) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
 	// Set our coverage data for the successful path.
-	return cm.successfulCoverage.updateCoveredAt(codeSize, pc)
+	return cm.coverage.updateCoveredAt(codeSize, pc)
 }
 
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
