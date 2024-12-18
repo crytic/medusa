@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/exp/slices"
-	"strings"
 )
 
 // CompiledContract represents a single contract unit from a smart contract compilation.
@@ -36,7 +37,6 @@ func (c *CompiledContract) IsMatch(initBytecode []byte, runtimeBytecode []byte) 
 	// Check if we can compare init and runtime bytecode
 	canCompareInit := len(initBytecode) > 0 && len(c.InitBytecode) > 0
 	canCompareRuntime := len(runtimeBytecode) > 0 && len(c.RuntimeBytecode) > 0
-
 	// First try matching runtime bytecode contract metadata.
 	if canCompareRuntime {
 		// First we try to match contracts with contract metadata embedded within the smart contract.

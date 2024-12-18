@@ -64,12 +64,12 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	assert.NoError(t, err)
 
 	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
 	for _, sender := range senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}

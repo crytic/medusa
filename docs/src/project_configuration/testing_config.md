@@ -59,9 +59,23 @@ contract MyContract {
 ### `traceAll`:
 
 - **Type**: Boolean
-- **Description**: Determines whether an [execution trace](TODO) should be attached to each element of a call sequence
+- **Description**: Determines whether an `execution trace` should be attached to each element of a call sequence
   that triggered a test failure.
 - **Default**: `false`
+
+### `targetFunctionSignatures`:
+
+- **Type**: [String]
+- **Description**: A list of function signatures that the fuzzer should exclusively target by omitting calls to other signatures. The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+  > **Note**: Property and optimization tests will always be called even if they are not explicitly specified in this list.
+- **Default**: `[]`
+
+### `excludeFunctionSignatures`:
+
+- **Type**: [String]
+- **Description**: A list of function signatures that the fuzzer should exclude from the fuzzing campaign. The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
+  > **Note**: Property and optimization tests will always be called and cannot be excluded.
+- **Default**: `[]`
 
 ## Assertion Testing Configuration
 
@@ -75,8 +89,6 @@ contract MyContract {
 
 - **Type**: Boolean
 - **Description**: Whether `pure` / `view` functions should be tested for assertion failures.
-  > 🚩 Fuzzing `pure` and `view` functions is not currently implemented. Thus, enabling this option to `true` does not
-  > update the fuzzer's behavior.
 - **Default**: `false`
 
 ### `panicCodeConfig`

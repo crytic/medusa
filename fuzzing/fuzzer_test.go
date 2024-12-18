@@ -2,10 +2,12 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"testing"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
@@ -36,7 +38,7 @@ func TestFuzzerHooks(t *testing.T) {
 				return existingSeqGenConfigFunc(fuzzer, valueSet, randomProvider)
 			}
 			existingChainSetupFunc := f.fuzzer.Hooks.ChainSetupFunc
-			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (error, *executiontracer.ExecutionTrace) {
+			f.fuzzer.Hooks.ChainSetupFunc = func(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
 				chainSetupOk = true
 				return existingChainSetupFunc(fuzzer, testChain)
 			}
@@ -73,6 +75,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_outofbounds_array_access.sol",
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
 		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
+		"testdata/contracts/assertions/assert_constant_method.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -88,6 +91,7 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
+				config.Fuzzing.Testing.AssertionTesting.TestViewMethods = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			},
@@ -247,7 +251,10 @@ func TestCheatCodes(t *testing.T) {
 
 				// enable assertion testing only
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
 			},
 			method: func(f *fuzzerTestContext) {
@@ -385,6 +392,29 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, false)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestDeploymentsWithPredeploy runs a test to ensure that predeployed contracts are instantiated correctly.
+func TestDeploymentsWithPredeploy(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, true)
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})
@@ -863,4 +893,126 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			assert.False(t, originalCoverage.Equal(newCoverage))
 		},
 	})
+}
+
+// TestTargetingFuncSignatures tests whether functions will be correctly whitelisted for testing
+func TestTargetingFuncSignatures(t *testing.T) {
+	targets := []string{"TestContract.f(), TestContract.g()"}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/filtering/target_and_exclude.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.TargetFunctionSignatures = targets
+		},
+		method: func(f *fuzzerTestContext) {
+			for _, contract := range f.fuzzer.ContractDefinitions() {
+				// The targets should be the only functions tested, excluding h and i
+				reflect.DeepEqual(contract.AssertionTestMethods, targets)
+
+				// ALL properties and optimizations should be tested
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
+			}
+		}})
+}
+
+// TestExcludeFunctionSignatures tests whether functions will be blacklisted/excluded for testing
+func TestExcludeFunctionSignatures(t *testing.T) {
+	excluded := []string{"TestContract.f(), TestContract.g()"}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/filtering/target_and_exclude.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.ExcludeFunctionSignatures = excluded
+		},
+		method: func(f *fuzzerTestContext) {
+			for _, contract := range f.fuzzer.ContractDefinitions() {
+				// Only h and i should be test since f and g are excluded
+				reflect.DeepEqual(contract.AssertionTestMethods, []string{"TestContract.h()", "TestContract.i()"})
+
+				// ALL properties and optimizations should be tested
+				reflect.DeepEqual(contract.PropertyTestMethods, []string{"TestContract.property_a()"})
+				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
+			}
+		}})
+}
+
+// TestExperimentalValueGeneration runs tests to ensure whether interesting values collected
+// during EVM execution is added to the base value set. In addition, it makes sure that the base value set is reset to
+// default after the end of each call sequence execution
+func TestExperimentalValueGeneration(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/valuegeneration_tracing/event_and_return_value_emission.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 500
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Workers = 1
+				config.Fuzzing.Testing.ExperimentalValueGenerationEnabled = true
+			},
+			method: func(f *fuzzerTestContext) {
+				valueSet := f.fuzzer.baseValueSet
+				expectedInts := []int{1, 2, 3, 4}
+				expectedStrings := []string{"another string", "string"}
+				expectedAddresses := []common.Address{common.HexToAddress("0x1234"), common.HexToAddress("0x5678")}
+				expectedByteArrays := [][]byte{[]byte("another byte array"), []byte("byte array"), []byte("word"), []byte("byte")}
+
+				f.fuzzer.Events.WorkerCreated.Subscribe(func(event FuzzerWorkerCreatedEvent) error {
+					// Wipe constants that were retrieved from AST so that we can test the capturing of values
+					event.Worker.valueSet = valuegeneration.NewValueSet()
+					event.Worker.Events.FuzzerWorkerChainSetup.Subscribe(func(event FuzzerWorkerChainSetupEvent) error {
+						event.Worker.chain.Events.PendingBlockAddedTx.Subscribe(func(event chain.PendingBlockAddedTxEvent) error {
+							if valueGenerationResults, ok := event.Block.MessageResults[event.TransactionIndex-1].AdditionalResults["ValueGenerationTracerResults"].([]any); ok {
+								f.fuzzer.workers[0].valueSet.Add(valueGenerationResults)
+								var contains bool
+
+								for _, intValue := range expectedInts {
+									contains = valueSet.ContainsInteger(big.NewInt(int64(intValue)))
+								}
+
+								for _, stringValue := range expectedStrings {
+									contains = valueSet.ContainsString(stringValue)
+								}
+
+								for _, addressValue := range expectedAddresses {
+									contains = valueSet.ContainsAddress(addressValue)
+								}
+
+								for _, byteArrayValue := range expectedByteArrays {
+									contains = valueSet.ContainsBytes(byteArrayValue)
+								}
+
+								assert.True(t, contains)
+							}
+							// just check if these values are added to value set
+							//msgResult[event.TransactionIndex].AdditionalResults
+							// make sure to use CallSequenceTested event to see if the base value set
+							// is reset at the end of each sequence
+							//fmt.Printf("MsgResult: %v\n", msgResult[event.TransactionIndex].AdditionalResults)
+							return nil
+						})
+						// This will make sure that the base value set is reset after the end of execution of each
+						// call sequence
+						event.Worker.Events.CallSequenceTested.Subscribe(func(event FuzzerWorkerCallSequenceTestedEvent) error {
+							sequenceValueSet := f.fuzzer.baseValueSet
+							assert.EqualValues(t, valueSet, sequenceValueSet)
+							return nil
+						})
+						return nil
+					})
+					return nil
+				})
+				err := f.fuzzer.Start()
+
+				assert.NoError(t, err)
+
+			},
+		})
+	}
 }
