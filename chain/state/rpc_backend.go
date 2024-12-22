@@ -18,6 +18,9 @@ type stateBackend interface {
 	GetStateObject(common.Address) (*uint256.Int, uint64, []byte, error)
 }
 
+var _ stateBackend = (*EmptyBackend)(nil)
+var _ stateBackend = (*RPCBackend)(nil)
+
 /*
 RPCBackend defines a stateBackend for fetching state from a remote RPC server. It is locked to a single block height,
 and caches data in-memory with no expiry.
@@ -27,8 +30,7 @@ type RPCBackend struct {
 	clientPool *rpc.ClientPool
 	height     string
 
-	slotCache        *object.SlotCacheThreadSafe
-	stateObjectCache *object.StateObjectCacheThreadSafe
+	cache object.StateCache
 }
 
 func NewRPCBackend(
@@ -41,12 +43,41 @@ func NewRPCBackend(
 		return nil, err
 	}
 
+	cache, err := object.NewPersistentCache(ctx, url, height)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RPCBackend{
-		context:          ctx,
-		clientPool:       clientPool,
-		height:           hexutil.Uint64(height).String(),
-		slotCache:        object.NewSlotCache(),
-		stateObjectCache: object.NewStateObjectCache(),
+		context:    ctx,
+		clientPool: clientPool,
+		height:     hexutil.Uint64(height).String(),
+		cache:      cache,
+	}, nil
+}
+
+// newRPCBackendNoPersistence creates a new RPC backend that will not persist its cache to disk. used for tests.
+// nolint:unused
+func newRPCBackendNoPersistence(
+	ctx context.Context,
+	url string,
+	height uint64,
+	poolSize uint) (*RPCBackend, error) {
+	clientPool, err := rpc.NewClientPool(url, poolSize)
+	if err != nil {
+		return nil, err
+	}
+
+	cache, err := object.NewNonPersistentCache()
+	if err != nil {
+		return nil, err
+	}
+
+	return &RPCBackend{
+		context:    ctx,
+		clientPool: clientPool,
+		height:     hexutil.Uint64(height).String(),
+		cache:      cache,
 	}, nil
 }
 
@@ -57,7 +88,7 @@ contracts.
 Errors may be network errors or a context cancelled error when the fuzzer is shutting down.
 */
 func (q *RPCBackend) GetStorageAt(addr common.Address, slot common.Hash) (common.Hash, error) {
-	data, err := q.slotCache.GetSlotData(addr, slot)
+	data, err := q.cache.GetSlotData(addr, slot)
 	if err == nil {
 		return data, nil
 	} else {
@@ -68,8 +99,8 @@ func (q *RPCBackend) GetStorageAt(addr common.Address, slot common.Hash) (common
 			return common.Hash{}, err
 		} else {
 			resultCast := common.HexToHash(common.Bytes2Hex(result))
-			q.slotCache.WriteSlotData(addr, slot, resultCast)
-			return resultCast, nil
+			err = q.cache.WriteSlotData(addr, slot, resultCast)
+			return resultCast, err
 		}
 	}
 }
@@ -80,7 +111,7 @@ Note that the Ethereum RPC will return zero for accounts that do not exist.
 Errors may be network errors or a context cancelled error when the fuzzer is shutting down.
 */
 func (q *RPCBackend) GetStateObject(addr common.Address) (*uint256.Int, uint64, []byte, error) {
-	obj, err := q.stateObjectCache.GetStateObject(addr)
+	obj, err := q.cache.GetStateObject(addr)
 	if err == nil {
 		return obj.Balance, obj.Nonce, obj.Code, nil
 	} else {
@@ -130,13 +161,13 @@ func (q *RPCBackend) GetStateObject(addr common.Address) (*uint256.Int, uint64, 
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		q.stateObjectCache.WriteStateObject(
+		err = q.cache.WriteStateObject(
 			addr,
 			object.StateObject{
-				balanceTyped,
-				uint64(nonce),
-				code,
+				Balance: balanceTyped,
+				Nonce:   uint64(nonce),
+				Code:    code,
 			})
-		return balanceTyped, uint64(nonce), code, nil
+		return balanceTyped, uint64(nonce), code, err
 	}
 }

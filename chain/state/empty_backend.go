@@ -5,8 +5,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var _ stateBackend = (*EmptyBackend)(nil)
-
 /*
 EmptyBackend defines a backend containing no data. Intended to be used for local-only state databases.
 */
