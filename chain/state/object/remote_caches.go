@@ -1,4 +1,4 @@
-package state
+package object
 
 import (
 	"fmt"
@@ -7,28 +7,28 @@ import (
 	"sync"
 )
 
-// remoteStateObject gives us a way to store state objects without the overhead of using geth's stateObject
-type remoteStateObject struct {
+// StateObject gives us a way to store state objects without the overhead of using geth's stateObject
+type StateObject struct {
 	Balance *uint256.Int
 	Nonce   uint64
 	Code    []byte
 }
 
-// stateObjectCacheThreadSafe provides a thread-safe cache for storing state objects.
-type stateObjectCacheThreadSafe struct {
+// StateObjectCacheThreadSafe provides a thread-safe cache for storing state objects.
+type StateObjectCacheThreadSafe struct {
 	lock  sync.RWMutex
-	cache map[common.Address]*remoteStateObject
+	cache map[common.Address]*StateObject
 }
 
-func newStateObjectCache() *stateObjectCacheThreadSafe {
-	return &stateObjectCacheThreadSafe{
+func NewStateObjectCache() *StateObjectCacheThreadSafe {
+	return &StateObjectCacheThreadSafe{
 		lock:  sync.RWMutex{},
-		cache: make(map[common.Address]*remoteStateObject),
+		cache: make(map[common.Address]*StateObject),
 	}
 }
 
 // GetStateObject checks if the addr is present in the cache, and if not, returns an error
-func (s *stateObjectCacheThreadSafe) GetStateObject(addr common.Address) (*remoteStateObject, error) {
+func (s *StateObjectCacheThreadSafe) GetStateObject(addr common.Address) (*StateObject, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
@@ -39,27 +39,27 @@ func (s *stateObjectCacheThreadSafe) GetStateObject(addr common.Address) (*remot
 	}
 }
 
-func (s *stateObjectCacheThreadSafe) WriteStateObject(addr common.Address, data remoteStateObject) {
+func (s *StateObjectCacheThreadSafe) WriteStateObject(addr common.Address, data StateObject) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.cache[addr] = &data
 }
 
-// slotCacheThreadSafe provides a thread-safe cache for storing data in an account's storage
-type slotCacheThreadSafe struct {
+// SlotCacheThreadSafe provides a thread-safe cache for storing data in an account's storage
+type SlotCacheThreadSafe struct {
 	lock  sync.RWMutex
 	cache map[common.Address]map[common.Hash]common.Hash
 }
 
-func newSlotCache() *slotCacheThreadSafe {
-	return &slotCacheThreadSafe{
+func NewSlotCache() *SlotCacheThreadSafe {
+	return &SlotCacheThreadSafe{
 		lock:  sync.RWMutex{},
 		cache: make(map[common.Address]map[common.Hash]common.Hash),
 	}
 }
 
 // GetSlotData checks if the specified data is stored in the cache, and if not, returns an error.
-func (s *slotCacheThreadSafe) GetSlotData(addr common.Address, slot common.Hash) (common.Hash, error) {
+func (s *SlotCacheThreadSafe) GetSlotData(addr common.Address, slot common.Hash) (common.Hash, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	if slotLookup, ok := s.cache[addr]; ok {
@@ -70,7 +70,7 @@ func (s *slotCacheThreadSafe) GetSlotData(addr common.Address, slot common.Hash)
 	return common.Hash{}, fmt.Errorf("cache miss")
 }
 
-func (s *slotCacheThreadSafe) WriteSlotData(addr common.Address, slot common.Hash, data common.Hash) {
+func (s *SlotCacheThreadSafe) WriteSlotData(addr common.Address, slot common.Hash, data common.Hash) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 

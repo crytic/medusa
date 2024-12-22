@@ -1,4 +1,4 @@
-package state
+package object
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestRemoteStateObjectCache tests for race conditions in stateObjectCacheThreadSafe
+// TestRemoteStateObjectCache tests for race conditions in StateObjectCacheThreadSafe
 func TestRemoteStateObjectCache(t *testing.T) {
-	cache := newStateObjectCache()
+	cache := NewStateObjectCache()
 	numObjects := 5
 	writers := 10
 	numWrites := 10_000
@@ -23,7 +23,7 @@ func TestRemoteStateObjectCache(t *testing.T) {
 		for writesRem > 0 {
 			objId := r.Uint32() % uint32(numObjects)
 			addr := common.BytesToAddress([]byte{byte(objId)})
-			stateObject := remoteStateObject{
+			stateObject := StateObject{
 				Nonce: r.Uint64(),
 			}
 			cache.WriteStateObject(addr, stateObject)
@@ -52,9 +52,9 @@ func TestRemoteStateObjectCache(t *testing.T) {
 	wg.Wait()
 }
 
-// TestRemoteStateObjectCache tests for race conditions in slotCacheThreadSafe
+// TestRemoteStateObjectCache tests for race conditions in SlotCacheThreadSafe
 func TestRemoteStateSlotCache(t *testing.T) {
-	cache := newSlotCache()
+	cache := NewSlotCache()
 	numContracts := 3
 	numObjects := 5
 	writers := 10

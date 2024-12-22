@@ -1,6 +1,7 @@
 package state
 
 import (
+	"github.com/crytic/medusa/chain/state/object"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -11,7 +12,7 @@ func TestRemoteStateProvider_ImportStateObject(t *testing.T) {
 	stateProvider := newRemoteStateProvider(fixture.Backend)
 
 	snapId := 5
-	importTest := func(objectAddr common.Address, expectedObjectData remoteStateObject) {
+	importTest := func(objectAddr common.Address, expectedObjectData object.StateObject) {
 		/* test a basic state object read */
 		bal, nonce, code, err := stateProvider.ImportStateObject(objectAddr, snapId)
 		assert.Nil(t, err)

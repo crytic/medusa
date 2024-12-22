@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"github.com/crytic/medusa/chain/state/object"
 	"github.com/crytic/medusa/chain/state/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -26,8 +27,8 @@ type RPCBackend struct {
 	clientPool *rpc.ClientPool
 	height     string
 
-	slotCache        *slotCacheThreadSafe
-	stateObjectCache *stateObjectCacheThreadSafe
+	slotCache        *object.SlotCacheThreadSafe
+	stateObjectCache *object.StateObjectCacheThreadSafe
 }
 
 func NewRPCBackend(
@@ -44,8 +45,8 @@ func NewRPCBackend(
 		context:          ctx,
 		clientPool:       clientPool,
 		height:           hexutil.Uint64(height).String(),
-		slotCache:        newSlotCache(),
-		stateObjectCache: newStateObjectCache(),
+		slotCache:        object.NewSlotCache(),
+		stateObjectCache: object.NewStateObjectCache(),
 	}, nil
 }
 
@@ -131,7 +132,7 @@ func (q *RPCBackend) GetStateObject(addr common.Address) (*uint256.Int, uint64, 
 		}
 		q.stateObjectCache.WriteStateObject(
 			addr,
-			remoteStateObject{
+			object.StateObject{
 				balanceTyped,
 				uint64(nonce),
 				code,
