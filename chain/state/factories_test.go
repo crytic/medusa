@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/object"
+	"github.com/crytic/medusa/chain/state/cache"
 	types2 "github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -36,7 +36,7 @@ func TestForkedStateDB(t *testing.T) {
 
 	/* write some new data and make sure it's readable */
 	newAccount := common.BytesToAddress([]byte{1, 2, 3, 4, 5, 6})
-	newAccountData := object.StateObject{
+	newAccountData := cache.StateObject{
 		Balance: uint256.NewInt(5),
 		Nonce:   99,
 		Code:    []byte{1, 2, 3},

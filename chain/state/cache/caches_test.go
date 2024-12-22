@@ -1,4 +1,4 @@
-package object
+package cache
 
 import (
 	"context"
@@ -127,12 +127,12 @@ func TestPersistentCache(t *testing.T) {
 	stateObjectData := &StateObject{
 		Nonce: rand.Uint64(),
 	}
-	// try reading from a state object that doesnt exist
+	// try reading from a state cache that doesnt exist
 	_, err = pc.GetStateObject(stateObjectAddr)
 	assert.Error(t, err)
 	assert.Equal(t, err, ErrCacheMiss)
 
-	// write the state object, then make sure we can read it
+	// write the state cache, then make sure we can read it
 	err = pc.WriteStateObject(stateObjectAddr, *stateObjectData)
 	assert.NoError(t, err)
 
@@ -165,7 +165,7 @@ func TestPersistentCache(t *testing.T) {
 	pc, err = newPersistentCache(ctx, tmpDir, rpcAddr, blockHeight)
 	assert.NoError(t, err)
 
-	// state object matches
+	// state cache matches
 	so, err = pc.GetStateObject(stateObjectAddr)
 	assert.NoError(t, err)
 	assert.Equal(t, *stateObjectData, *so)

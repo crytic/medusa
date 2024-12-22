@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/object"
+	"github.com/crytic/medusa/chain/state/cache"
 	types2 "github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -16,12 +16,12 @@ var _ stateBackend = (*prePopulatedBackend)(nil)
 // prePopulatedBackend is an offline-only backend used for testing.
 type prePopulatedBackend struct {
 	storageSlots map[common.Address]map[common.Hash]common.Hash
-	stateObjects map[common.Address]object.StateObject
+	stateObjects map[common.Address]cache.StateObject
 }
 
 func newPrepopulatedBackend(
 	storageSlots map[common.Address]map[common.Hash]common.Hash,
-	stateObjects map[common.Address]object.StateObject,
+	stateObjects map[common.Address]cache.StateObject,
 ) *prePopulatedBackend {
 	return &prePopulatedBackend{
 		storageSlots: storageSlots,
@@ -57,7 +57,7 @@ type prepopulatedBackendFixture struct {
 	Backend *prePopulatedBackend
 
 	StateObjectContractAddress common.Address
-	StateObjectContract        object.StateObject
+	StateObjectContract        cache.StateObject
 
 	StorageSlotPopulatedKey  common.Hash
 	StorageSlotPopulatedData common.Hash
@@ -66,25 +66,25 @@ type prepopulatedBackendFixture struct {
 	StorageSlotEmpty    common.Hash
 
 	StateObjectEOAAddress common.Address
-	StateObjectEOA        object.StateObject
+	StateObjectEOA        cache.StateObject
 
 	StateObjectEmptyAddress common.Address
-	StateObjectEmpty        object.StateObject
+	StateObjectEmpty        cache.StateObject
 }
 
 func newPrePopulatedBackendFixture() *prepopulatedBackendFixture {
-	stateObjectContract := object.StateObject{
+	stateObjectContract := cache.StateObject{
 		Balance: uint256.NewInt(1000),
 		Nonce:   5,
 		Code:    []byte{1, 2, 3},
 	}
-	stateObjectEOA := object.StateObject{
+	stateObjectEOA := cache.StateObject{
 		Balance: uint256.NewInt(5000),
 		Nonce:   1,
 		Code:    nil,
 	}
 
-	stateObjectEmpty := object.StateObject{
+	stateObjectEmpty := cache.StateObject{
 		Balance: uint256.NewInt(0),
 		Nonce:   0,
 		Code:    nil,
@@ -100,7 +100,7 @@ func newPrePopulatedBackendFixture() *prepopulatedBackendFixture {
 	storageSlotEmpty := common.Hash{}
 	storageSlotEmptyAddress := common.HexToHash("0xbbbbbbbbb")
 
-	stateObjects := make(map[common.Address]object.StateObject)
+	stateObjects := make(map[common.Address]cache.StateObject)
 	stateObjects[contractAddress] = stateObjectContract
 	stateObjects[eoaAddress] = stateObjectEOA
 	stateObjects[emptyAddress] = stateObjectEmpty
@@ -136,7 +136,7 @@ func (p *prepopulatedBackendFixture) verifyAgainstState(t *testing.T, stateDb ty
 }
 
 // checkAccountAgainstFixture is used by the test suite to verify an account in the stateDB matches the provided fixture
-func checkAccountAgainstFixture(t *testing.T, stateDb types2.MedusaStateDB, addr common.Address, fixture object.StateObject) {
+func checkAccountAgainstFixture(t *testing.T, stateDb types2.MedusaStateDB, addr common.Address, fixture cache.StateObject) {
 	bal := stateDb.GetBalance(addr)
 	assert.NoError(t, stateDb.Error())
 	assert.EqualValues(t, bal, fixture.Balance)

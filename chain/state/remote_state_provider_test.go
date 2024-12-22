@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/object"
+	"github.com/crytic/medusa/chain/state/cache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -12,15 +12,15 @@ func TestRemoteStateProvider_ImportStateObject(t *testing.T) {
 	stateProvider := newRemoteStateProvider(fixture.Backend)
 
 	snapId := 5
-	importTest := func(objectAddr common.Address, expectedObjectData object.StateObject) {
-		/* test a basic state object read */
+	importTest := func(objectAddr common.Address, expectedObjectData cache.StateObject) {
+		/* test a basic state cache read */
 		bal, nonce, code, err := stateProvider.ImportStateObject(objectAddr, snapId)
 		assert.Nil(t, err)
 		assert.EqualValues(t, bal, expectedObjectData.Balance)
 		assert.EqualValues(t, nonce, expectedObjectData.Nonce)
 		assert.EqualValues(t, code, expectedObjectData.Code)
 
-		/* reading the same state object twice should return dirty error */
+		/* reading the same state cache twice should return dirty error */
 		_, _, _, err = stateProvider.ImportStateObject(objectAddr, snapId)
 		assert.True(t, err.CannotQueryDirtyAccount)
 		assert.NotNil(t, err)
