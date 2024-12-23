@@ -111,7 +111,7 @@ medusa fuzz --deployer "0x40000"
 
 ### `--fail-fast`
 
-The `--fail-fast` flag enable fast failure (equivalent to
+The `--fail-fast` flag enables fast failure (equivalent to
 [`testing.StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest))
 
 ```shell
