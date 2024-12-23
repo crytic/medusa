@@ -63,6 +63,9 @@ func addFuzzFlags() error {
 	// Logging color
 	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
 
+	// Enable stop on failed test
+	fuzzCmd.Flags().Bool("fail-fast", false, "enabled stop on failed test")
+
 	return nil
 }
 
@@ -159,6 +162,14 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 	// Update logging color mode
 	if cmd.Flags().Changed("no-color") {
 		projectConfig.Logging.NoColor, err = cmd.Flags().GetBool("no-color")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update StopOnFailedTest enablement
+	if cmd.Flags().Changed("fail-fast") {
+		projectConfig.Fuzzing.Testing.StopOnFailedTest, err = cmd.Flags().GetBool("fail-fast")
 		if err != nil {
 			return err
 		}
