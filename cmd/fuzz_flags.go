@@ -63,6 +63,9 @@ func addFuzzFlags() error {
 	// Logging color
 	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
 
+	// Exploration mode
+	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
+
 	return nil
 }
 
@@ -161,6 +164,21 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		projectConfig.Logging.NoColor, err = cmd.Flags().GetBool("no-color")
 		if err != nil {
 			return err
+		}
+	}
+
+	// Update configuration to exploration mode
+	if cmd.Flags().Changed("explore") {
+		exploreBool, err := cmd.Flags().GetBool("explore")
+		if err != nil {
+			return err
+		}
+		if exploreBool {
+			projectConfig.Fuzzing.Testing.StopOnFailedTest = false
+			projectConfig.Fuzzing.Testing.StopOnNoTests = false
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		}
 	}
 	return nil
