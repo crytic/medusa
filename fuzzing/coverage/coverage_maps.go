@@ -46,6 +46,7 @@ func (cm *CoverageMaps) Reset() {
 	cm.cachedMap = nil
 }
 
+/*
 // Equal checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
 func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 	// Iterate through all maps
@@ -70,6 +71,7 @@ func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 	}
 	return true
 }
+*/
 
 // getContractCoverageMapHash obtain the hash used to look up a given contract's ContractCoverageMap.
 // If this is init bytecode, metadata and abi arguments will attempt to be stripped, then a hash is computed.
@@ -255,12 +257,14 @@ func newContractCoverageMap() *ContractCoverageMap {
 	}
 }
 
+/*
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	// Compare both our underlying bytecode coverage maps.
 	return cm.coverage.Equal(b.coverage)
 }
+*/
 
 // update updates the current ContractCoverageMap with the provided one.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
@@ -351,11 +355,14 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
 func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, marker uint64) (bool, error) {
 	// If the execution flags don't exist, create them for this code size.
+	oldVal := uint(0)
 	if cm.executedFlags == nil {
 		cm.executedFlags = map[uint64]uint{}
+	} else {
+		oldVal = cm.executedFlags[marker]
 	}
 
-	newCoverage := cm.executedFlags[marker] == 0
-	cm.executedFlags[marker]++
+	newCoverage := oldVal == 0
+	cm.executedFlags[marker] = oldVal+1
 	return newCoverage, nil
 }
