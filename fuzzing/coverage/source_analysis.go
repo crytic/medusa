@@ -274,27 +274,16 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime source map: %v", err)
 				}
 
-				// // Parse our instruction index to offset lookups
-				// initInstructionMarkersLookup, err := initSourceMap.GetInstructionIndexToMarkersLookup(contract.InitBytecode)
-				// if err != nil {
-				// 	return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
-				// }
-				// runtimeInstructionMarkersLookup, err := runtimeSourceMap.GetInstructionIndexToMarkersLookup(contract.RuntimeBytecode)
-				// if err != nil {
-				// 	return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
-				// }
-
 				// Filter our source maps
 				initSourceMap = filterSourceMaps(compilation, initSourceMap)
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.InitBytecode, initCoverageMapData, true)
-				// err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, /*initInstructionMarkersLookup,*/ contract.RuntimeBytecode, initCoverageMapData, true)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData, true)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, /*runtimeInstructionMarkersLookup,*/ contract.RuntimeBytecode, runtimeCoverageMapData, false)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData, false)
 				if err != nil {
 					return nil, err
 				}
@@ -308,14 +297,10 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, /*instructionMarkersLookup map[int][]uint64,*/ bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
 	if len(bytecode) == 0 { return nil } // TODO
 	if contractCoverageData == nil { return nil } // TODO
 	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
-	if succHitCounts == nil {
-		fmt.Println("weird err") // TODO
-		return nil
-	}
 
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
@@ -337,13 +322,6 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		// Capture the hit count of the source map element.
 		succHitCount := succHitCounts[sourceMapElement.Index]
 		revertHitCount := revertHitCounts[sourceMapElement.Index]
-		// TODO this is where we do stuff
-		/* if contractCoverageData != nil {
-			for _, marker := range instructionMarkersLookup[sourceMapElement.Index] {
-				succHitCount += contractCoverageData.successfulCoverage.HitCount(marker) // TODO might overflow on 32 bit
-				revertHitCount += contractCoverageData.revertedCoverage.HitCount(marker)
-			}
-		} */
 
 		// Obtain the source file this element maps to.
 		if sourceFile, ok := sourceAnalysis.Files[sourcePath]; ok {
@@ -363,17 +341,13 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				sourceLine.IsActive = true
 
 				// Set its coverage state and increment hit counts
-				// sourceLine.SuccessHitCount += succHitCount
-				// sourceLine.RevertHitCount += revertHitCount
 				if succHitCount > sourceLine.SuccessHitCount {
-					sourceLine.SuccessHitCount = succHitCount // TODO this isnt exactly correct, eg in the case that we have a jmp
+					sourceLine.SuccessHitCount = succHitCount // Not correct in all cases but good enough
 				}
 				if revertHitCount > 0 {
-					sourceLine.SuccessHitCount = 0 // TODO this isnt exactly correct, eg in the case that we have a jmp
+					sourceLine.SuccessHitCount = 0 // Not correct in all cases but good enough
 				}
-				if revertHitCount > sourceLine.RevertHitCount {
-					sourceLine.RevertHitCount = revertHitCount // TODO this should almost definitely be additive
-				}
+				sourceLine.RevertHitCount += revertHitCount
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
 				sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
 
@@ -389,7 +363,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 	jumpIndices := getJumpIndices(bytecode, indexToOffset)
-	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset) // btw 0 should always go here, and the ones after jmps
+	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset)
 	jumpToMarkers := getJumpToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
 	jumpDestToMarkers := getJumpDestToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
 	pcToRevertMarker := getRevertMarkers(indexToOffset)
@@ -416,27 +390,17 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 			}
 		}
 
-		hit += execFlags[uint64(pc)] // special case for when we just start out, TODO make this nicer, also TODO this gets triple counted
+		numStart := execFlags[uint64(pc)]
+		numRevert := execFlags[pcToRevertMarker[idx]]
+		numReturn := execFlags[pcToReturnMarker[idx]]
 
-		subtractOff := execFlags[pcToRevertMarker[idx]]
-		if subtractOff > hit { // TODO if it's > that means we coded smth wrong
-			fmt.Println("BAD CASE 1", isInit)
-		}
-		hit -= subtractOff
+		hit += numStart // TODO does this multi count?
+		hit -= numRevert
 
 		successfulHits[idx] = hit
-		revertedHits[idx] = execFlags[pcToRevertMarker[idx]]
+		revertedHits[idx] = numRevert
 
-		subtractOff2 := execFlags[pcToReturnMarker[idx]] // TODO rename
-		if subtractOff2 > hit { // TODO if it's > that means we coded smth wrong
-			fmt.Println("BAD CASE 2", isInit)
-		}
-		hit -= subtractOff2
-
-		if jumpIndices[idx] {
-			hit = uint(0)
-			hit += execFlags[uint64(pc)] // TODO this almost definitely should be removed
-		}
+		hit -= numReturn
 	}
 
 	return successfulHits, revertedHits
@@ -460,21 +424,20 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 		operandCount := 0
 		if op.IsPush() {
 			if op == vm.PUSH0 {
-				operandCount = 0 
+				operandCount = 0
 			} else {
-				operandCount = int(op) - int(vm.PUSH1) + 1 
-			}   
-		}   
+				operandCount = int(op) - int(vm.PUSH1) + 1
+			}
+		}
 
 		// Advance the offset past this instruction and its operands.
-		currentOffset += operandCount + 1 
-	}   
+		currentOffset += operandCount + 1
+	}
 	return indexToOffsetLookup
 }
 
 func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
         jumps := map[int]bool{}
-	// jumps[0] = true
         for idx, pc := range indexToOffset {
                 op := vm.OpCode(bytecode[pc])
                 if op == vm.JUMP || op == vm.JUMPI {
@@ -486,9 +449,6 @@ func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
 
 func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
         jumpDests := map[int]bool{}
-	// if len(indexToOffset) > 0 {
-	// 	jumpDests[0] = true
-	// }
         for idx, pc := range indexToOffset {
                 op := vm.OpCode(bytecode[pc])
                 if op == vm.JUMPDEST {

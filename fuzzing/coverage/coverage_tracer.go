@@ -64,6 +64,8 @@ type CoverageTracer struct {
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
 type coverageTracerCallFrameState struct {
+	initialized bool
+
 	// create indicates whether the current call frame is executing on init bytecode (deploying a contract).
 	create bool
 
@@ -74,10 +76,9 @@ type coverageTracerCallFrameState struct {
 	lookupHash *common.Hash
 
 	lastPC uint64
-	lastOp byte
-	address *common.Address
+	address common.Address
 	codeSize int
-	lastOpJmp bool
+	justJumped bool
 }
 
 // NewCoverageTracer returns a new CoverageTracer.
@@ -141,7 +142,7 @@ func (t *CoverageTracer) recordExit(reverted bool) {
 	}
 	marker := bits.RotateLeft64(callFrameState.lastPC, 32) ^ markerXor
 	if callFrameState != nil && callFrameState.lookupHash != nil { // TODO necessary?
-		callFrameState.pendingCoverageMap.UpdateAt(*callFrameState.address, *callFrameState.lookupHash, callFrameState.codeSize, marker)
+		callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, callFrameState.codeSize, marker)
 	}
 }
 
@@ -176,66 +177,31 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	// Obtain our call frame state tracking struct
 	callFrameState := t.callFrameStates[t.callDepth]
 
-	firstOpcode := callFrameState.codeSize == 0
+	// Back up these values before we overwrite them
+	initialized := callFrameState.initialized
+	justJumped := callFrameState.justJumped
+	lastPC := callFrameState.lastPC
 
-	old_lastOp := vm.OpCode(callFrameState.lastOp)
-	old_lastOpJmp := old_lastOp == vm.JUMPI || old_lastOp == vm.JUMP
-	old_lastPC := callFrameState.lastPC
-
+	// Record some info about where we are
 	callFrameState.lastPC = pc
-	callFrameState.lastOp = op
-	if callFrameState.address == nil {
-		add := scope.Address() // TODO
-		callFrameState.address = &add // TODO
-		callFrameState.codeSize = len(scope.(*vm.ScopeContext).Contract.Code) // TODO
+	callFrameState.justJumped = vm.OpCode(op) == vm.JUMP || vm.OpCode(op) == vm.JUMPI
+	if !initialized {
+		callFrameState.initialized = true
+		callFrameState.address = scope.Address()
+		callFrameState.codeSize = len(scope.(*vm.ScopeContext).Contract.Code)
 	}
 
-	if firstOpcode {
-		address := callFrameState.address
-		// TODO need to refactor
+	// Now record coverage, if applicable. Otherwise return
 
-		// If there is code we're executing, collect coverage.
-		// address := scope.Address()
-		// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
-		scopeContext := scope.(*vm.ScopeContext)
-		code := scopeContext.Contract.Code
-		codeSize := len(code)
-		isCreate := callFrameState.create
-		gethCodeHash := scopeContext.Contract.CodeHash
-
-		cacheArrayKey := 1
-		if isCreate {
-			cacheArrayKey = 0
-		}
-
-		// TODO used to have a codeSize > 0 check here
-
-		// Obtain our contract coverage map lookup hash.
-		if callFrameState.lookupHash == nil {
-			if isCreate { // TODO
-				lookupHash := getContractCoverageMapHash(code, isCreate)
-				callFrameState.lookupHash = &lookupHash
-			} else {
-				lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-				if !cacheHit {
-					lookupHash = getContractCoverageMapHash(code, isCreate)
-					t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
-				}
-				callFrameState.lookupHash = &lookupHash
-			}
-		}
-
-		// Record coverage for this location in our map.
-		callFrameState.pendingCoverageMap.UpdateAt(*address, *callFrameState.lookupHash, codeSize, uint64(pc))
+	var marker uint64
+	if !initialized { // first opcode
+		marker = uint64(pc)
+	} else if justJumped {
+		marker = bits.RotateLeft64(lastPC, 32) ^ pc
+	} else {
+		return
 	}
 
-	if !old_lastOpJmp { return }
-
-	address := callFrameState.address
-	marker := bits.RotateLeft64(old_lastPC, 32) ^ pc
-
-	// If there is code we're executing, collect coverage.
-	//address := scope.Address()
 	// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 	scopeContext := scope.(*vm.ScopeContext)
 	code := scopeContext.Contract.Code
@@ -266,7 +232,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 
 	// Record coverage for this location in our map.
-	callFrameState.pendingCoverageMap.UpdateAt(*address, *callFrameState.lookupHash, codeSize, marker)
+	callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, codeSize, marker)
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

@@ -46,7 +46,6 @@ func (cm *CoverageMaps) Reset() {
 	cm.cachedMap = nil
 }
 
-/*
 // Equal checks whether two coverage maps are the same. Equality is determined if the keys and values are all the same.
 func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 	// Iterate through all maps
@@ -71,7 +70,6 @@ func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 	}
 	return true
 }
-*/
 
 // getContractCoverageMapHash obtain the hash used to look up a given contract's ContractCoverageMap.
 // If this is init bytecode, metadata and abi arguments will attempt to be stripped, then a hash is computed.
@@ -216,32 +214,16 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 	return addedNewMap || changedInMap, err
 }
 
-// UniquePCs is a function that returns the total number of unique program counters (PCs)
-// TODO we probably want to remove this entirely
-func (cm *CoverageMaps) UniquePCs() uint64 {
-	uniquePCs := uint64(0)
+// BranchesHit is a function that TODO // returns the total number of unique program counters (PCs)
+func (cm *CoverageMaps) BranchesHit() uint64 {
+	branchesHit := uint64(0)
 	// Iterate across each contract deployment
 	for _, mapsByAddress := range cm.maps {
 		for _, contractCoverageMap := range mapsByAddress {
-			// TODO: Note we are not checking for nil dereference here because we are guaranteed that the successful
-			//  coverage and reverted coverage arrays have been instantiated if we are iterating over it
-
-			// Iterate across each PC in the successful coverage array
-			// We do not separately iterate over the reverted coverage array because if there is no data about a
-			// successful PC execution, then it is not possible for that PC to have ever reverted either
-			uniquePCs += uint64(len(contractCoverageMap.coverage.executedFlags))
-
-			// if contractCoverageMap.revertedCoverage.executedFlags != nil {
-			// 	for i, hits := range contractCoverageMap.revertedCoverage.executedFlags {
-			// 		// This is only executed if the PC was not executed successfully
-			// 		if contractCoverageMap.successfulCoverage.executedFlags[i] == 0 && hits != 0 {
-			// 			uniquePCs++
-			// 		}
-			// 	}
-			// }
+			branchesHit += uint64(len(contractCoverageMap.coverage.executedFlags))
 		}
 	}
-	return uniquePCs
+	return branchesHit
 }
 
 // ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
@@ -257,21 +239,18 @@ func newContractCoverageMap() *ContractCoverageMap {
 	}
 }
 
-/*
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	// Compare both our underlying bytecode coverage maps.
 	return cm.coverage.Equal(b.coverage)
 }
-*/
 
 // update updates the current ContractCoverageMap with the provided one.
 // Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
+// TODO change text above, coverage.update might need text change as well
 func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
-	// Update our success coverage data
-	coverageChanged, err := cm.coverage.update(coverageMap.coverage)
-	return coverageChanged, err
+	return cm.coverage.update(coverageMap.coverage)
 }
 
 // updateCoveredAt updates the hit counter at a given program counter location within a ContractCoverageMap used for
@@ -296,6 +275,11 @@ func (cm *CoverageMapBytecodeData) Reset() {
 // Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
+	// TODO there has to be some kind of helper function that can do this for us, right? this is just simple map equality
+
+	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
+	//  it may make sense to just check that both of them are greater than zero
+
 	for marker, hitcount := range cm.executedFlags {
 		if b.executedFlags[marker] != hitcount {
 			return false
@@ -317,7 +301,7 @@ func (cm *CoverageMapBytecodeData) HitCount(marker uint64) uint {
 		return 0
 	}
 
-	// If this map has no execution data or is out of bounds, it is not covered.
+	// If this map has no execution data, it is not covered.
 	if cm.executedFlags == nil {
 		return 0
 	}
@@ -343,9 +327,10 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	// Update each byte which represents a position in the bytecode which was covered.
 	changed := false
 	for marker, hitcount := range coverageMap.executedFlags {
-		if hitcount != 0 {
+		if hitcount != 0 { // It shouldn't be zero, but just to make sure
+			// If we have a hit count where it used to be zero, then coverage increased
 			changed = changed || cm.executedFlags[marker] == 0
-			cm.executedFlags[marker] += hitcount // TODO this might overflow on 32 bit machines
+			cm.executedFlags[marker] += hitcount
 		}
 	}
 	return changed, nil
@@ -354,15 +339,18 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 // updateCoveredAt updates the hit count at a given program counter location within a CoverageMapBytecodeData.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
 func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, marker uint64) (bool, error) {
+	// We could factor this out but doing it this way saves a single map read and this function is called often
+	var previousVal uint
+
 	// If the execution flags don't exist, create them for this code size.
-	oldVal := uint(0)
 	if cm.executedFlags == nil {
 		cm.executedFlags = map[uint64]uint{}
+		previousVal = uint(0)
 	} else {
-		oldVal = cm.executedFlags[marker]
+		previousVal = cm.executedFlags[marker]
 	}
 
-	newCoverage := oldVal == 0
-	cm.executedFlags[marker] = oldVal+1
+	newCoverage := previousVal == 0
+	cm.executedFlags[marker] = previousVal+1
 	return newCoverage, nil
 }

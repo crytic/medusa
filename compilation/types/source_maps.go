@@ -1,12 +1,8 @@
 package types
 
 import (
-	// "fmt"
 	"strconv"
 	"strings"
-	// "math/bits"
-
-	// "github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
@@ -148,79 +144,3 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 	// Return the resulting map
 	return sourceMap, nil
 }
-
-/*
-// GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
-// and the element of the slice represents the instruction offset.
-// Returns the slice lookup, or an error if one occurs.
-func GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, error) {
-	// Create our resulting lookup
-	indexToOffsetLookup := make([]int, len(s))
-
-	// Loop through all byte code
-	currentOffset := 0
-	for i := 0; i < len(indexToOffsetLookup); i++ {
-		// If we're going to read out of bounds, return an error.
-		if currentOffset >= len(bytecode) {
-			return nil, fmt.Errorf("failed to obtain a lookup of instruction indexes to offsets. instruction index: %v, current offset: %v, length: %v", i, currentOffset, len(bytecode))
-		}
-
-		// Obtain the indexed instruction and add the current offset to our lookup at this index.
-		op := vm.OpCode(bytecode[currentOffset])
-		indexToOffsetLookup[i] = currentOffset
-
-		// Next, calculate the length of data that follows this instruction.
-		operandCount := 0
-		if op.IsPush() {
-			if op == vm.PUSH0 {
-				operandCount = 0
-			} else {
-				operandCount = int(op) - int(vm.PUSH1) + 1
-			}
-		}
-
-		// Advance the offset past this instruction and its operands.
-		currentOffset += operandCount + 1
-	}
-	return indexToOffsetLookup, nil
-}
-
-func GetJumpToMarkers(bytecode []byte) (map[int][]uint64, error) {
-	indexToOffsetLookup, err := s.GetInstructionIndexToOffsetLookup(bytecode)
-	if err != nil {
-		return nil, err
-	}
-
-	jumpDests := make([]uint64, 0)
-	for _, opOffset := range indexToOffsetLookup {
-		op := vm.OpCode(bytecode[opOffset])
-		if op == vm.JUMPDEST {
-			jumpDests = append(jumpDests, uint64(opOffset))
-		}
-	}
-
-	indexToMarkerLookup := make(map[int][]uint64)
-
-	for opNum, opOffset := range indexToOffsetLookup {
-		op := vm.OpCode(bytecode[opOffset])
-
-		if op == vm.JUMP || op == vm.JUMPI {
-			xorWith := bits.RotateLeft64(uint64(opOffset), 32)
-			var list []uint64
-			if op == vm.JUMPI && opNum < len(indexToOffsetLookup) - 1 {
-				list = make([]uint64, len(jumpDests)+1)
-				list[len(list)-1] = xorWith ^ uint64(indexToOffsetLookup[opNum+1])
-			} else {
-				list = make([]uint64, len(jumpDests))
-			}
-
-			for i, jumpDest := range jumpDests {
-				list[i] = xorWith ^ jumpDest
-			}
-
-			indexToMarkerLookup[opOffset] = list
-		}
-	}
-
-	return indexToMarkerLookup, nil
-} */
