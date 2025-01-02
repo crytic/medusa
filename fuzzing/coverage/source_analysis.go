@@ -382,12 +382,12 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 	for idx, pc := range indexToOffset {
                 op := vm.OpCode(bytecode[pc])
 		isJump := op == vm.JUMP || op == vm.JUMPI
-                if isJump {
-			hit = uint(0)
-		}
+                //if isJump {
+		//	hit = uint(0)
+		//}
 
 		revertCount := uint(0)
-		returnCount := uint(0)
+		exitCount := uint(0)
 
 		if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
 			for src, hitHere := range flagsHere {
@@ -401,11 +401,15 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 				switch dst {
 				case REVERT_MARKER_XOR:
 					revertCount = hitHere
+					if hitHere > hit {
+						fmt.Println("BAD CASE", hit, hitHere)
+					}
 					hit -= hitHere
-				case RETURN_MARKER_XOR:
-					returnCount = hitHere
+				//case RETURN_MARKER_XOR:
+					//returnCount = hitHere
 				default:
-					hit += hitHere
+					exitCount += hitHere
+					// hit += hitHere
 				}
 			}
 		}
@@ -413,7 +417,15 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 		successfulHits[idx] = hit
 		revertedHits[idx] = revertCount
 
-		hit -= returnCount
+		if isJump && hit != exitCount {
+			fmt.Println("?!?!?!", hit, exitCount)
+		}
+
+		if exitCount > hit {
+			fmt.Println("BAD CASE 2", hit, exitCount, isJump)
+		}
+
+		hit -= exitCount//returnCount
 
 		if isJump {
 			hit = uint(0)
