@@ -298,9 +298,13 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
 func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
-	if len(bytecode) == 0 { return nil } // TODO
-	if contractCoverageData == nil { return nil } // TODO
-	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
+	var succHitCounts, revertHitCounts []uint
+	if len(bytecode) > 0 && contractCoverageData != nil {
+		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, isInit)
+	} else { // Probably because we didn't hit this code at all...
+		succHitCounts = nil
+		revertHitCounts = nil
+	}
 
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
@@ -320,8 +324,17 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		succHitCount := succHitCounts[sourceMapElement.Index]
-		revertHitCount := revertHitCounts[sourceMapElement.Index]
+		var succHitCount, revertHitCount uint
+		if succHitCounts != nil {
+			succHitCount = succHitCounts[sourceMapElement.Index]
+		} else {
+			succHitCount = 0
+		}
+		if revertHitCounts != nil {
+			revertHitCount = revertHitCounts[sourceMapElement.Index]
+		} else {
+			revertHitCount = 0
+		}
 
 		// Obtain the source file this element maps to.
 		if sourceFile, ok := sourceAnalysis.Files[sourcePath]; ok {
@@ -343,9 +356,6 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				// Set its coverage state and increment hit counts
 				if succHitCount > sourceLine.SuccessHitCount {
 					sourceLine.SuccessHitCount = succHitCount // Not correct in all cases but good enough
-				}
-				if revertHitCount > 0 {
-					sourceLine.SuccessHitCount = 0 // Not correct in all cases but good enough
 				}
 				sourceLine.RevertHitCount += revertHitCount
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0

@@ -218,17 +218,12 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 
 	// Obtain our contract coverage map lookup hash.
 	if callFrameState.lookupHash == nil {
-		if isCreate { // TODO
-			lookupHash := getContractCoverageMapHash(code, isCreate)
-			callFrameState.lookupHash = &lookupHash
-		} else {
-			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-			if !cacheHit {
-				lookupHash = getContractCoverageMapHash(code, isCreate)
-				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
-			}
-			callFrameState.lookupHash = &lookupHash
+		lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
+		if !cacheHit {
+			lookupHash = getContractCoverageMapHash(code, isCreate)
+			t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
 		}
+		callFrameState.lookupHash = &lookupHash
 	}
 
 	// Record coverage for this location in our map.

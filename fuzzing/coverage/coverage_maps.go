@@ -90,11 +90,7 @@ func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
 
 	// Otherwise, we use the hash of the bytecode after attempting to strip metadata (and constructor args).
 	strippedBytecode := compilationTypes.RemoveContractMetadata(bytecode)
-	hash := crypto.Keccak256Hash(strippedBytecode)
-	if init {
-		hash[0] = hash[0] ^ 1
-	}
-	return hash
+	return crypto.Keccak256Hash(strippedBytecode)
 }
 
 // GetContractCoverageMap obtains a total coverage map representing coverage for the provided bytecode.
