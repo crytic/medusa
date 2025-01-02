@@ -9,7 +9,6 @@ import (
 	"github.com/crytic/medusa/compilation/types"
 	"golang.org/x/exp/maps"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/bits"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -372,10 +371,6 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 
 func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
-	jumpIndices := getJumpIndices(bytecode, indexToOffset)
-	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset)
-	pcToRevertMarker := getRevertMarkers(indexToOffset)
-	pcToReturnMarker := getReturnMarkers(indexToOffset)
 
 	execFlags := cm.coverage.executedFlags
 	execFlagsSrcDst, execFlagsDstSrc := getExecFlagsMapping(execFlags)
@@ -385,39 +380,44 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 
 	hit := uint(0)
 	for idx, pc := range indexToOffset {
-		if jumpIndices[idx] {
+                op := vm.OpCode(bytecode[pc])
+		isJump := op == vm.JUMP || op == vm.JUMPI
+                if isJump {
 			hit = uint(0)
-			if flagsHere, ok := execFlagsSrcDst[uint64(pc)]; ok {
-				for dst, hitHere := range flagsHere {
-					if dst != REVERT_MARKER_XOR && dst != RETURN_MARKER_XOR {
-						hit += hitHere
-					}
+		}
+
+		revertCount := uint(0)
+		returnCount := uint(0)
+
+		if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
+			for src, hitHere := range flagsHere {
+				if src != 0 {
+					hit += hitHere
 				}
 			}
-		} else if jumpDestIndices[idx] {
-			if idx > 0 && jumpIndices[idx-1] {
-				hit = uint(0)
-			}
-			if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
-				for src, hitHere := range flagsHere {
-					if src != 0 {
-						hit += hitHere
-					}
+		}
+		if flagsHere, ok := execFlagsSrcDst[uint64(pc)]; ok {
+			for dst, hitHere := range flagsHere {
+				switch dst {
+				case REVERT_MARKER_XOR:
+					revertCount = hitHere
+					hit -= hitHere
+				case RETURN_MARKER_XOR:
+					returnCount = hitHere
+				default:
+					hit += hitHere
 				}
 			}
 		}
 
-		numStart := execFlags[uint64(pc)]
-		numRevert := execFlags[pcToRevertMarker[idx]]
-		numReturn := execFlags[pcToReturnMarker[idx]]
-
-		hit += numStart // TODO does this multi count?
-		hit -= numRevert
-
 		successfulHits[idx] = hit
-		revertedHits[idx] = numRevert
+		revertedHits[idx] = revertCount
 
-		hit -= numReturn
+		hit -= returnCount
+
+		if isJump {
+			hit = uint(0)
+		}
 	}
 
 	return successfulHits, revertedHits
@@ -451,46 +451,6 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 		currentOffset += operandCount + 1
 	}
 	return indexToOffsetLookup
-}
-
-func getJumpIndices(bytecode []byte, indexToOffset []int) map[int]bool {
-        jumps := map[int]bool{}
-        for idx, pc := range indexToOffset {
-                op := vm.OpCode(bytecode[pc])
-                if op == vm.JUMP || op == vm.JUMPI {
-                        jumps[idx] = true
-		}
-        }
-	return jumps
-}
-
-func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
-        jumpDests := map[int]bool{}
-        for idx, pc := range indexToOffset {
-                op := vm.OpCode(bytecode[pc])
-                if op == vm.JUMPDEST {
-                        jumpDests[idx] = true
-                } else if op == vm.JUMPI && idx < len(indexToOffset) {
-                        jumpDests[idx+1] = true
-		}
-        }
-	return jumpDests
-}
-
-func getRevertMarkers(indexToOffset []int) []uint64 {
-	markers := make([]uint64, len(indexToOffset))
-	for idx, pc := range indexToOffset {
-		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ REVERT_MARKER_XOR
-	}
-	return markers
-}
-
-func getReturnMarkers(indexToOffset []int) []uint64 {
-	markers := make([]uint64, len(indexToOffset))
-	for idx, pc := range indexToOffset {
-		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ RETURN_MARKER_XOR
-	}
-	return markers
 }
 
 func getExecFlagsMapping(execFlags map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
