@@ -164,12 +164,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 }
 
 // UpdateAt updates the hit count of a given program counter location within code coverage data.
-func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, codeSize int, pc uint64) (bool, error) {
-	// If the code size is zero, do nothing
-	if codeSize == 0 {
-		return false, nil
-	}
-
+func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, pc uint64) (bool, error) {
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
@@ -205,7 +200,7 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 	}
 
 	// Set our coverage in the map and return our change state
-	changedInMap, err = coverageMap.updateCoveredAt(codeSize, pc)
+	changedInMap, err = coverageMap.updateCoveredAt(pc)
 
 	return addedNewMap || changedInMap, err
 }
@@ -227,6 +222,12 @@ type ContractCoverageMap struct {
 	// coverage represents coverage for the contract bytecode, TODO
 	coverage *CoverageMapBytecodeData
 }
+
+// TODO comment and maybe move
+const (
+	REVERT_MARKER_XOR = 0x40000000
+	RETURN_MARKER_XOR = 0x80000000
+)
 
 // newContractCoverageMap creates and returns a new ContractCoverageMap.
 func newContractCoverageMap() *ContractCoverageMap {
@@ -252,9 +253,9 @@ func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, e
 // updateCoveredAt updates the hit counter at a given program counter location within a ContractCoverageMap used for
 // "successful" coverage (non-reverted).
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *ContractCoverageMap) updateCoveredAt(codeSize int, pc uint64) (bool, error) {
+func (cm *ContractCoverageMap) updateCoveredAt(pc uint64) (bool, error) {
 	// Set our coverage data for the successful path.
-	return cm.coverage.updateCoveredAt(codeSize, pc)
+	return cm.coverage.updateCoveredAt(pc)
 }
 
 // CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
@@ -271,8 +272,6 @@ func (cm *CoverageMapBytecodeData) Reset() {
 // Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
-	// TODO there has to be some kind of helper function that can do this for us, right? this is just simple map equality
-
 	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
 	//  it may make sense to just check that both of them are greater than zero
 
@@ -334,7 +333,7 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 
 // updateCoveredAt updates the hit count at a given program counter location within a CoverageMapBytecodeData.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *CoverageMapBytecodeData) updateCoveredAt(codeSize int, marker uint64) (bool, error) {
+func (cm *CoverageMapBytecodeData) updateCoveredAt(marker uint64) (bool, error) {
 	// We could factor this out but doing it this way saves a single map read and this function is called often
 	var previousVal uint
 

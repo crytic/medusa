@@ -301,7 +301,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 	var succHitCounts, revertHitCounts []uint
 	if len(bytecode) > 0 && contractCoverageData != nil {
 		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, isInit)
-	} else { // Probably because we didn't hit this code at all...
+	} else { // Probably because we didn't hit this contract at all...
 		succHitCounts = nil
 		revertHitCounts = nil
 	}
@@ -355,7 +355,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 
 				// Set its coverage state and increment hit counts
 				if succHitCount > sourceLine.SuccessHitCount {
-					sourceLine.SuccessHitCount = succHitCount // Not correct in all cases but good enough
+					sourceLine.SuccessHitCount = succHitCount
 				}
 				sourceLine.RevertHitCount += revertHitCount
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
@@ -374,12 +374,11 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 	jumpIndices := getJumpIndices(bytecode, indexToOffset)
 	jumpDestIndices := getJumpDestIndices(bytecode, indexToOffset)
-	jumpToMarkers := getJumpToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
-	jumpDestToMarkers := getJumpDestToMarkers(indexToOffset, jumpIndices, jumpDestIndices)
 	pcToRevertMarker := getRevertMarkers(indexToOffset)
 	pcToReturnMarker := getReturnMarkers(indexToOffset)
 
 	execFlags := cm.coverage.executedFlags
+	execFlagsSrcDst, execFlagsDstSrc := getExecFlagsMapping(execFlags)
 
 	successfulHits := make([]uint, len(indexToOffset))
 	revertedHits := make([]uint, len(indexToOffset))
@@ -388,15 +387,23 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 	for idx, pc := range indexToOffset {
 		if jumpIndices[idx] {
 			hit = uint(0)
-			for _, marker := range jumpToMarkers[idx] {
-				hit += execFlags[marker]
+			if flagsHere, ok := execFlagsSrcDst[uint64(pc)]; ok {
+				for dst, hitHere := range flagsHere {
+					if dst != REVERT_MARKER_XOR && dst != RETURN_MARKER_XOR {
+						hit += hitHere
+					}
+				}
 			}
 		} else if jumpDestIndices[idx] {
 			if idx > 0 && jumpIndices[idx-1] {
 				hit = uint(0)
 			}
-			for _, marker := range jumpDestToMarkers[idx] {
-				hit += execFlags[marker]
+			if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
+				for src, hitHere := range flagsHere {
+					if src != 0 {
+						hit += hitHere
+					}
+				}
 			}
 		}
 
@@ -470,34 +477,10 @@ func getJumpDestIndices(bytecode []byte, indexToOffset []int) map[int]bool {
 	return jumpDests
 }
 
-func getJumpToMarkers(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool) map[int][]uint64 {
-	markers := map[int][]uint64{}
-	for jmp, _ := range jumpIndices {
-		markersHere := make([]uint64, 0, len(jumpDestIndices))
-		for dst, _ := range jumpDestIndices {
-			markersHere = append(markersHere, bits.RotateLeft64(uint64(indexToOffset[jmp]), 32) ^ uint64(indexToOffset[dst]))
-		}
-		markers[jmp] = markersHere
-	}
-	return markers
-}
-
-func getJumpDestToMarkers(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool) map[int][]uint64 {
-	markers := map[int][]uint64{}
-	for dst, _ := range jumpDestIndices {
-		markersHere := make([]uint64, 0, len(jumpIndices))
-		for jmp, _ := range jumpIndices {
-			markersHere = append(markersHere, bits.RotateLeft64(uint64(indexToOffset[jmp]), 32) ^ uint64(indexToOffset[dst]))
-		}
-		markers[dst] = markersHere
-	}
-	return markers
-}
-
 func getRevertMarkers(indexToOffset []int) []uint64 {
 	markers := make([]uint64, len(indexToOffset))
 	for idx, pc := range indexToOffset {
-		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ 0x40000000
+		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ REVERT_MARKER_XOR
 	}
 	return markers
 }
@@ -505,19 +488,29 @@ func getRevertMarkers(indexToOffset []int) []uint64 {
 func getReturnMarkers(indexToOffset []int) []uint64 {
 	markers := make([]uint64, len(indexToOffset))
 	for idx, pc := range indexToOffset {
-		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ 0x80000000
+		markers[idx] = bits.RotateLeft64(uint64(pc), 32) ^ RETURN_MARKER_XOR
 	}
 	return markers
 }
 
-func getInterestingIndices(indexToOffset []int, jumpIndices map[int]bool, jumpDestIndices map[int]bool, pcToRevertMarker []uint64, pcToReturnMarker []uint64, executedFlags map[uint64]uint) map[int]bool {
-	indices := map[int]bool{}
-	for idx, _ := range indexToOffset {
-		if jumpIndices[idx] || jumpDestIndices[idx] || executedFlags[pcToRevertMarker[idx]] > 0 || executedFlags[pcToReturnMarker[idx]] > 0 {
-			indices[idx] = true
+func getExecFlagsMapping(execFlags map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
+	execFlagsSrcDst := make(map[uint64]map[uint64]uint)
+	execFlagsDstSrc := make(map[uint64]map[uint64]uint)
+
+	for marker, hitCount := range execFlags {
+		dst := marker & 0xFFFFFFFF
+		src := marker >> 32
+		if _, ok := execFlagsSrcDst[src]; !ok {
+			execFlagsSrcDst[src] = make(map[uint64]uint, 1)
 		}
+		if _, ok := execFlagsDstSrc[dst]; !ok {
+			execFlagsDstSrc[dst] = make(map[uint64]uint, 1)
+		}
+		execFlagsSrcDst[src][dst] = hitCount
+		execFlagsDstSrc[dst][src] = hitCount
 	}
-	return indices
+
+	return execFlagsSrcDst, execFlagsDstSrc
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are removed.
