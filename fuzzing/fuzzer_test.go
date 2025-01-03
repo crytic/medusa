@@ -842,14 +842,12 @@ func TestCorpusReplayability(t *testing.T) {
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same (disregarding hit count)
-			successCovIncreased, revertCovIncreased, err := originalCoverage.Update(newCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err := originalCoverage.Update(newCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
-			successCovIncreased, revertCovIncreased, err = newCoverage.Update(originalCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err = newCoverage.Update(originalCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
