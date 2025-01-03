@@ -59,7 +59,8 @@ type CoverageTracer struct {
 	// The [2] array is to differentiate between contract init (0) vs runtime (1),
 	// since init vs runtime produces different results from getContractCoverageMapHash.
 	// The Hash key is a contract's codehash, which uniquely identifies it.
-	codeHashCache [2]map[common.Hash]common.Hash
+	// TODO rewrite description
+	codeHashCache map[common.Hash]common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -85,7 +86,7 @@ func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
 		coverageMaps:    NewCoverageMaps(),
 		callFrameStates: make([]*coverageTracerCallFrameState, 0),
-		codeHashCache:   [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
+		codeHashCache:   make(map[common.Hash]common.Hash),
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -133,7 +134,7 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 
 func (t *CoverageTracer) recordExit(reverted bool) {
 	callFrameState := t.callFrameStates[t.callDepth]
-	if callFrameState != nil && callFrameState.lookupHash != nil {
+	if callFrameState != nil && callFrameState.lookupHash != nil && callFrameState.initialized { // TODO last one necessary?
 		var markerXor uint64
 		if reverted {
 			markerXor = REVERT_MARKER_XOR
@@ -193,7 +194,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 
 	var marker uint64
 	if !initialized { // first opcode
-		marker = uint64(pc)
+		marker = bits.RotateLeft64(ENTER_MARKER_XOR, 32) ^ pc
 	} else if justJumped {
 		marker = bits.RotateLeft64(lastPC, 32) ^ pc
 	} else {
@@ -206,19 +207,19 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	isCreate := callFrameState.create
 	gethCodeHash := scopeContext.Contract.CodeHash
 
-	cacheArrayKey := 1
-	if isCreate {
-		cacheArrayKey = 0
-	}
-
 	// Obtain our contract coverage map lookup hash.
 	if callFrameState.lookupHash == nil {
-		lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-		if !cacheHit {
-			lookupHash = getContractCoverageMapHash(code, isCreate)
-			t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
+		if isCreate {
+			lookupHash := getContractCoverageMapHash(code, isCreate)
+			callFrameState.lookupHash = &lookupHash
+		} else {
+			lookupHash, cacheHit := t.codeHashCache[gethCodeHash]
+			if !cacheHit {
+				lookupHash = getContractCoverageMapHash(code, isCreate)
+				t.codeHashCache[gethCodeHash] = lookupHash
+			}
+			callFrameState.lookupHash = &lookupHash
 		}
-		callFrameState.lookupHash = &lookupHash
 	}
 
 	// Record coverage for this location in our map.

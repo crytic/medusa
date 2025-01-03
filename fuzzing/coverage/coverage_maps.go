@@ -227,6 +227,7 @@ type ContractCoverageMap struct {
 const (
 	REVERT_MARKER_XOR = 0x40000000
 	RETURN_MARKER_XOR = 0x80000000
+	ENTER_MARKER_XOR  = 0xC0000000
 )
 
 // newContractCoverageMap creates and returns a new ContractCoverageMap.
