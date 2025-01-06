@@ -13,14 +13,16 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+*node_modules/
 
 # Goland project dir
 .idea/
-
-*node_modules/
 
 # Medusa binary
 medusa
 
 # Medusa docs
 docs/book
+
+# Build results
+result
