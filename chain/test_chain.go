@@ -794,6 +794,8 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	t.pendingBlock.Header.GasUsed += receipt.GasUsed
 	// Update our block's bloom filter
 	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
+	// Update our block's hash since a transaction may have changed the block's header (e.g. warp changes the timestamp)
+	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
 	t.pendingBlock.MessageResults = append(t.pendingBlock.MessageResults, messageResult)
@@ -845,6 +847,8 @@ func (t *TestChain) PendingBlockCommit() error {
 	t.pendingBlockChainConfig = nil
 
 	// Append our new block to our chain.
+	// Update the block hash since cheatcodes may have changed aspects of the header (e.g. time or number)
+	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 	t.blocks = append(t.blocks, t.pendingBlock)
 
 	// Clear our pending block, but keep a copy of it to emit our event

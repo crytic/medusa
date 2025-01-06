@@ -503,6 +503,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					}
 					// Revert to genesis and re-run the failed contract deployment tx.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
+					// TODO: Should we revert back to genesis or to the previous block?
 					err = testChain.RevertToBlockNumber(0)
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)

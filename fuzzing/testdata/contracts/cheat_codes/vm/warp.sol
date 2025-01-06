@@ -8,6 +8,8 @@ contract TestContract {
     CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
     uint64 startingTimestamp;
 
+    event TestValue(uint256 x);
+
     constructor() {
         // Set the starting timestamp
         startingTimestamp = 12345;
@@ -15,12 +17,11 @@ contract TestContract {
     }
 
     function test(uint64 x) public {
+        emit TestValue(block.timestamp);
         // Ensure that the block timestamp is GEQ than the starting timestamp
-        assert(block.timestamp >= startingTimestamp);
-
         // Change value and verify.
-        cheats.warp(x);
-        assert(block.timestamp == x);
+        cheats.warp(1);
+        assert(block.timestamp == 1);
         cheats.warp(7);
         assert(block.timestamp == 7);
         cheats.warp(9);

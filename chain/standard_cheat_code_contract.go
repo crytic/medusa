@@ -72,28 +72,58 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
-	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp!
+	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp until it is changed again!
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Capture the original time
+			originalTime := tracer.chain.pendingBlockContext.Time
+
 			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
 			newTime := inputs[0].(*big.Int)
 			if newTime.Cmp(MaxUint64) > 0 {
 				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
 			}
 
-			// Set the time
+			// Set the time for the pending block context and the pending block
+			// The block context will reflect the time change in the current EVM context
+			// And the pending block time will allow for the time to reflect until it is
+			// changed again.
 			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
+			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
+
+			// If the chain or transaction reverts, we will restore the original time
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				tracer.chain.pendingBlockContext.Time = originalTime
+				tracer.chain.pendingBlock.Header.Time = originalTime
+			})
 			return nil, nil
 		},
 	)
 
-	// Roll: Sets VM block number. Note that this _permanently_ updates the block number!
+	// Roll: Sets VM block number. Note that this _permanently_ updates the block number until it is changed again!
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Update the block number
-			tracer.chain.pendingBlockContext.BlockNumber.Set(inputs[0].(*big.Int))
+			// Capture the original block number
+			originalBlockNumber := tracer.chain.pendingBlockContext.BlockNumber
+
+			// Retrieve the new block number
+			newBlockNumber := inputs[0].(*big.Int)
+
+			// Set the block number for the pending block context and the pending block
+			// The block context will reflect the block number change in the current EVM context
+			// And the pending block number will allow for the number to reflect until it is
+			// changed again.
+			tracer.chain.pendingBlockContext.BlockNumber.Set(newBlockNumber)
+			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
+
+			// If the chain or transaction reverts, we will restore the original block number
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				tracer.chain.pendingBlockContext.BlockNumber.Set(originalBlockNumber)
+				tracer.chain.pendingBlock.Header.Number.Set(originalBlockNumber)
+			})
+
 			return nil, nil
 		},
 	)
