@@ -129,3 +129,12 @@ The `--no-color` flag disables colored console output (equivalent to
 # Disable colored output
 medusa fuzz --no-color
 ```
+
+### `--explore`
+
+The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests) fields to `false` and turns off assertion, property, and optimization testing.
+
+```shell
+# Enable exploration mode
+medusa fuzz --explore
+```
