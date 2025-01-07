@@ -4,7 +4,10 @@ import (
 	"math/big"
 
 	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	coretypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -73,6 +76,9 @@ type cheatCodeTracerCallFrame struct {
 
 // cheatCodeTracerResults holds the hooks that need to be executed when the chain reverts.
 type cheatCodeTracerResults struct {
+	// executionResult describes the results for the most recently concluded transaction
+	executionResult *core.ExecutionResult
+
 	// onChainRevertHooks describes hooks which are to be executed when the chain reverts.
 	onChainRevertHooks types.GenericHookFuncs
 }
@@ -128,6 +134,7 @@ func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 	t.callDepth = 0
 	t.callFrames = make([]*cheatCodeTracerCallFrame, 0)
 	t.results = &cheatCodeTracerResults{
+		executionResult:    &core.ExecutionResult{},
 		onChainRevertHooks: nil,
 	}
 	// Store our evm reference
@@ -173,6 +180,10 @@ func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to c
 func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	// Execute all current call frame exit hooks
 	exitingCallFrame := t.callFrames[t.callDepth]
+
+	exitingCallFrame.vmReturnData = output
+	exitingCallFrame.vmErr = err
+
 	exitingCallFrame.onFrameExitRestoreHooks.Execute(false, true)
 
 	var parentCallFrame *cheatCodeTracerCallFrame
@@ -227,4 +238,33 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Add our revert operations we collected for this transaction.
 	results.OnRevertHookFuncs = append(results.OnRevertHookFuncs, t.results.onChainRevertHooks...)
+	results.ExecutionResult = t.results.executionResult
+}
+
+// ThrowAssertionError is used to trigger an assertion failure from within a cheatcode
+func (t *cheatCodeTracer) ThrowAssertionError() {
+	// Define ABI types
+	uintType, _ := abi.NewType("uint256", "", nil)
+
+	// Create Panic ABI method
+	panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
+		{Name: "", Type: uintType, Indexed: false},
+	}, abi.Arguments{})
+
+	// Set panic code to 1 which represents an assertion failure
+	panicCode := big.NewInt(abiutils.PanicCodeAssertFailed)
+
+	// Pack the values into ABI encoded data
+	packedData, err := panicReturnDataAbi.Inputs.Pack(panicCode)
+	if err != nil {
+		panic(err)
+	}
+
+	// Add selector to the packed data
+	selector := panicReturnDataAbi.ID
+	returnData := append(selector, packedData...)
+
+	// Override the tracer's return error and data
+	t.results.executionResult.Err = vm.ErrExecutionReverted
+	t.results.executionResult.ReturnData = returnData
 }
