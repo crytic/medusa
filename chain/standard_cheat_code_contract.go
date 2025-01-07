@@ -4,6 +4,8 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/logging"
 	"math/big"
 	"os/exec"
 	"strconv"
@@ -525,6 +527,157 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// expectEmit() with no arguments - check all topics and data
+	contract.addMethod(
+		"expectEmit", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			return expectEmitHandler(tracer, true, true, true, true, nil)
+		},
+	)
+
+	// expectEmit(bool,bool,bool,bool) - specify which elements to check
+	contract.addMethod(
+		"expectEmit", abi.Arguments{
+			{Type: typeBool}, // checkTopic1
+			{Type: typeBool}, // checkTopic2
+			{Type: typeBool}, // checkTopic3  
+			{Type: typeBool}, // checkData
+		}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			return expectEmitHandler(tracer,
+				inputs[0].(bool), // checkTopic1
+				inputs[1].(bool), // checkTopic2 
+				inputs[2].(bool), // checkTopic3
+				inputs[3].(bool), // checkData
+				nil,             // emitter
+			)
+		},
+	)
+
+	// expectEmit(address) - check all topics and data from specific emitter
+	contract.addMethod(
+		"expectEmit", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			return expectEmitHandler(tracer, true, true, true, true, inputs[0].(common.Address))
+		},
+	)
+
+	// expectEmit(bool,bool,bool,bool,address) - specify elements to check and emitter
+	contract.addMethod(
+		"expectEmit", abi.Arguments{
+			{Type: typeBool},    // checkTopic1
+			{Type: typeBool},    // checkTopic2
+			{Type: typeBool},    // checkTopic3
+			{Type: typeBool},    // checkData
+			{Type: typeAddress}, // emitter
+		}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			return expectEmitHandler(tracer,
+				inputs[0].(bool), // checkTopic1
+				inputs[1].(bool), // checkTopic2
+				inputs[2].(bool), // checkTopic3
+				inputs[3].(bool), // checkData
+				inputs[4].(common.Address), // emitter
+			)
+		},
+	)
+
 	// Return our precompile contract information.
 	return contract, nil
+}
+
+// expectEmitHandler handles the implementation of the expectEmit cheatcode variants
+func expectEmitHandler(tracer *cheatCodeTracer, checkTopic1, checkTopic2, checkTopic3, checkData bool, emitter common.Address) ([]any, *cheatCodeRawReturnData) {
+	// Get the caller frame
+	cheatCodeCallerFrame := tracer.PreviousCallFrame()
+	
+	// Initialize sub logger
+	logger := logging.GlobalLogger.NewSubLogger("module", "cheatcodes")
+
+	// Flag to track if we've seen the expected event
+	enteredNewCallframe := false
+	expectedEventSeen := false
+
+	// We need to grab the expected log from the next event emitted after this cheat call
+	var expectedLog *types.Log
+
+	// Attach hook for the next log emission 
+	var expectEmitHook func()
+	expectEmitHook = func() {
+		currentFrame := tracer.CurrentCallFrame()
+
+		// Skip cheatcode calls
+		if currentFrame.vmScope == nil {
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(expectEmitHook)
+			return
+		}
+
+		// Update flag if not already updated to indicate that a new callframe was entered
+		if !enteredNewCallframe {
+			enteredNewCallframe = true
+		}
+
+		// Watch for LOG0-LOG4 opcodes
+		if currentFrame.vmOp >= vm.LOG0 && currentFrame.vmOp <= vm.LOG4 {
+			logs := tracer.chain.State().Logs()
+			if len(logs) > 0 {
+				lastLog := logs[len(logs)-1]
+
+				// If this is our first log after setting up expectEmit, save it as our expected log
+				if expectedLog == nil {
+					expectedLog = lastLog
+					return
+				}
+
+				// For subsequent logs, verify they match what we expect
+				if emitter != common.Address{} && lastLog.Address != emitter {
+					return // Skip logs from other emitters
+				}
+
+				// Always check topic[0] (event signature)
+				if len(lastLog.Topics) > 0 && len(expectedLog.Topics) > 0 {
+					if lastLog.Topics[0] == expectedLog.Topics[0] {
+						matched := true
+
+						// Check remaining topics based on flags
+						if checkTopic1 && len(lastLog.Topics) > 1 && len(expectedLog.Topics) > 1 {
+							matched = matched && (lastLog.Topics[1] == expectedLog.Topics[1])
+						}
+						if checkTopic2 && len(lastLog.Topics) > 2 && len(expectedLog.Topics) > 2 {
+							matched = matched && (lastLog.Topics[2] == expectedLog.Topics[2]) 
+						}
+						if checkTopic3 && len(lastLog.Topics) > 3 && len(expectedLog.Topics) > 3 {
+							matched = matched && (lastLog.Topics[3] == expectedLog.Topics[3])
+						}
+
+						// Check log data if requested
+						if checkData {
+							matched = matched && bytes.Equal(lastLog.Data, expectedLog.Data)
+						}
+
+						if matched {
+							expectedEventSeen = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add hook for next frame
+	cheatCodeCallerFrame.onNextFrameEnterHooks.Push(expectEmitHook)
+
+	// Check if we found the expected event when exiting
+	cheatCodeCallerFrame.onTopFrameExitRestoreHooks.Push(func() {
+		if !enteredNewCallframe {
+			logger.Error("expectEmit: No event emitted")
+			tracer.ThrowAssertionError()
+		}
+		if !expectedEventSeen {
+			logger.Error("expectEmit: Event did not match expected event")
+			tracer.ThrowAssertionError()
+		}
+	})
+
+	return nil, nil
 }
