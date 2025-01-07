@@ -2,13 +2,11 @@ package fuzzing
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -62,6 +60,10 @@ type Fuzzer struct {
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected. They are derived from
 	// compilations.
 	contractDefinitions fuzzerTypes.Contracts
+	// slitherResults holds the results obtained from slither. At the moment we do not have use for storing this in the
+	// Fuzzer but down the line we can use slither for other capabilities that may require storage of the results.
+	slitherResults *compilationTypes.SlitherResults
+
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -286,27 +288,32 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test chain
-	
 	var seedFromAST bool
-	// TODO slither should be run on the target in the config not with "."
-	out, err := exec.Command("slither", ".", "--ignore-compile", "--print", "echidna", "--json", "-" ).CombinedOutput()
-	
-	if err != nil {
-		// Fallback to using seed from ast
+
+	// No need to handle the error here since having compilation artifacts implies that we used a supported
+	// platform configuration
+	platformConfig, _ := f.config.Compilation.GetPlatformConfig()
+
+	// Retrieve the compilation target for slither
+	target := platformConfig.GetTarget()
+
+	// Run slither and handle errors
+	slitherResults, err := f.config.Slither.Run(target)
+	if err != nil || slitherResults == nil {
+		if err != nil {
+			// TODO: Log error
+		}
 		seedFromAST = true
 	}
-	var slither compilationTypes.Slither
-	err = json.Unmarshal(out, &slither)
-	if err != nil || slither.Error != "" {
-		// Fallback to using seed from ast
-		seedFromAST = true
-	}
+
+	// If we have results and there were no errors, we will seed the value set using the slither results
 	if !seedFromAST {
+		f.slitherResults = slitherResults
 		// Seed our base value set with the constants extracted by Slither
-		f.baseValueSet.SeedFromSlither(slither.ConstantsUsed)
+		f.baseValueSet.SeedFromSlither(slitherResults)
 	}
-	
+
+	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -314,11 +321,12 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 
 		// Loop for each source
 		for sourcePath, source := range compilation.SourcePathToArtifact {
+			// Seed from the contract's AST if we did not use slither or failed to do so
 			if seedFromAST {
 				// Seed our base value set from every source's AST
 				f.baseValueSet.SeedFromAst(source.Ast)
 			}
-			
+
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
 				contract := source.Contracts[contractName]

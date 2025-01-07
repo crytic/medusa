@@ -62,6 +62,21 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
+// TestSlitherPrinter runs slither and ensures that the constants are correctly added to the value set
+func TestSlitherPrinter(t *testing.T) {
+	// Run a test to simulate out of gas errors to make sure its handled well by the Chain and does not panic.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/slither/slither.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Workers = 1
+		},
+		method: func(f *fuzzerTestContext) {
+			t.Log(f.fuzzer.slitherResults)
+		},
+	})
+}
+
 // TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
