@@ -215,6 +215,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/sign.sol",
 		"testdata/contracts/cheat_codes/utils/parse.sol",
 		"testdata/contracts/cheat_codes/vm/snapshot_and_revert_to.sol",
+		"testdata/contracts/cheat_codes/vm/expect_emit.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
