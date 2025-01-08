@@ -36,6 +36,5 @@ func (vs *ValueSet) SeedFromSlither(slither *compilationTypes.SlitherResults) {
 			vs.AddAddress(common.BigToAddress(addressBigInt))
 			vs.AddBytes([]byte(constant.Value))
 		}
-
 	}
 }

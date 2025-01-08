@@ -301,7 +301,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	slitherResults, err := f.config.Slither.Run(target)
 	if err != nil || slitherResults == nil {
 		if err != nil {
-			// TODO: Log error
+			f.logger.Warn("Failed to run slither", err)
 		}
 		seedFromAST = true
 	}

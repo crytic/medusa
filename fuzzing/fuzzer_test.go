@@ -64,15 +64,46 @@ func TestFuzzerHooks(t *testing.T) {
 
 // TestSlitherPrinter runs slither and ensures that the constants are correctly added to the value set
 func TestSlitherPrinter(t *testing.T) {
-	// Run a test to simulate out of gas errors to make sure its handled well by the Chain and does not panic.
+	expectedInts := []int64{
+		123,  // value of `x`
+		12,   // constant in testFuzz
+		135,  // sum of 123 + 12
+		456,  // value of `y`
+		-123, // negative of 123
+		-12,  // negative of 12
+		-135, // negative of 135
+		-456, // negative of 456
+		0,    // the false in testFuzz is added as zero in the value set
+		1,    // true is evaluated as 1
+		-1,   // negative of 1
+	}
+	expectedAddrs := []common.Address{
+		common.HexToAddress("0"),
+	}
+	expectedStrings := []string{
+		"Hello World!",
+	}
+	// We actually don't need to start the fuzzer and only care about the instantiation of the fuzzer
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/slither/slither.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.Workers = 1
 		},
 		method: func(f *fuzzerTestContext) {
-			t.Log(f.fuzzer.slitherResults)
+			// Look through the value set to make sure all the ints, addrs, and strings are in there
+
+			// Check for ints
+			for _, x := range expectedInts {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsInteger(new(big.Int).SetInt64(x)))
+			}
+			// Check for addresses
+			for _, addr := range expectedAddrs {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsAddress(addr))
+			}
+			// Check for strings
+			for _, str := range expectedStrings {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsString(str))
+			}
 		},
 	})
 }

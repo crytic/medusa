@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // SlitherConfig determines whether to run slither and whether and where to cache the results from slither
@@ -58,7 +58,7 @@ func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
 		// Check to see if the file exists in the first place.
 		// If not, we will re-run slither
 		if _, err = os.Stat(s.CachePath); os.IsNotExist(err) {
-			logging.GlobalLogger.Info("No slither cache file found at ", colors.Bold, s.CachePath)
+			logging.GlobalLogger.Info("No Slither cached results found at ", s.CachePath)
 			haveCachedResults = false
 		} else {
 			// We found the cached file
@@ -66,12 +66,21 @@ func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
 				return nil, err
 			}
 			haveCachedResults = true
+			logging.GlobalLogger.Info("Using cached Slither results found at ", s.CachePath)
 		}
 	}
 
 	// Run slither if we do not have cached results, or we cannot find the cached results
 	if !haveCachedResults {
-		out, err = exec.Command("slither", target, "--ignore-compile", "--print", "echidna", "--json", "-").CombinedOutput()
+		// Log the command
+		cmd := exec.Command("slither", target, "--ignore-compile", "--print", "echidna", "--json", "-")
+		logging.GlobalLogger.Info("Running Slither:\n", cmd.String())
+
+		// Run slither
+		start := time.Now()
+		out, err = cmd.CombinedOutput()
+		logging.GlobalLogger.Info("Finished running Slither in ", time.Since(start).Round(time.Second))
+
 		if err != nil {
 			return nil, err
 		}
