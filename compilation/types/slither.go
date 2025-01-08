@@ -78,11 +78,10 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 		// Run slither
 		start := time.Now()
 		out, err = cmd.CombinedOutput()
-		logging.GlobalLogger.Info("Finished running Slither in ", time.Since(start).Round(time.Second))
-
 		if err != nil {
 			return nil, err
 		}
+		logging.GlobalLogger.Info("Finished running Slither in ", time.Since(start).Round(time.Second))
 	}
 
 	// Capture the slither results
