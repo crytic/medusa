@@ -2,7 +2,7 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/crytic/medusa/logging"
 	"os"
 	"os/exec"
@@ -95,7 +95,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	// Cache the results if we have not cached before. We have also already checked that the output is well-formed
 	// (through unmarshal) so we should be safe.
 	if !haveCachedResults && s.CachePath != "" {
-		// TODO: Should we indent?
+		// TODO: Should we indent the output?
 		err = os.WriteFile(s.CachePath, out, 0644)
 		if err != nil {
 			// If we are unable to write to the cache, we should log the error but continue
@@ -134,9 +134,9 @@ func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 	// If success is not true or there is a non-empty error string, return early
 	if !success || slitherError != "" {
 		if slitherError != "" {
-			return fmt.Errorf(slitherError)
+			return errors.New(slitherError)
 		}
-		return fmt.Errorf("slither returned a failure during parsing")
+		return errors.New("slither returned a failure during parsing")
 	}
 
 	// Now we will extract the constants
