@@ -30,7 +30,7 @@ type ProjectConfig struct {
 
 	// Slither describes the configuration for running slither
 	Slither *types.SlitherConfig `json:"slither"`
-	
+
 	// Logging describes the configuration used for logging to file and console
 	Logging LoggingConfig `json:"logging"`
 }
