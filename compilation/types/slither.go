@@ -98,7 +98,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 		err = os.WriteFile(s.CachePath, out, 0644)
 		if err != nil {
 			// If we are unable to write to the cache, we should log the error but continue
-			logging.GlobalLogger.Warn("Failed to cache Slither results at ", s.CachePath)
+			logging.GlobalLogger.Warn("Failed to cache Slither results at ", s.CachePath, " due to an error:", err)
 			// It is possible for os.WriteFile to create a partially written file so it is best to try to delete it
 			if _, err = os.Stat(s.CachePath); err == nil {
 				// We will not handle the error of os.Remove since we have already checked for the file's existence
