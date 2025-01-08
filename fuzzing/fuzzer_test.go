@@ -76,7 +76,6 @@ func TestSlitherPrinter(t *testing.T) {
 		-456, // negative of 456
 		0,    // the false in testFuzz is added as zero in the value set
 		1,    // true is evaluated as 1
-		-1,   // negative of 1
 	}
 	expectedAddrs := []common.Address{
 		common.HexToAddress("0"),

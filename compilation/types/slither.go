@@ -94,7 +94,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	// Cache the results if we have not cached before. We have also already checked that the output is well-formed
 	// (through unmarshal) so we should be safe.
 	if !haveCachedResults && s.CachePath != "" {
-		// TODO: Should we indent the output?
+		// Cache the data
 		err = os.WriteFile(s.CachePath, out, 0644)
 		if err != nil {
 			// If we are unable to write to the cache, we should log the error but continue
