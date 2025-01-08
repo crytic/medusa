@@ -69,6 +69,8 @@ func addFuzzFlags() error {
 	// Exploration mode
 	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
 
+	// Run slither on-the-fly
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither")
 	return nil
 }
 
@@ -193,5 +195,17 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
 		}
 	}
+
+	// Update configuration to run slither
+	if cmd.Flags().Changed("use-slither") {
+		useSlither, err := cmd.Flags().GetBool("use-slither")
+		if err != nil {
+			return err
+		}
+		if useSlither {
+			projectConfig.Slither.UseSlither = true
+		}
+	}
+
 	return nil
 }
