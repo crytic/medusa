@@ -298,7 +298,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	target := platformConfig.GetTarget()
 
 	// Run slither and handle errors
-	slitherResults, err := f.config.Slither.Run(target)
+	slitherResults, err := f.config.Slither.RunSlither(target)
 	if err != nil || slitherResults == nil {
 		if err != nil {
 			f.logger.Warn("Failed to run slither", err)

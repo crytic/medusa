@@ -11,10 +11,9 @@ import (
 
 // SlitherConfig determines whether to run slither and whether and where to cache the results from slither
 type SlitherConfig struct {
-	// RunSlither determines whether to run slither
-	RunSlither bool `json:"runSlither"`
-	// UseCache determines whether the results of slither should be cached or not
-	UseCache bool `json:"useCache"`
+	// UseSlither determines whether to use slither. If CachePath is non-empty, then the cached results will be attempted
+	// to be used. Otherwise, slither will be run.
+	UseSlither bool `json:"runSlither"`
 	// CachePath determines the path where the slither cache file will be located
 	CachePath string `json:"cachePath"`
 }
@@ -23,8 +22,7 @@ type SlitherConfig struct {
 // of slither with the use of a cache.
 func NewDefaultSlitherConfig() (*SlitherConfig, error) {
 	return &SlitherConfig{
-		RunSlither: true,
-		UseCache:   true,
+		UseSlither: true,
 		CachePath:  "slither_results.json",
 	}, nil
 }
@@ -43,10 +41,11 @@ type Constant struct {
 	Value string `json:"value"`
 }
 
-// Run slither on the provided compilation target. A SlitherResults data structure is returned.
-func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
+// RunSlither on the provided compilation target. RunSlither will use cached results if they exist and write to the cache
+// if we have not written to the cache already. A SlitherResults data structure is returned.
+func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	// Return early if we do not want to run slither
-	if !s.RunSlither {
+	if !s.UseSlither {
 		return nil, nil
 	}
 
@@ -54,7 +53,7 @@ func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
 	var haveCachedResults bool
 	var out []byte
 	var err error
-	if s.UseCache {
+	if s.CachePath != "" {
 		// Check to see if the file exists in the first place.
 		// If not, we will re-run slither
 		if _, err = os.Stat(s.CachePath); os.IsNotExist(err) {
@@ -91,6 +90,23 @@ func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
 	err = json.Unmarshal(out, &slitherResults)
 	if err != nil {
 		return nil, err
+	}
+
+	// Cache the results if we have not cached before. We have also already checked that the output is well-formed
+	// (through unmarshal) so we should be safe.
+	if !haveCachedResults && s.CachePath != "" {
+		// TODO: Should we indent?
+		err = os.WriteFile(s.CachePath, out, 0644)
+		if err != nil {
+			// If we are unable to write to the cache, we should log the error but continue
+			logging.GlobalLogger.Warn("Failed to cache Slither results at ", s.CachePath)
+			// It is possible for os.WriteFile to create a partially written file so it is best to try to delete it
+			if _, err = os.Stat(s.CachePath); err == nil {
+				// We will not handle the error of os.Remove since we have already checked for the file's existence
+				// and we have the right permissions.
+				os.Remove(s.CachePath)
+			}
+		}
 	}
 
 	return &slitherResults, nil
