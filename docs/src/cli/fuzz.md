@@ -109,6 +109,16 @@ The `--deployer` flag allows you to update `medusa`'s contract deployer (equival
 medusa fuzz --deployer "0x40000"
 ```
 
+### `--fail-fast`
+
+The `--fail-fast` flag enables fast failure (equivalent to
+[`testing.StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest))
+
+```shell
+# Enable fast failure
+medusa fuzz --fail-fast
+```
+
 ### `--trace-all`
 
 The `--trace-all` flag allows you to retrieve an execution trace for each element of a call sequence that triggered a test
