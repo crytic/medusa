@@ -109,6 +109,16 @@ The `--deployer` flag allows you to update `medusa`'s contract deployer (equival
 medusa fuzz --deployer "0x40000"
 ```
 
+### `--fail-fast`
+
+The `--fail-fast` flag enables fast failure (equivalent to
+[`testing.StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest))
+
+```shell
+# Enable fast failure
+medusa fuzz --fail-fast
+```
+
 ### `--trace-all`
 
 The `--trace-all` flag allows you to retrieve an execution trace for each element of a call sequence that triggered a test
@@ -128,4 +138,13 @@ The `--no-color` flag disables colored console output (equivalent to
 ```shell
 # Disable colored output
 medusa fuzz --no-color
+```
+
+### `--explore`
+
+The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests) fields to `false` and turns off assertion, property, and optimization testing.
+
+```shell
+# Enable exploration mode
+medusa fuzz --explore
 ```

@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
 
@@ -25,6 +27,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Slither describes the configuration for running slither
+	Slither *types.SlitherConfig `json:"slither"`
 
 	// Logging describes the configuration used for logging to file and console
 	Logging LoggingConfig `json:"logging"`
@@ -59,6 +64,9 @@ type FuzzingConfig struct {
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
 	CoverageEnabled bool `json:"coverageEnabled"`
+
+	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
+	CoverageFormats []string `json:"coverageFormats"`
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
@@ -388,6 +396,15 @@ func (p *ProjectConfig) Validate() error {
 	for _, addr := range p.Fuzzing.PredeployedContracts {
 		if _, err := utils.HexStringToAddress(addr); err != nil {
 			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
+		}
+	}
+
+	// The coverage report format must be either "lcov" or "html"
+	if p.Fuzzing.CoverageFormats != nil {
+		for _, report := range p.Fuzzing.CoverageFormats {
+			if report != "lcov" && report != "html" {
+				return fmt.Errorf("project configuration must specify only valid coverage reports (lcov, html): %s", report)
+			}
 		}
 	}
 

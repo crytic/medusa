@@ -44,7 +44,7 @@ The master branch can be installed using the following command:
 brew install --HEAD medusa
 ```
 
-For more information on building from source or obtaining binaries for Windows and Linux, please refer to the [installation guide](./docs/src/getting_started/installation.md).
+For more information on building from source, using nix, or obtaining binaries for Windows and Linux, please refer to the [installation guide](./docs/src/getting_started/installation.md).
 
 ## Contributing
 
