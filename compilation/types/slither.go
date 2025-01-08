@@ -3,20 +3,30 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
+	"os"
 	"os/exec"
 )
 
-// SlitherConfig determines whether to run slither and whether to cache the results from slither
+// SlitherConfig determines whether to run slither and whether and where to cache the results from slither
 type SlitherConfig struct {
 	// RunSlither determines whether to run slither
 	RunSlither bool `json:"runSlither"`
 	// UseCache determines whether the results of slither should be cached or not
 	UseCache bool `json:"useCache"`
+	// CachePath determines the path where the slither cache file will be located
+	CachePath string `json:"cachePath"`
 }
 
-// NewDefaultSlitherConfig provides a default configuration to run slither
+// NewDefaultSlitherConfig provides a default configuration to run slither. The default configuration enables the running
+// of slither with the use of a cache.
 func NewDefaultSlitherConfig() (*SlitherConfig, error) {
-	return &SlitherConfig{RunSlither: true, UseCache: true}, nil
+	return &SlitherConfig{
+		RunSlither: true,
+		UseCache:   true,
+		CachePath:  "slither_results.json",
+	}, nil
 }
 
 // SlitherResults describes a data structures that holds the interesting constants returned from slither
@@ -41,14 +51,30 @@ func (s *SlitherConfig) Run(target string) (*SlitherResults, error) {
 	}
 
 	// Use the cached slither output if it exists
+	var haveCachedResults bool
+	var out []byte
+	var err error
 	if s.UseCache {
-		// TODO
+		// Check to see if the file exists in the first place.
+		// If not, we will re-run slither
+		if _, err = os.Stat(s.CachePath); os.IsNotExist(err) {
+			logging.GlobalLogger.Info("No slither cache file found at ", colors.Bold, s.CachePath)
+			haveCachedResults = false
+		} else {
+			// We found the cached file
+			if out, err = os.ReadFile(s.CachePath); err != nil {
+				return nil, err
+			}
+			haveCachedResults = true
+		}
 	}
 
-	out, err := exec.Command("slither", target, "--ignore-compile", "--print", "echidna", "--json", "-").CombinedOutput()
-
-	if err != nil {
-		return nil, err
+	// Run slither if we do not have cached results, or we cannot find the cached results
+	if !haveCachedResults {
+		out, err = exec.Command("slither", target, "--ignore-compile", "--print", "echidna", "--json", "-").CombinedOutput()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Capture the slither results
@@ -80,9 +106,12 @@ func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 		return err
 	}
 
-	// If success is not true or there is a non-null error, return early
+	// If success is not true or there is a non-empty error string, return early
 	if !success || slitherError != "" {
-		return fmt.Errorf("failed to parse slither results")
+		if slitherError != "" {
+			return fmt.Errorf(slitherError)
+		}
+		return fmt.Errorf("slither returned a failure during parsing")
 	}
 
 	// Now we will extract the constants
@@ -107,11 +136,11 @@ func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 		return err
 	}
 
+	// We need to de-serialize the description in two separate steps because go is dumb sometimes
 	var descriptionString string
 	if err := json.Unmarshal(echidnaPrinter["description"], &descriptionString); err != nil {
 		return err
 	}
-
 	var description map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(descriptionString), &description); err != nil {
 		return err
