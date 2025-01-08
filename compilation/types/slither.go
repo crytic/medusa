@@ -13,7 +13,7 @@ import (
 type SlitherConfig struct {
 	// UseSlither determines whether to use slither. If CachePath is non-empty, then the cached results will be attempted
 	// to be used. Otherwise, slither will be run.
-	UseSlither bool `json:"runSlither"`
+	UseSlither bool `json:"useSlither"`
 	// CachePath determines the path where the slither cache file will be located
 	CachePath string `json:"cachePath"`
 }
