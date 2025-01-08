@@ -24,7 +24,6 @@ func (vs *ValueSet) SeedFromSlither(slither *compilationTypes.SlitherResults) {
 				vs.AddInteger(big.NewInt(0))
 			} else {
 				vs.AddInteger(big.NewInt(1))
-				vs.AddInteger(big.NewInt(-1))
 			}
 		} else if constant.Type == "string" {
 			// Capture strings
