@@ -3,22 +3,22 @@ package corpus
 import (
 	"bytes"
 	"fmt"
-	"math/big"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
-
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
+	"math/big"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
@@ -282,7 +282,22 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
 		if sequenceInvalidError == nil {
 			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+				// If the filename is a timestamp as expected, use it as a weight for the mutation chooser.
+				re := regexp.MustCompile("[0-9]+")
+				var weight *big.Int
+				if filename := re.FindAllString(sequenceFileData.fileName, 1); len(filename) > 0 {
+					// The timestamp will be the only element in the filename array
+					// If we can parse the timestamp with no errors, set the weight
+					if timestamp, err := strconv.ParseUint(filename[0], 10, 64); err == nil {
+						weight = new(big.Int).SetUint64(timestamp)
+					}
+				}
+
+				// Fallback to 1 if we couldn't parse the timestamp.
+				if weight == nil {
+					weight = big.NewInt(1)
+				}
+				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, weight))
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
