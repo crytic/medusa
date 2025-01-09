@@ -64,12 +64,12 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	assert.NoError(t, err)
 
 	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
 	for _, sender := range senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}
@@ -215,7 +215,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -223,7 +223,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		// Deploy each contract that has no construct arguments.
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -329,7 +329,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -346,7 +346,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		// Deploy each contract
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for contractName, contract := range source.Contracts {
 					contract := contract
 
@@ -467,7 +467,7 @@ func TestChainCloning(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -539,7 +539,7 @@ func TestChainCloning(t *testing.T) {
 	})
 }
 
-// TestCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
+// TestChainCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
 // it replays the same sequence on. It ensures that the ending state is the same.
 // Note: this does not set block timestamps or other data that might be non-deterministic.
 // This does not test replaying with a previous call sequence with different timestamps, etc. It expects the TestChain
@@ -563,7 +563,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {

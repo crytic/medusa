@@ -13,6 +13,12 @@ type TestChainConfig struct {
 
 	// CheatCodeConfig indicates the configuration for EVM cheat codes to use.
 	CheatCodeConfig CheatCodeConfig `json:"cheatCodes"`
+
+	// SkipAccountChecks skips account pre-checks like nonce validation and disallowing non-EOA tx senders (this is done in eth_call, for instance).
+	SkipAccountChecks bool `json:"skipAccountChecks"`
+
+	// ContractAddressOverrides describes contracts that are going to be deployed at deterministic addresses
+	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides,omitempty"`
 }
 
 // CheatCodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheat codes)
@@ -27,9 +33,16 @@ type CheatCodeConfig struct {
 
 // GetVMConfigExtensions derives a vm.ConfigExtensions from the provided TestChainConfig.
 func (t *TestChainConfig) GetVMConfigExtensions() *vm.ConfigExtensions {
-	// Obtain our cheat code precompiled contracts.
+	// Create a copy of the contract address overrides that can be ephemerally updated by medusa-geth
+	contractAddressOverrides := make(map[common.Hash]common.Address)
+	for hash, addr := range t.ContractAddressOverrides {
+		contractAddressOverrides[hash] = addr
+	}
+
+	// Obtain our vm config extensions data structure
 	return &vm.ConfigExtensions{
-		OverrideCodeSizeCheck: t.CodeSizeCheckDisabled,
-		AdditionalPrecompiles: make(map[common.Address]vm.PrecompiledContract),
+		OverrideCodeSizeCheck:    t.CodeSizeCheckDisabled,
+		AdditionalPrecompiles:    make(map[common.Address]vm.PrecompiledContract),
+		ContractAddressOverrides: contractAddressOverrides,
 	}
 }

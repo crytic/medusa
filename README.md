@@ -3,7 +3,7 @@
 `medusa` is a cross-platform [go-ethereum](https://github.com/ethereum/go-ethereum/)-based smart contract fuzzer inspired by [Echidna](https://github.com/crytic/echidna).
 It provides parallelized fuzz testing of smart contracts through CLI, or its Go API that allows custom user-extended testing methodology.
 
-**Disclaimer**: Please note that `medusa` is an **experimental** smart contract fuzzer. Currently, it should _not_ be adopted into production systems. We intend for `medusa` to reach the same capabilities and maturity that Echidna has. Until then, be careful using `medusa` as your primary smart contract fuzz testing solution. Additionally, please be aware that the Go-level testing API is still **under development** and is subject to breaking changes.
+**Disclaimer**: The Go-level testing API is still **under development** and is subject to breaking changes.
 
 ## Features
 
@@ -28,6 +28,23 @@ and then running the following steps from medusa's source directory:
 cd docs
 mdbook serve
 ```
+
+## Install
+
+MacOS users can install the latest release of `medusa` using Homebrew:
+
+```shell
+
+brew install medusa
+```
+
+The master branch can be installed using the following command:
+
+```shell
+brew install --HEAD medusa
+```
+
+For more information on building from source, using nix, or obtaining binaries for Windows and Linux, please refer to the [installation guide](./docs/src/getting_started/installation.md).
 
 ## Contributing
 

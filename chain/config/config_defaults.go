@@ -10,6 +10,7 @@ func DefaultTestChainConfig() (*TestChainConfig, error) {
 			CheatCodesEnabled: true,
 			EnableFFI:         false,
 		},
+		SkipAccountChecks: true,
 	}
 
 	// Return the generated configuration.

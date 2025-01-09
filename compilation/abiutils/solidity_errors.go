@@ -2,10 +2,12 @@ package abiutils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
 )
 
 // An enum is defined below providing all `Panic(uint)` error codes returned in return data when the VM encounters
@@ -37,7 +39,7 @@ func GetSolidityPanicCode(returnError error, returnData []byte, backwardsCompati
 	}
 
 	// Verify we have a revert, and our return data fits exactly the selector + uint256
-	if returnError == vm.ErrExecutionReverted && len(returnData) == 4+32 {
+	if errors.Is(returnError, vm.ErrExecutionReverted) && len(returnData) == 4+32 {
 		uintType, _ := abi.NewType("uint256", "", nil)
 		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
 			{Name: "", Type: uintType, Indexed: false},
@@ -61,7 +63,7 @@ func GetSolidityPanicCode(returnError error, returnData []byte, backwardsCompati
 // If the error and return data are not representative of an Error, then nil is returned.
 func GetSolidityRevertErrorString(returnError error, returnData []byte) *string {
 	// Verify we have a revert, and our return data fits the selector + additional data.
-	if returnError == vm.ErrExecutionReverted && len(returnData) > 4 {
+	if errors.Is(returnError, vm.ErrExecutionReverted) && len(returnData) > 4 {
 		stringType, _ := abi.NewType("string", "", nil)
 		errorReturnDataAbi := abi.NewMethod("Error", "Error", abi.Function, "", false, false, []abi.Argument{
 			{Name: "", Type: stringType, Indexed: false},
@@ -88,7 +90,7 @@ func GetSolidityRevertErrorString(returnError error, returnData []byte) *string 
 func GetSolidityCustomRevertError(contractAbi *abi.ABI, returnError error, returnData []byte) (*abi.Error, []any) {
 	// If no ABI was given or a revert was not encountered, no custom error can be extracted, or may exist,
 	// respectively.
-	if returnError != vm.ErrExecutionReverted || contractAbi == nil {
+	if !errors.Is(returnError, vm.ErrExecutionReverted) || contractAbi == nil {
 		return nil, nil
 	}
 

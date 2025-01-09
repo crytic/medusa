@@ -81,7 +81,7 @@ func assertFailedTestsExpected(f *fuzzerTestContext, expectFailure bool) {
 // corpus. It asserts that the actual result matches the provided expected result.
 func assertCorpusCallSequencesCollected(f *fuzzerTestContext, expectCallSequences bool) {
 	// Obtain our count of mutable (often representing just non-reverted coverage increasing) sequences.
-	callSequenceCount := f.fuzzer.corpus.CallSequenceEntryCount(true, false, false)
+	callSequenceCount, _ := f.fuzzer.corpus.CallSequenceEntryCount()
 
 	// Ensure we captured some coverage-increasing call sequences.
 	if expectCallSequences {

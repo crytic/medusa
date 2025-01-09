@@ -55,6 +55,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   can then be re-used/mutated by the fuzzer during the next fuzzing campaign.
 - **Default**: ""
 
+### `coverageFormats`
+
+- **Type**: [String] (e.g. `["lcov"]`)
+- **Description**: The coverage reports to generate after the fuzzing campaign has completed. The coverage reports are saved
+  in the `coverage` directory within `crytic-export/` or `corpusDirectory` if configured.
+- **Default**: `["lcov", "html"]`
+
 ### `targetContracts`
 
 - **Type**: [String] (e.g. `[FirstContract, SecondContract, ThirdContract]`)
@@ -64,6 +71,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > Thus, if you have a `corpusDirectory` set up, and you change the order of the contracts in the array, the corpus may no
   > longer work since the contract addresses of the target contracts will change. This may render the entire corpus useless.
 - **Default**: `[]`
+
+### `predeployedContracts`
+
+- **Type**: `{"contractName": "contractAddress"}` (e.g.`{"TestContract": "0x1234"}`)
+- **Description**: This configuration parameter allows you to deterministically deploy contracts at predefined addresses.
+  > 🚩 Predeployed contracts do not accept constructor arguments. This may be added in the future.
+- **Default**: `{}`
 
 ### `targetContractBalances`
 
