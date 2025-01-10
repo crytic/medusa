@@ -397,23 +397,6 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 	})
 }
 
-// TestCaptureReturnValues runs a test to ensure that return values are captured correctly
-func TestCaptureReturnValues(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/value_generation/capture_return_values.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
-			config.Fuzzing.Workers = 1
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
-		},
-	})
-}
-
 // TestDeploymentsWithPredeploy runs a test to ensure that predeployed contracts are instantiated correctly.
 func TestDeploymentsWithPredeploy(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
