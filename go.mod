@@ -1,6 +1,6 @@
 module github.com/crytic/medusa
 
-go 1.22
+go 1.23.4
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -8,6 +8,7 @@ require (
 	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.0
+	github.com/mitchellh/go-z3 v0.0.0-20191228203228-4cbedeba863f
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.33.0
 	github.com/shopspring/decimal v1.4.0
@@ -89,3 +90,5 @@ require (
 )
 
 replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20240919134035-0fd368c28419
+
+replace github.com/mitchellh/go-z3 => /Users/bsamuels/projects/go-z3
