@@ -543,10 +543,10 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.5,
+		GenerateRandomAddressBias:       0.05,
 		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.5,
-		GenerateRandomBytesBias:         0.1,
+		GenerateRandomStringBias:        0.05,
+		GenerateRandomBytesBias:         0.05,
 		MutateAddressProbability:        0.1,
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           0.1,

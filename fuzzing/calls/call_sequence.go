@@ -229,7 +229,7 @@ func (cse *CallSequenceElement) DecodedReturnValues() ([]any, error) {
 
 	// Retrieve the ABI-encoded return data
 	encodedReturnData := cse.ChainReference.Block.MessageResults[cse.ChainReference.TransactionIndex].ExecutionResult.ReturnData
-	if encodedReturnData == nil || len(encodedReturnData) == 0 {
+	if len(encodedReturnData) == 0 {
 		return nil, nil
 	}
 
