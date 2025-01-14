@@ -60,6 +60,10 @@ type Fuzzer struct {
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected. They are derived from
 	// compilations.
 	contractDefinitions fuzzerTypes.Contracts
+	// slitherResults holds the results obtained from slither. At the moment we do not have use for storing this in the
+	// Fuzzer but down the line we can use slither for other capabilities that may require storage of the results.
+	slitherResults *compilationTypes.SlitherResults
+
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -284,7 +288,32 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test chain
+	var seedFromAST bool
+
+	// No need to handle the error here since having compilation artifacts implies that we used a supported
+	// platform configuration
+	platformConfig, _ := f.config.Compilation.GetPlatformConfig()
+
+	// Retrieve the compilation target for slither
+	target := platformConfig.GetTarget()
+
+	// Run slither and handle errors
+	slitherResults, err := f.config.Slither.RunSlither(target)
+	if err != nil || slitherResults == nil {
+		if err != nil {
+			f.logger.Warn("Failed to run slither", err)
+		}
+		seedFromAST = true
+	}
+
+	// If we have results and there were no errors, we will seed the value set using the slither results
+	if !seedFromAST {
+		f.slitherResults = slitherResults
+		// Seed our base value set with the constants extracted by Slither
+		f.baseValueSet.SeedFromSlither(slitherResults)
+	}
+
+	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -292,8 +321,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 
 		// Loop for each source
 		for sourcePath, source := range compilation.SourcePathToArtifact {
-			// Seed our base value set from every source's AST
-			f.baseValueSet.SeedFromAst(source.Ast)
+			// Seed from the contract's AST if we did not use slither or failed to do so
+			if seedFromAST {
+				// Seed our base value set from every source's AST
+				f.baseValueSet.SeedFromAst(source.Ast)
+			}
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
@@ -409,6 +441,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
 					found = true
 				} else {
+					// TODO list options for the user to choose from
 					return nil, fmt.Errorf("specify target contract(s)")
 				}
 			}
@@ -834,13 +867,33 @@ func (f *Fuzzer) Start() error {
 	f.printExitingResults()
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
-		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+	if err == nil && len(f.config.Fuzzing.CoverageFormats) > 0 {
+		// Write to the default directory if we have no corpus directory set.
+		coverageReportDir := filepath.Join("crytic-export", "coverage")
+		if f.config.Fuzzing.CorpusDirectory != "" {
+			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		}
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
+
 		if err != nil {
-			f.logger.Error("Failed to generate coverage report", err)
+			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
-			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+			var path string
+			for _, reportType := range f.config.Fuzzing.CoverageFormats {
+				switch reportType {
+				case "html":
+					path, err = coverage.WriteHTMLReport(sourceAnalysis, coverageReportDir)
+				case "lcov":
+					path, err = coverage.WriteLCOVReport(sourceAnalysis, coverageReportDir)
+				default:
+					err = fmt.Errorf("unsupported coverage report type: %s", reportType)
+				}
+				if err != nil {
+					f.logger.Error(fmt.Sprintf("Failed to generate %s coverage report", reportType), err)
+				} else {
+					f.logger.Info(fmt.Sprintf("%s report(s) saved to: %s", reportType, path), colors.Bold, colors.Reset)
+				}
+			}
 		}
 	}
 

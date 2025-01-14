@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 
 	testChainConfig "github.com/crytic/medusa/chain/config"
@@ -31,6 +32,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		return nil, err
 	}
 
+	// Obtain a default slither configuration
+	slitherConfig, err := types.NewDefaultSlitherConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
@@ -46,6 +53,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
+			CoverageFormats:         []string{"html", "lcov"},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -87,6 +95,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Slither:     slitherConfig,
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",

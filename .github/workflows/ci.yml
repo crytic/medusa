@@ -24,7 +24,7 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -82,7 +82,7 @@ jobs:
 
       - name: Sign artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
           inputs: ./medusa-*.tar.gz
 
@@ -92,7 +92,7 @@ jobs:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
           path: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   release:
     needs: [build]
@@ -117,7 +117,7 @@ jobs:
           name: "${{ github.ref_name }}"
           files: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   lint:
     runs-on: ubuntu-latest
@@ -165,7 +165,7 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
@@ -214,7 +214,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select slither-analyzer
 
       - name: Install solc
         run: |

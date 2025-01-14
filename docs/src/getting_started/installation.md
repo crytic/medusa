@@ -22,6 +22,27 @@ Run the following command to install `medusa`:
 brew install medusa
 ```
 
+## Installing with Nix
+
+### Prerequisites
+
+Make sure nix is installed and that `nix-command` and `flake` features are enabled. The [Determinate Systems nix-installer](https://determinate.systems/nix-installer/) will automatically enable these features and is the recommended approach. If nix is already installed without these features enabled, run the following commands.
+
+```
+mkdir -p ~/.config/nix
+echo 'experimental-features = nix-command flakes' > ~/.config/nix/nix.conf
+```
+
+### Build `medusa`
+
+`nix build` will build medusa and wire up independent copies of required dependencies. The resulting binary can be found at `./result/bin/medusa`
+
+### Install `medusa`
+
+After building, you can add the build result to your PATH using nix profiles by running the following command:
+
+`nix profile install ./result`
+
 ## Building from source
 
 ### Prerequisites
