@@ -119,7 +119,7 @@ func GetPanicReason(panicCode uint64) string {
 	case PanicCodeAssertFailed:
 		return "panic: assertion failed"
 	case PanicCodeArithmeticUnderOverflow:
-		return "panic: arithmetic underflow"
+		return "panic: arithmetic underflow/overflow"
 	case PanicCodeDivideByZero:
 		return "panic: division by zero"
 	case PanicCodeEnumTypeConversionOutOfBounds:
