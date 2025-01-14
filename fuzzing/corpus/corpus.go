@@ -3,6 +3,14 @@ package corpus
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -12,13 +20,6 @@ import (
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"math/big"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"sync"
-	"time"
 
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
@@ -363,7 +364,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return 0, 0, err
+				return 0, 0, covErr
 			}
 		}
 	}
