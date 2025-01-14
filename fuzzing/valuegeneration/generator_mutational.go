@@ -276,11 +276,18 @@ func (g *MutationalValueGenerator) mutateBytesInternal(b []byte, length int) []b
 	}
 
 	// If we want a fixed-byte array and the mutated input is smaller than the requested length, then generate a random
-	// byte array
-	// TODO: This should be improved and maybe it is better to pad with zeros
+	// byte array and append it to the existing input
 	if length > 0 && len(input) < length {
-		return g.RandomValueGenerator.GenerateFixedBytes(length)
+		randomSlice := g.RandomValueGenerator.GenerateFixedBytes(length - len(input))
+		input = append(input, randomSlice...)
 	}
+
+	// Similarly, if we want a fixed-byte array and the mutated input is larger than the requested length, then truncate
+	// the array
+	if length > 0 && len(input) > length {
+		return input[:length]
+	}
+
 	return input
 }
 
