@@ -3,11 +3,12 @@ package coverage
 import (
 	"golang.org/x/exp/slices"
 
+	"sync"
+
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -249,6 +250,10 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 	uniquePCs := uint64(0)
 	// Iterate across each contract deployment
 	for _, mapsByAddress := range cm.maps {
+		// Consider the coverage of all of the different deployments of this codehash as a set
+		// And mark a PC as hit if any of the instances has a hit for it
+		uniquePCsForHash := make(map[int]struct{})
+
 		for _, contractCoverageMap := range mapsByAddress {
 			// TODO: Note we are not checking for nil dereference here because we are guaranteed that the successful
 			//  coverage and reverted coverage arrays have been instantiated if we are iterating over it
@@ -259,7 +264,7 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 			for i, hits := range contractCoverageMap.successfulCoverage.executedFlags {
 				// If we hit the PC at least once, we have a unique PC hit
 				if hits != 0 {
-					uniquePCs++
+					uniquePCsForHash[i] = struct{}{}
 
 					// Do not count both success and revert
 					continue
@@ -267,10 +272,12 @@ func (cm *CoverageMaps) UniquePCs() uint64 {
 
 				// This is only executed if the PC was not executed successfully
 				if contractCoverageMap.revertedCoverage.executedFlags != nil && contractCoverageMap.revertedCoverage.executedFlags[i] != 0 {
-					uniquePCs++
+					uniquePCsForHash[i] = struct{}{}
 				}
 			}
 		}
+
+		uniquePCs += uint64(len(uniquePCsForHash))
 	}
 	return uniquePCs
 }

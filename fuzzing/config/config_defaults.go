@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 
 	testChainConfig "github.com/crytic/medusa/chain/config"
@@ -27,6 +28,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 
 	// Try to obtain a default chain config.
 	chainConfig, err = testChainConfig.DefaultTestChainConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Obtain a default slither configuration
+	slitherConfig, err := types.NewDefaultSlitherConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +95,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Slither:     slitherConfig,
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",
