@@ -111,9 +111,9 @@ medusa fuzz --deployer "0x40000"
 
 ### `--use-slither`
 
-The `--use-slither` flag allows you to run Slither on the codebase to extract valuable constants for mutation testing. 
+The `--use-slither` flag allows you to run Slither on the codebase to extract valuable constants for mutation testing.
 Equivalent to [`slither.useSlither`](../project_configuration/slither_config.md#useslither). Note
-that if there are cached results (via [`slither.CachePath`](../project_configuration/slither_config.md#cachepath)) then 
+that if there are cached results (via [`slither.CachePath`](../project_configuration/slither_config.md#cachepath)) then
 the cache will be used.
 
 ```shell
@@ -123,7 +123,7 @@ medusa fuzz --use-slither
 
 ### `--use-slither-force`
 
-The `--use-slither-force` flag is similar to `--use-slither` except the cache at `slither.CachePath` will be 
+The `--use-slither-force` flag is similar to `--use-slither` except the cache at `slither.CachePath` will be
 overwritten.
 
 ```shell
@@ -164,7 +164,7 @@ medusa fuzz --no-color
 
 ### `--explore`
 
-The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests) 
+The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests)
 fields to `false` and turns off assertion, property, and optimization testing.
 
 ```shell
