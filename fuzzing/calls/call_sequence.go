@@ -263,7 +263,7 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.GasLimit,
 		cse.Call.GasPrice.String(),
 		cse.Call.Value.String(),
-		cse.Call.From,
+		utils.TrimLeadingZeroesFromAddress(cse.Call.From.String()),
 	)
 }
 
