@@ -600,6 +600,20 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			break
 		}
 
+		// If our context signalled to close the operation, we will emit the fuzzer worker stopping event and stop
+		// execution
+		if utils.CheckContextDone(fw.fuzzer.ctx) {
+			err := fw.Events.FuzzerWorkerStopping.Publish(FuzzerWorkerStoppingEvent{
+				Worker: fw,
+			})
+			if err != nil {
+				return true, err
+			}
+
+			// TODO: Where do we put the return?
+			//return true, nil
+		}
+
 		// Run all shrink requests first
 		for _, shrinkCallSequenceRequest := range fw.shrinkCallSequenceRequests {
 			_, err = fw.shrinkCallSequence(shrinkCallSequenceRequest)
@@ -607,14 +621,10 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 				return false, err
 			}
 		}
+
 		// Need to reset the shrink call sequence request array if it's a non-zero length
 		if len(fw.shrinkCallSequenceRequests) > 0 {
 			fw.shrinkCallSequenceRequests = make([]ShrinkCallSequenceRequest, 0)
-		}
-
-		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
-			return true, nil
 		}
 
 		// Emit an event indicating the worker is about to test a new call sequence.
