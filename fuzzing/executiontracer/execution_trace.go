@@ -13,6 +13,7 @@ import (
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -141,19 +142,19 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 	var callInfo string
 	if callFrame.IsProxyCall() {
 		if callFrame.ExecutedCode {
-			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CodeAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), utils.TrimLeadingZeroesFromAddress(callFrame.CodeAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
 		}
 	} else {
 		if callFrame.ExecutedCode {
 			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
 				callInfo = fmt.Sprintf("%v.%v(%v)", codeContractName, methodName, *inputArgumentsDisplayText)
 			} else {
-				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
 			}
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
 		}
 	}
 
