@@ -16,14 +16,18 @@ type SlitherConfig struct {
 	UseSlither bool `json:"useSlither"`
 	// CachePath determines the path where the slither cache file will be located
 	CachePath string `json:"cachePath"`
+	// OverwriteCache determines whether to overwrite the cache or not
+	// We will not serialize this value since it is something we want to control internally
+	OverwriteCache bool `json:"-"`
 }
 
 // NewDefaultSlitherConfig provides a default configuration to run slither. The default configuration enables the
 // running of slither with the use of a cache.
 func NewDefaultSlitherConfig() (*SlitherConfig, error) {
 	return &SlitherConfig{
-		UseSlither: true,
-		CachePath:  "slither_results.json",
+		UseSlither:     true,
+		CachePath:      "slither_results.json",
+		OverwriteCache: false,
 	}, nil
 }
 
@@ -53,7 +57,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	var haveCachedResults bool
 	var out []byte
 	var err error
-	if s.CachePath != "" {
+	if s.CachePath != "" && !s.OverwriteCache {
 		// Check to see if the file exists in the first place.
 		// If not, we will re-run slither
 		if _, err = os.Stat(s.CachePath); os.IsNotExist(err) {
