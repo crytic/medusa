@@ -19,6 +19,17 @@ type TestChainConfig struct {
 
 	// ContractAddressOverrides describes contracts that are going to be deployed at deterministic addresses
 	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides,omitempty"`
+
+	// ForkConfig indicates the RPC configuration if fuzzing using a network fork.
+	ForkConfig ForkConfig `json:"forkConfig,omitempty"`
+}
+
+// ForkConfig describes configuration for fuzzing using a network fork
+type ForkConfig struct {
+	ForkModeEnabled bool   `json:"forkModeEnabled"`
+	RpcUrl          string `json:"rpcUrl"`
+	RpcBlock        uint64 `json:"rpcBlock"`
+	PoolSize        uint   `json:"poolSize"`
 }
 
 // CheatCodeConfig describes any configuration options related to the use of vm extensions (a.k.a. cheat codes)

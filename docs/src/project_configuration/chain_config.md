@@ -29,3 +29,29 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
 - **Description**: Determines whether the `ffi` cheatcode is enabled.
   > 🚩 Enabling the `ffi` cheatcode may allow for arbitrary code execution on your machine.
 - **Default**: `false`
+
+## Fork Configuration
+
+### `forkModeEnabled`
+
+- **Type**: Boolean
+- **Description**: Determines whether fork mode is enabled
+- **Default**: `false`
+
+### `rpcUrl`
+
+- **Type**: String
+- **Description**: Determines the RPC URL that will be queried during fork mode.
+- **Default**: `n/a`
+
+### `rpcBlock`
+
+- **Type**: Integer
+- **Description**: Determines the block height that fork state will be queried for. Block tags like `LATEST` are not supported.
+- **Default**: `1`
+
+### `poolSize`
+
+- **Type**: Integer
+- **Description**: Determines the size of the client pool used to query the RPC. It is recommended to use a pool size that is 2-3x the number of workers used, but smaller pools may be required to avoid exceeding external RPC query limits.
+- **Default**: `20`
