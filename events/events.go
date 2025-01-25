@@ -19,7 +19,7 @@ var globalEventHandlers map[string][]any
 
 // globalEventHandlersLock is a lock that provides thread synchronization when accessing globalEventHandlers. This
 // helps in avoiding concurrent access panics.
-var globalEventHandlersLock sync.Mutex
+var globalEventHandlersLock sync.RWMutex
 
 // SubscribeAny adds an EventHandler to the list of global EventHandler objects for this a given event data type.
 // When an event is published, the callback will be triggered with the event data.
@@ -76,9 +76,9 @@ func (e *EventEmitter[T]) Publish(event T) error {
 	// If we have any handlers, invoke them.
 	if globalEventHandlers != nil {
 		// Acquire a thread lock when fetching our event handlers to avoid concurrent access panics.
-		globalEventHandlersLock.Lock()
+		globalEventHandlersLock.RLock()
 		callbacks := globalEventHandlers[eventType.String()]
-		globalEventHandlersLock.Unlock()
+		globalEventHandlersLock.RUnlock()
 
 		// Call all relevant event handlers.
 		for i := 0; i < len(callbacks); i++ {
