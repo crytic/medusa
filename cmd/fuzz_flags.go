@@ -69,8 +69,11 @@ func addFuzzFlags() error {
 	// Exploration mode
 	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
 
-	// Run slither on-the-fly
-	fuzzCmd.Flags().Bool("use-slither", false, "runs slither")
+	// Run slither while still trying to use the cache
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+
+	// Run slither and overwrite the cache
+	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
 	return nil
 }
 
@@ -196,7 +199,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update configuration to run slither
+	// Update configuration to run slither while using current cache
 	if cmd.Flags().Changed("use-slither") {
 		useSlither, err := cmd.Flags().GetBool("use-slither")
 		if err != nil {
@@ -204,6 +207,18 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 		if useSlither {
 			projectConfig.Slither.UseSlither = true
+		}
+	}
+
+	// Update configuration to run slither and overwrite the current cache
+	if cmd.Flags().Changed("use-slither-force") {
+		useSlitherForce, err := cmd.Flags().GetBool("use-slither-force")
+		if err != nil {
+			return err
+		}
+		if useSlitherForce {
+			projectConfig.Slither.UseSlither = true
+			projectConfig.Slither.OverwriteCache = true
 		}
 	}
 

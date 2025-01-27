@@ -287,9 +287,9 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	}
 
 	// Select a random method
-	// There is a 1/100 chance that a pure method will be invoked or if there are only pure functions that are callable
+	// There is a 1/1000 chance that a pure method will be invoked or if there are only pure functions that are callable
 	var selectedMethod *contracts.DeployedContractMethod
-	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0) || callOnlyPureFunctions {
+	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(1000) == 0) || callOnlyPureFunctions {
 		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
 	} else {
 		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]

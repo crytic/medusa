@@ -262,10 +262,15 @@ func (fw *FuzzerWorker) updateMethods() {
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
 // deployed in the Chain.
 // Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
-func (fw *FuzzerWorker) testNextCallSequence() error {
+func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+	// We will make a copy of the worker's base value set so that we can rollback to it at the end of the call sequence
+	originalValueSet := fw.valueSet.Clone()
+
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
+		// Reset the value set back to the original
+		fw.valueSet = originalValueSet
 		if err == nil {
 			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
 		}
@@ -285,11 +290,21 @@ func (fw *FuzzerWorker) testNextCallSequence() error {
 
 	// Our "post execution check function" method will check coverage and call all testing functions. If one returns a
 	// request for a shrunk call sequence, we exit our call sequence execution immediately to go fulfill the shrink
-	// request.
+	// request. Additionally, the execution check function will also attempt to add any return data to the value set for
+	// this call sequence. Note that the value set is reset after each call sequence (see the defer section above)
 	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
+		// Get the last call sequence element that was executed
+		latestCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		// Get the decoded return values and add it to the base value set
+		// Don't throw an error since we care more about coverage than adding the return values to the base value set
+		decodedReturnValues, err := latestCallSequenceElement.DecodedReturnValues()
+		if decodedReturnValues != nil && err == nil {
+			fw.valueSet.Add(decodedReturnValues)
+		}
+
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		err = fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return true, err
 		}

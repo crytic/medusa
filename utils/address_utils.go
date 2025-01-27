@@ -2,8 +2,9 @@ package utils
 
 import (
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/common"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // HexStringToAddress converts a hex string (with or without the "0x" prefix) to a common.Address. Returns the parsed
@@ -44,4 +45,15 @@ func HexStringsToAddresses(addressHexStrings []string) ([]common.Address, error)
 		addresses = append(addresses, address)
 	}
 	return addresses, nil
+}
+
+// TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability
+// Example: sender=0x0000000000000000000000000000000000030000 becomes sender=0x30000 when shown on console
+func TrimLeadingZeroesFromAddress(hexString string) string {
+	if strings.HasPrefix(hexString, "0x") {
+		// Retain "0x" and trim leading zeroes from the rest of the string
+		return "0x" + strings.TrimLeft(hexString[2:], "0")
+	}
+	// Trim leading zeroes if there's no "0x" prefix
+	return strings.TrimLeft(hexString, "0")
 }

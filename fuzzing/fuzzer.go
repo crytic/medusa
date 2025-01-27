@@ -533,9 +533,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// Revert to genesis and re-run the failed contract deployment tx.
+					// Revert to one block before and re-run the failed contract deployment tx.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockNumber(0)
+					err = testChain.RevertToBlockNumber(block.Header.Number.Uint64() - 1)
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
@@ -575,10 +575,10 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.5,
+		GenerateRandomAddressBias:       0.05,
 		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.5,
-		GenerateRandomBytesBias:         0.5,
+		GenerateRandomStringBias:        0.05,
+		GenerateRandomBytesBias:         0.05,
 		MutateAddressProbability:        0.1,
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           0.1,
