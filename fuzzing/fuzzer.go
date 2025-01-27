@@ -651,7 +651,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}
 	}
 
-	// Define a flag that indicates whether we have not cancelled o
+	// Define a flag that indicates whether we have cancelled fuzzing or not
 	working := !utils.CheckContextDone(f.ctx)
 
 	// Create workers and start fuzzing.
@@ -715,7 +715,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
-	if f.ctxCancelFunc != nil {
+	if err != nil && f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
 	}
 
@@ -858,13 +858,6 @@ func (f *Fuzzer) Start() error {
 		}
 	}
 
-	// Publish a fuzzer stopping event.
-	fuzzerStoppingErr := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: err})
-	if err == nil && fuzzerStoppingErr != nil {
-		err = fuzzerStoppingErr
-		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
-	}
-
 	// Print our results on exit.
 	f.printExitingResults()
 
@@ -906,6 +899,14 @@ func (f *Fuzzer) Start() error {
 // Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
 // occurs.
 func (f *Fuzzer) Stop() {
+	// Emit the fuzzer stopping event
+	// Since event emissions are synchronous, we can perform any necessary tasks before clean-up
+	err := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f})
+	// We will log the error but continue to exit gracefully
+	if err != nil {
+		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
+	}
+
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()

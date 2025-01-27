@@ -191,20 +191,6 @@ func (t *OptimizationTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreated
 	// Subscribe to relevant worker events.
 	event.Worker.Events.ContractAdded.Subscribe(t.onWorkerDeployedContractAdded)
 	event.Worker.Events.ContractDeleted.Subscribe(t.onWorkerDeployedContractDeleted)
-	event.Worker.Events.FuzzerWorkerStopping.Subscribe(t.onWorkerStopping)
-	return nil
-}
-
-// onWorkerStopping is the event handler triggered when a fuzzer worker is about to stop executing. If we have a shrink
-// request, we will ask the first worker that emits this event to shrink the call sequence.
-func (t *OptimizationTestCaseProvider) onWorkerStopping(event FuzzerWorkerStoppingEvent) error {
-	// Guard clause to exit early if we don't have a call sequence to shrink
-	if t.shrinkCallSequenceRequest == nil {
-		return nil
-	}
-	// TODO: We should immediately nil out the shrink request so that other workers that hit this point don't shrink the
-	//  same call sequence
-
 	return nil
 }
 
@@ -313,6 +299,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		if newValue.Cmp(testCase.value) == 1 {
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
+				CallSequenceToShrink: callSequence,
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 					// First verify the contract to the optimization test is still deployed to call upon.
 					_, optimizationTestContractDeployed := worker.deployedContracts[workerOptimizationTestMethod.Address]

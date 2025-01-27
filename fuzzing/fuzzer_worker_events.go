@@ -24,9 +24,6 @@ type FuzzerWorkerEvents struct {
 	// FuzzerWorkerChainSetup emits events when the FuzzerWorker has set up its chain and is about to begin fuzzing.
 	FuzzerWorkerChainSetup events.EventEmitter[FuzzerWorkerChainSetupEvent]
 
-	// FuzzerWorkerStopping emits an event when the fuzzer worker is stopping
-	FuzzerWorkerStopping events.EventEmitter[FuzzerWorkerStoppingEvent]
-
 	// CallSequenceTesting emits events when the FuzzerWorker is about to generate and test a new
 	// call sequence.
 	CallSequenceTesting events.EventEmitter[FuzzerWorkerCallSequenceTestingEvent]

@@ -261,8 +261,8 @@ func (fw *FuzzerWorker) updateMethods() {
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
 // deployed in the Chain.
-// Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
-func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+// Returns any requests for call sequence shrinking or an error if one occurs.
+func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, error) {
 	// We will make a copy of the worker's base value set so that we can rollback to it at the end of the call sequence
 	originalValueSet := fw.valueSet.Clone()
 
@@ -280,8 +280,11 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	var isNewSequence bool
 	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	// Define our shrink requests we'll collect during execution.
+	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
@@ -316,7 +319,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 			if err != nil {
 				return true, err
 			}
-			fw.shrinkCallSequenceRequests = append(fw.shrinkCallSequenceRequests, newShrinkRequests...)
+			shrinkCallSequenceRequests = append(shrinkCallSequenceRequests, newShrinkRequests...)
 		}
 
 		// Update our metrics
@@ -330,7 +333,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		}
 
 		// If we have shrink requests, it means we violated a test, so we quit at this point
-		return len(fw.shrinkCallSequenceRequests) > 0, nil
+		return len(shrinkCallSequenceRequests) > 0, nil
 	}
 
 	// Execute our call sequence.
@@ -339,23 +342,24 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 	// If we encountered an error, report it.
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
+	// TODO: Probably need to check something here
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
-		return nil
+		return nil, nil
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
 	if !isNewSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
-			fw.shrinkCallSequenceRequests[i].RecordResultInCorpus = false
+			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
 		}
 	}
 
 	// Return our results accordingly.
-	return nil
+	return shrinkCallSequenceRequests, nil
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
@@ -407,6 +411,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
+	// TODO: Probably need to check something here
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
 		return false, nil
 	}
@@ -607,34 +612,29 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Enter the main fuzzing loop. In the main fuzzing loop, we will always handle shrink requests first.
 	// While there are no shrink requests, we will execute call sequence restricted by our memory database size based
 	// on our config variable. When the limit is reached, we exit this method gracefully, which will cause the fuzzer
-	// to recreate this worker with a fresh memory database.
+	// to recreate this worker with a fresh memory database. Note that if fuzzing is cancelled, we will execute any
+	// outstanding shrink requests and then exit.
 	sequencesTested := 0
-	for {
-		// If we have hit the configured reset limit, exit the loop
-		if sequencesTested == fw.fuzzer.config.Fuzzing.WorkerResetLimit {
-			break
-		}
-
-		// If our context signalled to close the operation, we will emit the fuzzer worker stopping event and stop
-		// execution
+	fuzzingCancelled := false
+	for sequencesTested <= fw.fuzzer.config.Fuzzing.WorkerResetLimit {
+		// If our context signalled to close the operation, we will complete shrinking any outstanding shrink requests
+		// and then return immediately
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
-			err := fw.Events.FuzzerWorkerStopping.Publish(FuzzerWorkerStoppingEvent{
-				Worker: fw,
-			})
-			if err != nil {
-				return true, err
-			}
-
-			// TODO: Where do we put the return?
-			//return true, nil
+			fuzzingCancelled = true
 		}
 
-		// Run all shrink requests first
+		// Run all shrink requests
+		// Note that if fuzzing is cancelled, we will run any outstanding shrink requests and then exit
 		for _, shrinkCallSequenceRequest := range fw.shrinkCallSequenceRequests {
 			_, err = fw.shrinkCallSequence(shrinkCallSequenceRequest)
 			if err != nil {
 				return false, err
 			}
+		}
+
+		// If we have cancelled fuzzing, return immediately
+		if fuzzingCancelled {
+			return true, nil
 		}
 
 		// Need to reset the shrink call sequence request array if it's a non-zero length
@@ -651,10 +651,13 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Test a new sequence
-		err = fw.testNextCallSequence()
+		shrinkRequests, err := fw.testNextCallSequence()
 		if err != nil {
 			return false, err
 		}
+
+		// Add any new shrink requests to our list
+		fw.shrinkCallSequenceRequests = append(fw.shrinkCallSequenceRequests, shrinkRequests...)
 
 		// Emit an event indicating the worker finished testing a new call sequence.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
