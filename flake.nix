@@ -15,7 +15,9 @@
       packages = {
         medusa = pkgs.buildGoModule {
           pname = "medusa";
-          version = "0.1.8"; # from cmd/root.go
+          version = builtins.head (
+            builtins.match ''.*const version = "([^"]+)".*'' (builtins.readFile ./cmd/root.go)
+          );
           src = ./.;
           vendorHash = "sha256-12Xkg5dzA83HQ2gMngXoLgu1c9KGSL6ly5Qz/o8U++8=";
           nativeBuildInputs = [
