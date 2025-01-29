@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/hex"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -72,11 +71,11 @@ func ResolveAddressToLabelFromString(str string, addressToLabel map[common.Addre
 	processedString := addressRegex.ReplaceAllStringFunc(str, func(match string) string {
 		address := common.HexToAddress(match) // Convert the match to an Ethereum address
 		if label, exists := addressToLabel[address]; exists {
-			fmt.Printf("Replacing address %s with label %s in element: %s\n", match, label, str)
+			//fmt.Printf("Replacing address %s with label: %s\n", match, label)
 			return label // Replace address with label
 		}
 		trimmedAddress := TrimLeadingZeroesFromAddress(match)
-		fmt.Printf("Address %s does not have a label, trimming leading zeroes to: %s\n", match, trimmedAddress)
+		//fmt.Printf("Address %s does not have a label, trimming leading zeroes to: %s\n", match, trimmedAddress)
 		return trimmedAddress // Keep the address unchanged if no label is found
 	})
 
