@@ -24,6 +24,9 @@ type OptimizationTestCase struct {
 	targetMethod abi.Method
 	// callSequence describes the call sequence that maximized the value
 	callSequence *calls.CallSequence
+	// shrinkCallSequenceRequest is the shrink request that will be executed to identify the optimal call sequence
+	// that maximizes the value
+	shrinkCallSequenceRequest *ShrinkCallSequenceRequest
 	// value is used to store the maximum value returned by the test method
 	value *big.Int
 	// valueLock is used for thread-synchronization when updating the value

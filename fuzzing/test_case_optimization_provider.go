@@ -29,11 +29,6 @@ type OptimizationTestCaseProvider struct {
 
 	// workerStates is a slice where each element stores state for a given worker index.
 	workerStates []optimizationTestCaseProviderWorkerState
-
-	// shrinkCallSequenceRequest represents the ShrinkCallSequenceRequest that will be executed right before the fuzzer
-	// exits. We do not continuously shrink since it is expensive to shrink in optimization mode. Thus, we will cache
-	// the latest shrink request and right before the fuzzer exits, we will shrink that sequence.
-	shrinkCallSequenceRequest *ShrinkCallSequenceRequest
 }
 
 // optimizationTestCaseProviderWorkerState represents the state for an individual worker maintained by
@@ -197,6 +192,24 @@ func (t *OptimizationTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreated
 	// Subscribe to relevant worker events.
 	event.Worker.Events.ContractAdded.Subscribe(t.onWorkerDeployedContractAdded)
 	event.Worker.Events.ContractDeleted.Subscribe(t.onWorkerDeployedContractDeleted)
+	event.Worker.Events.TestingComplete.Subscribe(t.onWorkerTestingComplete)
+	return nil
+}
+
+// onWorkerTestingComplete is the event handler triggered when a FuzzerWorker has completed testing of call sequences
+// and is about to exit the fuzzing loop. We use this event to attach a shrink request to the worker, if a request exists.
+// This way we are only shrinking once throughout the entire fuzzing campaign in optimization mode.
+func (t *OptimizationTestCaseProvider) onWorkerTestingComplete(event FuzzerWorkerTestingCompleteEvent) error {
+	if t.shrinkCallSequenceRequest != nil {
+		shrunkenSequence, err := event.Worker.shrinkCallSequence(*t.shrinkCallSequenceRequest)
+		if err != nil {
+			return err
+		}
+
+		// Reset it to nil so that only the first worker that is trying to exit is requested to handle the shrink request
+		// The other workers can exit gracefully
+		t.shrinkCallSequenceRequest = nil
+	}
 	return nil
 }
 

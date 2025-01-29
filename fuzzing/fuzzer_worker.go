@@ -15,6 +15,9 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+// TestCaseID represents a unique identifier for a test case
+type TestCaseID string
+
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
 // Fuzzer-generated transaction sequences.
 type FuzzerWorker struct {
@@ -64,6 +67,9 @@ type FuzzerWorker struct {
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
+
+	// testCasesFinished is a map to keep track of finished test cases
+	testCasesFinished map[TestCaseID]TestCase
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -96,6 +102,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
 		valueSet:                   valueSet,
+		testCasesFinished:          make(map[TestCaseID]TestCase),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -617,10 +624,17 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	sequencesTested := 0
 	fuzzingCancelled := false
 	for sequencesTested <= fw.fuzzer.config.Fuzzing.WorkerResetLimit {
-		// If our context signalled to close the operation, we will complete shrinking any outstanding shrink requests
+		// If our context signaled to close the operation, we will complete shrinking any outstanding shrink requests
 		// and then return immediately
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			fuzzingCancelled = true
+			// TODO: First figure out if there is error within the context
+			err := fw.Events.TestingComplete.Publish(FuzzerWorkerTestingCompleteEvent{
+				Worker: fw,
+			})
+			if err != nil {
+				return true, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing is complete: %v", err)
+			}
 		}
 
 		// Run all shrink requests
@@ -674,4 +688,12 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
 	return false, nil
+}
+
+// ReportTestCaseFinished is a method to report the completion of a test case
+func (fw *FuzzerWorker) ReportTestCaseFinished(testCase TestCase) {
+	if _, alreadyExists := fw.testCasesFinished[TestCaseID(testCase.ID())]; alreadyExists {
+		return
+	}
+	fw.testCasesFinished[TestCaseID(testCase.ID())] = testCase
 }
