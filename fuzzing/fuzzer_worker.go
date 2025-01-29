@@ -28,9 +28,9 @@ type FuzzerWorker struct {
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
 
-	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
-	// to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
-	testingBaseBlockNumber uint64
+	// testingBaseBlockIndex refers to the block index within the test chain at which all contracts for testing have been deployed,
+	// prior to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
+	testingBaseBlockIndex uint64
 
 	// deployedContracts describes a mapping of deployed contractDefinitions and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
@@ -266,7 +266,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		// Reset the value set back to the original
 		fw.valueSet = originalValueSet
 		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+			err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 		}
 	}()
 
@@ -362,7 +362,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	var err error
 	defer func() {
 		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+			err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 		}
 	}()
 
@@ -526,7 +526,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	}
 
 	// Reset our state before running tracing in FinishedCallback.
-	err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+	err := fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +540,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	}
 
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
-	if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+	if err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex); err != nil {
 		return nil, err
 	}
 	return optimizedSequence, err
@@ -596,9 +596,9 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
 
-	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
+	// Save the current block index as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
-	fw.testingBaseBlockNumber = fw.chain.HeadBlockNumber()
+	fw.testingBaseBlockIndex = uint64(len(fw.chain.CommittedBlocks()))
 
 	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
 	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate

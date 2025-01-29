@@ -87,15 +87,21 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Set the time for the pending block context and the pending block
 			// The block context will reflect the time change in the current EVM context
-			// And the pending block time will allow for the time to reflect until it is
-			// changed again.
+			// And the pending block time will allow for the new time to reflect
+			// permanently for the remainder of the chain.
 			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
 			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
 
-			// If the chain or transaction reverts, we will restore the original time
+			// If the transaction reverts, we will restore the original time
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
-				tracer.chain.pendingBlockContext.Time = originalTime
-				tracer.chain.pendingBlock.Header.Time = originalTime
+				// We need to check if the pending block context and pending block are not nil, as they may be nil
+				// when the chain is being reverted back to its original state.
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.Time = originalTime
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.Time = originalTime
+				}
 			})
 			return nil, nil
 		},
@@ -113,15 +119,21 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Set the block number for the pending block context and the pending block
 			// The block context will reflect the block number change in the current EVM context
-			// And the pending block number will allow for the number to reflect until it is
-			// changed again.
+			// And the pending block number will allow for the number to reflect
+			// permanently for the remainder of the chain.
 			tracer.chain.pendingBlockContext.BlockNumber.Set(newBlockNumber)
 			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
 
-			// If the chain or transaction reverts, we will restore the original block number
+			// If the transaction reverts, we will restore the original block number
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
-				tracer.chain.pendingBlockContext.BlockNumber.Set(originalBlockNumber)
-				tracer.chain.pendingBlock.Header.Number.Set(originalBlockNumber)
+				// We need to check if the pending block context and pending block are not nil, as they may be nil
+				// when the chain is being reverted back to its original state.
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.BlockNumber.Set(originalBlockNumber)
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.Number.Set(originalBlockNumber)
+				}
 			})
 
 			return nil, nil
