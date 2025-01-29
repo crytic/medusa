@@ -95,6 +95,14 @@ type Fuzzer struct {
 	logger *logging.Logger
 }
 
+// fuzzerErr is a custom type to be used to report an error within the fuzzer context
+type fuzzerErr string
+
+const (
+	// fuzzerErrKey is of type fuzzerErr and will be the key to represent an error within the fuzzer context
+	fuzzerErrKey fuzzerErr = "fuzzerErr"
+)
+
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
@@ -716,6 +724,8 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 
 	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
 	if err != nil && f.ctxCancelFunc != nil {
+		// We need to update our context with an error so that anyone subscribing to the cancellation of the fuzzer is aware that an error occured
+		f.ctx = context.WithValue(f.ctx, fuzzerErrKey, err)
 		f.ctxCancelFunc()
 	}
 
@@ -823,6 +833,9 @@ func (f *Fuzzer) Start() error {
 	// Start our printing loop now that we're about to begin fuzzing.
 	go f.printMetricsLoop()
 
+	// Start our goroutine that monitors when the fuzzing campaign is cancelled
+	go f.monitorContextCancellation()
+
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
@@ -896,17 +909,25 @@ func (f *Fuzzer) Start() error {
 	return err
 }
 
-// Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
-// occurs.
-func (f *Fuzzer) Stop() {
-	// Emit the fuzzer stopping event
-	// Since event emissions are synchronous, we can perform any necessary tasks before clean-up
-	err := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f})
+// monitorContextCancellation monitors when the fuzzing campaign is cancelled and emits the fuzzer stopping event once the campaign is over.
+func (f *Fuzzer) monitorContextCancellation() {
+	// Keep checking if the fuzzing campaign is cancelled every 100 milliseconds
+	for !utils.CheckContextDone(f.ctx) {
+		time.Sleep(time.Millisecond * 100)
+	}
+
+	// We are exiting so we need to emit the fuzzer stopping event
+	err := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: f.ctx.Value(fuzzerErrKey).(error)})
 	// We will log the error but continue to exit gracefully
+	// TODO: Do we really need to log this error?
 	if err != nil {
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
+}
 
+// Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
+// occurs.
+func (f *Fuzzer) Stop() {
 	// Call the cancel function on our running context to stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()

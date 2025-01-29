@@ -167,6 +167,11 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
+	// If there is no error, we request a shrink request
+	if event.err == nil {
+		// TODO: Request a shrink request
+	}
+
 	// Clear our optimization test methods
 	t.workerStates = nil
 
@@ -176,6 +181,7 @@ func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEven
 			testCase.status = TestCaseStatusPassed
 		}
 	}
+
 	return nil
 }
 
