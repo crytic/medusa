@@ -2,6 +2,8 @@ package utils
 
 import (
 	"encoding/hex"
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,6 +47,40 @@ func HexStringsToAddresses(addressHexStrings []string) ([]common.Address, error)
 		addresses = append(addresses, address)
 	}
 	return addresses, nil
+}
+
+// ResolveAddressToLabelFromElements parse array elements for ethereum addresses and if found replace that with a label if one exists
+func ResolveAddressToLabelFromElements(elements []any, addressToLabel map[common.Address]string) []any {
+	updatedElements := []any{}
+	for _, element := range elements {
+		// Check if the element is a string
+		if str, ok := element.(string); ok {
+			// Replace addresses in the string with their labels
+			updatedElements = append(updatedElements, ResolveAddressToLabelFromString(str, addressToLabel))
+		} else {
+			// Keep non-string elements unchanged
+			updatedElements = append(updatedElements, element)
+		}
+	}
+
+	return updatedElements
+}
+
+// ResolveAddressToLabelFromString parse a string for ethereum addresses and if found replace that with a label if one exists
+func ResolveAddressToLabelFromString(str string, addressToLabel map[common.Address]string) string {
+	addressRegex := regexp.MustCompile(`0x[a-fA-F0-9]{40}`)
+	processedString := addressRegex.ReplaceAllStringFunc(str, func(match string) string {
+		address := common.HexToAddress(match) // Convert the match to an Ethereum address
+		if label, exists := addressToLabel[address]; exists {
+			fmt.Printf("Replacing address %s with label %s in element: %s\n", match, label, str)
+			return label // Replace address with label
+		}
+		trimmedAddress := TrimLeadingZeroesFromAddress(match)
+		fmt.Printf("Address %s does not have a label, trimming leading zeroes to: %s\n", match, trimmedAddress)
+		return trimmedAddress // Keep the address unchanged if no label is found
+	})
+
+	return processedString
 }
 
 // TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability

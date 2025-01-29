@@ -168,6 +168,17 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// Label: Sets a label for an address.
+	contract.addMethod(
+		"label", abi.Arguments{{Type: typeAddress}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			addr := inputs[0].(common.Address)
+			lbl := inputs[1].(string)
+			tracer.chain.AddressToLabel[addr] = lbl
+			return nil, nil
+		},
+	)
+
 	// Load: Loads a storage slot value from a given account.
 	contract.addMethod(
 		"load", abi.Arguments{{Type: typeAddress}, {Type: typeBytes32}}, abi.Arguments{{Type: typeBytes32}},

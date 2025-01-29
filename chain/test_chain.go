@@ -75,6 +75,9 @@ type TestChain struct {
 	// This is constructed over the kvstore.
 	db ethdb.Database
 
+	// AddressToLabel maps an address to its label if one exists
+	AddressToLabel map[common.Address]string
+
 	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
 	callTracerRouter *TestChainTracerRouter
@@ -156,6 +159,8 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 			vmConfigExtensions.AdditionalPrecompiles[cheatContract.address] = cheatContract
 		}
 	}
+	// Initialize address to label mapping
+	AddressToLabel := make(map[common.Address]string)
 
 	// Create an in-memory database
 	db := rawdb.NewMemoryDatabase()
@@ -188,6 +193,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		db:                      db,
 		state:                   nil,
 		stateDatabase:           stateDatabase,
+		AddressToLabel:          AddressToLabel,
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		testChainConfig:         testChainConfig,
