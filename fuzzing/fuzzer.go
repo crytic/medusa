@@ -60,6 +60,10 @@ type Fuzzer struct {
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected. They are derived from
 	// compilations.
 	contractDefinitions fuzzerTypes.Contracts
+	// slitherResults holds the results obtained from slither. At the moment we do not have use for storing this in the
+	// Fuzzer but down the line we can use slither for other capabilities that may require storage of the results.
+	slitherResults *compilationTypes.SlitherResults
+
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -284,7 +288,32 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test chain
+	var seedFromAST bool
+
+	// No need to handle the error here since having compilation artifacts implies that we used a supported
+	// platform configuration
+	platformConfig, _ := f.config.Compilation.GetPlatformConfig()
+
+	// Retrieve the compilation target for slither
+	target := platformConfig.GetTarget()
+
+	// Run slither and handle errors
+	slitherResults, err := f.config.Slither.RunSlither(target)
+	if err != nil || slitherResults == nil {
+		if err != nil {
+			f.logger.Warn("Failed to run slither", err)
+		}
+		seedFromAST = true
+	}
+
+	// If we have results and there were no errors, we will seed the value set using the slither results
+	if !seedFromAST {
+		f.slitherResults = slitherResults
+		// Seed our base value set with the constants extracted by Slither
+		f.baseValueSet.SeedFromSlither(slitherResults)
+	}
+
+	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -292,8 +321,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 
 		// Loop for each source
 		for sourcePath, source := range compilation.SourcePathToArtifact {
-			// Seed our base value set from every source's AST
-			f.baseValueSet.SeedFromAst(source.Ast)
+			// Seed from the contract's AST if we did not use slither or failed to do so
+			if seedFromAST {
+				// Seed our base value set from every source's AST
+				f.baseValueSet.SeedFromAst(source.Ast)
+			}
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
@@ -501,10 +533,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// Revert to genesis and re-run the failed contract deployment tx.
+					// Revert to one block before and re-run the failed contract deployment tx.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					// TODO: Should we revert back to genesis or to the previous block?
-					err = testChain.RevertToBlockNumber(0)
+					err = testChain.RevertToBlockNumber(block.Header.Number.Uint64() - 1)
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
@@ -544,10 +575,10 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.5,
+		GenerateRandomAddressBias:       0.05,
 		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.5,
-		GenerateRandomBytesBias:         0.5,
+		GenerateRandomStringBias:        0.05,
+		GenerateRandomBytesBias:         0.05,
 		MutateAddressProbability:        0.1,
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           0.1,

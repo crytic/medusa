@@ -214,7 +214,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select slither-analyzer
 
       - name: Install solc
         run: |

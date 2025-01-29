@@ -61,8 +61,19 @@ func addFuzzFlags() error {
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
 
 	// Logging color
-	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
+	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
+	// Enable stop on failed test
+	fuzzCmd.Flags().Bool("fail-fast", false, "enables stop on failed test")
+
+	// Exploration mode
+	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
+
+	// Run slither while still trying to use the cache
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+
+	// Run slither and overwrite the cache
+	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
 	return nil
 }
 
@@ -163,5 +174,53 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			return err
 		}
 	}
+
+	// Update stop on failed test feature
+	if cmd.Flags().Changed("fail-fast") {
+		failFast, err := cmd.Flags().GetBool("fail-fast")
+		if err != nil {
+			return err
+		}
+		projectConfig.Fuzzing.Testing.StopOnFailedTest = failFast
+	}
+
+	// Update configuration to exploration mode
+	if cmd.Flags().Changed("explore") {
+		explore, err := cmd.Flags().GetBool("explore")
+		if err != nil {
+			return err
+		}
+		if explore {
+			projectConfig.Fuzzing.Testing.StopOnFailedTest = false
+			projectConfig.Fuzzing.Testing.StopOnNoTests = false
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		}
+	}
+
+	// Update configuration to run slither while using current cache
+	if cmd.Flags().Changed("use-slither") {
+		useSlither, err := cmd.Flags().GetBool("use-slither")
+		if err != nil {
+			return err
+		}
+		if useSlither {
+			projectConfig.Slither.UseSlither = true
+		}
+	}
+
+	// Update configuration to run slither and overwrite the current cache
+	if cmd.Flags().Changed("use-slither-force") {
+		useSlitherForce, err := cmd.Flags().GetBool("use-slither-force")
+		if err != nil {
+			return err
+		}
+		if useSlitherForce {
+			projectConfig.Slither.UseSlither = true
+			projectConfig.Slither.OverwriteCache = true
+		}
+	}
+
 	return nil
 }

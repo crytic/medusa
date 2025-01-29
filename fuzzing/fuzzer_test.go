@@ -27,6 +27,7 @@ func TestFuzzerHooks(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Attach to fuzzer hooks which simply set a success state.
@@ -57,6 +58,51 @@ func TestFuzzerHooks(t *testing.T) {
 			assert.True(t, valueGenOk, "could not hook value generator func")
 			assert.True(t, chainSetupOk, "could not hook chain setup func")
 			assert.True(t, callSeqTestFuncOk, "could not hook call sequence test func")
+		},
+	})
+}
+
+// TestSlitherPrinter runs slither and ensures that the constants are correctly added to the value set
+func TestSlitherPrinter(t *testing.T) {
+	expectedInts := []int64{
+		123,  // value of `x`
+		12,   // constant in testFuzz
+		135,  // sum of 123 + 12
+		456,  // value of `y`
+		-123, // negative of 123
+		-12,  // negative of 12
+		-135, // negative of 135
+		-456, // negative of 456
+		0,    // the false in testFuzz is added as zero in the value set
+		1,    // true is evaluated as 1
+	}
+	expectedAddrs := []common.Address{
+		common.HexToAddress("0"),
+	}
+	expectedStrings := []string{
+		"Hello World!",
+	}
+	// We actually don't need to start the fuzzer and only care about the instantiation of the fuzzer
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/slither/slither.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+		},
+		method: func(f *fuzzerTestContext) {
+			// Look through the value set to make sure all the ints, addrs, and strings are in there
+
+			// Check for ints
+			for _, x := range expectedInts {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsInteger(new(big.Int).SetInt64(x)))
+			}
+			// Check for addresses
+			for _, addr := range expectedAddrs {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsAddress(addr))
+			}
+			// Check for strings
+			for _, str := range expectedStrings {
+				assert.True(t, f.fuzzer.baseValueSet.ContainsString(str))
+			}
 		},
 	})
 }
@@ -93,6 +139,7 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.TestViewMethods = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -116,6 +163,7 @@ func TestAssertionsNotRequire(t *testing.T) {
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -138,6 +186,7 @@ func TestAssertionsAndProperties(t *testing.T) {
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.StopOnFailedTest = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -163,6 +212,7 @@ func TestOptimizationMode(t *testing.T) {
 				config.Fuzzing.TestLimit = 10_000 // this test should expose a failure quickly.
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -194,6 +244,7 @@ func TestChainBehaviour(t *testing.T) {
 			config.Fuzzing.TransactionGasLimit = 500000                          // we set this low, so contract execution runs out of gas earlier.
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -255,6 +306,7 @@ func TestCheatCodes(t *testing.T) {
 
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
 				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -291,6 +343,7 @@ func TestConsoleLog(t *testing.T) {
 				config.Fuzzing.TestLimit = 10000
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -339,6 +392,7 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 				config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -362,6 +416,7 @@ func TestDeploymentsInnerDeployments(t *testing.T) {
 			config.Fuzzing.Testing.TestAllContracts = true // test dynamically deployed contracts
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -383,6 +438,7 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 			config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -407,6 +463,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -430,6 +487,7 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 			config.Fuzzing.TestLimit = 1 // this should happen immediately
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -461,6 +519,7 @@ func TestDeploymentsSelfDestruct(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Fuzzing.Testing.TestAllContracts = true
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Subscribe to any mined block events globally. When receiving them, check contract changes for a
@@ -507,6 +566,7 @@ func TestExecutionTraces(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -549,6 +609,7 @@ func TestTestingScope(t *testing.T) {
 				config.Fuzzing.Testing.TestAllContracts = testingAllContracts
 				config.Fuzzing.Testing.StopOnFailedTest = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -596,6 +657,7 @@ func TestDeploymentsWithArgs(t *testing.T) {
 			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -617,6 +679,7 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 			config.Fuzzing.TestLimit = 10_000
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -651,6 +714,7 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -709,6 +773,7 @@ func TestASTValueExtraction(t *testing.T) {
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -747,6 +812,7 @@ func TestVMCorrectness(t *testing.T) {
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -786,6 +852,7 @@ func TestVMCorrectness(t *testing.T) {
 			config.Fuzzing.TestLimit = 1_000          // this test should expose a failure quickly.
 			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -811,6 +878,7 @@ func TestCorpusReplayability(t *testing.T) {
 			config.Fuzzing.CorpusDirectory = "corpus"
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
@@ -867,6 +935,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"InheritedFirstContract", "InheritedSecondContract"}
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
@@ -912,6 +981,7 @@ func TestTargetingFuncSignatures(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.Testing.TargetFunctionSignatures = targets
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			for _, contract := range f.fuzzer.ContractDefinitions() {
@@ -933,6 +1003,7 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.Testing.ExcludeFunctionSignatures = excluded
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			for _, contract := range f.fuzzer.ContractDefinitions() {

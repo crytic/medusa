@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
 
@@ -26,6 +27,9 @@ type ProjectConfig struct {
 
 	// Compilation describes the configuration used to compile the underlying project.
 	Compilation *compilation.CompilationConfig `json:"compilation"`
+
+	// Slither describes the configuration for running slither
+	Slither *types.SlitherConfig `json:"slither"`
 
 	// Logging describes the configuration used for logging to file and console
 	Logging LoggingConfig `json:"logging"`
