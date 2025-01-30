@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -260,7 +261,7 @@ func TestChainBehaviour(t *testing.T) {
 // TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
 func TestCheatCodes(t *testing.T) {
 	filePaths := []string{
-		/*"testdata/contracts/cheat_codes/utils/addr.sol",
+		"testdata/contracts/cheat_codes/utils/addr.sol",
 		"testdata/contracts/cheat_codes/utils/to_string.sol",
 		"testdata/contracts/cheat_codes/utils/sign.sol",
 		"testdata/contracts/cheat_codes/utils/parse.sol",
@@ -273,13 +274,15 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/fee.sol",
 		"testdata/contracts/cheat_codes/vm/prank.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
-		"testdata/contracts/cheat_codes/vm/store_load.sol",*/
+		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
 	// tests.
-	/*if utils.IsWindowsEnvironment() {
+	if utils.IsWindowsEnvironment() {
 		filePaths = append(filePaths,
 			"testdata/contracts/cheat_codes/utils/ffi_windows.sol",
 		)
@@ -287,7 +290,7 @@ func TestCheatCodes(t *testing.T) {
 		filePaths = append(filePaths,
 			"testdata/contracts/cheat_codes/utils/ffi_unix.sol",
 		)
-	}*/
+	}
 
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{

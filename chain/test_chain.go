@@ -561,29 +561,12 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		blockGasLimit = &t.BlockGasLimit
 	}
 
-	// Validate our block number exceeds our previous head
-	currentHeadBlockNumber := t.Head().Header.Number.Uint64()
-	if blockNumber <= currentHeadBlockNumber {
-		return nil, fmt.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
-	}
-
 	// Obtain our parent block hash to reference in our new block.
 	parentBlockHash := t.Head().Hash
 
-	// If the head's block number is not immediately preceding the one we're trying to add, the chain will fake
-	// the existence of intermediate blocks, where the block hash is deterministically spoofed based off the block
-	// number. Check this condition and substitute the parent block hash if we jumped.
-	blockNumberDifference := blockNumber - currentHeadBlockNumber
-	if blockNumberDifference > 1 {
-		parentBlockHash = getBlockHashFromNumber(blockNumber - 1)
-	}
-
-	// Timestamps must be unique per block, that means our timestamp must've advanced at least as many steps as the
-	// block number for us to spoof the existence of those intermediate blocks, each with their own unique timestamp.
-	currentHeadTimeStamp := t.Head().Header.Time
-	if currentHeadTimeStamp >= blockTime || blockNumberDifference > blockTime-currentHeadTimeStamp {
-		return nil, fmt.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
-	}
+	// Note we do not perform any block number or timestamp validation since cheatcodes can permanently update the
+	// block number or timestamp which could violate the invariants of a blockchain (e.g. block.number is strictly
+	// increasing)
 
 	// Create a block header for this block:
 	// - State root hash reflects the state after applying block updates (no transactions, so unchanged from last block)
@@ -698,8 +681,6 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	t.pendingBlock.Header.GasUsed += receipt.GasUsed
 	// Update our block's bloom filter
 	t.pendingBlock.Header.Bloom.Add(receipt.Bloom.Bytes())
-	// Update our block's hash since a transaction may have changed the block's header (e.g. warp changes the timestamp)
-	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 	// Update our block's transactions and results.
 	t.pendingBlock.Messages = append(t.pendingBlock.Messages, message)
 	t.pendingBlock.MessageResults = append(t.pendingBlock.MessageResults, messageResult)

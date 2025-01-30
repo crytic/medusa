@@ -93,6 +93,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
 
 			// If the transaction reverts, we will restore the original time
+			// TODO: Should we revert changes if transaction reverts
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
 				// We need to check if the pending block context and pending block are not nil, as they may be nil
 				// when the chain is being reverted back to its original state.
@@ -125,6 +126,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
 
 			// If the transaction reverts, we will restore the original block number
+			// TODO: Should we revert changes if transaction reverts
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
 				// We need to check if the pending block context and pending block are not nil, as they may be nil
 				// when the chain is being reverted back to its original state.
@@ -140,13 +142,18 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Fee: Update base fee
+	// Fee: Update the base fee _permanently_
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
+			// Capture the original value
 			original := new(big.Int).Set(tracer.chain.pendingBlockContext.BaseFee)
+
+			// Update the pending block context and pending block's base fee
 			tracer.chain.pendingBlockContext.BaseFee.Set(inputs[0].(*big.Int))
+			tracer.chain.pendingBlock.Header.BaseFee.Set(inputs[0].(*big.Int))
+
+			// TODO: Should we revert changes if transaction reverts
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
 				tracer.chain.pendingBlockContext.BaseFee.Set(original)
 			})
@@ -155,6 +162,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	)
 
 	// Difficulty: Updates difficulty
+	// TODO: Make changes to difficulty permanent and make it revert for post-Paris EVM versions
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
@@ -171,6 +179,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			return nil, nil
 		},
 	)
+
+	// TODO: Add prevrandao cheatcode
 
 	// ChainId: Sets VM chain ID
 	contract.addMethod(
@@ -255,15 +265,21 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Coinbase: Sets the block coinbase.
+	// Coinbase: Updates the block coinbase _permanently_.
 	contract.addMethod(
 		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
+			// Capture the original coinbase
 			original := tracer.chain.pendingBlockContext.Coinbase
+
+			// Update the pending block context and the pending block's coinbase
 			tracer.chain.pendingBlockContext.Coinbase = inputs[0].(common.Address)
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
+			tracer.chain.pendingBlock.Header.Coinbase = inputs[0].(common.Address)
+
+			// TODO: Should we revert changes if transaction reverts
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
 				tracer.chain.pendingBlockContext.Coinbase = original
+				tracer.chain.pendingBlock.Header.Coinbase = original
 			})
 			return nil, nil
 		},
