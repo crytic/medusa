@@ -46,18 +46,12 @@ func (cs CallSequence) Log() *logging.LogBuffer {
 
 	// Construct the buffer for each call made in the sequence
 	for i := 0; i < len(cs); i++ {
-		addressToLabel, ok := cs[i].ChainReference.MessageResults().AdditionalResults["AddressToLabel"].(map[common.Address]string)
-
 		// Add the string representing the call
-		buffer.Append(utils.ResolveAddressToLabelFromString(fmt.Sprintf("%d) %s\n", i+1, cs[i].String()), addressToLabel))
-
-		if !ok {
-			panic("AdditionalResults[\"AddressToLabel\"] is not of type map[common.Address]string")
-		}
+		buffer.Append(fmt.Sprintf("%d) %s\n", i+1, cs[i].String()))
 
 		// If we have an execution trace attached, print information about it.
 		if cs[i].ExecutionTrace != nil {
-			buffer.Append(utils.ResolveAddressToLabelFromElements(cs[i].ExecutionTrace.Log().Elements(), addressToLabel)...)
+			buffer.Append(cs[i].ExecutionTrace.Log().Elements()...)
 			buffer.Append("\n")
 		}
 	}

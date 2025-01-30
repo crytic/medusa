@@ -122,7 +122,7 @@ func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.trace = newExecutionTrace(t.contractDefinitions)
+	t.trace = newExecutionTrace(t.contractDefinitions, t.cheatCodeContracts)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
 	t.traceMap = make(map[common.Hash]*ExecutionTrace)

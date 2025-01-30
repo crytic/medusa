@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"regexp"
 	"strings"
 
@@ -28,13 +30,16 @@ type ExecutionTrace struct {
 	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
 	// obtain any additional information regarding execution.
 	contractDefinitions contracts.Contracts
+
+	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, cheatCodeContracts map[common.Address]*chain.CheatCodeContract) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
+		cheatCodeContracts:  cheatCodeContracts,
 	}
 }
 
@@ -368,9 +373,16 @@ func (t *ExecutionTrace) Log() *logging.LogBuffer {
 	// Create a buffer
 	buffer := logging.NewLogBuffer()
 
+	// Get addressToLabel mapping from the underlying test chain
+	addressToLabel := make(map[common.Address]string)
+	for _, contract := range t.cheatCodeContracts {
+		addressToLabel = contract.Tracer().TestChain().AddressToLabel
+		break // exits after first iteration
+	}
+
 	// First, add the elements that make up the overarching execution trace
 	elements, logs := t.generateElementsAndLogsForCallFrame(0, t.TopLevelCallFrame)
-	buffer.Append(elements...)
+	buffer.Append(utils.ResolveAddressToLabelFromElements(elements, addressToLabel)...)
 
 	// If we captured any logs during tracing, add them to the overarching execution trace
 	if len(logs) > 0 {
