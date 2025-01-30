@@ -301,7 +301,7 @@ func TestCheatCodes(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 
 				// some tests require full sequence + revert to test fully
-				config.Fuzzing.Workers = 1
+				config.Fuzzing.Workers = 3
 				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
 
 				// enable assertion testing only
