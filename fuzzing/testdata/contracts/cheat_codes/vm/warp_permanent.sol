@@ -1,4 +1,4 @@
-// This test ensures that the block timestamp can be set with cheat codes
+// This test ensures that the block timestamp is permanent once it is changed with the warp cheatcode
 interface CheatCodes {
     function warp(uint256) external;
 }

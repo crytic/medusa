@@ -384,7 +384,7 @@ func (t *TestChain) StateFromRoot(root common.Hash) (*state.StateDB, error) {
 
 // StateRootAfterBlockNumber obtains the Ethereum world state root hash after processing all transactions in the
 // provided block number. If the block doesn't exist, because it wasn't committed,
-// we return an error with an empty state hash. Thus, the block must be committed to the chain.
+// we return an error with an empty state root hash. Thus, the block must be committed to the chain.
 func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, error) {
 	// Obtain the block from the chain if it exists
 	block, err := t.BlockFromNumber(blockNumber)
@@ -398,7 +398,7 @@ func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, 
 
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
 // number. If the block doesn't exist, because it wasn't committed,
-// we return an error with an empty state hash. Thus, the block must be committed to the chain.
+// we return an error. Thus, the block must be committed to the chain.
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
 	// Obtain our block's post-execution state root hash
 	root, err := t.StateRootAfterBlockNumber(blockNumber)
@@ -546,9 +546,8 @@ func (t *TestChain) PendingBlockCreate() (*chainTypes.Block, error) {
 }
 
 // PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block
-// properties provided. Values should be sensibly chosen (e.g., block number and timestamps should be greater than the
-// previous block). Providing a block number that is greater than the previous block number plus one will simulate empty
-// blocks between.
+// properties provided. Note that there are no constraints on the next block number or timestamp. Because of cheatcode
+// usage, the next block can go back in time.
 // Returns the constructed block, or an error if one occurred.
 func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*chainTypes.Block, error) {
 	// If we already have a pending block, return an error.
@@ -591,7 +590,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		Extra:       []byte{},
 		MixDigest:   parentBlockHash,
 		Nonce:       types.BlockNonce{},
-		BaseFee:     big.NewInt(params.InitialBaseFee),
+		BaseFee:     new(big.Int).Set(t.Head().Header.BaseFee),
 	}
 
 	// Create a new block for our test node

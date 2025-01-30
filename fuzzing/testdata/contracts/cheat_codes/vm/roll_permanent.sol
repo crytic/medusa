@@ -1,4 +1,4 @@
-// This test ensures that the block number can be set with cheat codes
+// This test ensures that the block number is permanent once it is changed with the roll cheatcode
 interface CheatCodes {
     function roll(uint256) external;
 }
