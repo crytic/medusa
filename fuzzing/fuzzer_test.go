@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -276,7 +277,6 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
-		"testdata/contracts/cheat_codes/vm/label.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
@@ -597,6 +597,40 @@ func TestExecutionTraces(t *testing.T) {
 			},
 		})
 	}
+}
+
+func TestLabelCheatCode(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/cheat_codes/vm/label.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last execution trace mg
+			executionTraceMessages := failingSequence.Log().String()
+
+			pattern := `addr=[a-zA-Z]+`
+			match, _ := regexp.MatchString(pattern, executionTraceMessages)
+
+			// Verify it contains all expected strings
+			assert.True(t, match)
+		},
+	})
 }
 
 // TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
