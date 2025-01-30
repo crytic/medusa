@@ -327,16 +327,6 @@ func (t *TestChain) Head() *chainTypes.Block {
 	return t.blocks[len(t.blocks)-1]
 }
 
-// getBlockHashFromNumber is a helper method used to create a hash for a real/fake block at a given
-// block number. The function basically hashes the block number to create a deterministic hash. Note that the
-// hash is not unique since you can have multiple blocks with the same block number and thus multiple blocks with the same
-// hash.
-func getBlockHashFromNumber(blockNumber uint64) common.Hash {
-	// For blocks which were not internally committed, which we fake the existence of (for block number jumping), we use
-	// the block number as the block hash.
-	return common.BigToHash(new(big.Int).SetUint64(blockNumber))
-}
-
 // HeadBlockNumber returns the test chain head's block number, where zero is the genesis block.
 func (t *TestChain) HeadBlockNumber() uint64 {
 	return t.Head().Header.Number.Uint64()
