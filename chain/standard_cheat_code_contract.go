@@ -174,7 +174,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			addr := inputs[0].(common.Address)
 			lbl := inputs[1].(string)
-			tracer.chain.AddressToLabel[addr] = lbl
+			tracer.chain.AddressToLabel()[addr] = lbl
 			return nil, nil
 		},
 	)

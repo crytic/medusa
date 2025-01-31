@@ -99,7 +99,6 @@ func (t *cheatCodeTracer) NativeTracer() *TestChainTracer {
 	return t.nativeTracer
 }
 
-// TestChain returns the underlying TestChain
 func (t *cheatCodeTracer) TestChain() *TestChain { return t.chain }
 
 // bindToChain is called by the TestChain which created the tracer to set its reference.
@@ -230,4 +229,6 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Add our revert operations we collected for this transaction.
 	results.OnRevertHookFuncs = append(results.OnRevertHookFuncs, t.results.onChainRevertHooks...)
+	// Add AddressToLabel to the additional results
+	results.AdditionalResults["AddressToLabelResults"] = t.chain.AddressToLabel()
 }

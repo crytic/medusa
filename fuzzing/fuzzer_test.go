@@ -621,11 +621,15 @@ func TestLabelCheatCode(t *testing.T) {
 			failingSequence := *failedTestCase[0].CallSequence()
 			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
 
-			// Obtain the last execution trace mg
-			executionTraceMessages := failingSequence.Log().String()
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
 
 			pattern := `addr=[a-zA-Z]+`
-			match, _ := regexp.MatchString(pattern, executionTraceMessages)
+			match, _ := regexp.MatchString(pattern, executionTraceMsg)
 
 			// Verify it contains all expected strings
 			assert.True(t, match)

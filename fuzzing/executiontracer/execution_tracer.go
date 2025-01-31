@@ -122,7 +122,7 @@ func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.trace = newExecutionTrace(t.contractDefinitions, t.cheatCodeContracts)
+	t.trace = newExecutionTrace(t.contractDefinitions, t.getAddressToLabelFromTestChain())
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
 	t.traceMap = make(map[common.Hash]*ExecutionTrace)
@@ -308,4 +308,15 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 			}
 		})
 	}
+}
+
+// getAddressToLabelFromTestChain gets the AddressToLabel stored as part of the TestChain through
+// the underlying cheatCodeContract's Tracer
+func (t *ExecutionTracer) getAddressToLabelFromTestChain() map[common.Address]string {
+	addressToLabel := make(map[common.Address]string)
+	for _, contract := range t.cheatCodeContracts {
+		addressToLabel = contract.Tracer().TestChain().AddressToLabel()
+		break // exits after first iteration
+	}
+	return addressToLabel
 }

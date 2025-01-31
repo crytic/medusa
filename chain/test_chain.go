@@ -76,7 +76,7 @@ type TestChain struct {
 	db ethdb.Database
 
 	// AddressToLabel maps an address to its label if one exists
-	AddressToLabel map[common.Address]string
+	addressToLabel map[common.Address]string
 
 	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
@@ -160,7 +160,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		}
 	}
 	// Initialize address to label mapping
-	AddressToLabel := make(map[common.Address]string)
+	addressToLabel := make(map[common.Address]string)
 
 	// Create an in-memory database
 	db := rawdb.NewMemoryDatabase()
@@ -193,7 +193,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		db:                      db,
 		state:                   nil,
 		stateDatabase:           stateDatabase,
-		AddressToLabel:          AddressToLabel,
+		addressToLabel:          addressToLabel,
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		testChainConfig:         testChainConfig,
@@ -306,6 +306,9 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 func (t *TestChain) State() *state.StateDB {
 	return t.state
 }
+
+// AddressToLabel returns the addressToLabel mapping
+func (t *TestChain) AddressToLabel() map[common.Address]string { return t.addressToLabel }
 
 // CheatCodeContracts returns all cheat code contracts which are installed in the chain.
 func (t *TestChain) CheatCodeContracts() map[common.Address]*CheatCodeContract {
