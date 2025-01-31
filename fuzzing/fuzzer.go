@@ -45,7 +45,7 @@ import (
 type Fuzzer struct {
 	// ctx is the main context used by the fuzzer.
 	ctx context.Context
-	// mainCtxCancelFunc describes a function which can be used to cancel the fuzzing operations the main ctx tracks.
+	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations the main ctx tracks.
 	// Cancelling ctx does _not_ guarantee that all operations will terminate.
 	ctxCancelFunc context.CancelFunc
 
