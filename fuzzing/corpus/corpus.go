@@ -215,8 +215,8 @@ func (c *Corpus) RandomMutationTargetSequence() (calls.CallSequence, error) {
 // If this sequence list being initialized is for use with mutations, it is added to the mutationTargetSequenceChooser.
 // Returns an error if one occurs.
 func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSequence], testChain *chain.TestChain, deployedContracts map[common.Address]*contracts.Contract, useInMutations bool) error {
-	// Cache current HeadBlockNumber so that you can reset back to it after every sequence
-	baseBlockNumber := testChain.HeadBlockNumber()
+	// Cache the base block index so that you can reset back to it after every sequence
+	baseBlockIndex := uint64(len(testChain.CommittedBlocks()))
 
 	// Loop for each sequence
 	var err error
@@ -277,7 +277,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v\n", err)
+			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v", err)
 		}
 
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
@@ -306,8 +306,8 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
-		if err := testChain.RevertToBlockNumber(baseBlockNumber); err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
+		if err := testChain.RevertToBlockIndex(baseBlockIndex); err != nil {
+			return fmt.Errorf("failed to reset the chain while seeding coverage: %v", err)
 		}
 	}
 	return nil

@@ -541,8 +541,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						TransactionIndex: len(block.Messages) - 1,
 					}
 					// Revert to one block before and re-run the failed contract deployment tx.
+					// This should be one index before the current head block index.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockNumber(block.Header.Number.Uint64() - 1)
+					err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1))
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
