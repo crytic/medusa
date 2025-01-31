@@ -334,8 +334,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
 
-		// If our fuzzer context is done, exit out immediately without results.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
+		// If our fuzzer context or the emergency context is cancelled, exit out immediately without results.
+		if utils.CheckContextDone(fw.fuzzer.ctx) || utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 			return true, nil
 		}
 
@@ -353,8 +353,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
-	// TODO: Probably need to check something here
-	if utils.CheckContextDone(fw.fuzzer.ctx) {
+	if utils.CheckContextDone(fw.fuzzer.ctx) || utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 		return nil, nil
 	}
 
@@ -404,7 +403,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 		}
 
 		// If our fuzzer context is done, exit out immediately without results.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
+		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 			return true, nil
 		}
 
@@ -418,8 +417,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
-	// TODO: Probably need to check something here
-	if utils.CheckContextDone(fw.fuzzer.ctx) {
+	if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 		return false, nil
 	}
 
@@ -451,7 +449,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 	shrinkIteration := uint64(0)
 	shrinkLimit := fw.fuzzer.config.Fuzzing.ShrinkLimit
 	shrinkingEnded := func() bool {
-		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.ctx)
+		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.emergencyCtx)
 	}
 	if shrinkLimit > 0 {
 		// The first pass of shrinking is greedy towards trying to remove any unnecessary calls.
@@ -563,8 +561,9 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 }
 
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
-// and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
-// Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
+// and asserting properties are upheld. This runs until Fuzzer.ctx or Fuzzer.emergencyCtx cancels the operation.
+// Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
+// error if one occurred.
 func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Clone our chain, attaching our necessary components for fuzzing post-genesis, prior to all blocks being copied.
 	// This means any tracers added or events subscribed to within this inner function are done so prior to chain
@@ -600,7 +599,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Defer the closing of the test chain object
 	defer fw.chain.Close()
 
-	// Emit an event indicating the worker has setup its chain.
+	// Emit an event indicating the worker has set up its chain.
 	err = fw.Events.FuzzerWorkerChainSetup.Publish(FuzzerWorkerChainSetupEvent{
 		Worker: fw,
 		Chain:  fw.chain,
@@ -624,11 +623,16 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	sequencesTested := 0
 	fuzzingCancelled := false
 	for sequencesTested <= fw.fuzzer.config.Fuzzing.WorkerResetLimit {
-		// If our context signaled to close the operation, we will complete shrinking any outstanding shrink requests
-		// and then return immediately
+		// Immediately exit if the emergency context is triggered
+		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
+			return true, nil
+		}
+
+		// If our main context signaled to close the operation, we will emit an event notifying any subscribers that
+		// this fuzzer worker is going to be shut down. This allows any subscriber (e.g. the optimization provider)
+		// one last opportunity to shrink a call sequence if necessary.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			fuzzingCancelled = true
-			// TODO: First figure out if there is error within the context
 			err := fw.Events.TestingComplete.Publish(FuzzerWorkerTestingCompleteEvent{
 				Worker: fw,
 			})
@@ -646,14 +650,12 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			}
 		}
 
-		// If we have cancelled fuzzing, return immediately
+		// Clean up the shrink requests
+		fw.shrinkCallSequenceRequests = nil
+
+		// If we have cancelled fuzzing, return now
 		if fuzzingCancelled {
 			return true, nil
-		}
-
-		// Need to reset the shrink call sequence request array if it's a non-zero length
-		if len(fw.shrinkCallSequenceRequests) > 0 {
-			fw.shrinkCallSequenceRequests = make([]ShrinkCallSequenceRequest, 0)
 		}
 
 		// Emit an event indicating the worker is about to test a new call sequence.

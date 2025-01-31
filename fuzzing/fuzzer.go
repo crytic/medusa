@@ -43,10 +43,17 @@ import (
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
 type Fuzzer struct {
-	// ctx describes the context for the fuzzing run, used to cancel running operations.
+	// ctx is the main context used by the fuzzer.
 	ctx context.Context
-	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
+	// mainCtxCancelFunc describes a function which can be used to cancel the fuzzing operations the main ctx tracks.
+	// Cancelling ctx does _not_ guarantee that all operations will terminate.
 	ctxCancelFunc context.CancelFunc
+
+	// emergencyCtx is the context that is used by the fuzzer to react to OS-level interrupts (e.g. SIGINT) or errors.
+	emergencyCtx context.Context
+	// emergencyCtxCancelFunc describes a function which can be used to cancel the fuzzing operations due to an OS-level
+	// interrupt or an error. Cancelling emergencyCtx will guarantee that all operations will terminate.
+	emergencyCtxCancelFunc context.CancelFunc
 
 	// config describes the project configuration which the fuzzing is targeting.
 	config config.ProjectConfig
@@ -722,11 +729,9 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}(workerSlotInfo)
 	}
 
-	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
-	if err != nil && f.ctxCancelFunc != nil {
-		// We need to update our context with an error so that anyone subscribing to the cancellation of the fuzzer is aware that an error occured
-		f.ctx = context.WithValue(f.ctx, fuzzerErrKey, err)
-		f.ctxCancelFunc()
+	// Explicitly call cancel on our emergency context to ensure all threads exit if we encountered an error.
+	if err != nil {
+		f.Terminate()
 	}
 
 	// Wait for every worker to be freed, so we don't have a race condition when reporting the order
@@ -757,8 +762,9 @@ func (f *Fuzzer) Start() error {
 	// While we're fuzzing, we'll want to have an initialized random provider.
 	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Create our running context (allows us to cancel across threads)
+	// Create our main and secondary running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	f.emergencyCtx, f.emergencyCtxCancelFunc = context.WithCancel(context.Background())
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
@@ -833,9 +839,6 @@ func (f *Fuzzer) Start() error {
 	// Start our printing loop now that we're about to begin fuzzing.
 	go f.printMetricsLoop()
 
-	// Start our goroutine that monitors when the fuzzing campaign is cancelled
-	go f.monitorContextCancellation()
-
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
 	if err != nil {
@@ -869,6 +872,13 @@ func (f *Fuzzer) Start() error {
 			err = corpusFlushErr
 			f.logger.Info("Failed to flush the corpus", err)
 		}
+	}
+
+	// Publish a fuzzer stopping event.
+	fuzzerStoppingErr := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: err})
+	if err == nil && fuzzerStoppingErr != nil {
+		err = fuzzerStoppingErr
+		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
 
 	// Print our results on exit.
@@ -909,28 +919,23 @@ func (f *Fuzzer) Start() error {
 	return err
 }
 
-// monitorContextCancellation monitors when the fuzzing campaign is cancelled and emits the fuzzer stopping event once the campaign is over.
-func (f *Fuzzer) monitorContextCancellation() {
-	// Keep checking if the fuzzing campaign is cancelled every 100 milliseconds
-	for !utils.CheckContextDone(f.ctx) {
-		time.Sleep(time.Millisecond * 100)
-	}
-
-	// We are exiting so we need to emit the fuzzer stopping event
-	err := f.Events.FuzzerStopping.Publish(FuzzerStoppingEvent{Fuzzer: f, err: f.ctx.Value(fuzzerErrKey).(error)})
-	// We will log the error but continue to exit gracefully
-	// TODO: Do we really need to log this error?
-	if err != nil {
-		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
+// Stop attempts to stop all running operations invoked by the Start method. Note that Stop is not guaranteed to fully
+// terminate the operations across all threads. For example, the optimization testing provider may request a thread to
+// shrink some call sequences before the thread is torn down. Stop will not prevent those shrink requests from
+// executing. An OS-level interrupt must be used to guarantee the stopping of _all_ operations (see Terminate).
+func (f *Fuzzer) Stop() {
+	// Call the cancel function on our main running context to try stop all working goroutines
+	if f.ctxCancelFunc != nil {
+		f.ctxCancelFunc()
 	}
 }
 
-// Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
-// occurs.
-func (f *Fuzzer) Stop() {
-	// Call the cancel function on our running context to stop all working goroutines
-	if f.ctxCancelFunc != nil {
-		f.ctxCancelFunc()
+// Terminate is called to react to an OS-level interrupt (e.g. SIGINT) or an error. This will stop all operations.
+// Note that this function will return before all operations are complete.
+func (f *Fuzzer) Terminate() {
+	// Call the emergency context cancel function on our running context to stop all working goroutines
+	if f.emergencyCtxCancelFunc != nil {
+		f.emergencyCtxCancelFunc()
 	}
 }
 

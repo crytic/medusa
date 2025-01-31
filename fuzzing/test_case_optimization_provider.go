@@ -162,11 +162,6 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 // have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
 // "passed".
 func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
-	// If there is no error, we request a shrink request
-	if event.err == nil {
-		// TODO: Request a shrink request
-	}
-
 	// Clear our optimization test methods
 	t.workerStates = nil
 
@@ -197,19 +192,19 @@ func (t *OptimizationTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreated
 }
 
 // onWorkerTestingComplete is the event handler triggered when a FuzzerWorker has completed testing of call sequences
-// and is about to exit the fuzzing loop. We use this event to attach a shrink request to the worker, if a request exists.
+// and is about to exit the fuzzing loop. We use this event to attach shrink requests to the worker.
 // This way we are only shrinking once throughout the entire fuzzing campaign in optimization mode.
 func (t *OptimizationTestCaseProvider) onWorkerTestingComplete(event FuzzerWorkerTestingCompleteEvent) error {
-	if t.shrinkCallSequenceRequest != nil {
-		shrunkenSequence, err := event.Worker.shrinkCallSequence(*t.shrinkCallSequenceRequest)
-		if err != nil {
-			return err
+	// Iterate across each test case to see if there is a shrink request for it
+	t.testCasesLock.Lock()
+	for _, testCase := range t.testCases {
+		// We have a shrink request, let's send it to the fuzzer worker
+		if testCase.shrinkCallSequenceRequest != nil {
+			event.Worker.shrinkCallSequenceRequests = append(event.Worker.shrinkCallSequenceRequests, *testCase.shrinkCallSequenceRequest)
+			testCase.shrinkCallSequenceRequest = nil
 		}
-
-		// Reset it to nil so that only the first worker that is trying to exit is requested to handle the shrink request
-		// The other workers can exit gracefully
-		t.shrinkCallSequenceRequest = nil
 	}
+	t.testCasesLock.Unlock()
 	return nil
 }
 
@@ -289,10 +284,6 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractDeleted(event Fuz
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether any
 // optimization test's value has increased.
 func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
-	// Create a list of shrink call sequence verifiers, which we populate for each maximized optimization test we want a call
-	// sequence shrunk for.
-	shrinkRequests := make([]ShrinkCallSequenceRequest, 0)
-
 	// Obtain the test provider state for this worker
 	workerState := &t.workerStates[worker.WorkerIndex()]
 
@@ -312,9 +303,6 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 
 		// If we updated the test case's maximum value, we update our state immediately. We provide a shrink verifier which will update
 		// the call sequence for each shrunken sequence provided that still it maintains the maximum value.
-		// TODO: This is very inefficient since this runs every time a new max value is found. It would be ideal if we
-		//  could perform a one-time shrink request. This code should be refactored when we introduce the high-level
-		//  testing API.
 		if newValue.Cmp(testCase.value) == 1 {
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
@@ -372,11 +360,9 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 				},
 				RecordResultInCorpus: true,
 			}
-
-			// Add our shrink request to our list.
-			shrinkRequests = append(shrinkRequests, shrinkRequest)
+			testCase.shrinkCallSequenceRequest = &shrinkRequest
 		}
 	}
 
-	return shrinkRequests, nil
+	return nil, nil
 }

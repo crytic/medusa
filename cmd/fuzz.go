@@ -161,7 +161,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		fuzzer.Stop()
+		fuzzer.Terminate()
 	}()
 
 	// Start the fuzzing process with our cancellable context.
