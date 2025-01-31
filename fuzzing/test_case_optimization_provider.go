@@ -322,8 +322,9 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 		// for races here. We also update the test case's cached shrink request.
 		// TODO: Should we allow for races here?
 		if newValue.Cmp(testCase.value) == 1 {
-			// Update the test case's value
+			// Update the test case's value and call sequence
 			testCase.value = newValue
+			testCase.callSequence = &callSequence
 
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
