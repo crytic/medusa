@@ -340,7 +340,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 	// If our fuzzer context is done, exit out immediately without results.
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
-		return nil, nil, nil
+		return nil, nil, err
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
@@ -351,7 +351,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	}
 
 	// Return our results accordingly.
-	return testedCallSequence, shrinkCallSequenceRequests, nil
+	return testedCallSequence, shrinkCallSequenceRequests, err
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
