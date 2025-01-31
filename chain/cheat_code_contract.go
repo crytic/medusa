@@ -116,6 +116,9 @@ func (c *CheatCodeContract) Address() common.Address {
 	return c.address
 }
 
+// Tracer represents the tracer associated with the cheat code contract
+func (c *CheatCodeContract) Tracer() *cheatCodeTracer { return c.tracer }
+
 // Abi provides the cheat code contract interface.
 func (c *CheatCodeContract) Abi() *abi.ABI {
 	return &c.abi

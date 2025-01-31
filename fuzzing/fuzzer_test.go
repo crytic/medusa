@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -600,6 +601,44 @@ func TestExecutionTraces(t *testing.T) {
 			},
 		})
 	}
+}
+
+func TestLabelCheatCode(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/cheat_codes/vm/label.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+			pattern := `addr=[a-zA-Z]+`
+			match, _ := regexp.MatchString(pattern, executionTraceMsg)
+
+			// Verify it contains all expected strings
+			assert.True(t, match)
+		},
+	})
 }
 
 // TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"

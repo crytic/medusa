@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"regexp"
 	"strings"
 
@@ -13,7 +15,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -29,13 +30,17 @@ type ExecutionTrace struct {
 	// contractDefinitions represents the known contract definitions at the time of tracing. This is used to help
 	// obtain any additional information regarding execution.
 	contractDefinitions contracts.Contracts
+
+	// Address to label mapping used to map addresses to their labels in a execution trace
+	addressToLabel map[common.Address]string
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, addressToLabel map[common.Address]string) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
+		addressToLabel:      addressToLabel,
 	}
 }
 
@@ -137,29 +142,39 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 		inputArgumentsDisplayText = &temp
 	}
 
+	// Check if a code/proxy contract address exists in the addressToLabel mapping
+	if addr, exists := t.addressToLabel[callFrame.ToAddress]; exists {
+		codeContractName = addr
+		proxyContractName = addr
+	}
+
 	// Generate the message we wish to output finally, using all these display string components.
 	// If we executed code, attach additional context such as the contract name, method, etc.
 	var callInfo string
 	if callFrame.IsProxyCall() {
 		if callFrame.ExecutedCode {
-			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), utils.TrimLeadingZeroesFromAddress(callFrame.CodeAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
+			// Resets codeContractName if this is a proxy call
+			if _, exists := t.addressToLabel[callFrame.CodeAddress]; exists {
+				codeContractName = t.addressToLabel[callFrame.CodeAddress]
+			}
+			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CodeAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		}
 	} else {
 		if callFrame.ExecutedCode {
 			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
 				callInfo = fmt.Sprintf("%v.%v(%v)", codeContractName, methodName, *inputArgumentsDisplayText)
 			} else {
-				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
+				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 			}
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", utils.TrimLeadingZeroesFromAddress(callFrame.ToAddress.String()), callFrame.CallValue, utils.TrimLeadingZeroesFromAddress(callFrame.SenderAddress.String()))
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
 		}
 	}
 
-	// Add call information to the elements
-	elements = append(elements, callInfo, "\n")
+	// Labels the addresses using addressToLabel and add call information to the elements
+	elements = append(elements, utils.ResolveAddressToLabelFromString(callInfo, t.addressToLabel), "\n")
 
 	return elements, consoleLogString
 }
@@ -371,6 +386,7 @@ func (t *ExecutionTrace) Log() *logging.LogBuffer {
 
 	// First, add the elements that make up the overarching execution trace
 	elements, logs := t.generateElementsAndLogsForCallFrame(0, t.TopLevelCallFrame)
+	// Replace addresses to their corresponding labels if exist
 	buffer.Append(elements...)
 
 	// If we captured any logs during tracing, add them to the overarching execution trace
