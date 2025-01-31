@@ -15,9 +15,6 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-// TestCaseID represents a unique identifier for a test case
-type TestCaseID string
-
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
 // Fuzzer-generated transaction sequences.
 type FuzzerWorker struct {
@@ -67,9 +64,6 @@ type FuzzerWorker struct {
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
-
-	// testCasesFinished is a map to keep track of finished test cases
-	testCasesFinished map[TestCaseID]TestCase
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -102,7 +96,6 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
 		valueSet:                   valueSet,
-		testCasesFinished:          make(map[TestCaseID]TestCase),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -344,7 +337,6 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// Execute our call sequence.
-	// TODO: Do we need to track the executed call sequence?
 	_, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
 	// If we encountered an error, report it.
@@ -690,12 +682,4 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 	// We have not cancelled fuzzing operations, but this worker exited, signalling for it to be regenerated.
 	return false, nil
-}
-
-// ReportTestCaseFinished is a method to report the completion of a test case
-func (fw *FuzzerWorker) ReportTestCaseFinished(testCase TestCase) {
-	if _, alreadyExists := fw.testCasesFinished[TestCaseID(testCase.ID())]; alreadyExists {
-		return
-	}
-	fw.testCasesFinished[TestCaseID(testCase.ID())] = testCase
 }

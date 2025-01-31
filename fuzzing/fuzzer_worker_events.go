@@ -85,12 +85,6 @@ type FuzzerWorkerChainSetupEvent struct {
 	Chain *chain.TestChain
 }
 
-// FuzzerWorkerStoppingEvent describes an event where a fuzzing.FuzzerWorker is stopping
-type FuzzerWorkerStoppingEvent struct {
-	// Worker represents the instance of the fuzzing.FuzzerWorker that is being stopped
-	Worker *FuzzerWorker
-}
-
 // FuzzerWorkerCallSequenceTestingEvent describes an event where a fuzzing.FuzzerWorker is about to generate and test a new call
 // sequence.
 type FuzzerWorkerCallSequenceTestingEvent struct {

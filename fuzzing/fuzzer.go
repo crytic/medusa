@@ -102,14 +102,6 @@ type Fuzzer struct {
 	logger *logging.Logger
 }
 
-// fuzzerErr is a custom type to be used to report an error within the fuzzer context
-type fuzzerErr string
-
-const (
-	// fuzzerErrKey is of type fuzzerErr and will be the key to represent an error within the fuzzer context
-	fuzzerErrKey fuzzerErr = "fuzzerErr"
-)
-
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
@@ -667,7 +659,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Define a flag that indicates whether we have cancelled fuzzing or not
-	working := !utils.CheckContextDone(f.ctx)
+	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
 
 	// Create workers and start fuzzing.
 	var err error
@@ -762,7 +754,7 @@ func (f *Fuzzer) Start() error {
 	// While we're fuzzing, we'll want to have an initialized random provider.
 	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Create our main and secondary running context (allows us to cancel across threads)
+	// Create our main and emergency running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
 	f.emergencyCtx, f.emergencyCtxCancelFunc = context.WithCancel(context.Background())
 
