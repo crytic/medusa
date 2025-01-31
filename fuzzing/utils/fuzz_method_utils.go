@@ -10,6 +10,10 @@ import (
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func IsOptimizationTest(method abi.Method, prefixes []string) bool {
+	// Don't register setup hook as a test case
+	if IsSetupHook(method) {
+		return false
+	}
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(method.Name, prefix) {
@@ -25,6 +29,10 @@ func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 func IsPropertyTest(method abi.Method, prefixes []string) bool {
+	// Don't register setup hook as a test case
+	if IsSetupHook(method) {
+		return false
+	}
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		// The property test must simply have the right prefix and take no inputs and return a boolean
@@ -37,10 +45,17 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 	return false
 }
 
-// BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
-func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method) {
+// IsSetupHook checks whether the method is a setup hook
+func IsSetupHook(method abi.Method) bool {
+	return method.Name == "setUp"
+}
+
+// BinTestByType sorts a contract's methods by whether they are the contract's setup hook,assertion, property, or optimization tests.
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method, setupHook *abi.Method) {
 	for _, method := range contract.Abi.Methods {
-		if IsPropertyTest(method, propertyTestPrefixes) {
+		if IsSetupHook(method) {
+			setupHook = &method
+		} else if IsPropertyTest(method, propertyTestPrefixes) {
 			propertyTests = append(propertyTests, method)
 		} else if IsOptimizationTest(method, optimizationTestPrefixes) {
 			optimizationTests = append(optimizationTests, method)
@@ -48,5 +63,5 @@ func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPref
 			assertionTests = append(assertionTests, method)
 		}
 	}
-	return assertionTests, propertyTests, optimizationTests
+	return assertionTests, propertyTests, optimizationTests, setupHook
 }

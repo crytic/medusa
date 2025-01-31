@@ -339,13 +339,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods, setupHook := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
+
+				// Register the contract's setup hook, if exists
+				if setupHook != nil {
+					contractDefinition.SetupHook = &fuzzerTypes.ContractSetupHook{Method: setupHook, DeployerAddress: f.deployer}
+				}
 
 				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
 				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {

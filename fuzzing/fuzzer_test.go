@@ -232,6 +232,26 @@ func TestOptimizationMode(t *testing.T) {
 	}
 }
 
+// TestSetupHook runs a test to ensure that setup hooks work as expected.
+func TestSetupHook(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_setup_hook.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract", "TestContract2"}
+			config.Fuzzing.TestLimit = 10_000
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Assert that we should not have failures.
+			assertFailedTestsExpected(f, false)
+		},
+	})
+}
+
 // TestChainBehaviour runs tests to ensure the chain behaves as expected.
 func TestChainBehaviour(t *testing.T) {
 	// Run a test to simulate out of gas errors to make sure its handled well by the Chain and does not panic.
