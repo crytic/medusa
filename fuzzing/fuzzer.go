@@ -44,10 +44,17 @@ import (
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
 type Fuzzer struct {
-	// ctx describes the context for the fuzzing run, used to cancel running operations.
+	// ctx is the main context used by the fuzzer.
 	ctx context.Context
-	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
+	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations the main ctx tracks.
+	// Cancelling ctx does _not_ guarantee that all operations will terminate.
 	ctxCancelFunc context.CancelFunc
+
+	// emergencyCtx is the context that is used by the fuzzer to react to OS-level interrupts (e.g. SIGINT) or errors.
+	emergencyCtx context.Context
+	// emergencyCtxCancelFunc describes a function which can be used to cancel the fuzzing operations due to an OS-level
+	// interrupt or an error. Cancelling emergencyCtx will guarantee that all operations will terminate.
+	emergencyCtxCancelFunc context.CancelFunc
 
 	// config describes the project configuration which the fuzzing is targeting.
 	config config.ProjectConfig
@@ -61,6 +68,10 @@ type Fuzzer struct {
 	// contractDefinitions defines targets to be fuzzed once their deployment is detected. They are derived from
 	// compilations.
 	contractDefinitions fuzzerTypes.Contracts
+	// slitherResults holds the results obtained from slither. At the moment we do not have use for storing this in the
+	// Fuzzer but down the line we can use slither for other capabilities that may require storage of the results.
+	slitherResults *compilationTypes.SlitherResults
+
 	// baseValueSet represents a valuegeneration.ValueSet containing input values for our fuzz tests.
 	baseValueSet *valuegeneration.ValueSet
 
@@ -289,7 +300,32 @@ func (f *Fuzzer) ReportTestCaseFinished(testCase TestCase) {
 // AddCompilationTargets takes a compilation and updates the Fuzzer state with additional Fuzzer.ContractDefinitions
 // definitions and Fuzzer.BaseValueSet values.
 func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilation) {
-	// Loop for each contract in each compilation and deploy it to the test chain
+	var seedFromAST bool
+
+	// No need to handle the error here since having compilation artifacts implies that we used a supported
+	// platform configuration
+	platformConfig, _ := f.config.Compilation.GetPlatformConfig()
+
+	// Retrieve the compilation target for slither
+	target := platformConfig.GetTarget()
+
+	// Run slither and handle errors
+	slitherResults, err := f.config.Slither.RunSlither(target)
+	if err != nil || slitherResults == nil {
+		if err != nil {
+			f.logger.Warn("Failed to run slither", err)
+		}
+		seedFromAST = true
+	}
+
+	// If we have results and there were no errors, we will seed the value set using the slither results
+	if !seedFromAST {
+		f.slitherResults = slitherResults
+		// Seed our base value set with the constants extracted by Slither
+		f.baseValueSet.SeedFromSlither(slitherResults)
+	}
+
+	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
 		f.compilations = append(f.compilations, compilations[i])
@@ -297,8 +333,11 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 
 		// Loop for each source
 		for sourcePath, source := range compilation.SourcePathToArtifact {
-			// Seed our base value set from every source's AST
-			f.baseValueSet.SeedFromAst(source.Ast)
+			// Seed from the contract's AST if we did not use slither or failed to do so
+			if seedFromAST {
+				// Seed our base value set from every source's AST
+				f.baseValueSet.SeedFromAst(source.Ast)
+			}
 
 			// Loop for every contract and register it in our contract definitions
 			for contractName := range source.Contracts {
@@ -414,6 +453,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
 					found = true
 				} else {
+					// TODO list options for the user to choose from
 					return nil, fmt.Errorf("specify target contract(s)")
 				}
 			}
@@ -505,9 +545,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						Block:            block,
 						TransactionIndex: len(block.Messages) - 1,
 					}
-					// Revert to genesis and re-run the failed contract deployment tx.
+					// Revert to one block before and re-run the failed contract deployment tx.
+					// This should be one index before the current head block index.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockNumber(0)
+					err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1))
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
@@ -547,10 +588,10 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds:               0,
 		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.5,
+		GenerateRandomAddressBias:       0.05,
 		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.5,
-		GenerateRandomBytesBias:         0.5,
+		GenerateRandomStringBias:        0.05,
+		GenerateRandomBytesBias:         0.05,
 		MutateAddressProbability:        0.1,
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           0.1,
@@ -623,8 +664,8 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}
 	}
 
-	// Define a flag that indicates whether we have not cancelled o
-	working := !utils.CheckContextDone(f.ctx)
+	// Define a flag that indicates whether we have cancelled fuzzing or not
+	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
 
 	// Create workers and start fuzzing.
 	var err error
@@ -686,9 +727,9 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}(workerSlotInfo)
 	}
 
-	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
-	if f.ctxCancelFunc != nil {
-		f.ctxCancelFunc()
+	// Explicitly call cancel on our emergency context to ensure all threads exit if we encountered an error.
+	if err != nil {
+		f.Terminate()
 	}
 
 	// Wait for every worker to be freed, so we don't have a race condition when reporting the order
@@ -719,8 +760,9 @@ func (f *Fuzzer) Start() error {
 	// While we're fuzzing, we'll want to have an initialized random provider.
 	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Create our running context (allows us to cancel across threads)
+	// Create our main and emergency running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	f.emergencyCtx, f.emergencyCtxCancelFunc = context.WithCancel(context.Background())
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
@@ -847,16 +889,35 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
-
-	if err == nil && f.config.Fuzzing.CorpusDirectory != "" {
-		coverageReportPath := filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage_report.html")
-		err = coverage.GenerateReport(f.compilations, f.corpus.CoverageMaps(), coverageReportPath)
+	if err == nil && len(f.config.Fuzzing.CoverageFormats) > 0 {
+		// Write to the default directory if we have no corpus directory set.
+		coverageReportDir := filepath.Join("crytic-export", "coverage")
+		if f.config.Fuzzing.CorpusDirectory != "" {
+			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
+		}
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
 		if err != nil {
-			f.logger.Error("Failed to generate coverage report", err)
+			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
-			f.logger.Info("Coverage report saved to file: ", colors.Bold, coverageReportPath, colors.Reset)
+			var path string
+			for _, reportType := range f.config.Fuzzing.CoverageFormats {
+				switch reportType {
+				case "html":
+					path, err = coverage.WriteHTMLReport(sourceAnalysis, coverageReportDir)
+				case "lcov":
+					path, err = coverage.WriteLCOVReport(sourceAnalysis, coverageReportDir)
+				default:
+					err = fmt.Errorf("unsupported coverage report type: %s", reportType)
+				}
+				if err != nil {
+					f.logger.Error(fmt.Sprintf("Failed to generate %s coverage report", reportType), err)
+				} else {
+					f.logger.Info(fmt.Sprintf("%s report(s) saved to: %s", reportType, path), colors.Bold, colors.Reset)
+				}
+			}
 		}
 	}
+	// TODO: Fix use of logger and where report is going
 	err = f.ReversionReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
 	if err != nil {
 		f.logger.Error("Failed to write reversion metrics to disk", err)
@@ -866,12 +927,23 @@ func (f *Fuzzer) Start() error {
 	return err
 }
 
-// Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
-// occurs.
+// Stop attempts to stop all running operations invoked by the Start method. Note that Stop is not guaranteed to fully
+// terminate the operations across all threads. For example, the optimization testing provider may request a thread to
+// shrink some call sequences before the thread is torn down. Stop will not prevent those shrink requests from
+// executing. An OS-level interrupt must be used to guarantee the stopping of _all_ operations (see Terminate).
 func (f *Fuzzer) Stop() {
-	// Call the cancel function on our running context to stop all working goroutines
+	// Call the cancel function on our main running context to try stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
+	}
+}
+
+// Terminate is called to react to an OS-level interrupt (e.g. SIGINT) or an error. This will stop all operations.
+// Note that this function will return before all operations are complete.
+func (f *Fuzzer) Terminate() {
+	// Call the emergency context cancel function on our running context to stop all working goroutines
+	if f.emergencyCtxCancelFunc != nil {
+		f.emergencyCtxCancelFunc()
 	}
 }
 
@@ -930,6 +1002,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt
+		// TODO: We should move this logic somewhere else because it is weird that the metrics loop halts the fuzzer
 		testLimit := f.config.Fuzzing.TestLimit
 		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
 			f.logger.Info("Transaction test limit reached, halting now...")

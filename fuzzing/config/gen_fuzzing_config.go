@@ -23,6 +23,7 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		CallSequenceLength       int                       `json:"callSequenceLength"`
 		CorpusDirectory          string                    `json:"corpusDirectory"`
 		CoverageEnabled          bool                      `json:"coverageEnabled"`
+		CoverageFormats          []string                  `json:"coverageFormats"`
 		TargetContracts          []string                  `json:"targetContracts"`
 		PredeployedContracts     map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances  []*hexutil.Big            `json:"targetContractsBalances"`
@@ -46,6 +47,7 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CallSequenceLength = f.CallSequenceLength
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
+	enc.CoverageFormats = f.CoverageFormats
 	enc.TargetContracts = f.TargetContracts
 	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
@@ -78,6 +80,7 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		CallSequenceLength       *int                      `json:"callSequenceLength"`
 		CorpusDirectory          *string                   `json:"corpusDirectory"`
 		CoverageEnabled          *bool                     `json:"coverageEnabled"`
+		CoverageFormats          []string                  `json:"coverageFormats"`
 		TargetContracts          []string                  `json:"targetContracts"`
 		PredeployedContracts     map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances  []*hexutil.Big            `json:"targetContractsBalances"`
@@ -119,6 +122,9 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.CoverageEnabled != nil {
 		f.CoverageEnabled = *dec.CoverageEnabled
+	}
+	if dec.CoverageFormats != nil {
+		f.CoverageFormats = dec.CoverageFormats
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts

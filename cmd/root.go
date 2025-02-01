@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-const version = "0.1.6"
+const version = "0.1.8"
 
 // rootCmd represents the root CLI command object which all other commands stem from.
 var rootCmd = &cobra.Command{

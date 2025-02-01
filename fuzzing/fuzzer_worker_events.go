@@ -32,6 +32,10 @@ type FuzzerWorkerEvents struct {
 	// CallSequenceTested emits events when the FuzzerWorker has finished generating and testing a
 	// new call sequence.
 	CallSequenceTested events.EventEmitter[FuzzerWorkerCallSequenceTestedEvent]
+
+	// TestingComplete emits events when the FuzzerWorker has completed testing of call sequences and is about to exit
+	// the fuzzing loop.
+	TestingComplete events.EventEmitter[FuzzerWorkerTestingCompleteEvent]
 }
 
 // FuzzerWorkerContractAddedEvent describes an event where a fuzzing.FuzzerWorker detects a newly deployed contract in
@@ -96,4 +100,11 @@ type FuzzerWorkerCallSequenceTestedEvent struct {
 	Worker *FuzzerWorker
 	// Sequence represents the call sequence that was tested
 	Sequence calls.CallSequence
+}
+
+// FuzzerWorkerTestingCompleteEvent describes an event where a fuzzing.FuzzerWorker has completed testing of call sequences
+// and is about to exit the fuzzing loop.
+type FuzzerWorkerTestingCompleteEvent struct {
+	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
+	Worker *FuzzerWorker
 }

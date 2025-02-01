@@ -145,7 +145,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 				}
 
 				// Get the source unit ID
-				sourceUnitId := ast.GetSourceUnitID()
+				sourceUnitId := types.GetSrcMapSourceUnitID(ast.Src)
 				// Construct our compiled source object
 				compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
 					// TODO our types.AST is not the same as the original AST but we could parse it and avoid using "any"

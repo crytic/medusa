@@ -219,6 +219,29 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	return method, err
 }
 
+// DecodedReturnValues returns the Go-equivalent decoded return values for the CallSequenceElement's return data
+func (cse *CallSequenceElement) DecodedReturnValues() ([]any, error) {
+	// First, retrieve the method that was called by the call sequence element
+	method, err := cse.Method()
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve the ABI-encoded return data
+	encodedReturnData := cse.ChainReference.Block.MessageResults[cse.ChainReference.TransactionIndex].ExecutionResult.ReturnData
+	if len(encodedReturnData) == 0 {
+		return nil, nil
+	}
+
+	// Decode the return data
+	decodedReturnValues, err := method.Outputs.Unpack(encodedReturnData)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodedReturnValues, nil
+}
+
 // String returns a displayable string representing the CallSequenceElement.
 func (cse *CallSequenceElement) String() string {
 	// Obtain our contract name
@@ -238,7 +261,7 @@ func (cse *CallSequenceElement) String() string {
 	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, nil)
 		if err != nil {
 			argsText = "<unresolved args>"
 		}
@@ -263,7 +286,7 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.GasLimit,
 		cse.Call.GasPrice.String(),
 		cse.Call.Value.String(),
-		cse.Call.From,
+		cse.Call.From.String(),
 	)
 }
 

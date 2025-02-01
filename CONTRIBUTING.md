@@ -87,6 +87,16 @@ To run
 
 - Ensure JSON keys are `camelCase` rather than `snake_case`, where possible.
 
+### Nix considerations
+
+- If any dependencies are added or removed, the `vendorHash` property in ./flake.nix will need to be updated. To do so, run `nix build`. If it works, you're good to go. If a change is required, you'll see an error that looks like the following. Replace the `specified` value of `vendorHash` in the medusa package of flake.nix with what nix actually `got`.
+
+```
+error: hash mismatch in fixed-output derivation '/nix/store/sfgmkr563pzyxzllpmwxdbdxgrav8y1p-medusa-0.1.8-go-modules.drv':
+         specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            got:    sha256-12Xkg5dzA83HQ2gMngXoLgu1c9KGSL6ly5Qz/o8U++8=
+```
+
 ## License
 
 The license for this software can be found [here](./LICENSE).

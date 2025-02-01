@@ -7,6 +7,8 @@ configuration is a `.json` file that is broken down into five core components.
 - [Testing Configuration](./testing_config.md): The testing configuration dictates how and what `medusa` should fuzz test.
 - [Chain Configuration](./chain_config.md): The chain configuration dictates how `medusa`'s underlying blockchain should be configured.
 - [Compilation Configuration](./compilation_config.md): The compilation configuration dictates how to compile the fuzzing target.
+- [Slither Configuration](./slither_config.md): The Slither configuration dictates whether Slither should be used in
+  `medusa` and whether the results from Slither should be cached.
 - [Logging Configuration](./logging_config.md): The logging configuration dictates when and where to log events.
 
 To generate a project configuration file, run [`medusa init`](../cli/init.md).
@@ -43,7 +45,7 @@ value to `10_000` or `100_000` depending on the use case. You can learn more abo
 Updating the corpus directory is optional but recommended. The corpus directory determines where corpus items should be
 stored on disk. A corpus item is a sequence of transactions that increased `medusa`'s coverage of the system. Thus, these
 corpus items are valuable to store so that they can be re-used for the next fuzzing campaign. Additionally, the directory
-will also hold [coverage reports](../coverage_reports.md) which is a valuable tool for debugging and validation. For most cases, you may set
+will also hold [coverage reports](../testing/coverage_reports.md) which is a valuable tool for debugging and validation. For most cases, you may set
 `corpusDirectory`'s value to "corpus". This will create a `corpus/` directory in the same directory as the `medusa.json`
 file.
 You can learn more about this option [here](./fuzzing_config.md#corpusdirectory).
