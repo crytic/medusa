@@ -43,10 +43,17 @@ import (
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
 type Fuzzer struct {
-	// ctx describes the context for the fuzzing run, used to cancel running operations.
+	// ctx is the main context used by the fuzzer.
 	ctx context.Context
-	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations ctx tracks.
+	// ctxCancelFunc describes a function which can be used to cancel the fuzzing operations the main ctx tracks.
+	// Cancelling ctx does _not_ guarantee that all operations will terminate.
 	ctxCancelFunc context.CancelFunc
+
+	// emergencyCtx is the context that is used by the fuzzer to react to OS-level interrupts (e.g. SIGINT) or errors.
+	emergencyCtx context.Context
+	// emergencyCtxCancelFunc describes a function which can be used to cancel the fuzzing operations due to an OS-level
+	// interrupt or an error. Cancelling emergencyCtx will guarantee that all operations will terminate.
+	emergencyCtxCancelFunc context.CancelFunc
 
 	// config describes the project configuration which the fuzzing is targeting.
 	config config.ProjectConfig
@@ -534,8 +541,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						TransactionIndex: len(block.Messages) - 1,
 					}
 					// Revert to one block before and re-run the failed contract deployment tx.
+					// This should be one index before the current head block index.
 					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockNumber(block.Header.Number.Uint64() - 1)
+					err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1))
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
@@ -651,8 +659,8 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}
 	}
 
-	// Define a flag that indicates whether we have not cancelled o
-	working := !utils.CheckContextDone(f.ctx)
+	// Define a flag that indicates whether we have cancelled fuzzing or not
+	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
 
 	// Create workers and start fuzzing.
 	var err error
@@ -714,9 +722,9 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}(workerSlotInfo)
 	}
 
-	// Explicitly call cancel on our context to ensure all threads exit if we encountered an error.
-	if f.ctxCancelFunc != nil {
-		f.ctxCancelFunc()
+	// Explicitly call cancel on our emergency context to ensure all threads exit if we encountered an error.
+	if err != nil {
+		f.Terminate()
 	}
 
 	// Wait for every worker to be freed, so we don't have a race condition when reporting the order
@@ -747,8 +755,9 @@ func (f *Fuzzer) Start() error {
 	// While we're fuzzing, we'll want to have an initialized random provider.
 	f.randomProvider = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Create our running context (allows us to cancel across threads)
+	// Create our main and emergency running context (allows us to cancel across threads)
 	f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	f.emergencyCtx, f.emergencyCtxCancelFunc = context.WithCancel(context.Background())
 
 	// If we set a timeout, create the timeout context now, as we're about to begin fuzzing.
 	if f.config.Fuzzing.Timeout > 0 {
@@ -903,12 +912,23 @@ func (f *Fuzzer) Start() error {
 	return err
 }
 
-// Stop stops a running operation invoked by the Start method. This method may return before complete operation teardown
-// occurs.
+// Stop attempts to stop all running operations invoked by the Start method. Note that Stop is not guaranteed to fully
+// terminate the operations across all threads. For example, the optimization testing provider may request a thread to
+// shrink some call sequences before the thread is torn down. Stop will not prevent those shrink requests from
+// executing. An OS-level interrupt must be used to guarantee the stopping of _all_ operations (see Terminate).
 func (f *Fuzzer) Stop() {
-	// Call the cancel function on our running context to stop all working goroutines
+	// Call the cancel function on our main running context to try stop all working goroutines
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
+	}
+}
+
+// Terminate is called to react to an OS-level interrupt (e.g. SIGINT) or an error. This will stop all operations.
+// Note that this function will return before all operations are complete.
+func (f *Fuzzer) Terminate() {
+	// Call the emergency context cancel function on our running context to stop all working goroutines
+	if f.emergencyCtxCancelFunc != nil {
+		f.emergencyCtxCancelFunc()
 	}
 }
 
@@ -967,6 +987,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		lastWorkerStartupCount = workerStartupCount
 
 		// If we reached our transaction threshold, halt
+		// TODO: We should move this logic somewhere else because it is weird that the metrics loop halts the fuzzer
 		testLimit := f.config.Fuzzing.TestLimit
 		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
 			f.logger.Info("Transaction test limit reached, halting now...")

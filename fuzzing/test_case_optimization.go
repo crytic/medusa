@@ -2,16 +2,14 @@ package fuzzing
 
 import (
 	"fmt"
-	"math/big"
-	"strings"
-	"sync"
-
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"math/big"
+	"strings"
 )
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
@@ -24,10 +22,11 @@ type OptimizationTestCase struct {
 	targetMethod abi.Method
 	// callSequence describes the call sequence that maximized the value
 	callSequence *calls.CallSequence
+	// shrinkCallSequenceRequest is the shrink request that will be executed to identify the optimal call sequence
+	// that maximizes the value
+	shrinkCallSequenceRequest *ShrinkCallSequenceRequest
 	// value is used to store the maximum value returned by the test method
 	value *big.Int
-	// valueLock is used for thread-synchronization when updating the value
-	valueLock sync.Mutex
 	// optimizationTestTrace describes the execution trace when running the callSequence
 	optimizationTestTrace *executiontracer.ExecutionTrace
 }

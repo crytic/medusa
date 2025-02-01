@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -14,7 +15,6 @@ import (
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/crytic/medusa/fuzzing/config"
@@ -268,15 +268,19 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/parse.sol",
 		"testdata/contracts/cheat_codes/vm/snapshot_and_revert_to.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/coinbase_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
 		"testdata/contracts/cheat_codes/vm/difficulty.sol",
 		"testdata/contracts/cheat_codes/vm/etch.sol",
 		"testdata/contracts/cheat_codes/vm/fee.sol",
+		"testdata/contracts/cheat_codes/vm/fee_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/prank.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
