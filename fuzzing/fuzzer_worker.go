@@ -582,7 +582,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 		// Copy the labels from the base chain to the worker's chain
 		initializedChain.Labels = maps.Clone(baseTestChain.Labels)
-		
+
 		// Emit an event indicating the worker has created its chain.
 		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
 			Worker: fw,
