@@ -1,4 +1,4 @@
-package reversion
+package reverts
 
 import (
 	_ "embed"

@@ -1,4 +1,4 @@
-package reversion
+package reverts
 
 import (
 	"context"
@@ -6,59 +6,49 @@ import (
 	"errors"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
-	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"os"
 	"path/filepath"
 )
 
-type ReversionReporter struct {
+// RevertReporter is responsible for tracking and reporting revert stats across the fuzzer workers. These revert
+// statistics are then provided as an artifact to the end user.
+type RevertReporter struct {
 	incomingMetricsQueue chan *TxCallMetrics
-
-	aggregatedMetrics *TxCallMetrics
-	enabled           bool
-	reportArtifact    *RevertArtifact
-	cleanupWorker     func()
+	aggregatedMetrics    *TxCallMetrics
+	reportArtifact       *RevertArtifact
+	cleanupWorker        func()
 }
 
-// CreateReversionReporter creates a new ReversionReporter using the provided config
-func CreateReversionReporter(config config.ProjectConfig) *ReversionReporter {
-	return &ReversionReporter{
+// NewRevertsReporter creates a new RevertsReporter
+func NewRevertsReporter() *RevertReporter {
+	return &RevertReporter{
 		incomingMetricsQueue: make(chan *TxCallMetrics, 500),
 		aggregatedMetrics:    createTxCallMetrics(),
-		enabled:              config.Fuzzing.ReversionReporterEnabled,
 	}
 }
 
-// StartWorker creates a background goroutine that handles incoming reversion reports from workers.
+// Start creates a background goroutine that handles incoming reversion reports from workers.
 // The background goroutine is terminated when the provided context is terminated, or when the
 // cleanup function returned by StartWorker is called.
-func (s *ReversionReporter) StartWorker(ctx context.Context) {
-	if s.enabled {
-		workerCtx, done := context.WithCancel(ctx)
-		go func() {
-			for {
-				select {
-				case report := <-s.incomingMetricsQueue:
-					s.aggregatedMetrics.concatReports(report)
-				case <-workerCtx.Done():
-					return
-				}
-			}
-		}()
-		s.cleanupWorker = done
+func (s *RevertReporter) Start(ctx context.Context) {
+	for !utils.CheckContextDone(ctx) {
+		select {
+		case report := <-s.incomingMetricsQueue:
+			s.aggregatedMetrics.concatReports(report)
+		default:
+		}
 	}
+	// TODO: Maybe do some cleanup?
 }
 
 // OnPendingBlockCommittedEvent is used to identify top level calls made by the fuzzer, extract the result of those
 // calls, then add the data to a reversion report that will be submitted to the background worker via incomingMetricsQueue
-func (s *ReversionReporter) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
-	if !s.enabled {
-		return nil
-	}
+func (s *RevertReporter) OnPendingBlockCommittedEvent(event chain.PendingBlockCommittedEvent) error {
 	report := createTxCallMetrics()
 
 	for i, msg := range event.Block.Messages {
@@ -94,10 +84,7 @@ func (s *ReversionReporter) OnPendingBlockCommittedEvent(event chain.PendingBloc
 }
 
 // BuildArtifact converts aggregated report information into an artifact that can be easily serialized.
-func (s *ReversionReporter) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
-	if !s.enabled {
-		return nil
-	}
+func (s *RevertReporter) BuildArtifact(logger *logging.Logger, contractDefs fuzzerTypes.Contracts, corpusDir string) error {
 	// terminate the worker to make sure all the stats are aggregated
 	s.cleanupWorker()
 
@@ -112,10 +99,7 @@ func (s *ReversionReporter) BuildArtifact(logger *logging.Logger, contractDefs f
 
 // WriteReport takes the generated reportArtifact and writes it to the provided dir. Two artifacts are written;
 // a revert statistics json file, and a user-readable html file.
-func (s *ReversionReporter) WriteReport(dir string, logger *logging.Logger) error {
-	if !s.enabled {
-		return nil
-	}
+func (s *RevertReporter) WriteReport(dir string, logger *logging.Logger) error {
 	if s.reportArtifact == nil {
 		return errors.New("report artifact missing")
 	}
@@ -132,7 +116,7 @@ func (s *ReversionReporter) WriteReport(dir string, logger *logging.Logger) erro
 }
 
 // writeReportHtml generates an HTML representation of the report artifact and writes it to path.
-func (s *ReversionReporter) writeReportHtml(path string, logger *logging.Logger) error {
+func (s *RevertReporter) writeReportHtml(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -148,7 +132,7 @@ func (s *ReversionReporter) writeReportHtml(path string, logger *logging.Logger)
 }
 
 // writeReportHtml generates an JSON representation of the report artifact and writes it to path.
-func (s *ReversionReporter) writeReportJson(path string, logger *logging.Logger) error {
+func (s *RevertReporter) writeReportJson(path string, logger *logging.Logger) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err

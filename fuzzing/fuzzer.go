@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/crytic/medusa/fuzzing/coverage"
-	"github.com/crytic/medusa/fuzzing/reversion"
+	"github.com/crytic/medusa/fuzzing/reverts"
 	"math/big"
 	"math/rand"
 	"os"
@@ -82,8 +82,8 @@ type Fuzzer struct {
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
 
-	// ReversionReporter tracks per-function reversion metrics, if enabled
-	ReversionReporter *reversion.ReversionReporter
+	// revertReporter tracks per-function reversion metrics, if enabled
+	revertReporter *reverts.RevertReporter
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -168,7 +168,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		ReversionReporter:   reversion.CreateReversionReporter(config),
+		revertReporter:      reverts.NewRevertsReporter(),
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -665,7 +665,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Define a flag that indicates whether we have cancelled fuzzing or not
-	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
+	working := !utils.CheckContextDone(f.ctx)
 
 	// Create workers and start fuzzing.
 	var err error
@@ -837,13 +837,6 @@ func (f *Fuzzer) Start() error {
 	// Start our printing loop now that we're about to begin fuzzing.
 	go f.printMetricsLoop()
 
-	// Publish a fuzzer starting event.
-	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
-	if err != nil {
-		f.logger.Error("FuzzerStarting event subscriber returned an error", err)
-		return err
-	}
-
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
 		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
@@ -854,8 +847,18 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
-	// Measure reversion stats across all workers
-	f.ReversionReporter.StartWorker(f.ctx)
+	// Create a reversion reporter if enabled and start tracking revert statistics
+	if f.config.Fuzzing.ReversionReporterEnabled {
+		// Provide the fuzzer's main context so that we can cancel the goroutine when the campaign is complete
+		go f.revertReporter.Start(f.ctx)
+	}
+
+	// Publish a fuzzer starting event.
+	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
+	if err != nil {
+		f.logger.Error("FuzzerStarting event subscriber returned an error", err)
+		return err
+	}
 
 	// Run the main worker loop
 	err = f.spawnWorkersLoop(baseTestChain)
@@ -883,7 +886,7 @@ func (f *Fuzzer) Start() error {
 	// Print our results on exit.
 	f.printExitingResults()
 
-	err = f.ReversionReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
+	err = f.revertReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
 	if err != nil {
 		f.logger.Error("Failed to generate reversion stats report", err)
 	}
@@ -918,7 +921,7 @@ func (f *Fuzzer) Start() error {
 		}
 	}
 	// TODO: Fix use of logger and where report is going
-	err = f.ReversionReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
+	err = f.revertReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
 	if err != nil {
 		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}
@@ -944,6 +947,11 @@ func (f *Fuzzer) Terminate() {
 	// Call the emergency context cancel function on our running context to stop all working goroutines
 	if f.emergencyCtxCancelFunc != nil {
 		f.emergencyCtxCancelFunc()
+	}
+
+	// Also cancel the main context just to be safe
+	if f.ctxCancelFunc != nil {
+		f.ctxCancelFunc()
 	}
 }
 

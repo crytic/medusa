@@ -62,6 +62,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   in the `coverage` directory within `crytic-export/` or `corpusDirectory` if configured.
 - **Default**: `["lcov", "html"]`
 
+### `reversionReporterEnabled`
+
+- **Type**: Boolean
+- **Description**: Enables or disables the reversion reporting plugin.
+- **Default**: `false`
+
 ### `targetContracts`
 
 - **Type**: [String] (e.g. `[FirstContract, SecondContract, ThirdContract]`)
@@ -141,12 +147,6 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Description**: Defines the amount of gas sent with each fuzzer-generated transaction.
   > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
 - **Default**: `12_500_000`
-
-### `reversionReporterEnabled`
-
-- **Type**: Boolean
-- **Description**: Enable or disables the reversion reporting plugin
-- **Default**: `false`
 
 ## Using `constructorArgs`
 

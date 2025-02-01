@@ -68,6 +68,9 @@ type FuzzingConfig struct {
 	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
 	CoverageFormats []string `json:"coverageFormats"`
 
+	// ReversionReporterEnabled determines whether reversion metrics should be collected and reported.
+	ReversionReporterEnabled bool `json:"reversionReporterEnabled"`
+	
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
 
@@ -104,9 +107,6 @@ type FuzzingConfig struct {
 
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
-
-	// ReversionReporterEnabled determines whether reversion metrics should be collected and reported.
-	ReversionReporterEnabled bool `json:"reversionReporterEnabled"`
 
 	// Testing describes the configuration used for different testing strategies.
 	Testing TestingConfig `json:"testing"`
