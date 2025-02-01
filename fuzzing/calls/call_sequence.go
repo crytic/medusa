@@ -46,11 +46,8 @@ func (cs CallSequence) Log() *logging.LogBuffer {
 
 	// Construct the buffer for each call made in the sequence
 	for i := 0; i < len(cs); i++ {
-
-		// Get the addressToLabel mapping to map addresses to their labels in the log
-		addressToLabel := cs[i].ChainReference.MessageResults().AdditionalResults["AddressToLabelResults"].(map[common.Address]string)
 		// Add the string representing the call
-		buffer.Append(utils.ResolveAddressToLabelFromString(fmt.Sprintf("%d) %s\n", i+1, cs[i].String()), addressToLabel))
+		buffer.Append(fmt.Sprintf("%d) %s\n", i+1, cs[i].String()))
 
 		// If we have an execution trace attached, print information about it.
 		if cs[i].ExecutionTrace != nil {
@@ -264,7 +261,7 @@ func (cse *CallSequenceElement) String() string {
 	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, nil)
 		if err != nil {
 			argsText = "<unresolved args>"
 		}

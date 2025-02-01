@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -322,9 +323,10 @@ func EncodeJSONArgumentsToSlice(inputs abi.Arguments, values []any) ([]any, erro
 }
 
 // EncodeABIArgumentsToString encodes provided go-ethereum ABI package input values into string that is
-// human-readable for console output purpose.
+// human-readable for console output purpose. A mapping of overrides can also be provided to override the string
+// representation of addresses for something else (useful for the vm.label cheatcode).
 // Returns the string, or an error if one occurs.
-func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, error) {
+func EncodeABIArgumentsToString(inputs abi.Arguments, values []any, overrides map[common.Address]string) (string, error) {
 	// Create a variable to store string arguments, fill it with the respective arguments
 	var encodedArgs = make([]string, len(inputs))
 
@@ -339,6 +341,16 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, err
 				input.Name, input.Type, values[i], err)
 			return "", err
 		}
+
+		// If the ABI-type is an address, see if there is a label override for it
+		if input.Type.T == abi.AddressTy {
+			// It's okay to type assert here without capturing an error since that is handled earlier in the flow
+			if label, ok := overrides[values[i].(common.Address)]; ok {
+				// Attach the label to the address
+				arg = utils.AttachLabelToAddress(values[i].(common.Address), label)
+			}
+		}
+
 		// Store the encoded argument at the current index in the encodedArgs slice
 		encodedArgs[i] = arg
 	}

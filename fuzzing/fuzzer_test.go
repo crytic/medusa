@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
-	"regexp"
 	"testing"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -603,11 +602,24 @@ func TestExecutionTraces(t *testing.T) {
 	}
 }
 
+// TestLabelCheatCode tests the vm.label cheatcode.
 func TestLabelCheatCode(t *testing.T) {
+	// These are the expected messages in the execution trace
+	expectedTraceMessages := []string{
+		"ProxyContract.testVMLabel()()",
+		"addr=ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66]",
+		"sender=MySender [0x10000]",
+		"ProxyContract -> ImplementationContract.emitEvent(address)(ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])",
+		"code=ImplementationContract [0x54919A19522Ce7c842E25735a9cFEcef1c0a06dA]",
+		"[event] TestEvent(RandomAddress [0x20000])",
+		"[return (ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])]",
+	}
 	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/cheat_codes/vm/label.sol",
+		filePath: "testdata/contracts/cheat_codes/utils/label.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			// Only allow for one sender for proper testing of this unit test
+			config.Fuzzing.SenderAddresses = []string{"0x10000"}
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			config.Slither.UseSlither = false
@@ -632,11 +644,10 @@ func TestLabelCheatCode(t *testing.T) {
 			// Get the execution trace message
 			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
 
-			pattern := `addr=[a-zA-Z]+`
-			match, _ := regexp.MatchString(pattern, executionTraceMsg)
-
 			// Verify it contains all expected strings
-			assert.True(t, match)
+			for _, expectedTraceMessage := range expectedTraceMessages {
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+			}
 		},
 	})
 }

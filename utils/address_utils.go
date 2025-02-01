@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/hex"
-	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -48,26 +47,21 @@ func HexStringsToAddresses(addressHexStrings []string) ([]common.Address, error)
 	return addresses, nil
 }
 
-// ResolveAddressToLabelFromString parse a string for ethereum addresses and if found replace that with a label if one exists
-func ResolveAddressToLabelFromString(str string, addressToLabel map[common.Address]string) string {
-	addressRegex := regexp.MustCompile(`0x[a-fA-F0-9]{40}`)
-	processedString := addressRegex.ReplaceAllStringFunc(str, func(match string) string {
-		address := common.HexToAddress(match) // Convert the match to an Ethereum address
-		if label, exists := addressToLabel[address]; exists {
-			//fmt.Printf("Replacing address %s with label: %s\n", match, label)
-			return label + " " + "[" + TrimLeadingZeroesFromAddress(address.String()) + "]" // Replace address with label
-		}
-		trimmedAddress := TrimLeadingZeroesFromAddress(match)
-		//fmt.Printf("Address %s does not have a label, trimming leading zeroes to: %s\n", match, trimmedAddress)
-		return trimmedAddress // Keep the address unchanged if no label is found
-	})
-
-	return processedString
+// AttachLabelToAddress appends a human-readable label to an address for console-output. If a label is not-provided,
+// the address is returned back. Note that this function also trims any leading zeroes from the address to clean it
+// up for console output.
+func AttachLabelToAddress(address common.Address, label string) string {
+	trimmedHexString := TrimLeadingZeroesFromAddress(address)
+	if label == "" {
+		return trimmedHexString
+	}
+	return label + " [" + trimmedHexString + "]"
 }
 
-// TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability
+// TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability and returns it as a string
 // Example: sender=0x0000000000000000000000000000000000030000 becomes sender=0x30000 when shown on console
-func TrimLeadingZeroesFromAddress(hexString string) string {
+func TrimLeadingZeroesFromAddress(address common.Address) string {
+	hexString := address.String()
 	if strings.HasPrefix(hexString, "0x") {
 		// Retain "0x" and trim leading zeroes from the rest of the string
 		return "0x" + strings.TrimLeft(hexString[2:], "0")

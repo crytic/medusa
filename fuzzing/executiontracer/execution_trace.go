@@ -31,16 +31,16 @@ type ExecutionTrace struct {
 	// obtain any additional information regarding execution.
 	contractDefinitions contracts.Contracts
 
-	// Address to label mapping used to map addresses to their labels in a execution trace
-	addressToLabel map[common.Address]string
+	// labels is a mapping that maps an address to its string representation for cleaner execution traces
+	labels map[common.Address]string
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts, addressToLabel map[common.Address]string) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
-		addressToLabel:      addressToLabel,
+		labels:              labels,
 	}
 }
 
@@ -75,10 +75,18 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 
 	// Resolve our contract names, as well as our method and its name from the code contract.
 	if callFrame.ToContractAbi != nil {
+		// Check to see if there is a label for the proxy address
 		proxyContractName = callFrame.ToContractName
+		if label, ok := t.labels[callFrame.ToAddress]; ok {
+			proxyContractName = label
+		}
 	}
 	if callFrame.CodeContractAbi != nil {
+		// Check to see if there is a label for the code address
 		codeContractName = callFrame.CodeContractName
+		if label, ok := t.labels[callFrame.CodeAddress]; ok {
+			codeContractName = label
+		}
 		if callFrame.IsContractCreation() {
 			methodName = "constructor"
 			method = &callFrame.CodeContractAbi.Constructor
@@ -107,8 +115,8 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 		// Unpack our input values and obtain a string to represent them
 		inputValues, err := method.Inputs.Unpack(abiDataInputBuffer)
 		if err == nil {
-			// Encode the ABI arguments into strings
-			encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues)
+			// Encode the ABI arguments into strings and provide the label overrides
+			encodedInputString, err := valuegeneration.EncodeABIArgumentsToString(method.Inputs, inputValues, t.labels)
 			if err == nil {
 				inputArgumentsDisplayText = &encodedInputString
 			}
@@ -142,39 +150,34 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 		inputArgumentsDisplayText = &temp
 	}
 
-	// Check if a code/proxy contract address exists in the addressToLabel mapping
-	if addr, exists := t.addressToLabel[callFrame.ToAddress]; exists {
-		codeContractName = addr
-		proxyContractName = addr
-	}
+	// Handle all label overrides
+	toAddress := utils.AttachLabelToAddress(callFrame.ToAddress, t.labels[callFrame.ToAddress])
+	senderAddress := utils.AttachLabelToAddress(callFrame.SenderAddress, t.labels[callFrame.SenderAddress])
+	codeAddress := utils.AttachLabelToAddress(callFrame.CodeAddress, t.labels[callFrame.CodeAddress])
 
 	// Generate the message we wish to output finally, using all these display string components.
 	// If we executed code, attach additional context such as the contract name, method, etc.
 	var callInfo string
 	if callFrame.IsProxyCall() {
 		if callFrame.ExecutedCode {
-			// Resets codeContractName if this is a proxy call
-			if _, exists := t.addressToLabel[callFrame.CodeAddress]; exists {
-				codeContractName = t.addressToLabel[callFrame.CodeAddress]
-			}
-			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CodeAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("%v -> %v.%v(%v) (addr=%v, code=%v, value=%v, sender=%v)", proxyContractName, codeContractName, methodName, *inputArgumentsDisplayText, toAddress, codeAddress, callFrame.CallValue, senderAddress)
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", toAddress, callFrame.CallValue, senderAddress)
 		}
 	} else {
 		if callFrame.ExecutedCode {
 			if callFrame.ToAddress == chain.ConsoleLogContractAddress {
 				callInfo = fmt.Sprintf("%v.%v(%v)", codeContractName, methodName, *inputArgumentsDisplayText)
 			} else {
-				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+				callInfo = fmt.Sprintf("%v.%v(%v) (addr=%v, value=%v, sender=%v)", codeContractName, methodName, *inputArgumentsDisplayText, toAddress, callFrame.CallValue, senderAddress)
 			}
 		} else {
-			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", callFrame.ToAddress.String(), callFrame.CallValue, callFrame.SenderAddress.String())
+			callInfo = fmt.Sprintf("(addr=%v, value=%v, sender=%v)", toAddress, callFrame.CallValue, senderAddress)
 		}
 	}
 
 	// Labels the addresses using addressToLabel and add call information to the elements
-	elements = append(elements, utils.ResolveAddressToLabelFromString(callInfo, t.addressToLabel), "\n")
+	elements = append(elements, callInfo, "\n")
 
 	return elements, consoleLogString
 }
@@ -204,7 +207,7 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []a
 		if callFrame.ReturnError == nil {
 			outputValues, err := method.Outputs.Unpack(callFrame.ReturnData)
 			if err == nil {
-				encodedOutputString, err := valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues)
+				encodedOutputString, err := valuegeneration.EncodeABIArgumentsToString(method.Outputs, outputValues, t.labels)
 				if err == nil {
 					outputArgumentsDisplayText = &encodedOutputString
 				}
@@ -247,7 +250,7 @@ func (t *ExecutionTrace) generateCallFrameExitElements(callFrame *CallFrame) []a
 	// Try to unpack a custom Solidity error from the return values.
 	matchedCustomError, unpackedCustomErrorArgs := abiutils.GetSolidityCustomRevertError(callFrame.CodeContractAbi, callFrame.ReturnError, callFrame.ReturnData)
 	if matchedCustomError != nil {
-		customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs)
+		customErrorArgsDisplayText, err := valuegeneration.EncodeABIArgumentsToString(matchedCustomError.Inputs, unpackedCustomErrorArgs, t.labels)
 		if err == nil {
 			elements = append(elements, colors.RedBold, fmt.Sprintf("[revert (error: %v(%v))]", matchedCustomError.Name, customErrorArgsDisplayText), colors.Reset, "\n")
 			return elements
@@ -291,7 +294,7 @@ func (t *ExecutionTrace) generateEventEmittedElements(callFrame *CallFrame, even
 	// If we resolved an event definition and unpacked data.
 	if event != nil {
 		// Format the values as a comma-separated string
-		encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues)
+		encodedEventValuesString, err := valuegeneration.EncodeABIArgumentsToString(event.Inputs, eventInputValues, t.labels)
 		if err == nil {
 			// Format our event display text finally, with the event name.
 			temp := fmt.Sprintf("%v(%v)", event.Name, encodedEventValuesString)

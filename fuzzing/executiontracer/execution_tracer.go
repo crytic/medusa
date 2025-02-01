@@ -22,7 +22,7 @@ import (
 // Returns the ExecutionTrace for the call or an error if one occurs.
 func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
-	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
+	executionTracer := NewExecutionTracer(contractDefinitions, testChain)
 	defer executionTracer.Close()
 
 	// Call the contract on our chain with the provided state.
@@ -48,6 +48,11 @@ type ExecutionTracer struct {
 	// trace represents the current execution trace captured by this tracer.
 	trace *ExecutionTrace
 
+	// testChain represents the underlying chain that the execution tracer runs on
+	testChain *chain.TestChain
+
+	// traceMap describes a mapping that allows someone to retrieve the execution trace for a common transaction
+	// hash.
 	traceMap map[common.Hash]*ExecutionTrace
 
 	// currentCallFrame references the current call frame being traced.
@@ -56,23 +61,21 @@ type ExecutionTracer struct {
 	// contractDefinitions represents the contract definitions to match for execution traces.
 	contractDefinitions contracts.Contracts
 
-	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
-	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
-
 	// onNextCaptureState refers to methods which should be executed the next time OnOpcode executes.
 	// OnOpcode is called prior to execution of an instruction. This allows actions to be performed
 	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
 	// using this structure to execute code later once the log is committed).
 	onNextCaptureState []func()
 
+	// nativeTracer is the underlying tracer interface that the execution tracer follows
 	nativeTracer *chain.TestChainTracer
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
-func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContracts map[common.Address]*chain.CheatCodeContract) *ExecutionTracer {
+func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain) *ExecutionTracer {
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
-		cheatCodeContracts:  cheatCodeContracts,
+		testChain:           testChain,
 		traceMap:            make(map[common.Hash]*ExecutionTrace),
 	}
 	innerTracer := &tracers.Tracer{
@@ -122,7 +125,7 @@ func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.trace = newExecutionTrace(t.contractDefinitions, t.getAddressToLabelFromTestChain())
+	t.trace = newExecutionTrace(t.contractDefinitions, t.testChain.Labels)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
 	t.traceMap = make(map[common.Hash]*ExecutionTrace)
@@ -151,7 +154,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 	// Try to resolve contract definitions for "to" address
 	if callFrame.ToContractAbi == nil {
 		// Try to resolve definitions from cheat code contracts
-		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.ToAddress]; ok {
+		if cheatCodeContract, ok := t.testChain.CheatCodeContracts()[callFrame.ToAddress]; ok {
 			callFrame.ToContractName = cheatCodeContract.Name()
 			callFrame.ToContractAbi = cheatCodeContract.Abi()
 			callFrame.ExecutedCode = true
@@ -175,7 +178,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 	// Try to resolve contract definitions for "code" address
 	if callFrame.CodeContractAbi == nil {
 		// Try to resolve definitions from cheat code contracts
-		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.CodeAddress]; ok {
+		if cheatCodeContract, ok := t.testChain.CheatCodeContracts()[callFrame.CodeAddress]; ok {
 			callFrame.CodeContractName = cheatCodeContract.Name()
 			callFrame.CodeContractAbi = cheatCodeContract.Abi()
 			callFrame.ExecutedCode = true
@@ -308,15 +311,4 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 			}
 		})
 	}
-}
-
-// getAddressToLabelFromTestChain gets the AddressToLabel stored as part of the TestChain through
-// the underlying cheatCodeContract's Tracer
-func (t *ExecutionTracer) getAddressToLabelFromTestChain() map[common.Address]string {
-	addressToLabel := make(map[common.Address]string)
-	for _, contract := range t.cheatCodeContracts {
-		addressToLabel = contract.Tracer().TestChain().AddressToLabel()
-		break // exits after first iteration
-	}
-	return addressToLabel
 }

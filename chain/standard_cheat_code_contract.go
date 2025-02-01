@@ -255,8 +255,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		"label", abi.Arguments{{Type: typeAddress}, {Type: typeString}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			addr := inputs[0].(common.Address)
-			lbl := inputs[1].(string)
-			tracer.chain.AddressToLabel()[addr] = lbl
+			label := inputs[1].(string)
+			tracer.chain.Labels[addr] = label
 			return nil, nil
 		},
 	)
