@@ -47,9 +47,22 @@ func HexStringsToAddresses(addressHexStrings []string) ([]common.Address, error)
 	return addresses, nil
 }
 
-// TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability
+// AttachLabelToAddress appends a human-readable label to an address for console-output. If a label is not-provided,
+// the address is returned back. Note that this function also trims any leading zeroes from the address to clean it
+// up for console output.
+// TODO: Maybe we allow the user to determine whether they want to trim the address of leading zeroes?
+func AttachLabelToAddress(address common.Address, label string) string {
+	trimmedHexString := TrimLeadingZeroesFromAddress(address)
+	if label == "" {
+		return trimmedHexString
+	}
+	return label + " [" + trimmedHexString + "]"
+}
+
+// TrimLeadingZeroesFromAddress removes the leading zeroes from an address for readability and returns it as a string
 // Example: sender=0x0000000000000000000000000000000000030000 becomes sender=0x30000 when shown on console
-func TrimLeadingZeroesFromAddress(hexString string) string {
+func TrimLeadingZeroesFromAddress(address common.Address) string {
+	hexString := address.String()
 	if strings.HasPrefix(hexString, "0x") {
 		// Retain "0x" and trim leading zeroes from the rest of the string
 		return "0x" + strings.TrimLeft(hexString[2:], "0")

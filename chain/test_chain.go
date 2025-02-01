@@ -74,6 +74,9 @@ type TestChain struct {
 	// This is constructed over the kvstore.
 	db ethdb.Database
 
+	// Labels maps an address to its label if one exists. This is useful for execution tracing.
+	Labels map[common.Address]string
+
 	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
 	callTracerRouter *TestChainTracerRouter
@@ -187,6 +190,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		db:                      db,
 		state:                   nil,
 		stateDatabase:           stateDatabase,
+		Labels:                  make(map[common.Address]string),
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		testChainConfig:         testChainConfig,

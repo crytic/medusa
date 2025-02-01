@@ -261,7 +261,7 @@ func (cse *CallSequenceElement) String() string {
 	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, nil)
 		if err != nil {
 			argsText = "<unresolved args>"
 		}
@@ -286,7 +286,7 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.GasLimit,
 		cse.Call.GasPrice.String(),
 		cse.Call.Value.String(),
-		utils.TrimLeadingZeroesFromAddress(cse.Call.From.String()),
+		cse.Call.From.String(),
 	)
 }
 

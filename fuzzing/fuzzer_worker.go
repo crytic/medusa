@@ -570,11 +570,6 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-		// Emit an event indicating the worker has created its chain.
-		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
-			Worker: fw,
-			Chain:  initializedChain,
-		})
 		if err != nil {
 			return fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
 		}
@@ -584,6 +579,15 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer.NativeTracer(), true, false)
 		}
+
+		// Copy the labels from the base chain to the worker's chain
+		initializedChain.Labels = maps.Clone(baseTestChain.Labels)
+
+		// Emit an event indicating the worker has created its chain.
+		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
+			Worker: fw,
+			Chain:  initializedChain,
+		})
 		return nil
 	})
 
