@@ -161,7 +161,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		fuzzer.Stop()
+		fuzzer.Terminate()
 	}()
 
 	// Start the fuzzing process with our cancellable context.
@@ -170,8 +170,8 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
 
-	// If we have no error and failed test cases, we'll want to return a special exit code
-	if fuzzErr == nil && len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
+	// If we have failed test cases, we'll want to return a special exit code
+	if len(fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)) > 0 {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeTestFailed)
 	}
 
