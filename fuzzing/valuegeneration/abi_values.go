@@ -343,6 +343,8 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any, overrides ma
 		}
 
 		// If the ABI-type is an address, see if there is a label override for it
+		// TODO: This is a little hacky and maybe it should be handled by the internal encodeABIArgumentToString
+		//  function. But realistically neither solution is great.
 		if input.Type.T == abi.AddressTy {
 			// It's okay to type assert here without capturing an error since that is handled earlier in the flow
 			if label, ok := overrides[values[i].(common.Address)]; ok {

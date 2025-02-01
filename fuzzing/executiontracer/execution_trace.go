@@ -176,7 +176,7 @@ func (t *ExecutionTrace) generateCallFrameEnterElements(callFrame *CallFrame) ([
 		}
 	}
 
-	// Labels the addresses using addressToLabel and add call information to the elements
+	// Add call information to the elements
 	elements = append(elements, callInfo, "\n")
 
 	return elements, consoleLogString
@@ -389,7 +389,6 @@ func (t *ExecutionTrace) Log() *logging.LogBuffer {
 
 	// First, add the elements that make up the overarching execution trace
 	elements, logs := t.generateElementsAndLogsForCallFrame(0, t.TopLevelCallFrame)
-	// Replace addresses to their corresponding labels if exist
 	buffer.Append(elements...)
 
 	// If we captured any logs during tracing, add them to the overarching execution trace
