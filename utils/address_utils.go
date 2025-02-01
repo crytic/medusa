@@ -50,6 +50,7 @@ func HexStringsToAddresses(addressHexStrings []string) ([]common.Address, error)
 // AttachLabelToAddress appends a human-readable label to an address for console-output. If a label is not-provided,
 // the address is returned back. Note that this function also trims any leading zeroes from the address to clean it
 // up for console output.
+// TODO: Maybe we allow the user to determine whether they want to trim the address of leading zeroes?
 func AttachLabelToAddress(address common.Address, label string) string {
 	trimmedHexString := TrimLeadingZeroesFromAddress(address)
 	if label == "" {
