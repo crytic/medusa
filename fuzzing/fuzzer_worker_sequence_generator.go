@@ -467,15 +467,22 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		return nil
 	}
 
-	// Loop for each input value and mutate it
-	abiValuesMsgData := element.Call.DataAbiValues
-	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
-		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
-		if err != nil {
-			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
-		}
-		abiValuesMsgData.InputValues[i] = mutatedInput
+	// If this element has no input values, exit early.
+	if len(element.Call.DataAbiValues.InputValues) == 0 {
+		return nil
 	}
+
+	// Choose which input value to mutate
+	idx := sequenceGenerator.worker.randomProvider.Intn(len(element.Call.DataAbiValues.InputValues))
+
+	// Mutate selected input value and replace the value
+	abiValuesMsgData := element.Call.DataAbiValues
+	mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[idx].Type, abiValuesMsgData.InputValues[idx])
+	if err != nil {
+		return fmt.Errorf("error when mutating call sequence input argument: %v", err)
+	}
+	abiValuesMsgData.InputValues[idx] = mutatedInput
+
 	// Re-encode the message's calldata
 	element.Call.WithDataAbiValues(abiValuesMsgData)
 
