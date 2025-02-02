@@ -4,10 +4,10 @@ interface CheatCodes {
 }
 
 contract TestContract {
-    function test(uint64 x) public {
-        // Obtain our cheat code contract reference.
-        CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+    // Obtain our cheat code contract reference.
+    CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
+    function test(uint64 x) public {
         // Change value and verify.
         cheats.warp(x);
         assert(block.timestamp == x);
@@ -25,3 +25,4 @@ contract TestContract {
         }
     }
 }
+

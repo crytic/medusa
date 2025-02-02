@@ -98,7 +98,7 @@ func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
 	return t.nativeTracer
 }
 
-// CaptureTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
+// OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our call frame states
 	t.callDepth = 0

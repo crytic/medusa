@@ -26,30 +26,13 @@ func verifyChain(t *testing.T, chain *TestChain) {
 	assert.EqualValues(t, chain.blocks[len(chain.blocks)-1], chain.Head())
 
 	// Loop through all blocks
-	// Note: We use the API here rather than internally committed blocks (chain.blocks) to validate spoofed blocks
-	// from height jumps as well.
-	for i := int(chain.HeadBlockNumber()); i >= 0; i-- {
+	for _, currentBlock := range chain.blocks {
 		// Verify our count of messages, message results, and receipts match.
-		currentBlock, err := chain.BlockFromNumber(uint64(i))
-		assert.NoError(t, err)
 		assert.EqualValues(t, len(currentBlock.Messages), len(currentBlock.MessageResults))
 
-		// Verify our method to fetch block hashes works appropriately.
-		blockHash, err := chain.BlockHashFromNumber(uint64(i))
-		assert.NoError(t, err)
-		assert.EqualValues(t, currentBlock.Hash, blockHash)
-
 		// Try to obtain the state for this block
-		_, err = chain.StateAfterBlockNumber(uint64(i))
+		_, err := chain.StateAfterBlockNumber(uint64(currentBlock.Header.Number.Uint64()))
 		assert.NoError(t, err)
-
-		// If we didn't reach genesis, verify our previous block hash matches, and our timestamp is greater.
-		if i > 0 {
-			previousBlock, err := chain.BlockFromNumber(uint64(i - 1))
-			assert.NoError(t, err)
-			assert.EqualValues(t, previousBlock.Hash, currentBlock.Header.ParentHash)
-			assert.Less(t, previousBlock.Header.Time, currentBlock.Header.Time)
-		}
 	}
 }
 
@@ -133,7 +116,7 @@ func TestChainReverting(t *testing.T) {
 		chainBackup := chainBackups[i]
 
 		// Revert our main chain to this block height.
-		err := chain.RevertToBlockNumber(chainBackup.HeadBlockNumber())
+		err := chain.RevertToBlockIndex(uint64(len(chainBackup.CommittedBlocks())))
 		assert.NoError(t, err)
 
 		// Verify state matches

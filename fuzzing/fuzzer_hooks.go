@@ -57,6 +57,8 @@ type CallSequenceTestFunc func(worker *FuzzerWorker, callSequence calls.CallSequ
 
 // ShrinkCallSequenceRequest is a structure signifying a request for a shrunken call sequence from the FuzzerWorker.
 type ShrinkCallSequenceRequest struct {
+	// CallSequenceToShrink represents the _original_ CallSequence that needs to be shrunk
+	CallSequenceToShrink calls.CallSequence
 	// VerifierFunction is a method is called upon by a FuzzerWorker to check if a shrunken call sequence satisfies
 	// the needs of an original method.
 	VerifierFunction func(worker *FuzzerWorker, callSequence calls.CallSequence) (bool, error)

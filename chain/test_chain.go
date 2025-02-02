@@ -6,7 +6,6 @@ import (
 	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"
 	"math/big"
-	"sort"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -76,6 +75,9 @@ type TestChain struct {
 	// db represents the in-memory database used by the TestChain and its underlying chain to store state changes.
 	// This is constructed over the kvstore.
 	db ethdb.Database
+
+	// Labels maps an address to its label if one exists. This is useful for execution tracing.
+	Labels map[common.Address]string
 
 	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
@@ -225,6 +227,7 @@ func newTestChainWithStateFactory(
 		db:                      db,
 		state:                   nil,
 		stateDatabase:           stateDatabase,
+		Labels:                  make(map[common.Address]string),
 		transactionTracerRouter: transactionTracerRouter,
 		callTracerRouter:        callTracerRouter,
 		testChainConfig:         testChainConfig,
@@ -371,129 +374,33 @@ func (t *TestChain) HeadBlockNumber() uint64 {
 	return t.Head().Header.Number.Uint64()
 }
 
-// fetchClosestInternalBlock obtains the closest preceding block that is internally committed to the TestChain.
-// When the TestChain creates a new block that jumps the block number forward, the existence of any intermediate
-// block will be spoofed based off of the closest preceding internally committed block.
-// Returns the index of the closest preceding block in blocks and the Block itself.
-func (t *TestChain) fetchClosestInternalBlock(blockNumber uint64) (int, *types.Block) {
-	// Perform a binary search for this exact block number, or the closest preceding block we committed.
-	k := sort.Search(len(t.blocks), func(n int) bool {
-		return t.blocks[n].Header.Number.Uint64() >= blockNumber
-	})
-
-	// Determine our closest block index
-	var blockIndex int
-	if k >= len(t.blocks) {
-		// If our result is out of bounds, it means we supplied a block number too high, so we return our head
-		blockIndex = len(t.blocks) - 1
-	} else if t.blocks[k].Header.Number.Uint64() == blockNumber {
-		// If our result is an exact match, k is our block index
-		blockIndex = k
-	} else {
-		// If the result is not an exact match, binary search will return the index where the block number should've
-		// existed. This means the closest preceding block is just the index before
-		blockIndex = k - 1
-	}
-
-	// Return the resulting block index and block.
-	return blockIndex, t.blocks[blockIndex]
-}
-
-// BlockFromNumber obtains the block with the provided block number from the current chain. If blocks committed to
-// the TestChain skip block numbers, this method will simulate the existence of well-formed intermediate blocks to
-// ensure chain validity throughout. Thus, this is a "simulated" chain API method.
-// Returns the block, or an error if one occurs.
+// BlockFromNumber obtains the block with the provided block number from the current chain. If the block is not found,
+// we return an error with an empty block. Thus, the block must be committed to the chain to be retrieved.
 func (t *TestChain) BlockFromNumber(blockNumber uint64) (*types.Block, error) {
-	// If the block number is past our current head, return an error.
-	if blockNumber > t.HeadBlockNumber() {
-		return nil, fmt.Errorf("could not obtain block for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+	// Check to see if we have the block in our committed blocks.
+	for _, block := range t.blocks {
+		if block.Header.Number.Uint64() == blockNumber {
+			return block, nil
+		}
 	}
 
-	// We only commit blocks that were created by this chain. If block numbers are skipped, we simulate their existence
-	// by returning deterministic values for them (block hash, timestamp). This helps us avoid actually creating
-	// thousands of blocks to jump forward in time, while maintaining chain integrity (so BLOCKHASH instructions
-	// continue to work).
+	// TODO: In the future, we can reintroduce spoofing a block instead of throwing an error.
 
-	// First, search for this exact block number, or the closest preceding block we committed to derive information
-	// from. There will always be one, given the genesis block always exists.
-	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
-	closestBlockNumber := closestBlock.Header.Number.Uint64()
-
-	// If we have an exact match, return it.
-	if closestBlockNumber == blockNumber {
-		return closestBlock, nil
-	}
-
-	// If we didn't have an exact match, it means we skipped block numbers, so we simulate these blocks existing.
-	// The block hash for the block we construct will simply be the block number
-	blockHash := getSpoofedBlockHashFromNumber(blockNumber)
-
-	// If the block preceding this is the closest internally committed block, we reference that for the previous block
-	// hash. Otherwise, we know it's another spoofed block in between.
-	previousBlockHash := closestBlock.Hash
-	if closestBlockNumber != blockNumber-1 {
-		previousBlockHash = getSpoofedBlockHashFromNumber(blockNumber - 1)
-	}
-
-	// Create our new block header
-	// - Unchanged state from last block
-	// - No transactions or receipts
-	// - Reuses gas limit from last committed block.
-	// - We reuse the previous timestamp and add 1 for every block generated (blocks must have different timestamps)
-	//   - Note: This means that we must check that our timestamp jump >= block number jump when committing a new block.
-	blockHeader := &gethTypes.Header{
-		ParentHash:  previousBlockHash,
-		UncleHash:   gethTypes.EmptyUncleHash,
-		Coinbase:    common.Address{},
-		Root:        closestBlock.Header.Root,
-		TxHash:      gethTypes.EmptyRootHash,
-		ReceiptHash: gethTypes.EmptyRootHash,
-		Bloom:       gethTypes.Bloom{},
-		Difficulty:  common.Big0,
-		Number:      big.NewInt(int64(blockNumber)),
-		GasLimit:    closestBlock.Header.GasLimit,
-		GasUsed:     0,
-		Time:        closestBlock.Header.Time + (blockNumber - closestBlockNumber),
-		Extra:       []byte{},
-		MixDigest:   previousBlockHash,
-		Nonce:       gethTypes.BlockNonce{},
-		BaseFee:     closestBlock.Header.BaseFee,
-	}
-
-	// Create our new empty block with our provided header and return it.
-	block := types.NewBlock(blockHeader)
-	block.Hash = blockHash // we patch our block hash with our spoofed one immediately
-	return block, nil
+	// We cannot find the block, so return an error with an empty block.
+	return nil, fmt.Errorf("could not find block with block number %v", blockNumber)
 }
 
-// getSpoofedBlockHashFromNumber is a helper method used to create a deterministic hash for a spoofed block at a given
-// block number. This avoids costly calculation of potentially thousands of simulated blocks and allows us to generate
-// simulated blocks on demand, rather than storing them.
-func getSpoofedBlockHashFromNumber(blockNumber uint64) common.Hash {
-	// For blocks which were not internally committed, which we fake the existence of (for block number jumping), we use
-	// the block number as the block hash.
-	return common.BigToHash(new(big.Int).SetUint64(blockNumber))
-}
-
-// BlockHashFromNumber returns a block hash for a given block number. If the index is out of bounds, it returns
-// an error.
+// BlockHashFromNumber returns a block hash for a given block number. If the block doesn't exist, because it wasn't committed,
+// we return an error with an empty hash. Thus, the block must be committed to the chain to be retrieved.
 func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error) {
-	// If our block number references something too new, return an error
-	if blockNumber > t.HeadBlockNumber() {
-		return common.Hash{}, fmt.Errorf("could not obtain block hash for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+	// Obtain the block from the chain if it exists
+	block, err := t.BlockFromNumber(blockNumber)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
-	// Obtain our closest internally committed block
-	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
-
-	// If the block is an exact match, return its hash.
-	if closestBlock.Header.Number.Uint64() == blockNumber {
-		return closestBlock.Hash, nil
-	} else {
-		// Otherwise, the block hash comes from a spoofed block we pretend exists, as blocks which jumped block numbers
-		// must've been committed. For these blocks we pretend exist in between, their block hash is their block number.
-		return getSpoofedBlockHashFromNumber(blockNumber), nil
-	}
+	// Return the block hash
+	return block.Hash, nil
 }
 
 // StateFromRoot obtains a state from a given state root hash.
@@ -508,22 +415,22 @@ func (t *TestChain) StateFromRoot(root common.Hash) (types.MedusaStateDB, error)
 }
 
 // StateRootAfterBlockNumber obtains the Ethereum world state root hash after processing all transactions in the
-// provided block number. Returns the state, or an error if one occurs.
+// provided block number. If the block doesn't exist, because it wasn't committed,
+// we return an error with an empty state root hash. Thus, the block must be committed to the chain.
 func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, error) {
-	// If our block number references something too new, return an error
-	if blockNumber > t.HeadBlockNumber() {
-		return common.Hash{}, fmt.Errorf("could not obtain post-state for block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
+	// Obtain the block from the chain if it exists
+	block, err := t.BlockFromNumber(blockNumber)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
-	// Obtain our closest internally committed block
-	_, closestBlock := t.fetchClosestInternalBlock(blockNumber)
-
-	// Return our state root hash
-	return closestBlock.Header.Root, nil
+	// Return the state root hash
+	return block.Header.Root, nil
 }
 
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
-// number. Returns the state, or an error if one occurs.
+// number. If the block doesn't exist, because it wasn't committed,
+// we return an error. Thus, the block must be committed to the chain.
 func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (types.MedusaStateDB, error) {
 	// Obtain our block's post-execution state root hash
 	root, err := t.StateRootAfterBlockNumber(blockNumber)
@@ -535,26 +442,17 @@ func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (types.MedusaState
 	return t.StateFromRoot(root)
 }
 
-// RevertToBlockNumber sets the head of the chain to the block specified by the provided block number and reloads
-// the state from the underlying database.
-func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
-	// If our block number references something too new, return an error
-	if blockNumber > t.HeadBlockNumber() {
-		return fmt.Errorf("could not revert to block number %d because it exceeds the current head block number %d", blockNumber, t.HeadBlockNumber())
-	}
-
-	// Obtain our closest internally committed block, if it's not an exact match, it means we're trying to revert
-	// to a spoofed block, which we disallow for now.
-	closestBlockIndex, closestBlock := t.fetchClosestInternalBlock(blockNumber)
-	if closestBlock.Header.Number.Uint64() != blockNumber {
-		return fmt.Errorf("could not revert to block number %d because it does not refer to an internally committed block", blockNumber)
+// RevertToBlockIndex reverts all blocks after the provided block index and reloads the state from the underlying database.
+func (t *TestChain) RevertToBlockIndex(index uint64) error {
+	if index > uint64(len(t.blocks)) {
+		return fmt.Errorf("could not revert to block index %d because it exceeds the current chain length of %d", index, len(t.blocks))
 	}
 
 	// Slice off our blocks to be removed (to produce relevant events)
-	removedBlocks := t.blocks[closestBlockIndex+1:]
+	removedBlocks := t.blocks[index:]
 
-	// Remove the relevant blocks from the chain
-	t.blocks = t.blocks[:closestBlockIndex+1]
+	// Keep the relevant blocks up till index
+	t.blocks = t.blocks[:index]
 
 	// Discard our pending block
 	err := t.PendingBlockDiscard()
@@ -576,8 +474,8 @@ func (t *TestChain) RevertToBlockNumber(blockNumber uint64) error {
 		}
 	}
 
-	// Reload our state from our database
-	t.state, err = t.StateAfterBlockNumber(blockNumber)
+	// Reload our state from our database using the block number at the index we're reverting to.
+	t.state, err = t.StateAfterBlockNumber(t.blocks[index-1].Header.Number.Uint64())
 	if err != nil {
 		return err
 	}
@@ -680,9 +578,8 @@ func (t *TestChain) PendingBlockCreate() (*types.Block, error) {
 }
 
 // PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block
-// properties provided. Values should be sensibly chosen (e.g., block number and timestamps should be greater than the
-// previous block). Providing a block number that is greater than the previous block number plus one will simulate empty
-// blocks between.
+// properties provided. Note that there are no constraints on the next block number or timestamp. Because of cheatcode
+// usage, the next block can go back in time.
 // Returns the constructed block, or an error if one occurred.
 func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*types.Block, error) {
 	// If we already have a pending block, return an error.
@@ -695,29 +592,12 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		blockGasLimit = &t.BlockGasLimit
 	}
 
-	// Validate our block number exceeds our previous head
-	currentHeadBlockNumber := t.Head().Header.Number.Uint64()
-	if blockNumber <= currentHeadBlockNumber {
-		return nil, fmt.Errorf("failed to create block with a block number of %d as does precedes the chain head block number of %d", blockNumber, currentHeadBlockNumber)
-	}
-
 	// Obtain our parent block hash to reference in our new block.
 	parentBlockHash := t.Head().Hash
 
-	// If the head's block number is not immediately preceding the one we're trying to add, the chain will fake
-	// the existence of intermediate blocks, where the block hash is deterministically spoofed based off the block
-	// number. Check this condition and substitute the parent block hash if we jumped.
-	blockNumberDifference := blockNumber - currentHeadBlockNumber
-	if blockNumberDifference > 1 {
-		parentBlockHash = getSpoofedBlockHashFromNumber(blockNumber - 1)
-	}
-
-	// Timestamps must be unique per block, that means our timestamp must've advanced at least as many steps as the
-	// block number for us to spoof the existence of those intermediate blocks, each with their own unique timestamp.
-	currentHeadTimeStamp := t.Head().Header.Time
-	if currentHeadTimeStamp >= blockTime || blockNumberDifference > blockTime-currentHeadTimeStamp {
-		return nil, fmt.Errorf("failed to create block as block number was advanced by %d while block timestamp was advanced by %d. timestamps must be unique per block", blockNumberDifference, blockTime-currentHeadTimeStamp)
-	}
+	// Note we do not perform any block number or timestamp validation since cheatcodes can permanently update the
+	// block number or timestamp which could violate the invariants of a blockchain (e.g. block.number is strictly
+	// increasing)
 
 	// Create a block header for this block:
 	// - State root hash reflects the state after applying block updates (no transactions, so unchanged from last block)
@@ -742,7 +622,7 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		Extra:       []byte{},
 		MixDigest:   parentBlockHash,
 		Nonce:       gethTypes.BlockNonce{},
-		BaseFee:     big.NewInt(params.InitialBaseFee),
+		BaseFee:     new(big.Int).Set(t.Head().Header.BaseFee),
 	}
 
 	// Create a new block for our test node
@@ -883,6 +763,8 @@ func (t *TestChain) PendingBlockCommit() error {
 	t.pendingBlockChainConfig = nil
 
 	// Append our new block to our chain.
+	// Update the block hash since cheatcodes may have changed aspects of the header (e.g. time or number)
+	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 	t.blocks = append(t.blocks, t.pendingBlock)
 
 	// Clear our pending block, but keep a copy of it to emit our event
