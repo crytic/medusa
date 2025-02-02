@@ -1,10 +1,13 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"math/rand"
+	"sync"
+
+	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/randomutils"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // RandomValueGenerator represents a ValueGenerator used to generate transaction fields and call arguments with values
@@ -126,15 +129,112 @@ func (g *RandomValueGenerator) MutateString(s string) string {
 
 // GenerateInteger generates a random integer to use when populating inputs.
 func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.Int {
-	// Fill a byte array of the appropriate size with random bytes
-	b := make([]byte, bitLength/8)
-	g.randomProvider.Read(b)
+	// Generate the various choices for an unsigned integer
+	unsignedGenerationChooser := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
+	unsignedGenerationChooser.AddChoices(
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random value between [0, 1024) with a 9% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				return new(big.Int).SetInt64(int64(g.randomProvider.Intn(1024)))
+			},
+			new(big.Int).SetUint64(2),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random value between [0, 2^n - 5) with a 76% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				// Create upper bound (2^n - 5)
+				upperBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
+				upperBound.Sub(upperBound, big.NewInt(5))
 
-	// Create an unsigned integer.
-	res := big.NewInt(0).SetBytes(b)
+				// Generate random number in range [0, upperBound)
+				return new(big.Int).Rand(g.randomProvider, upperBound)
+			},
+			new(big.Int).SetUint64(16),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random value between [2^n-5, 2^n - 1) with a 9% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				// Create 2^n first
+				maxValue := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
 
-	// Constrain our integer bounds
-	return utils.ConstrainIntegerToBitLength(res, signed, bitLength)
+				// Subtract a random number between 1 and 5 to get our expected range
+				return maxValue.Sub(maxValue, big.NewInt(int64(1+g.randomProvider.Intn(5))))
+			},
+			new(big.Int).SetUint64(2),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random value between [2^(n/2), 2^n) where n = n-5 with a 4% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				// Subtract 5 from the bit length to get the upper bound exponent
+				bitLength = bitLength - 5
+				if bitLength <= 0 {
+					return new(big.Int).SetUint64(0)
+				}
+
+				// Create lower and upper bound
+				lowerBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength/2))
+				upperBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
+
+				// Calculate range size (2^n - 2^(n/2))
+				rangeSize := new(big.Int).Sub(upperBound, lowerBound)
+
+				// Generate random number in range [0, rangeSize)
+				result := new(big.Int).Rand(g.randomProvider, rangeSize)
+
+				// Add min to shift into desired range [2^(n/2), 2^n)
+				return result.Add(result, lowerBound)
+
+			},
+			new(big.Int).SetUint64(1),
+		),
+	)
+
+	// Generate the various choices for a signed integer
+	signedGenerationChooser := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
+	signedGenerationChooser.AddChoices(
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random number between [-1023, 1023] with a 10% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				// Generate random number in range [0, 2047) (which covers -1023 to 1023)
+				n := g.randomProvider.Intn(2047)
+
+				// Shift the range from [0, 2048) to [-1023, 1024]
+				return big.NewInt(int64(n - 1023))
+			},
+			new(big.Int).SetUint64(1),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Generate a random number between [-2^n, 2^n-1] with a 90% chance
+			func(g *RandomValueGenerator, bitLength int) *big.Int {
+				// Fill a byte array of the appropriate size with random bytes
+				b := make([]byte, bitLength/8)
+				g.randomProvider.Read(b)
+
+				// Create an unsigned integer.
+				res := big.NewInt(0).SetBytes(b)
+
+				// Constrain our integer bounds
+				return utils.ConstrainIntegerToBitLength(res, true, bitLength)
+			},
+			new(big.Int).SetUint64(9),
+		),
+	)
+
+	// If it is signed, choose a generator for a signed integer and return the result
+	if signed {
+		generatorFunc, err := signedGenerationChooser.Choose()
+		if err != nil {
+			panic(err)
+		}
+		return (*generatorFunc)(g, bitLength)
+	}
+
+	// Otherwise, choose a generator for an unsigned integer and return the result
+	generatorFunc, err := unsignedGenerationChooser.Choose()
+	if err != nil {
+		panic(err)
+	}
+	return (*generatorFunc)(g, bitLength)
 }
 
 // MutateInteger takes an integer input and returns a mutated value based off the input.

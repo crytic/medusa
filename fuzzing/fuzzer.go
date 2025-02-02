@@ -581,12 +581,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
 	// Create the value generator and mutator for the worker.
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
-		MinMutationRounds:               0,
-		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.05,
-		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.05,
-		GenerateRandomBytesBias:         0.05,
+		MinMutationRounds: 0,
+		MaxMutationRounds: 1,
+		// Echidna: There is a 40% chance of generating a random ABI value
+		GenerateRandomAddressBias:       0.4,
+		GenerateRandomIntegerBias:       0.4,
+		GenerateRandomStringBias:        0.4,
+		GenerateRandomBytesBias:         0.4,
 		MutateAddressProbability:        0.1,
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           0.1,
