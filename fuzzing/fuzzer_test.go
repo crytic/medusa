@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -13,7 +14,6 @@ import (
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/crytic/medusa/fuzzing/config"
@@ -267,15 +267,19 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/parse.sol",
 		"testdata/contracts/cheat_codes/vm/snapshot_and_revert_to.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/coinbase_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
 		"testdata/contracts/cheat_codes/vm/difficulty.sol",
 		"testdata/contracts/cheat_codes/vm/etch.sol",
 		"testdata/contracts/cheat_codes/vm/fee.sol",
+		"testdata/contracts/cheat_codes/vm/fee_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/prank.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
@@ -596,6 +600,56 @@ func TestExecutionTraces(t *testing.T) {
 			},
 		})
 	}
+}
+
+// TestLabelCheatCode tests the vm.label cheatcode.
+func TestLabelCheatCode(t *testing.T) {
+	// These are the expected messages in the execution trace
+	expectedTraceMessages := []string{
+		"ProxyContract.testVMLabel()()",
+		"addr=ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66]",
+		"sender=MySender [0x10000]",
+		"ProxyContract -> ImplementationContract.emitEvent(address)(ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])",
+		"code=ImplementationContract [0x54919A19522Ce7c842E25735a9cFEcef1c0a06dA]",
+		"[event] TestEvent(RandomAddress [0x20000])",
+		"[return (ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])]",
+	}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/cheat_codes/utils/label.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			// Only allow for one sender for proper testing of this unit test
+			config.Fuzzing.SenderAddresses = []string{"0x10000"}
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+			// Verify it contains all expected strings
+			for _, expectedTraceMessage := range expectedTraceMessages {
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+			}
+		},
+	})
 }
 
 // TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
