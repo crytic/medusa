@@ -74,6 +74,12 @@ func addFuzzFlags() error {
 
 	// Run slither and overwrite the cache
 	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
+
+	// RPC url
+	fuzzCmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
+
+	// RPC block
+	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
 	return nil
 }
 
@@ -177,11 +183,10 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update stop on failed test feature
 	if cmd.Flags().Changed("fail-fast") {
-		failFast, err := cmd.Flags().GetBool("fail-fast")
+		projectConfig.Fuzzing.Testing.StopOnFailedTest, err = cmd.Flags().GetBool("fail-fast")
 		if err != nil {
 			return err
 		}
-		projectConfig.Fuzzing.Testing.StopOnFailedTest = failFast
 	}
 
 	// Update configuration to exploration mode
@@ -201,12 +206,9 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update configuration to run slither while using current cache
 	if cmd.Flags().Changed("use-slither") {
-		useSlither, err := cmd.Flags().GetBool("use-slither")
+		projectConfig.Slither.UseSlither, err = cmd.Flags().GetBool("use-slither")
 		if err != nil {
 			return err
-		}
-		if useSlither {
-			projectConfig.Slither.UseSlither = true
 		}
 	}
 
@@ -219,6 +221,22 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		if useSlitherForce {
 			projectConfig.Slither.UseSlither = true
 			projectConfig.Slither.OverwriteCache = true
+		}
+	}
+
+	// Update RPC url
+	if cmd.Flags().Changed("rpc-url") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl, err = cmd.Flags().GetString("rpc-url")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update RPC block
+	if cmd.Flags().Changed("rpc-block") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcBlock, err = cmd.Flags().GetUint64("rpc-block")
+		if err != nil {
+			return err
 		}
 	}
 
