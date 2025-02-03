@@ -3,9 +3,10 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"
-	"math/big"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -93,6 +94,15 @@ type TestChain struct {
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
 	stateFactory state.MedusaStateFactory
+
+	// isCloning describes whether the chain is being cloned. This is a _god awful hack_ that we have to use
+	// because we don't want cheatcodes like "warp" or "roll" to re-execute when we clone the chain.
+	// When they are called, they directly update the block timestamp or number. Thus, when you try to
+	// clone that block and the "warp", for example, is called again, it may cause the timestamp to change e.g.
+	// (`vm.warp(block.timestamp + 5)`), which will cause the cloned block to have a different timestamp than
+	// the original block.
+	// TODO: We have to find a better way to handle cheatcode issues like this.
+	isCloning bool
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -210,7 +220,6 @@ func newTestChainWithStateFactory(
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	testChainGenesisBlock := types.NewBlock(genesisBlock.Header())
-
 	// Create our state database over-top our database.
 	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
 
@@ -282,6 +291,11 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 			return nil, fmt.Errorf("could not clone chain due to error: %v", err)
 		}
 	}
+
+	// We need to set the isCloning flag on the target chain so that the cheatcodes like "warp" or "roll" do not
+	// execute their effects when we clone the chain.
+	targetChain.isCloning = true
+	defer func() { targetChain.isCloning = false }()
 
 	// Replay all messages after genesis onto it. We set the block gas limit each time we mine so the chain acts as it
 	// did originally.
@@ -746,6 +760,12 @@ func (t *TestChain) PendingBlockCommit() error {
 	// Perform a state commit to obtain the root hash for our block.
 	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true)
 	t.pendingBlock.Header.Root = root
+
+	// Update any header-related fields that may have been changed by cheatcodes.
+	t.pendingBlock.Header.Time = t.pendingBlockContext.Time
+	t.pendingBlock.Header.Number = t.pendingBlockContext.BlockNumber
+	t.pendingBlock.Header.Coinbase = t.pendingBlockContext.Coinbase
+	t.pendingBlock.Header.BaseFee = t.pendingBlockContext.BaseFee
 
 	if err != nil {
 		return err

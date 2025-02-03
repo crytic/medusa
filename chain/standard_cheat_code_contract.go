@@ -72,11 +72,15 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
-	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp for the remainder of the
-	// chain's lifecycle.
+	// Warp: Sets VM timestamp in the pending block context.
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// If we are cloning, do nothing
+			if tracer.chain.isCloning {
+				return nil, nil
+			}
+
 			// Capture the original time
 			originalTime := tracer.chain.pendingBlockContext.Time
 
@@ -86,12 +90,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
 			}
 
-			// Set the time for the pending block context and the pending block
-			// The block context will reflect the time change in the current EVM context
-			// And the pending block time will allow for the new time to reflect
-			// permanently for the remainder of the chain's existence.
+			// Update the pending block context's timestamp
 			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
-			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
 
 			// If the transaction reverts, we will restore the original time
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
@@ -100,31 +100,28 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				if tracer.chain.pendingBlockContext != nil {
 					tracer.chain.pendingBlockContext.Time = originalTime
 				}
-				if tracer.chain.pendingBlock != nil {
-					tracer.chain.pendingBlock.Header.Time = originalTime
-				}
 			})
 			return nil, nil
 		},
 	)
 
-	// Roll: Sets VM block number. Note that this _permanently_ updates the block number for the remainder of the
-	// chain's lifecycle
+	// Roll: Sets VM block number in the pending block context.
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// If we are cloning, do nothing
+			if tracer.chain.isCloning {
+				return nil, nil
+			}
+
 			// Capture the original block number
 			originalBlockNumber := tracer.chain.pendingBlockContext.BlockNumber
 
 			// Retrieve the new block number
 			newBlockNumber := inputs[0].(*big.Int)
 
-			// Set the block number for the pending block context and the pending block
-			// The block context will reflect the block number change in the current EVM context
-			// And the pending block number will allow for the number to reflect
-			// permanently for the remainder of the chain.
+			// Set the block number for the pending block context
 			tracer.chain.pendingBlockContext.BlockNumber.Set(newBlockNumber)
-			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
 
 			// If the transaction reverts, we will restore the original block number
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
@@ -133,29 +130,26 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				if tracer.chain.pendingBlockContext != nil {
 					tracer.chain.pendingBlockContext.BlockNumber.Set(originalBlockNumber)
 				}
-				if tracer.chain.pendingBlock != nil {
-					tracer.chain.pendingBlock.Header.Number.Set(originalBlockNumber)
-				}
 			})
 
 			return nil, nil
 		},
 	)
 
-	// Fee: Update the base bee. Note that this _permanently_ updates the base fee for the remainder of the
-	// chain's lifecycle
+	// Fee: Update the base fee in the pending block context
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// If we are cloning, do nothing
+			if tracer.chain.isCloning {
+				return nil, nil
+			}
+
 			// Capture the original value
 			original := new(big.Int).Set(tracer.chain.pendingBlockContext.BaseFee)
 
-			// Update the pending block context and pending block's base fee
-			// The block context will reflect the base fee change in the current EVM context
-			// And the pending block will allow for the base fee to reflect
-			// permanently for the remainder of the chain.
+			// Update the fee in the pending block context
 			tracer.chain.pendingBlockContext.BaseFee.Set(inputs[0].(*big.Int))
-			tracer.chain.pendingBlock.Header.BaseFee.Set(inputs[0].(*big.Int))
 
 			// If the transaction reverts, we will restore the original base fee
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
@@ -163,9 +157,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// case if the transaction that called fee reverts (which is why we have the nil checks).
 				if tracer.chain.pendingBlockContext != nil {
 					tracer.chain.pendingBlockContext.BaseFee.Set(original)
-				}
-				if tracer.chain.pendingBlock != nil {
-					tracer.chain.pendingBlock.Header.BaseFee.Set(original)
 				}
 			})
 			return nil, nil
@@ -193,20 +184,20 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 	// TODO: Add prevrandao cheatcode
 
-	// Coinbase: Updates the block coinbase. Note that this _permanently_ updates the coinbase for the remainder of the
-	// chain's lifecycle
+	// Coinbase: Updates the block coinbase in the pending block context
 	contract.addMethod(
 		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// If we are cloning, do nothing
+			if tracer.chain.isCloning {
+				return nil, nil
+			}
+
 			// Capture the original coinbase
 			original := tracer.chain.pendingBlockContext.Coinbase
 
-			// Update the pending block context and the pending block's coinbase
-			// The block context will reflect the coinbase change in the current EVM context
-			// And the pending block will allow for the coinbase change to reflect
-			// permanently for the remainder of the chain.
+			// Update the coinbase in the pending block context
 			tracer.chain.pendingBlockContext.Coinbase = inputs[0].(common.Address)
-			tracer.chain.pendingBlock.Header.Coinbase = inputs[0].(common.Address)
 
 			// If the transaction reverts, we will restore the original base fee
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
@@ -214,9 +205,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// case if the transaction that called coinbase reverts (which is why we have the nil checks).
 				if tracer.chain.pendingBlockContext != nil {
 					tracer.chain.pendingBlockContext.Coinbase = original
-				}
-				if tracer.chain.pendingBlock != nil {
-					tracer.chain.pendingBlock.Header.Coinbase = original
 				}
 			})
 			return nil, nil

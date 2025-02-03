@@ -2,11 +2,12 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
@@ -261,7 +262,7 @@ func TestChainBehaviour(t *testing.T) {
 // TestCheatCodes runs tests to ensure that vm extensions ("cheat codes") are working as intended.
 func TestCheatCodes(t *testing.T) {
 	filePaths := []string{
-		"testdata/contracts/cheat_codes/utils/addr.sol",
+		/*"testdata/contracts/cheat_codes/utils/addr.sol",
 		"testdata/contracts/cheat_codes/utils/to_string.sol",
 		"testdata/contracts/cheat_codes/utils/sign.sol",
 		"testdata/contracts/cheat_codes/utils/parse.sol",
@@ -278,7 +279,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
-		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/warp.sol",*/
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 	}
 

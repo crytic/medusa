@@ -6,16 +6,17 @@ interface CheatCodes {
 contract TestContract {
     // Obtain our cheat code contract reference.
     CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-    uint64 startingTimestamp;
+    uint64 timestampOffset;
 
     constructor() {
         // Set the starting timestamp
-        startingTimestamp = 12345;
-        cheats.warp(startingTimestamp);
+        timestampOffset = 12345;
+        cheats.warp(block.timestamp + timestampOffset);
     }
 
     function test(uint64 x) public {
-        assert(block.timestamp > startingTimestamp);
+        // The new timestamp should be greater than the original timestamp
+        assert(block.timestamp > 12346);
     }
 }
 
