@@ -10,6 +10,13 @@ func DefaultTestChainConfig() (*TestChainConfig, error) {
 			CheatCodesEnabled: true,
 			EnableFFI:         false,
 		},
+		SkipAccountChecks: true,
+		ForkConfig: ForkConfig{
+			ForkModeEnabled: false,
+			RpcUrl:          "",
+			RpcBlock:        1,
+			PoolSize:        20,
+		},
 	}
 
 	// Return the generated configuration.

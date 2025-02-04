@@ -1,10 +1,12 @@
 package config
 
 import (
+	"github.com/crytic/medusa/compilation/types"
+	"math/big"
+
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/rs/zerolog"
-	"math/big"
 )
 
 // GetDefaultProjectConfig obtains a default configuration for a project. It populates a default compilation config
@@ -30,6 +32,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		return nil, err
 	}
 
+	// Obtain a default slither configuration
+	slitherConfig, err := types.NewDefaultSlitherConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
@@ -41,9 +49,11 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
 			TargetContractsBalances: []*big.Int{},
+			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
+			CoverageFormats:         []string{"html", "lcov"},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -60,6 +70,8 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnNoTests:                true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
+				TargetFunctionSignatures:     []string{},
+				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{
 					Enabled:         true,
 					TestViewMethods: false,
@@ -83,6 +95,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Slither:     slitherConfig,
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",

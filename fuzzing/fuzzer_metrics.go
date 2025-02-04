@@ -11,13 +11,19 @@ type FuzzerMetrics struct {
 
 // fuzzerWorkerMetrics represents metrics for a single FuzzerWorker instance.
 type fuzzerWorkerMetrics struct {
-	// sequencesTested describes the amount of sequences of transactions which tests were run against.
+	// sequencesTested is the amount of sequences of transactions which tests were run against.
 	sequencesTested *big.Int
 
-	// callsTested describes the amount of transactions/calls the fuzzer executed and ran tests against.
+	// failedSequences is the amount of sequences of transactions which tests failed.
+	failedSequences *big.Int
+
+	// callsTested is the amount of transactions/calls the fuzzer executed and ran tests against.
 	callsTested *big.Int
 
-	// workerStartupCount describes the amount of times the worker was generated, or re-generated for this index.
+	// gasUsed is the amount of gas the fuzzer executed and ran tests against.
+	gasUsed *big.Int
+
+	// workerStartupCount is the amount of times the worker was generated, or re-generated for this index.
 	workerStartupCount *big.Int
 
 	// shrinking indicates whether the fuzzer worker is currently shrinking.
@@ -33,10 +39,21 @@ func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 	}
 	for i := 0; i < len(metrics.workerMetrics); i++ {
 		metrics.workerMetrics[i].sequencesTested = big.NewInt(0)
+		metrics.workerMetrics[i].failedSequences = big.NewInt(0)
 		metrics.workerMetrics[i].callsTested = big.NewInt(0)
 		metrics.workerMetrics[i].workerStartupCount = big.NewInt(0)
+		metrics.workerMetrics[i].gasUsed = big.NewInt(0)
 	}
 	return &metrics
+}
+
+// FailedSequences returns the number of sequences that led to failures across all workers
+func (m *FuzzerMetrics) FailedSequences() *big.Int {
+	failedSequences := big.NewInt(0)
+	for _, workerMetrics := range m.workerMetrics {
+		failedSequences.Add(failedSequences, workerMetrics.failedSequences)
+	}
+	return failedSequences
 }
 
 // SequencesTested returns the amount of sequences of transactions the fuzzer executed and ran tests against.
@@ -55,6 +72,14 @@ func (m *FuzzerMetrics) CallsTested() *big.Int {
 		transactionsTested.Add(transactionsTested, workerMetrics.callsTested)
 	}
 	return transactionsTested
+}
+
+func (m *FuzzerMetrics) GasUsed() *big.Int {
+	gasUsed := big.NewInt(0)
+	for _, workerMetrics := range m.workerMetrics {
+		gasUsed.Add(gasUsed, workerMetrics.gasUsed)
+	}
+	return gasUsed
 }
 
 // WorkerStartupCount describes the amount of times the worker was spawned for this index. Workers are periodically

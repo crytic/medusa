@@ -17,10 +17,11 @@
 package vendored
 
 import (
+	"github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/chain/types"
 	"github.com/ethereum/go-ethereum/common"
 	. "github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -35,13 +36,22 @@ import (
 // This executes on an underlying EVM and returns a transaction receipt, or an error if one occurs.
 // Additional changes:
 // - Exposed core.ExecutionResult as a return value.
-func EVMApplyTransaction(msg *Message, config *params.ChainConfig, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, *ExecutionResult, error) {
+func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConfig *config.TestChainConfig, author *common.Address, gp *GasPool, statedb types.MedusaStateDB, blockNumber *big.Int, blockHash common.Hash, tx *gethtypes.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *gethtypes.Receipt, result *ExecutionResult, err error) {
+	// Apply the OnTxStart and OnTxEnd hooks
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if evm.Config.Tracer.OnTxEnd != nil {
+			defer func() {
+				evm.Config.Tracer.OnTxEnd(receipt, err)
+			}()
+		}
+	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err = ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,23 +67,35 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, author *commo
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	receipt = &gethtypes.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
 	if result.Failed() {
-		receipt.Status = types.ReceiptStatusFailed
+		receipt.Status = gethtypes.ReceiptStatusFailed
 	} else {
-		receipt.Status = types.ReceiptStatusSuccessful
+		receipt.Status = gethtypes.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To == nil {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+		// If the contract creation was a predeployed contract, we need to set the receipt's contract address to the
+		// override address
+		// Otherwise, we use the traditional method based on tx.origin and nonce
+		if len(testChainConfig.ContractAddressOverrides) > 0 {
+			initBytecodeHash := crypto.Keccak256Hash(msg.Data)
+			if overrideAddr, ok := testChainConfig.ContractAddressOverrides[initBytecodeHash]; ok {
+				receipt.ContractAddress = overrideAddr
+			} else {
+				receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+			}
+		} else {
+			receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+		}
 	}
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = gethtypes.CreateBloom(gethtypes.Receipts{receipt})
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())

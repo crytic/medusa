@@ -104,23 +104,14 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 
 	// Create a compilation unit out of this.
 	compilation := types.NewCompilation()
-	if sourceList, ok := results["sourceList"]; ok {
-		if sourceListCasted, ok := sourceList.([]any); ok {
-			compilation.SourceList = make([]string, len(sourceListCasted))
-			for i := 0; i < len(sourceListCasted); i++ {
-				compilation.SourceList[i] = sourceListCasted[i].(string)
-			}
-		} else {
-			return nil, "", fmt.Errorf("could not parse compiled source artifact because 'sourcesList' was not a []string type")
-		}
-	} else {
-		return nil, "", fmt.Errorf("could not parse compiled source artifact because 'sourcesList' did not exist")
-	}
+
+	// Create a map of contract names to their kinds
+	contractKinds := make(map[string]types.ContractKind)
 
 	// Parse our sources from solc output
 	if sources, ok := results["sources"]; ok {
 		if sourcesMap, ok := sources.(map[string]any); ok {
-			for name, source := range sourcesMap {
+			for sourcePath, source := range sourcesMap {
 				// Treat our source as a key-value lookup
 				sourceDict, sourceCorrectType := source.(map[string]any)
 				if !sourceCorrectType {
@@ -128,16 +119,42 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 				}
 
 				// Try to obtain our AST key
-				ast, hasAST := sourceDict["AST"]
+				origAST, hasAST := sourceDict["AST"]
 				if !hasAST {
 					return nil, "", fmt.Errorf("could not parse AST from sources, AST field could not be found")
 				}
 
-				// Construct our compiled source object
-				compilation.Sources[name] = types.CompiledSource{
-					Ast:       ast,
-					Contracts: make(map[string]types.CompiledContract),
+				// Convert the AST into our version of the AST (types.AST)
+				var ast types.AST
+				b, err := json.Marshal(origAST)
+				if err != nil {
+					return nil, "", fmt.Errorf("could not encode AST from sources: %v", err)
 				}
+				err = json.Unmarshal(b, &ast)
+				if err != nil {
+					return nil, "", fmt.Errorf("could not parse AST from sources, error: %v", err)
+				}
+
+				// From the AST, extract the contract kinds where the contract definition could be for a contract, library,
+				// or interface
+				for _, node := range ast.Nodes {
+					if node.GetNodeType() == "ContractDefinition" {
+						contractDefinition := node.(types.ContractDefinition)
+						contractKinds[contractDefinition.CanonicalName] = contractDefinition.Kind
+					}
+				}
+
+				// Get the source unit ID
+				sourceUnitId := types.GetSrcMapSourceUnitID(ast.Src)
+				// Construct our compiled source object
+				compilation.SourcePathToArtifact[sourcePath] = types.SourceArtifact{
+					// TODO our types.AST is not the same as the original AST but we could parse it and avoid using "any"
+					Ast:          origAST,
+					Contracts:    make(map[string]types.CompiledContract),
+					SourceUnitId: sourceUnitId,
+				}
+				compilation.SourceIdToPath[sourceUnitId] = sourcePath
+
 			}
 		}
 	}
@@ -171,12 +188,13 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		}
 
 		// Construct our compiled contract
-		compilation.Sources[sourcePath].Contracts[contractName] = types.CompiledContract{
+		compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
 			Abi:             *contractAbi,
 			InitBytecode:    initBytecode,
 			RuntimeBytecode: runtimeBytecode,
 			SrcMapsInit:     contract.Info.SrcMap.(string),
 			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
+			Kind:            contractKinds[contractName],
 		}
 	}
 

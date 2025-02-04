@@ -234,17 +234,17 @@
                                     {{/* Output a cell for the line number */}}
                                     <td class="row-line-number unselectable">{{add $lineIndex 1}}</td>
 
-                                    {{/* Output two cells for the reverted/non-reverted execution status */}}
-                                    <td class="row-reverted-status unselectable">
-                                        {{if $line.IsCovered}}
-                                            <div title="The source line executed without reverting.">√</div>
-                                        {{end}}
-                                    </td>
-                                    <td class="row-reverted-status unselectable">
-                                        {{if $line.IsCoveredReverted}}
-                                            <div title="The source line executed, but was reverted.">⟳</div>
-                                        {{end}}
-                                    </td>
+                        {{/* Output two cells for the reverted/non-reverted execution status */}}
+                        <td class="row-reverted-status unselectable">
+                            {{if $line.IsCovered}}
+                                <div title="The source line executed without reverting.">√ {{$line.SuccessHitCount}}</div>
+                            {{end}}
+                        </td>
+                        <td class="row-reverted-status unselectable">
+                            {{if $line.IsCoveredReverted}}
+                                <div title="The source line executed, but was reverted.">⟳ {{$line.RevertHitCount}}</div>
+                            {{end}}
+                        </td>
 
                                     {{/* Output a cell for the source line */}}
                                     {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}

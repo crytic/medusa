@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"math/big"
 	"strings"
-	"sync"
 )
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
@@ -23,10 +22,11 @@ type OptimizationTestCase struct {
 	targetMethod abi.Method
 	// callSequence describes the call sequence that maximized the value
 	callSequence *calls.CallSequence
+	// shrinkCallSequenceRequest is the shrink request that will be executed to identify the optimal call sequence
+	// that maximizes the value
+	shrinkCallSequenceRequest *ShrinkCallSequenceRequest
 	// value is used to store the maximum value returned by the test method
 	value *big.Int
-	// valueLock is used for thread-synchronization when updating the value
-	valueLock sync.Mutex
 	// optimizationTestTrace describes the execution trace when running the callSequence
 	optimizationTestTrace *executiontracer.ExecutionTrace
 }
@@ -47,17 +47,19 @@ func (t *OptimizationTestCase) Name() string {
 	return fmt.Sprintf("Optimization Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// LogMessage obtains a buffer that represents the result of the AssertionTestCase. This buffer can be passed to a logger for
+// LogMessage obtains a buffer that represents the result of the OptimizationTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
 
 	// Note that optimization tests will always pass
 	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
-	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
-	buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
-	buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
-	buffer.Append(t.CallSequence().Log().Elements()...)
+	if t.Status() != TestCaseStatusNotStarted {
+		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
+		buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
+		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+		buffer.Append(t.CallSequence().Log().Elements()...)
+	}
 	// If an execution trace is attached then add it to the message
 	if t.optimizationTestTrace != nil {
 		buffer.Append(colors.Bold, "[Optimization Test Execution Trace]", colors.Reset, "\n")

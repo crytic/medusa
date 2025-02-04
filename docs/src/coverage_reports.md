@@ -1,3 +1,0 @@
-# Coverage Reports
-
-WIP

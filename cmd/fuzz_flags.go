@@ -61,8 +61,25 @@ func addFuzzFlags() error {
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
 
 	// Logging color
-	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
+	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
+	// Enable stop on failed test
+	fuzzCmd.Flags().Bool("fail-fast", false, "enables stop on failed test")
+
+	// Exploration mode
+	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
+
+	// Run slither while still trying to use the cache
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+
+	// Run slither and overwrite the cache
+	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
+
+	// RPC url
+	fuzzCmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
+
+	// RPC block
+	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
 	return nil
 }
 
@@ -163,5 +180,65 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			return err
 		}
 	}
+
+	// Update stop on failed test feature
+	if cmd.Flags().Changed("fail-fast") {
+		projectConfig.Fuzzing.Testing.StopOnFailedTest, err = cmd.Flags().GetBool("fail-fast")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update configuration to exploration mode
+	if cmd.Flags().Changed("explore") {
+		explore, err := cmd.Flags().GetBool("explore")
+		if err != nil {
+			return err
+		}
+		if explore {
+			projectConfig.Fuzzing.Testing.StopOnFailedTest = false
+			projectConfig.Fuzzing.Testing.StopOnNoTests = false
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		}
+	}
+
+	// Update configuration to run slither while using current cache
+	if cmd.Flags().Changed("use-slither") {
+		projectConfig.Slither.UseSlither, err = cmd.Flags().GetBool("use-slither")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update configuration to run slither and overwrite the current cache
+	if cmd.Flags().Changed("use-slither-force") {
+		useSlitherForce, err := cmd.Flags().GetBool("use-slither-force")
+		if err != nil {
+			return err
+		}
+		if useSlitherForce {
+			projectConfig.Slither.UseSlither = true
+			projectConfig.Slither.OverwriteCache = true
+		}
+	}
+
+	// Update RPC url
+	if cmd.Flags().Changed("rpc-url") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl, err = cmd.Flags().GetString("rpc-url")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update RPC block
+	if cmd.Flags().Changed("rpc-block") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcBlock, err = cmd.Flags().GetUint64("rpc-block")
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

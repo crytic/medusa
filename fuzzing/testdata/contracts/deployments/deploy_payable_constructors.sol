@@ -6,6 +6,9 @@ contract FirstContract {
     function property_contract_has_no_balance() public returns(bool) {
         return address(this).balance == 0;
     }
+
+    // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+    function dummy() public {}
 }
 
 
@@ -15,4 +18,8 @@ contract SecondContract {
     function property_contract_has_balance() public returns(bool) {
         return address(this).balance == 1 ether;
     }
+
+    // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+    function dummy() public {}
+
 }

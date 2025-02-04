@@ -24,7 +24,7 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
           # disable caching during release (tag) builds
           cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
@@ -82,18 +82,17 @@ jobs:
 
       - name: Sign artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
           inputs: ./medusa-*.tar.gz
 
       - name: Upload artifact
-        if: github.ref == 'refs/heads/master' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         uses: actions/upload-artifact@v4
         with:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
           path: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   release:
     needs: [build]
@@ -118,7 +117,7 @@ jobs:
           name: "${{ github.ref_name }}"
           files: |
             ./medusa-*.tar.gz
-            ./medusa-*.tar.gz.sigstore
+            ./medusa-*.tar.gz.sigstore.json
 
   lint:
     runs-on: ubuntu-latest
@@ -129,7 +128,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
 
       - name: Actionlint
         run: |
@@ -156,10 +155,17 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run --timeout 5m0s
 
+      - name: Gencodec
+        run: |
+          go get github.com/fjl/gencodec 
+          pushd fuzzing/config
+          go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
+          git diff --exit-code -- .
+          popd
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-12, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
@@ -197,7 +203,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.18.1"
+          go-version: "^1.22"
 
       - uses: actions/setup-node@v4
         with:
@@ -208,7 +214,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select slither-analyzer
 
       - name: Install solc
         run: |
