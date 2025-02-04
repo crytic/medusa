@@ -321,6 +321,42 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		if err != nil {
 			return nil, err
 		}
+
+		/*logging.GlobalLogger.Info("logging header components for base chain")
+		logging.GlobalLogger.Info("blockHeader.ParentHash: ", blockHeader.ParentHash)
+		logging.GlobalLogger.Info("blockHeader.UncleHash: ", blockHeader.UncleHash)
+		logging.GlobalLogger.Info("blockHeader.Coinbase: ", blockHeader.Coinbase)
+		logging.GlobalLogger.Info("blockHeader.Root: ", blockHeader.Root)
+		logging.GlobalLogger.Info("blockHeader.TxHash: ", blockHeader.TxHash)
+		logging.GlobalLogger.Info("blockHeader.ReceiptHash: ", blockHeader.ReceiptHash)
+		logging.GlobalLogger.Info("blockHeader.Bloom: ", blockHeader.Bloom)
+		logging.GlobalLogger.Info("blockHeader.Difficulty: ", blockHeader.Difficulty)
+		logging.GlobalLogger.Info("blockHeader.Number: ", blockHeader.Number)
+		logging.GlobalLogger.Info("blockHeader.GasLimit: ", blockHeader.GasLimit)
+		logging.GlobalLogger.Info("blockHeader.GasUsed: ", blockHeader.GasUsed)
+		logging.GlobalLogger.Info("blockHeader.Time: ", blockHeader.Time)
+		logging.GlobalLogger.Info("blockHeader.Extra: ", blockHeader.Extra)
+		logging.GlobalLogger.Info("blockHeader.MixDigest: ", blockHeader.MixDigest)
+		logging.GlobalLogger.Info("blockHeader.Nonce: ", blockHeader.Nonce)
+		logging.GlobalLogger.Info("blockHeader.BaseFee: ", blockHeader.BaseFee)
+
+		logging.GlobalLogger.Info("logging header components for target chain")
+		logging.GlobalLogger.Info("targetChain.ParentHash: ", targetChain.blocks[i].Header.ParentHash)
+		logging.GlobalLogger.Info("targetChain.UncleHash: ", targetChain.blocks[i].Header.UncleHash)
+		logging.GlobalLogger.Info("targetChain.Coinbase: ", targetChain.blocks[i].Header.Coinbase)
+		logging.GlobalLogger.Info("targetChain.Root: ", targetChain.blocks[i].Header.Root)
+		logging.GlobalLogger.Info("targetChain.TxHash: ", targetChain.blocks[i].Header.TxHash)
+		logging.GlobalLogger.Info("targetChain.ReceiptHash: ", targetChain.blocks[i].Header.ReceiptHash)
+		logging.GlobalLogger.Info("targetChain.Bloom: ", targetChain.blocks[i].Header.Bloom)
+		logging.GlobalLogger.Info("targetChain.Difficulty: ", targetChain.blocks[i].Header.Difficulty)
+		logging.GlobalLogger.Info("targetChain.Number: ", targetChain.blocks[i].Header.Number)
+		logging.GlobalLogger.Info("targetChain.GasLimit: ", targetChain.blocks[i].Header.GasLimit)
+		logging.GlobalLogger.Info("targetChain.GasUsed: ", targetChain.blocks[i].Header.GasUsed)
+		logging.GlobalLogger.Info("targetChain.Time: ", targetChain.blocks[i].Header.Time)
+		logging.GlobalLogger.Info("targetChain.Extra: ", targetChain.blocks[i].Header.Extra)
+		logging.GlobalLogger.Info("targetChain.MixDigest: ", targetChain.blocks[i].Header.MixDigest)
+		logging.GlobalLogger.Info("targetChain.Nonce: ", targetChain.blocks[i].Header.Nonce)
+		logging.GlobalLogger.Info("targetChain.BaseFee: ", targetChain.blocks[i].Header.BaseFee)*/
 	}
 
 	// Set our final block gas limit
@@ -757,15 +793,11 @@ func (t *TestChain) PendingBlockCommit() error {
 		return fmt.Errorf("could not commit chain's pending block, as no pending block was created")
 	}
 
+	//logging.GlobalLogger.Info("block timestamp is ", t.pendingBlock.Header.Time)
+
 	// Perform a state commit to obtain the root hash for our block.
 	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true)
 	t.pendingBlock.Header.Root = root
-
-	// Update any header-related fields that may have been changed by cheatcodes.
-	t.pendingBlock.Header.Time = t.pendingBlockContext.Time
-	t.pendingBlock.Header.Number = t.pendingBlockContext.BlockNumber
-	t.pendingBlock.Header.Coinbase = t.pendingBlockContext.Coinbase
-	t.pendingBlock.Header.BaseFee = t.pendingBlockContext.BaseFee
 
 	if err != nil {
 		return err

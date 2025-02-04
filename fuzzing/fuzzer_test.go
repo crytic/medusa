@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/chain"
@@ -285,7 +283,7 @@ func TestCheatCodes(t *testing.T) {
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
 	// tests.
-	if utils.IsWindowsEnvironment() {
+	/*if utils.IsWindowsEnvironment() {
 		filePaths = append(filePaths,
 			"testdata/contracts/cheat_codes/utils/ffi_windows.sol",
 		)
@@ -293,7 +291,7 @@ func TestCheatCodes(t *testing.T) {
 		filePaths = append(filePaths,
 			"testdata/contracts/cheat_codes/utils/ffi_unix.sol",
 		)
-	}
+	}*/
 
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{

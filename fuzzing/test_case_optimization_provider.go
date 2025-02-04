@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging"
 	"math/big"
 	"sync"
 
@@ -103,7 +104,7 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 
 	// If the execution reverted, then we know that we do not have any valuable return data, so we return the smallest
 	// integer value
-	if executionResult.Failed() {
+	if executionResult.Failed() || len(executionResult.Return()) == 0 {
 		minInt256, _ := new(big.Int).SetString(MIN_INT, 16)
 		return minInt256, nil, nil
 	}
@@ -111,6 +112,10 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 	// Decode our ABI outputs
 	retVals, err := optimizationTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
+		logging.GlobalLogger.Info("test case that failed ", optimizationTestMethod.Method.Name)
+		logging.GlobalLogger.Info("execution result failed or no ", executionResult.Failed())
+		logging.GlobalLogger.Info("execution result error data ", executionResult.Err)
+		logging.GlobalLogger.Info("execution result error data ", executionResult.Return())
 		return nil, nil, fmt.Errorf("failed to decode optimization test method return value: %v", err)
 	}
 
