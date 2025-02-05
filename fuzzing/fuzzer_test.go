@@ -988,7 +988,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"InheritedFirstContract", "InheritedSecondContract"}
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+			config.Slither.UseSlither = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
