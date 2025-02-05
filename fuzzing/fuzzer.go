@@ -660,7 +660,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Define a flag that indicates whether we have cancelled fuzzing or not
-	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
+	working := !utils.CheckContextDone(f.ctx)
 
 	// Create workers and start fuzzing.
 	var err error
