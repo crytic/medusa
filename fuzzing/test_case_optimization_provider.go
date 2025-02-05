@@ -321,6 +321,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
+				TestName:             testCase.Name(),
 				CallSequenceToShrink: callSequence,
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 					// First verify the contract to the optimization test is still deployed to call upon.

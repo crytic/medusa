@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/logging/colors"
 	"math/big"
 	"math/rand"
 
@@ -454,7 +455,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
-		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(shrinkRequest.CallSequenceToShrink)))
+		fw.fuzzer.logger.Info("[Worker ", fw.workerIndex, "] Shrinking call sequence for ", colors.GreenBold,
+			shrinkRequest.TestName, colors.Bold, " with ", len(shrinkRequest.CallSequenceToShrink), " call(s)")
 
 		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
@@ -644,6 +646,10 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 
 		// Run all shrink requests
 		for _, shrinkCallSequenceRequest := range fw.shrinkCallSequenceRequests {
+			// Immediately exit if we are shutting down
+			if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
+				return true, nil
+			}
 			_, err = fw.shrinkCallSequence(shrinkCallSequenceRequest)
 			if err != nil {
 				return false, err
