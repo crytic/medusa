@@ -94,7 +94,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		if err != nil {
 			return err
 		}
-
 		err = projectConfig.Compilation.SetTarget(newTarget)
 		if err != nil {
 			return err
@@ -226,10 +225,14 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update RPC url
 	if cmd.Flags().Changed("rpc-url") {
-		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl, err = cmd.Flags().GetString("rpc-url")
+		rpcUrl, err := cmd.Flags().GetString("rpc-url")
 		if err != nil {
 			return err
 		}
+
+		// Enable on-chain fuzzing with the given URL
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.ForkModeEnabled = true
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl = rpcUrl
 	}
 
 	// Update RPC block
