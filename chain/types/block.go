@@ -1,6 +1,8 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,7 +29,7 @@ type Block struct {
 	// within the block. Since transactions that use cheatcodes can affect the VM context
 	// permanently, we need to store the original values so that we can maintain execution
 	// semantics and allow for the chain to be clone-able.
-	BaseVMContext *BaseVMContext
+	BaseVMContext *BaseBlockContext
 }
 
 // NewBlock returns a new Block with the provided parameters.
@@ -38,7 +40,44 @@ func NewBlock(header *types.Header) *Block {
 		Header:         header,
 		Messages:       make([]*core.Message, 0),
 		MessageResults: make([]*MessageResults, 0),
-		BaseVMContext:  NewBaseVMContext(),
+		BaseVMContext: NewBaseBlockContext(
+			header.Number,
+			header.Time,
+			header.BaseFee,
+			header.Coinbase,
+			header.Difficulty,
+			&header.MixDigest,
+		),
 	}
 	return block
+}
+
+// BaseNumber returns the base number of the block when the block was first created.
+func (b *Block) BaseNumber() *big.Int {
+	return b.BaseVMContext.number
+}
+
+// BaseTime returns the base time of the block when the block was first created.
+func (b *Block) BaseTime() uint64 {
+	return b.BaseVMContext.time
+}
+
+// BaseBaseFee returns the base fee of the block when the block was first created.
+func (b *Block) BaseBaseFee() *big.Int {
+	return b.BaseVMContext.baseFee
+}
+
+// BaseCoinbase returns the coinbase of the block when the block was first created.
+func (b *Block) BaseCoinbase() common.Address {
+	return b.BaseVMContext.coinbase
+}
+
+// BaseDifficulty returns the difficulty of the block when the block was first created.
+func (b *Block) BaseDifficulty() *big.Int {
+	return b.BaseVMContext.difficulty
+}
+
+// BaseRandom returns the random value of the block when the block was first created.
+func (b *Block) BaseRandom() *common.Hash {
+	return b.BaseVMContext.random
 }

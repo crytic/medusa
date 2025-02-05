@@ -94,15 +94,6 @@ type TestChain struct {
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
 	stateFactory state.MedusaStateFactory
-
-	// isCloning describes whether the chain is being cloned. This is a _god awful hack_ that we have to use
-	// because we don't want cheatcodes like "warp" or "roll" to re-execute when we clone the chain.
-	// When they are called, they directly update the block timestamp or number. Thus, when you try to
-	// clone that block and the "warp", for example, is called again, it may cause the timestamp to change e.g.
-	// (`vm.warp(block.timestamp + 5)`), which will cause the cloned block to have a different timestamp than
-	// the original block.
-	// TODO: We have to find a better way to handle cheatcode issues like this.
-	isCloning bool
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -292,17 +283,13 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		}
 	}
 
-	// We need to set the isCloning flag on the target chain so that the cheatcodes like "warp" or "roll" do not
-	// execute their effects when we clone the chain.
-	targetChain.isCloning = true
-	defer func() { targetChain.isCloning = false }()
-
 	// Replay all messages after genesis onto it. We set the block gas limit each time we mine so the chain acts as it
 	// did originally.
 	for i := 1; i < len(t.blocks); i++ {
 		// First create a new pending block to commit
-		blockHeader := t.blocks[i].Header
-		_, err = targetChain.PendingBlockCreateWithParameters(blockHeader.Number.Uint64(), blockHeader.Time, &blockHeader.GasLimit)
+		block := t.blocks[i]
+		blockHeader := block.Header
+		_, err = targetChain.PendingBlockCreateWithParameters(block.BaseNumber().Uint64(), block.BaseTime(), &blockHeader.GasLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -321,42 +308,6 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 		if err != nil {
 			return nil, err
 		}
-
-		/*logging.GlobalLogger.Info("logging header components for base chain")
-		logging.GlobalLogger.Info("blockHeader.ParentHash: ", blockHeader.ParentHash)
-		logging.GlobalLogger.Info("blockHeader.UncleHash: ", blockHeader.UncleHash)
-		logging.GlobalLogger.Info("blockHeader.Coinbase: ", blockHeader.Coinbase)
-		logging.GlobalLogger.Info("blockHeader.Root: ", blockHeader.Root)
-		logging.GlobalLogger.Info("blockHeader.TxHash: ", blockHeader.TxHash)
-		logging.GlobalLogger.Info("blockHeader.ReceiptHash: ", blockHeader.ReceiptHash)
-		logging.GlobalLogger.Info("blockHeader.Bloom: ", blockHeader.Bloom)
-		logging.GlobalLogger.Info("blockHeader.Difficulty: ", blockHeader.Difficulty)
-		logging.GlobalLogger.Info("blockHeader.Number: ", blockHeader.Number)
-		logging.GlobalLogger.Info("blockHeader.GasLimit: ", blockHeader.GasLimit)
-		logging.GlobalLogger.Info("blockHeader.GasUsed: ", blockHeader.GasUsed)
-		logging.GlobalLogger.Info("blockHeader.Time: ", blockHeader.Time)
-		logging.GlobalLogger.Info("blockHeader.Extra: ", blockHeader.Extra)
-		logging.GlobalLogger.Info("blockHeader.MixDigest: ", blockHeader.MixDigest)
-		logging.GlobalLogger.Info("blockHeader.Nonce: ", blockHeader.Nonce)
-		logging.GlobalLogger.Info("blockHeader.BaseFee: ", blockHeader.BaseFee)
-
-		logging.GlobalLogger.Info("logging header components for target chain")
-		logging.GlobalLogger.Info("targetChain.ParentHash: ", targetChain.blocks[i].Header.ParentHash)
-		logging.GlobalLogger.Info("targetChain.UncleHash: ", targetChain.blocks[i].Header.UncleHash)
-		logging.GlobalLogger.Info("targetChain.Coinbase: ", targetChain.blocks[i].Header.Coinbase)
-		logging.GlobalLogger.Info("targetChain.Root: ", targetChain.blocks[i].Header.Root)
-		logging.GlobalLogger.Info("targetChain.TxHash: ", targetChain.blocks[i].Header.TxHash)
-		logging.GlobalLogger.Info("targetChain.ReceiptHash: ", targetChain.blocks[i].Header.ReceiptHash)
-		logging.GlobalLogger.Info("targetChain.Bloom: ", targetChain.blocks[i].Header.Bloom)
-		logging.GlobalLogger.Info("targetChain.Difficulty: ", targetChain.blocks[i].Header.Difficulty)
-		logging.GlobalLogger.Info("targetChain.Number: ", targetChain.blocks[i].Header.Number)
-		logging.GlobalLogger.Info("targetChain.GasLimit: ", targetChain.blocks[i].Header.GasLimit)
-		logging.GlobalLogger.Info("targetChain.GasUsed: ", targetChain.blocks[i].Header.GasUsed)
-		logging.GlobalLogger.Info("targetChain.Time: ", targetChain.blocks[i].Header.Time)
-		logging.GlobalLogger.Info("targetChain.Extra: ", targetChain.blocks[i].Header.Extra)
-		logging.GlobalLogger.Info("targetChain.MixDigest: ", targetChain.blocks[i].Header.MixDigest)
-		logging.GlobalLogger.Info("targetChain.Nonce: ", targetChain.blocks[i].Header.Nonce)
-		logging.GlobalLogger.Info("targetChain.BaseFee: ", targetChain.blocks[i].Header.BaseFee)*/
 	}
 
 	// Set our final block gas limit
@@ -677,6 +628,8 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 
 	// Create a new block for our test node
 	t.pendingBlock = types.NewBlock(header)
+
+	// Create the block hash
 	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 
 	// Emit our event for the pending block being created

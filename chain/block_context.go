@@ -1,11 +1,12 @@
 package chain
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
 )
 
 // newTestChainBlockContext obtains a new vm.BlockContext that is tailored to provide data from a TestChain.
