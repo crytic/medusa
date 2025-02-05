@@ -58,7 +58,7 @@ func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 		return buffer
 	}
 
-	// We are now guaranteed to handle on test cases in the running status
+	// We are now guaranteed to handle only test cases in the running state
 	// If we weren't able to find a value greater than the minimum, the test case has failed
 	minInt, _ := new(big.Int).SetString(MIN_INT, 16)
 	if t.Value().Cmp(minInt) == 0 {
