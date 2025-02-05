@@ -70,7 +70,7 @@ func (s *SlitherConfig) validateArgs() error {
 // getArgs returns the arguments to be provided to slither, or an error if one occurs.
 // The slither target is provided as an input argument.
 func (s *SlitherConfig) getArgs(target string) ([]string, error) {
-	// By default we do not re-compile, use the echidna printer, and output in json format
+	// By default, we do not re-compile, use the echidna printer, and output in json format
 	args := []string{target, "--ignore-compile", "--print", "echidna", "--json", "-"}
 
 	// Add remaining args

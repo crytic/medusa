@@ -90,7 +90,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// The block context will reflect the time change in the current EVM context
 			// And the pending block time will allow for the new time to reflect
 			// permanently for the remainder of the chain's existence.
-			// Update the pending block context's timestamp
 			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
 			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
 
@@ -124,7 +123,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// The block context will reflect the block number change in the current EVM context
 			// And the pending block number will allow for the number to reflect
 			// permanently for the remainder of the chain.
-			// Set the block number for the pending block context
 			tracer.chain.pendingBlockContext.BlockNumber.Set(newBlockNumber)
 			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
 
@@ -156,7 +154,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// The block context will reflect the base fee change in the current EVM context
 			// And the pending block will allow for the base fee to reflect
 			// permanently for the remainder of the chain.
-			// Update the fee in the pending block context
 			tracer.chain.pendingBlockContext.BaseFee.Set(inputs[0].(*big.Int))
 			tracer.chain.pendingBlock.Header.BaseFee.Set(inputs[0].(*big.Int))
 
@@ -175,26 +172,35 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Difficulty: Updates difficulty
-	// TODO: Make changes to difficulty permanent and make it revert for post-Paris EVM versions
+	// Difficulty: Updates difficulty. Since we do not allow users to choose the fork that
+	// they are using (for now), and we are using a post-Paris fork, the difficulty cheatcode will
+	// revert.
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			spoofedDifficulty := inputs[0].(*big.Int)
-			spoofedDifficultyHash := common.BigToHash(spoofedDifficulty)
+			return nil, cheatCodeRevertData([]byte("difficulty: not supported for the post-Paris EVM being used"))
+		},
+	)
+
+	// Prevrandao: Updates random.
+	contract.addMethod(
+		"prevrandao", abi.Arguments{{Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Store our original random
 			originalRandom := tracer.chain.pendingBlockContext.Random
 
-			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
-			tracer.chain.pendingBlockContext.Random = &spoofedDifficultyHash
+			// Update the pending block context random
+			newRandom := inputs[0].([32]byte)
+			newRandomHash := common.BytesToHash(newRandom[:])
+			tracer.chain.pendingBlockContext.Random = &newRandomHash
+
+			// Restore the original random when top frame exits
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
 				tracer.chain.pendingBlockContext.Random = originalRandom
 			})
 			return nil, nil
 		},
 	)
-
-	// TODO: Add prevrandao cheatcode
 
 	// Coinbase: Updates the block coinbase. Note that this _permanently_ updates the coinbase for the remainder of the
 	// chain's lifecycle
@@ -208,7 +214,6 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// The block context will reflect the coinbase change in the current EVM context
 			// And the pending block will allow for the coinbase change to reflect
 			// permanently for the remainder of the chain.
-			// Update the coinbase in the pending block context
 			tracer.chain.pendingBlockContext.Coinbase = inputs[0].(common.Address)
 			tracer.chain.pendingBlock.Header.Coinbase = inputs[0].(common.Address)
 

@@ -930,6 +930,11 @@ func (f *Fuzzer) Terminate() {
 	if f.emergencyCtxCancelFunc != nil {
 		f.emergencyCtxCancelFunc()
 	}
+
+	// Cancel the main context as well
+	if f.ctxCancelFunc != nil {
+		f.ctxCancelFunc()
+	}
 }
 
 // printMetricsLoop prints metrics to the console in a loop until ctx signals a stopped operation.
