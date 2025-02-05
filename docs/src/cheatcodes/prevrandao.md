@@ -2,7 +2,7 @@
 
 ## Description
 
-The `prevrandao` cheatcode updates the `block.prevrandao`. 
+The `prevrandao` cheatcode updates the `block.prevrandao`.
 
 ## Example
 

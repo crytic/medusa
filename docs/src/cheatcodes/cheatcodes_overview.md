@@ -23,10 +23,10 @@ interface StdCheats {
 
     // Set block.difficulty (deprecated in `medusa`)
     function difficulty(uint256) external;
-   
+
     // Set block.prevrandao
     function prevrandao(bytes32) external;
-   
+
     // Set block.chainid
     function chainId(uint256) external;
 
