@@ -6,14 +6,16 @@ interface CheatCodes {
 contract TestContract {
     // Obtain our cheat code contract reference.
     CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-    uint64 startingBlockNumber;
+    uint64 blockNumberOffset;
 
     constructor() {
         // Set the starting block number
-        startingBlockNumber = 12345;
-        cheats.roll(startingBlockNumber);
+        blockNumberOffset = 12345;
+        cheats.roll(block.number + blockNumberOffset);
     }
     function test(uint256 x) public {
-        assert(block.number > startingBlockNumber);
+        // We know that the block number originally will be 1 so we need
+        // to make sure that the new block number is 1 more than the offset
+        assert(block.number >= blockNumberOffset + 1);
     }
 }

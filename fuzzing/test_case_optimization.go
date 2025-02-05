@@ -52,14 +52,36 @@ func (t *OptimizationTestCase) Name() string {
 func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer := logging.NewLogBuffer()
 
-	// Note that optimization tests will always pass
-	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
-	if t.Status() != TestCaseStatusNotStarted {
-		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
-		buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
-		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
-		buffer.Append(t.CallSequence().Log().Elements()...)
+	// If the test case never started, just log the status and name of the test case
+	if t.Status() == TestCaseStatusNotStarted {
+		buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+		return buffer
 	}
+
+	// We are now guaranteed to handle only test cases in the running state
+	// If we weren't able to find a value greater than the minimum, the test case has failed
+	minInt, _ := new(big.Int).SetString(MIN_INT, 16)
+	if t.Value().Cmp(minInt) == 0 {
+		t.status = TestCaseStatusFailed
+	} else {
+		t.status = TestCaseStatusPassed
+	}
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
+
+	// Notify the user we failed to find anything
+	if t.status == TestCaseStatusFailed {
+		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed to identify a value greater than the minimum"+
+			" value of an int256: ", t.targetContract.Name(), t.targetMethod.Sig))
+		// We do not have a call sequence or execution trace for this test, so return early
+		return buffer
+	}
+
+	// We are guaranteed to now handle only successful test cases
+	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
+	buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
+	buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
+	buffer.Append(t.CallSequence().Log().Elements()...)
+
 	// If an execution trace is attached then add it to the message
 	if t.optimizationTestTrace != nil {
 		buffer.Append(colors.Bold, "[Optimization Test Execution Trace]", colors.Reset, "\n")

@@ -25,3 +25,13 @@ best to mine constants from each contract's AST so don't worry!
   is computationally intensive for complex projects. We recommend disabling caching (by making `cachePath` an empty string)
   if the target codebase changes. If the code remains constant during the fuzzing campaign, we recommend to use the cache.
 - **Default**: `slither_results.json`
+
+### `args`
+
+- **Type**: [String]
+- **Description**: Refers to any additional args that one may want to provide to Slither. Run `slither --help`
+  to view all of its supported flags. For example, if you would like to specify `--foundry-out-directory out`, the
+  `args` value will be `"args": ["--foundry-out-directory", "out"]`.
+  > 🚩 The `--ignore-compile`, `--print`, and `--json` are already used during compilation with Slither.
+  > Re-using these flags in `args` will cause the compilation to fail.
+- **Default**: `[]`

@@ -1,10 +1,11 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/crytic/medusa/logging"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 const version = "1.0.0"

@@ -8,11 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crytic/medusa/fuzzing/executiontracer"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -280,6 +279,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/prevrandao.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
