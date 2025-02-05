@@ -125,7 +125,8 @@ func NewTestChain(
 		}
 		stateFactory = state.NewForkedStateFactory(provider)
 	} else {
-		stateFactory = state.NewUnbackedStateFactory()
+		stateFactory = state.NewVanillaStateFactory()
+		// stateFactory = state.NewUnbackedStateFactory()
 	}
 
 	return newTestChainWithStateFactory(genesisAlloc, testChainConfig, stateFactory)
