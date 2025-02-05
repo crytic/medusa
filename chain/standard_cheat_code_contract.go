@@ -173,12 +173,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	)
 
 	// Difficulty: Updates difficulty. Since we do not allow users to choose the fork that
-	// they are using (for now), and we are using a post-Paris fork, the difficulty cheatcode will
-	// revert.
+	// they are using (for now), and we are using a post-Paris fork, the difficulty cheatcode is a no-op.
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			return nil, cheatCodeRevertData([]byte("difficulty: not supported for the post-Paris EVM being used"))
+			return nil, nil
 		},
 	)
 

@@ -1,4 +1,4 @@
-// This test ensures that the block difficulty can be set with cheat codes
+// This test ensures that the block random can be set with cheat codes
 interface CheatCodes {
     function prevrandao(bytes32) external;
 }

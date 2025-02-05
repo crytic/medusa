@@ -33,6 +33,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   is provided, no test limit will be enforced.
 - **Default**: 0 calls
 
+### `shrinkLimit`
+
+- **Type**: Integer
+- **Description**: The number of iterations that shrinking will run for before returning the shrunken call sequence.
+- **Default**: 5000 iterations
+- 
 ### `callSequenceLength`
 
 - **Type**: Integer

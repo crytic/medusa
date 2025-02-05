@@ -1,4 +1,4 @@
-// This test ensures that the difficulty cheatcode will revert
+// This test ensures that the difficulty cheatcode is a no-op
 interface CheatCodes {
     function difficulty(uint256) external;
 }
@@ -9,9 +9,10 @@ contract TestContract {
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Use try catch
-        try cheats.difficulty(x) {
-            // The call to difficulty should not work
-            assert(false);
-        } catch (bytes memory){}
+        uint256 originalDifficulty = block.difficulty;
+        // Update the difficulty
+        cheats.difficulty(x);
+        // Make sure that the new difficulty is the same as the original
+        assert(block.difficulty == originalDifficulty);
     }
 }
