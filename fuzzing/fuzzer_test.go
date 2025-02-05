@@ -750,15 +750,13 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 
 // TestValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
 func TestValueGenerationSolving(t *testing.T) {
-	// TODO: match_ints_xy is slower than match_uints_xy in the value generator because AST doesn't retain negative
-	//  numbers, improve our logic to solve it faster, then re-enable this.
 	filePaths := []string{
 		"testdata/contracts/value_generation/match_addr_contract.sol",
 		"testdata/contracts/value_generation/match_addr_exact.sol",
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
 		"testdata/contracts/value_generation/match_structs_xy.sol",
-		//"testdata/contracts/value_generation/match_ints_xy.sol",
+		"testdata/contracts/value_generation/match_ints_xy.sol",
 		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
@@ -769,7 +767,7 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-				config.Slither.UseSlither = false
+				config.Slither.UseSlither = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
