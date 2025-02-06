@@ -583,14 +583,14 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
 		MinMutationRounds: 0,
 		MaxMutationRounds: 1,
-		// Echidna: There is a 40% chance of generating a random ABI value
+		// Echidna: Generate a random ABI value 40% of the time
 		GenerateRandomAddressBias:       0.4,
 		GenerateRandomIntegerBias:       0.4,
 		GenerateRandomStringBias:        0.4,
 		GenerateRandomBytesBias:         0.4,
-		MutateAddressProbability:        0.1,
+		MutateAddressProbability:        0.0,
 		MutateArrayStructureProbability: 0.1,
-		MutateBoolProbability:           0.1,
+		MutateBoolProbability:           1.0,
 		MutateBytesProbability:          0.1,
 		MutateBytesGenerateNewBias:      0.45,
 		MutateFixedBytesProbability:     0.1,
@@ -599,12 +599,12 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 		MutateIntegerProbability:        0.1,
 		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
-			GenerateRandomArrayMinSize:  0,
-			GenerateRandomArrayMaxSize:  100,
-			GenerateRandomBytesMinSize:  0,
-			GenerateRandomBytesMaxSize:  100,
-			GenerateRandomStringMinSize: 0,
-			GenerateRandomStringMaxSize: 100,
+			GenerateRandomArrayMinSize:  1,
+			GenerateRandomArrayMaxSize:  32,
+			GenerateRandomBytesMinSize:  1,
+			GenerateRandomBytesMaxSize:  32,
+			GenerateRandomStringMinSize: 1,
+			GenerateRandomStringMaxSize: 32,
 		},
 	}
 	mutationalGenerator := valuegeneration.NewMutationalValueGenerator(mutationalGeneratorConfig, valueSet, randomProvider)

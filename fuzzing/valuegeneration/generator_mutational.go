@@ -1,11 +1,12 @@
 package valuegeneration
 
 import (
+	"math/big"
+	"math/rand"
+
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
-	"math/big"
-	"math/rand"
 )
 
 // MutationalValueGenerator represents a ValueGenerator and ValueMutator for function inputs and call arguments. It
@@ -395,13 +396,9 @@ func (g *MutationalValueGenerator) GenerateAddress() common.Address {
 	return address
 }
 
-// MutateAddress takes an address input and sometimes returns a mutated value based off the input.
+// MutateAddress takes an address input and mutates it.
 func (g *MutationalValueGenerator) MutateAddress(addr common.Address) common.Address {
-	// Determine whether to perform mutations against this input or just return it as-is.
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.MutateAddressProbability {
-		return g.RandomValueGenerator.GenerateAddress()
-	}
+	// Currently, we do not mutate addresses and we return it as-is.
 	return addr
 }
 

@@ -64,7 +64,7 @@ func (g *RandomValueGenerator) MutateAddress(addr common.Address) common.Address
 // many elements a non-byte, non-string array should have.
 func (g *RandomValueGenerator) GenerateArrayOfLength() int {
 	rangeSize := uint64(g.config.GenerateRandomArrayMaxSize-g.config.GenerateRandomArrayMinSize) + 1
-	return int(g.GenerateInteger(false, 16).Uint64()%rangeSize) + g.config.GenerateRandomArrayMinSize
+	return int(g.randomProvider.Uint64()%rangeSize) + g.config.GenerateRandomArrayMinSize
 }
 
 // MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
