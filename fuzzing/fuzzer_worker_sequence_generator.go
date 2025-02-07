@@ -46,6 +46,10 @@ type CallSequenceGeneratorConfig struct {
 	// sequence rather than mutating one from the corpus.
 	NewSequenceProbability float32
 
+	// MutateCallSequenceElementProbability defines the probability that the CallSequenceGenerator should mutate a call
+	// sequence element.
+	MutateCallSequenceElementProbability float32
+
 	// RandomUnmodifiedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
 	// generation strategy of taking the head of a corpus sequence (without mutations) and append newly generated calls
 	// to the end of it.
@@ -464,6 +468,12 @@ func callSeqGenFuncInterleaveAtRandom(sequenceGenerator *CallSequenceGenerator, 
 func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, element *calls.CallSequenceElement) error {
 	// If this element has no ABI value based call data, exit early.
 	if element.Call == nil || element.Call.DataAbiValues == nil {
+		return nil
+	}
+
+	// If our bias directs us to it, do not mutate the element at all
+	randomGeneratorDecision := sequenceGenerator.worker.randomProvider.Float32()
+	if randomGeneratorDecision > sequenceGenerator.config.MutateCallSequenceElementProbability {
 		return nil
 	}
 

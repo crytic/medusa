@@ -1,10 +1,10 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"math/rand"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ShrinkingValueMutator represents a ValueMutator used to shrink function inputs and call arguments.
@@ -60,7 +60,8 @@ func (g *ShrinkingValueMutator) MutateArray(value []any, fixedLength bool) []any
 // MutateBool takes a boolean input and returns a mutated value based off the input.
 // This type is not mutated by the ShrinkingValueMutator.
 func (g *ShrinkingValueMutator) MutateBool(bl bool) bool {
-	return bl
+	// Always return false
+	return false
 }
 
 // MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
@@ -102,58 +103,22 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 	return b
 }
 
-// integerShrinkingMethods define methods which take a big integer and a set of inputs and
-// transform the integer with a random input and operation.
-var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.Int) *big.Int{
-	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// If our base value is positive, we subtract from it. If it's positive, we add to it.
-		// If it's zero, we leave it unchanged.
-		r := big.NewInt(0)
-		if x.Cmp(r) > 0 {
-			r = r.Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
-		} else if x.Cmp(r) < 0 {
-			r = r.Add(x, inputs[g.randomProvider.Intn(len(inputs))])
-		}
-		return r
-
-	},
-	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Divide by two
-		return big.NewInt(0).Div(x, big.NewInt(2))
-	},
-}
-
 // MutateInteger takes an integer input and applies optional mutations to the provided value.
 // Returns an optionally mutated copy of the input.
 func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.ShrinkValueProbability {
-		// Calculate our integer bounds
-		min, max := utils.GetIntegerConstraints(signed, bitLength)
-
-		// Obtain our inputs. We also add our min/max values for this range to the list of inputs.
-		// Note: We exclude min being added if we're requesting an unsigned integer, as zero is already
-		// in our set, and we don't want duplicates.
-		var inputs []*big.Int
-		inputs = append(inputs, g.valueSet.Integers()...)
-		if signed {
-			inputs = append(inputs, min, max)
-		} else {
-			inputs = append(inputs, max)
-		}
-
-		// Set the input and ensure it is constrained to the value boundaries
-		input := new(big.Int).Set(i)
-		input = utils.ConstrainIntegerToBounds(input, min, max)
-
-		// Shrink input
-		input = integerShrinkingMethods[g.randomProvider.Intn(len(integerShrinkingMethods))](g, input, inputs...)
-
-		// Correct value boundaries (underflow/overflow)
-		input = utils.ConstrainIntegerToBounds(input, min, max)
-		return input
+	// Simply generate a new integer between [0, i) so that we are always approaching zero
+	// for unsigned integers.
+	if !signed {
+		return big.NewInt(0).Rand(g.randomProvider, i)
 	}
-	return i
+
+	// For signed integers, we will generate an integer between [1, abs(i)]
+	// and then add it to i.
+	offset := big.NewInt(0).Rand(g.randomProvider, big.NewInt(0).Abs(i))
+	offset.Add(offset, big.NewInt(1))
+
+	// Add it to the original value to reach the range (i, 0]
+	return i.Add(i, offset)
 }
 
 // stringShrinkingMethods define methods which take an initial string and a set of inputs to transform the input. The
