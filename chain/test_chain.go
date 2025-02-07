@@ -3,9 +3,10 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"
-	"math/big"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -125,7 +126,8 @@ func NewTestChain(
 		}
 		stateFactory = state.NewForkedStateFactory(provider)
 	} else {
-		stateFactory = state.NewUnbackedStateFactory()
+		stateFactory = state.NewVanillaStateFactory()
+		// stateFactory = state.NewUnbackedStateFactory()
 	}
 
 	return newTestChainWithStateFactory(genesisAlloc, testChainConfig, stateFactory)
@@ -210,7 +212,6 @@ func newTestChainWithStateFactory(
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	testChainGenesisBlock := types.NewBlock(genesisBlock.Header())
-
 	// Create our state database over-top our database.
 	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
 
@@ -287,8 +288,9 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 	// did originally.
 	for i := 1; i < len(t.blocks); i++ {
 		// First create a new pending block to commit
-		blockHeader := t.blocks[i].Header
-		_, err = targetChain.PendingBlockCreateWithParameters(blockHeader.Number.Uint64(), blockHeader.Time, &blockHeader.GasLimit)
+		block := t.blocks[i]
+		blockHeader := block.Header
+		_, err = targetChain.PendingBlockCreateWithBaseBlockContext(block.BaseContext, &blockHeader.GasLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -577,11 +579,10 @@ func (t *TestChain) PendingBlockCreate() (*types.Block, error) {
 	return t.PendingBlockCreateWithParameters(blockNumber, timestamp, nil)
 }
 
-// PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block
-// properties provided. Note that there are no constraints on the next block number or timestamp. Because of cheatcode
-// usage, the next block can go back in time.
-// Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*types.Block, error) {
+// PendingBlockCreateWithBaseBlockContext constructs an empty block which is pending addition to the chain, using the
+// provided base block context. The base block context holds information such as the block number, timestamp, and base fee
+// that should be used to initialize the block.
+func (t *TestChain) PendingBlockCreateWithBaseBlockContext(baseBlockContext *types.BaseBlockContext, blockGasLimit *uint64) (*types.Block, error) {
 	// If we already have a pending block, return an error.
 	if t.pendingBlock != nil {
 		return nil, fmt.Errorf("could not create a new pending block for chain, as a block is already pending")
@@ -592,41 +593,43 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		blockGasLimit = &t.BlockGasLimit
 	}
 
-	// Obtain our parent block hash to reference in our new block.
-	parentBlockHash := t.Head().Hash
-
 	// Note we do not perform any block number or timestamp validation since cheatcodes can permanently update the
 	// block number or timestamp which could violate the invariants of a blockchain (e.g. block.number is strictly
 	// increasing)
 
+	// Obtain our parent block hash to reference in our new block.
+	parentBlockHash := t.Head().Hash
+
 	// Create a block header for this block:
 	// - State root hash reflects the state after applying block updates (no transactions, so unchanged from last block)
+	// - Other hashes will populate as we apply transactions
 	// - Bloom is aggregated for each transaction in the block (for now empty).
-	// - TODO: Difficulty should be revisited/checked.
 	// - GasUsed is aggregated for each transaction in the block (for now zero).
-	// - Mix digest is only useful for randomness, so we just fake randomness by using the previous block hash.
-	// - TODO: BaseFee should be revisited/checked.
+	// - We don't care too much about difficulty and mix digest so setting them to random things
 	header := &gethTypes.Header{
 		ParentHash:  parentBlockHash,
 		UncleHash:   gethTypes.EmptyUncleHash,
-		Coinbase:    t.Head().Header.Coinbase,
 		Root:        t.Head().Header.Root,
 		TxHash:      gethTypes.EmptyRootHash,
 		ReceiptHash: gethTypes.EmptyRootHash,
 		Bloom:       gethTypes.Bloom{},
-		Difficulty:  common.Big0,
-		Number:      big.NewInt(int64(blockNumber)),
 		GasLimit:    *blockGasLimit,
 		GasUsed:     0,
-		Time:        blockTime,
 		Extra:       []byte{},
-		MixDigest:   parentBlockHash,
 		Nonce:       gethTypes.BlockNonce{},
-		BaseFee:     new(big.Int).Set(t.Head().Header.BaseFee),
+		Coinbase:    baseBlockContext.Coinbase,
+		Difficulty:  common.Big0,
+		Number:      new(big.Int).Set(baseBlockContext.Number),
+		Time:        baseBlockContext.Time,
+		MixDigest:   parentBlockHash,
+		BaseFee:     new(big.Int).Set(baseBlockContext.BaseFee),
 	}
 
-	// Create a new block for our test node
+	// Create a new block for our test chain
 	t.pendingBlock = types.NewBlock(header)
+
+	// Set the block hash
+	// Note that this block hash may change if cheatcodes that update the block header are used (e.g. warp)
 	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 
 	// Emit our event for the pending block being created
@@ -640,6 +643,21 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 
 	// Return our created block.
 	return t.pendingBlock, nil
+}
+
+// PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block number
+// and timestamp provided. Returns the constructed block, or an error if one occurred.
+func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*types.Block, error) {
+	// We will create a base block context with the provided parameters in addition to using the current head block.
+	// All values that are not the block number and timestamp are taken from the current head block.
+	baseBlockContext := types.NewBaseBlockContext(
+		blockNumber,
+		blockTime,
+		t.Head().Header.BaseFee,
+		t.Head().Header.Coinbase,
+	)
+
+	return t.PendingBlockCreateWithBaseBlockContext(baseBlockContext, blockGasLimit)
 }
 
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header

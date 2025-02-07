@@ -17,6 +17,7 @@ type MedusaStateFactory interface {
 
 var _ MedusaStateFactory = (*UnbackedStateFactory)(nil)
 var _ MedusaStateFactory = (*ForkedStateFactory)(nil)
+var _ MedusaStateFactory = (*VanillaStateDbFactory)(nil)
 
 // ForkedStateFactory is used to build StateDBs that are backed by a remote RPC
 type ForkedStateFactory struct {
@@ -43,4 +44,15 @@ func NewUnbackedStateFactory() *UnbackedStateFactory {
 func (f *UnbackedStateFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
 	remoteStateProvider := newRemoteStateProvider(EmptyBackend{})
 	return state.NewForkedStateDb(root, db, remoteStateProvider)
+}
+
+type VanillaStateDbFactory struct {
+}
+
+func (v VanillaStateDbFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
+	return state.New(root, db, nil)
+}
+
+func NewVanillaStateFactory() *VanillaStateDbFactory {
+	return &VanillaStateDbFactory{}
 }

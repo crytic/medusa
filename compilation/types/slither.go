@@ -3,10 +3,11 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"github.com/crytic/medusa/logging"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/crytic/medusa/logging"
 )
 
 // SlitherConfig determines whether to run slither and whether and where to cache the results from slither
@@ -16,6 +17,8 @@ type SlitherConfig struct {
 	UseSlither bool `json:"useSlither"`
 	// CachePath determines the path where the slither cache file will be located
 	CachePath string `json:"cachePath"`
+	// Args determines the arguments to pass to slither
+	Args []string `json:"args"`
 	// OverwriteCache determines whether to overwrite the cache or not
 	// We will not serialize this value since it is something we want to control internally
 	OverwriteCache bool `json:"-"`
@@ -27,6 +30,7 @@ func NewDefaultSlitherConfig() (*SlitherConfig, error) {
 	return &SlitherConfig{
 		UseSlither:     true,
 		CachePath:      "slither_results.json",
+		Args:           []string{},
 		OverwriteCache: false,
 	}, nil
 }
@@ -43,6 +47,35 @@ type Constant struct {
 	Type string `json:"type"`
 	// Value represents the value of the constant
 	Value string `json:"value"`
+}
+
+// validateArgs ensures that the additional arguments provided to slither do not contain the `--ignore-compile`,
+// `--print`, or `--json` arguments. These arguments are already used internally.
+func (s *SlitherConfig) validateArgs() error {
+	// If --ignore-compile, --print, or --json are specified in s.Args, throw an error
+	for _, arg := range s.Args {
+		if arg == "--ignore-compile" {
+			return errors.New("do not specify `--ignore-compile` as an argument since it is already used")
+		}
+		if arg == "--print" {
+			return errors.New("do not specify `--print` as an argument since it is already used")
+		}
+		if arg == "--json" {
+			return errors.New("do not specify `--json` as an argument since it is already used")
+		}
+	}
+	return nil
+}
+
+// getArgs returns the arguments to be provided to slither, or an error if one occurs.
+// The slither target is provided as an input argument.
+func (s *SlitherConfig) getArgs(target string) ([]string, error) {
+	// By default, we do not re-compile, use the echidna printer, and output in json format
+	args := []string{target, "--ignore-compile", "--print", "echidna", "--json", "-"}
+
+	// Add remaining args
+	args = append(args, s.Args...)
+	return args, nil
 }
 
 // RunSlither on the provided compilation target. RunSlither will use cached results if they exist and write to the
@@ -75,8 +108,19 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 
 	// Run slither if we do not have cached results, or we cannot find the cached results
 	if !haveCachedResults {
+		// Validate the input arguments to slither
+		if err := s.validateArgs(); err != nil {
+			return nil, err
+		}
+
+		// Fetch the arguments to invoke slither with
+		args, err := s.getArgs(target)
+		if err != nil {
+			return nil, err
+		}
+
 		// Log the command
-		cmd := exec.Command("slither", target, "--ignore-compile", "--print", "echidna", "--json", "-")
+		cmd := exec.Command("slither", args...)
 		logging.GlobalLogger.Info("Running Slither:\n", cmd.String())
 
 		// Run slither

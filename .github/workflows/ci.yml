@@ -218,7 +218,7 @@ jobs:
 
       - name: Install solc
         run: |
-          solc-select use 0.8.17 --always-install
+          solc-select use 0.8.28 --always-install
 
       - name: Test
         run: go test ./...

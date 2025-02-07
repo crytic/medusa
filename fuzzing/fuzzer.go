@@ -661,7 +661,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Define a flag that indicates whether we have cancelled fuzzing or not
-	working := !(utils.CheckContextDone(f.ctx) || utils.CheckContextDone(f.emergencyCtx))
+	working := !utils.CheckContextDone(f.ctx)
 
 	// Create workers and start fuzzing.
 	var err error
@@ -930,6 +930,11 @@ func (f *Fuzzer) Terminate() {
 	// Call the emergency context cancel function on our running context to stop all working goroutines
 	if f.emergencyCtxCancelFunc != nil {
 		f.emergencyCtxCancelFunc()
+	}
+
+	// Cancel the main context as well
+	if f.ctxCancelFunc != nil {
+		f.ctxCancelFunc()
 	}
 }
 

@@ -15,9 +15,9 @@
       packages = {
         medusa = pkgs.buildGoModule {
           pname = "medusa";
-          version = 1.0.0;
+          version = "1.1.0";
           src = ./.;
-          vendorHash = "sha256-12Xkg5dzA83HQ2gMngXoLgu1c9KGSL6ly5Qz/o8U++8=";
+          vendorHash = "sha256-0n72whnGP6Qrk2IjvVJzJ0NLGz41nqLLEWoHiR4PcJE=";
           nativeBuildInputs = [
             crytic.packages.${system}.crytic-compile
             crytic.packages.${system}.slither

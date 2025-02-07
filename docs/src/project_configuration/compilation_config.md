@@ -50,6 +50,7 @@ The compilation configuration defines the parameters to use while compiling a ta
   `args` value will be `"args": ["--compile-force-framework", "foundry"]`.
   > 🚩 The `--export-format` and `--export-dir` are already used during compilation with `crytic-compile`.
   > Re-using these flags in `args` will cause the compilation to fail.
+- **Default**: `[]`
 
 ### `platformConfig` for `solc`
 
