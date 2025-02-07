@@ -379,17 +379,14 @@ func (g *MutationalValueGenerator) mutateStringInternal(s *string) string {
 
 // GenerateAddress obtains an existing address from its underlying value set or generates a random one.
 func (g *MutationalValueGenerator) GenerateAddress() common.Address {
-	// If our bias directs us to, use the random generator instead
+	// If our bias directs us to or if we have nothing in the value set, use the random generator instead
 	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.GenerateRandomAddressBias {
+	if randomGeneratorDecision < g.config.GenerateRandomAddressBias || len(g.valueSet.Addresses()) == 0 {
 		return g.RandomValueGenerator.GenerateAddress()
 	}
 
-	// Obtain our addresses from our value set. If we have none, generate a random one instead.
+	// Obtain our addresses from our value set.
 	addresses := g.valueSet.Addresses()
-	if len(addresses) == 0 {
-		return g.RandomValueGenerator.GenerateAddress()
-	}
 
 	// Select a random address from our set of addresses.
 	address := addresses[g.randomProvider.Intn(len(addresses))]
@@ -431,7 +428,19 @@ func (g *MutationalValueGenerator) MutateBool(bl bool) bool {
 
 // GenerateBytes generates bytes and returns them.
 func (g *MutationalValueGenerator) GenerateBytes() []byte {
-	return g.mutateBytesInternal(nil, 0)
+	// If our bias directs us to or if we have nothing in the value set, use the random generator instead
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.config.GenerateRandomBytesBias || len(g.valueSet.Bytes()) == 0 {
+		return g.RandomValueGenerator.GenerateBytes()
+	}
+
+	// Obtain our byte arrays/slices from our value set.
+	byteSlices := g.valueSet.Bytes()
+
+	// Select a random byte slice from our set of byte slices.
+	byteSlice := byteSlices[g.randomProvider.Intn(len(byteSlices))]
+
+	return byteSlice
 }
 
 // MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
@@ -457,12 +466,45 @@ func (g *MutationalValueGenerator) MutateFixedBytes(b []byte) []byte {
 
 // GenerateFixedBytes generates a fixed-sized byte array to use when populating inputs.
 func (g *MutationalValueGenerator) GenerateFixedBytes(length int) []byte {
-	return g.mutateBytesInternal(nil, length)
+	// If our bias directs us to or if we have nothing in the value set, use the random generator instead
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.config.GenerateRandomBytesBias || len(g.valueSet.Bytes()) == 0 {
+		return g.RandomValueGenerator.GenerateFixedBytes(length)
+	}
+
+	// Obtain our byte arrays/slices from our value set.
+	byteArrays := g.valueSet.Bytes()
+
+	// Select a random byte array from our set of byte arrays.
+	byteArray := byteArrays[g.randomProvider.Intn(len(byteArrays))]
+
+	// If the array is smaller than the requested length, then pad the array with zeros
+	if len(byteArray) < length {
+		paddedZeros := make([]byte, length-len(byteArray))
+		byteArray = append(byteArray, paddedZeros...)
+	}
+
+	// Similarly, if it's too long, truncate it
+	if len(byteArray) > length {
+		return byteArray[:length]
+	}
+	return byteArray
 }
 
-// GenerateString generates strings and returns them.
+// GenerateString generates a new string and returns it.
 func (g *MutationalValueGenerator) GenerateString() string {
-	return g.mutateStringInternal(nil)
+	// If our bias directs us to or if we have nothing in the value set, use the random generator instead
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.config.GenerateRandomStringBias || len(g.valueSet.Strings()) == 0 {
+		return g.RandomValueGenerator.GenerateString()
+	}
+
+	// Obtain our strings from our value set.
+	strings := g.valueSet.Strings()
+
+	// Select a random string from our set of strings.
+	string := strings[g.randomProvider.Intn(len(strings))]
+	return string
 }
 
 // MutateString takes a string input and returns a mutated value based off the input.
@@ -483,8 +525,18 @@ func (g *MutationalValueGenerator) MutateString(s string) string {
 
 // GenerateInteger generates an integer of the provided properties and returns a big.Int representing it.
 func (g *MutationalValueGenerator) GenerateInteger(signed bool, bitLength int) *big.Int {
-	// Call our internal mutation method with no starting input. This will generate a new input.
-	return g.mutateIntegerInternal(nil, signed, bitLength)
+	// If our bias directs us to or if we have nothing in the value set, use the random generator instead
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision < g.config.GenerateRandomIntegerBias || len(g.valueSet.Integers()) == 0 {
+		return g.RandomValueGenerator.GenerateInteger(signed, bitLength)
+	}
+
+	// Obtain our integers from our value set.
+	integers := g.valueSet.Integers()
+
+	// Select a random integer from our set of integers.
+	integer := integers[g.randomProvider.Intn(len(integers))]
+	return integer
 }
 
 // MutateInteger takes an integer input and applies optional mutations to the provided value.

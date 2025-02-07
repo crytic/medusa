@@ -48,10 +48,16 @@ func NewRandomValueGenerator(config *RandomValueGeneratorConfig, randomProvider 
 
 // GenerateAddress generates a random address to use when populating inputs.
 func (g *RandomValueGenerator) GenerateAddress() common.Address {
-	// Generate random bytes of the address length, then convert it to an address.
-	addressBytes := make([]byte, common.AddressLength)
-	g.randomProvider.Read(addressBytes)
-	return common.BytesToAddress(addressBytes)
+	// Use these predefined addresses for random address generation
+	addresses := []common.Address{
+		common.HexToAddress("0x000000000000000000000000000000000FFFFFFFF"),
+		common.HexToAddress("0x00000000000000000000000000000001FFFFFFFE"),
+		common.HexToAddress("0x00000000000000000000000000000002FFFFFFFD"),
+	}
+
+	// Pick a random address from our predefined set
+	idx := g.randomProvider.Intn(len(addresses))
+	return addresses[idx]
 }
 
 // MutateAddress takes an address input and returns a mutated value based off the input.
@@ -129,30 +135,31 @@ func (g *RandomValueGenerator) MutateString(s string) string {
 
 // GenerateInteger generates a random integer to use when populating inputs.
 func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.Int {
-	// Generate the various choices for an unsigned integer
-	unsignedGenerationChooser := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
-	unsignedGenerationChooser.AddChoices(
+	// There are four different generation methods for unsigned integers.
+	unsignedIntegerGenerationMethods := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
+	unsignedIntegerGenerationMethods.AddChoices(
 		randomutils.NewWeightedRandomChoice(
-			// Generate a random value between [0, 1024) with a 9% chance
+			// Generate a random value between [0, 1023] with a 9% chance
 			func(g *RandomValueGenerator, bitLength int) *big.Int {
 				return new(big.Int).SetInt64(int64(g.randomProvider.Intn(1024)))
 			},
 			new(big.Int).SetUint64(2),
 		),
 		randomutils.NewWeightedRandomChoice(
-			// Generate a random value between [0, 2^n - 5) with a 76% chance
+			// Generate a random value between [0, 2^n - 5] with a 76% chance
 			func(g *RandomValueGenerator, bitLength int) *big.Int {
 				// Create upper bound (2^n - 5)
+				// We calculate 2^n - 4 to account for the fact that we want to include the upper bound in our range
 				upperBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
-				upperBound.Sub(upperBound, big.NewInt(5))
+				upperBound.Sub(upperBound, big.NewInt(4))
 
-				// Generate random number in range [0, upperBound)
+				// Generate random number in range [0, upperBound]
 				return new(big.Int).Rand(g.randomProvider, upperBound)
 			},
 			new(big.Int).SetUint64(16),
 		),
 		randomutils.NewWeightedRandomChoice(
-			// Generate a random value between [2^n-5, 2^n - 1) with a 9% chance
+			// Generate a random value between [2^n-5, 2^n - 1] with a 9% chance
 			func(g *RandomValueGenerator, bitLength int) *big.Int {
 				// Create 2^n first
 				maxValue := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
@@ -163,25 +170,24 @@ func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.
 			new(big.Int).SetUint64(2),
 		),
 		randomutils.NewWeightedRandomChoice(
-			// Generate a random value between [2^(n/2), 2^n) where n = n-5 with a 4% chance
+			// Generate a random value between [2^(n/2), 2^n] where n = n-5 with a 4% chance
 			func(g *RandomValueGenerator, bitLength int) *big.Int {
-				// Subtract 5 from the bit length to get the upper bound exponent
-				bitLength = bitLength - 5
-				if bitLength <= 0 {
-					return new(big.Int).SetUint64(0)
+				// Guard clause if bitLength is too small
+				if bitLength <= 5 {
+					return big.NewInt(0)
 				}
+				bitLength -= 5
 
-				// Create lower and upper bound
-				lowerBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength/2))
-				upperBound := new(big.Int).Lsh(big.NewInt(1), uint(bitLength))
+				// Generate random exponent between [min(20, bitLength), max(20, bitLength)]
+				exp := g.randomProvider.Intn(max(bitLength-20+1, 1)) + 20
 
-				// Calculate range size (2^n - 2^(n/2))
+				// Create bounds: [2^(exp/2), 2^exp]
+				lowerBound := new(big.Int).Lsh(big.NewInt(1), uint(exp/2))
+				upperBound := new(big.Int).Lsh(big.NewInt(1), uint(exp))
+
+				// Generate random number in range [lowerBound, upperBound]
 				rangeSize := new(big.Int).Sub(upperBound, lowerBound)
-
-				// Generate random number in range [0, rangeSize)
-				result := new(big.Int).Rand(g.randomProvider, rangeSize)
-
-				// Add min to shift into desired range [2^(n/2), 2^n)
+				result := new(big.Int).Rand(g.randomProvider, rangeSize.Add(rangeSize, big.NewInt(1)))
 				return result.Add(result, lowerBound)
 
 			},
@@ -189,16 +195,16 @@ func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.
 		),
 	)
 
-	// Generate the various choices for a signed integer
-	signedGenerationChooser := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
-	signedGenerationChooser.AddChoices(
+	// There are two different generation methods for signed integers.
+	signedIntegerGenerationMethods := randomutils.NewWeightedRandomChooserWithRand[func(g *RandomValueGenerator, bitLength int) *big.Int](g.randomProvider, &sync.Mutex{})
+	signedIntegerGenerationMethods.AddChoices(
 		randomutils.NewWeightedRandomChoice(
 			// Generate a random number between [-1023, 1023] with a 10% chance
 			func(g *RandomValueGenerator, bitLength int) *big.Int {
-				// Generate random number in range [0, 2047) (which covers -1023 to 1023)
+				// Generate random number in range [0, 2046] (which covers -1023 to 1023)
 				n := g.randomProvider.Intn(2047)
 
-				// Shift the range from [0, 2048) to [-1023, 1024]
+				// Shift the range from [0, 2046] to [-1023, 1023]
 				return big.NewInt(int64(n - 1023))
 			},
 			new(big.Int).SetUint64(1),
@@ -220,20 +226,15 @@ func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.
 		),
 	)
 
-	// If it is signed, choose a generator for a signed integer and return the result
+	// Select a generation method
+	var generatorFunc *func(g *RandomValueGenerator, bitLength int) *big.Int
 	if signed {
-		generatorFunc, err := signedGenerationChooser.Choose()
-		if err != nil {
-			panic(err)
-		}
-		return (*generatorFunc)(g, bitLength)
+		generatorFunc, _ = signedIntegerGenerationMethods.Choose()
+	} else {
+		generatorFunc, _ = unsignedIntegerGenerationMethods.Choose()
+
 	}
 
-	// Otherwise, choose a generator for an unsigned integer and return the result
-	generatorFunc, err := unsignedGenerationChooser.Choose()
-	if err != nil {
-		panic(err)
-	}
 	return (*generatorFunc)(g, bitLength)
 }
 
