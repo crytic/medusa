@@ -248,7 +248,7 @@ func (fw *FuzzerWorker) updateMethods() {
 			// Any non-constant method should be tracked as a state changing method.
 			if method.IsConstant() {
 				// Only track the pure/view method if testing view methods is enabled
-				if fw.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+				if fw.fuzzer.config.Fuzzing.Testing.TestViewMethods {
 					fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
 				}
 			} else {

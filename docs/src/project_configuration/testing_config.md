@@ -49,6 +49,13 @@ contract MyContract {
   the [`timeout`](./fuzzing_config.md#timeout) is hit, or the user manually stops execution.
 - **Default**: `true`
 
+### `testViewMethods`
+
+- **Type**: Boolean
+- **Description**: Whether `pure` / `view` functions should be called and tested.
+- **Default**: `true`
+-
+
 ### `testAllContracts`
 
 - **Type**: Boolean
@@ -84,12 +91,6 @@ contract MyContract {
 - **Type**: Boolean
 - **Description**: Enable or disable assertion testing
 - **Default**: `true`
-
-### `testViewMethods`
-
-- **Type**: Boolean
-- **Description**: Whether `pure` / `view` functions should be tested for assertion failures.
-- **Default**: `false`
 
 ### `panicCodeConfig`
 
