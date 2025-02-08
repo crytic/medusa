@@ -8,6 +8,7 @@
     "callSequenceLength": 100,
     "corpusDirectory": "",
     "coverageEnabled": true,
+    "coverageFormats": ["html", "lcov"],
     "targetContracts": [],
     "predeployedContracts": {},
     "targetContractsBalances": [],
@@ -57,7 +58,13 @@
         "cheatCodesEnabled": true,
         "enableFFI": false
       },
-      "skipAccountChecks": true
+      "skipAccountChecks": true,
+      "forkConfig": {
+        "forkModeEnabled": false,
+        "rpcUrl": "",
+        "rpcBlock": 1,
+        "poolSize": 20
+      }
     }
   },
   "compilation": {
@@ -68,6 +75,11 @@
       "exportDirectory": "",
       "args": []
     }
+  },
+  "slither": {
+    "useSlither": true,
+    "cachePath": "slither_results.json",
+    "args": []
   },
   "logging": {
     "level": "info",

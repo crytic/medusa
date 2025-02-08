@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/crytic/medusa/chain/state"
+	"golang.org/x/net/context"
+
 	"github.com/crytic/medusa/chain/config"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -13,14 +16,14 @@ import (
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 
-	chainTypes "github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	gethState "github.com/ethereum/go-ethereum/core/state"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
@@ -32,10 +35,10 @@ type TestChain struct {
 	// blocks represents the blocks created on the current chain. If blocks are sent to the chain which skip some
 	// block numbers, any block in that gap will not be committed here and its block hash and other parameters
 	// will be spoofed when requested through the API, for efficiency.
-	blocks []*chainTypes.Block
+	blocks []*types.Block
 
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
-	pendingBlock *chainTypes.Block
+	pendingBlock *types.Block
 
 	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used by cheatcodes to override the EVM
 	// interpreter's behavior. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
@@ -62,13 +65,13 @@ type TestChain struct {
 	// genesisDefinition represents the Genesis information used to generate the chain's initial state.
 	genesisDefinition *core.Genesis
 
-	// state represents the current Ethereum world state.StateDB. It tracks all state across the chain and dummyChain
-	// and is the subject of state changes when executing new transactions. This does not track the current block
-	// head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
-	state *state.StateDB
+	// state represents the current Ethereum world (interface implementing state.StateDB). It tracks all state across
+	// the chain and dummyChain and is the subject of state changes when executing new transactions. This does not
+	// track the current block head or anything of that nature and simply tracks accounts, balances, code, storage, etc.
+	state types.MedusaStateDB
 
 	// stateDatabase refers to the database object which state uses to store data. It is constructed over db.
-	stateDatabase state.Database
+	stateDatabase gethState.Database
 
 	// db represents the in-memory database used by the TestChain and its underlying chain to store state changes.
 	// This is constructed over the kvstore.
@@ -87,12 +90,56 @@ type TestChain struct {
 
 	// Events defines the event system for the TestChain.
 	Events TestChainEvents
+
+	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
+	// fork mode.
+	stateFactory state.MedusaStateFactory
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
 // If a nil config is provided, a default one is used.
-func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestChainConfig) (*TestChain, error) {
+// Additional TestChain objects should be obtained via calling Clone on the original, as this allows cloned chains to
+// benefit from shared RPC caching and certain kinds of state memoization that may be implemented in the future.
+func NewTestChain(
+	fuzzerContext context.Context,
+	genesisAlloc gethTypes.GenesisAlloc,
+	testChainConfig *config.TestChainConfig) (*TestChain, error) {
+
+	// Use a default config if we were not provided one
+	var err error
+	if testChainConfig == nil {
+		testChainConfig, err = config.DefaultTestChainConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
+	var stateFactory state.MedusaStateFactory
+	if testChainConfig.ForkConfig.ForkModeEnabled {
+		provider, err := state.NewRPCBackend(
+			fuzzerContext,
+			testChainConfig.ForkConfig.RpcUrl,
+			testChainConfig.ForkConfig.RpcBlock,
+			testChainConfig.ForkConfig.PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		stateFactory = state.NewForkedStateFactory(provider)
+	} else {
+		stateFactory = state.NewVanillaStateFactory()
+		// stateFactory = state.NewUnbackedStateFactory()
+	}
+
+	return newTestChainWithStateFactory(genesisAlloc, testChainConfig, stateFactory)
+}
+
+// newTestChainWithStateFactory creates a simulated backend, using the provided stateFactory for optionally fetching
+// remote state if RPC mode is configured.
+func newTestChainWithStateFactory(
+	genesisAlloc gethTypes.GenesisAlloc,
+	testChainConfig *config.TestChainConfig,
+	stateFactory state.MedusaStateFactory) (*TestChain, error) {
+
 	// Copy our chain config, so it is not shared across chains.
 	chainConfig, err := utils.CopyChainConfig(params.TestChainConfig)
 	if err != nil {
@@ -127,14 +174,6 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		BaseFee:    big.NewInt(0),
 	}
 
-	// Use a default config if we were not provided one
-	if testChainConfig == nil {
-		testChainConfig, err = config.DefaultTestChainConfig()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// Obtain our VM extensions from our config
 	vmConfigExtensions := testChainConfig.GetVMConfigExtensions()
 
@@ -151,7 +190,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 			return nil, err
 		}
 		for _, cheatContract := range cheatContracts {
-			genesisDefinition.Alloc[cheatContract.address] = types.Account{
+			genesisDefinition.Alloc[cheatContract.address] = gethTypes.Account{
 				Balance: big.NewInt(0),
 				Code:    []byte{0xFF},
 			}
@@ -172,10 +211,9 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	genesisBlock := genesisDefinition.MustCommit(db, trieDB)
 
 	// Convert our genesis block (go-ethereum type) to a test chain block.
-	testChainGenesisBlock := chainTypes.NewBlock(genesisBlock.Header())
-
+	testChainGenesisBlock := types.NewBlock(genesisBlock.Header())
 	// Create our state database over-top our database.
-	stateDatabase := state.NewDatabaseWithConfig(db, dbConfig)
+	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
 
 	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
 	transactionTracerRouter := NewTestChainTracerRouter()
@@ -185,7 +223,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 	chain := &TestChain{
 		genesisDefinition:       genesisDefinition,
 		BlockGasLimit:           genesisBlock.Header().GasLimit,
-		blocks:                  []*chainTypes.Block{testChainGenesisBlock},
+		blocks:                  []*types.Block{testChainGenesisBlock},
 		pendingBlock:            nil,
 		db:                      db,
 		state:                   nil,
@@ -196,6 +234,7 @@ func NewTestChain(genesisAlloc types.GenesisAlloc, testChainConfig *config.TestC
 		testChainConfig:         testChainConfig,
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
+		stateFactory:            stateFactory,
 	}
 
 	// Add our internal tracers to this chain.
@@ -232,7 +271,7 @@ func (t *TestChain) Close() {
 // Returns the new chain, or an error if one occurred.
 func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain, error) {
 	// Create a new chain with the same genesis definition and config
-	targetChain, err := NewTestChain(t.genesisDefinition.Alloc, t.testChainConfig)
+	targetChain, err := newTestChainWithStateFactory(t.genesisDefinition.Alloc, t.testChainConfig, t.stateFactory)
 	if err != nil {
 		return nil, err
 	}
@@ -249,8 +288,9 @@ func (t *TestChain) Clone(onCreateFunc func(chain *TestChain) error) (*TestChain
 	// did originally.
 	for i := 1; i < len(t.blocks); i++ {
 		// First create a new pending block to commit
-		blockHeader := t.blocks[i].Header
-		_, err = targetChain.PendingBlockCreateWithParameters(blockHeader.Number.Uint64(), blockHeader.Time, &blockHeader.GasLimit)
+		block := t.blocks[i]
+		blockHeader := block.Header
+		_, err = targetChain.PendingBlockCreateWithBaseBlockContext(block.BaseContext, &blockHeader.GasLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +340,7 @@ func (t *TestChain) GenesisDefinition() *core.Genesis {
 }
 
 // State returns the current state.StateDB of the chain.
-func (t *TestChain) State() *state.StateDB {
+func (t *TestChain) State() types.MedusaStateDB {
 	return t.state
 }
 
@@ -322,12 +362,12 @@ func (t *TestChain) CheatCodeContracts() map[common.Address]*CheatCodeContract {
 
 // CommittedBlocks returns the real blocks which were committed to the chain, where methods such as BlockFromNumber
 // return the simulated chain state with intermediate blocks injected for block number jumps, etc.
-func (t *TestChain) CommittedBlocks() []*chainTypes.Block {
+func (t *TestChain) CommittedBlocks() []*types.Block {
 	return t.blocks
 }
 
 // Head returns the head of the chain (the latest block).
-func (t *TestChain) Head() *chainTypes.Block {
+func (t *TestChain) Head() *types.Block {
 	return t.blocks[len(t.blocks)-1]
 }
 
@@ -338,7 +378,7 @@ func (t *TestChain) HeadBlockNumber() uint64 {
 
 // BlockFromNumber obtains the block with the provided block number from the current chain. If the block is not found,
 // we return an error with an empty block. Thus, the block must be committed to the chain to be retrieved.
-func (t *TestChain) BlockFromNumber(blockNumber uint64) (*chainTypes.Block, error) {
+func (t *TestChain) BlockFromNumber(blockNumber uint64) (*types.Block, error) {
 	// Check to see if we have the block in our committed blocks.
 	for _, block := range t.blocks {
 		if block.Header.Number.Uint64() == blockNumber {
@@ -367,9 +407,9 @@ func (t *TestChain) BlockHashFromNumber(blockNumber uint64) (common.Hash, error)
 
 // StateFromRoot obtains a state from a given state root hash.
 // Returns the state, or an error if one occurred.
-func (t *TestChain) StateFromRoot(root common.Hash) (*state.StateDB, error) {
+func (t *TestChain) StateFromRoot(root common.Hash) (types.MedusaStateDB, error) {
 	// Load our state from the database
-	stateDB, err := state.New(root, t.stateDatabase, nil)
+	stateDB, err := t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +433,7 @@ func (t *TestChain) StateRootAfterBlockNumber(blockNumber uint64) (common.Hash, 
 // StateAfterBlockNumber obtains the Ethereum world state after processing all transactions in the provided block
 // number. If the block doesn't exist, because it wasn't committed,
 // we return an error. Thus, the block must be committed to the chain.
-func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (*state.StateDB, error) {
+func (t *TestChain) StateAfterBlockNumber(blockNumber uint64) (types.MedusaStateDB, error) {
 	// Obtain our block's post-execution state root hash
 	root, err := t.StateRootAfterBlockNumber(blockNumber)
 	if err != nil {
@@ -456,7 +496,7 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
-func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
+func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state
@@ -505,11 +545,11 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 	state.RevertToSnapshot(snapshot)
 
 	// Gather receipt for OnTxEnd
-	receipt := &types.Receipt{Type: tx.Type()}
+	receipt := &gethTypes.Receipt{Type: tx.Type()}
 	if msgResult.Failed() {
-		receipt.Status = types.ReceiptStatusFailed
+		receipt.Status = gethTypes.ReceiptStatusFailed
 	} else {
-		receipt.Status = types.ReceiptStatusSuccessful
+		receipt.Status = gethTypes.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = msgResult.UsedGas
@@ -525,25 +565,24 @@ func (t *TestChain) CallContract(msg *core.Message, state *state.StateDB, additi
 
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
 // This may be nil if no pending block was created.
-func (t *TestChain) PendingBlock() *chainTypes.Block {
+func (t *TestChain) PendingBlock() *types.Block {
 	return t.pendingBlock
 }
 
 // PendingBlockCreate constructs an empty block which is pending addition to the chain. The block produces by this
 // method will have a block number and timestamp that is greater by the current chain head by 1.
 // Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockCreate() (*chainTypes.Block, error) {
+func (t *TestChain) PendingBlockCreate() (*types.Block, error) {
 	// Create a block with default parameters
 	blockNumber := t.HeadBlockNumber() + 1
 	timestamp := t.Head().Header.Time + 1
 	return t.PendingBlockCreateWithParameters(blockNumber, timestamp, nil)
 }
 
-// PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block
-// properties provided. Note that there are no constraints on the next block number or timestamp. Because of cheatcode
-// usage, the next block can go back in time.
-// Returns the constructed block, or an error if one occurred.
-func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*chainTypes.Block, error) {
+// PendingBlockCreateWithBaseBlockContext constructs an empty block which is pending addition to the chain, using the
+// provided base block context. The base block context holds information such as the block number, timestamp, and base fee
+// that should be used to initialize the block.
+func (t *TestChain) PendingBlockCreateWithBaseBlockContext(baseBlockContext *types.BaseBlockContext, blockGasLimit *uint64) (*types.Block, error) {
 	// If we already have a pending block, return an error.
 	if t.pendingBlock != nil {
 		return nil, fmt.Errorf("could not create a new pending block for chain, as a block is already pending")
@@ -554,41 +593,43 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 		blockGasLimit = &t.BlockGasLimit
 	}
 
-	// Obtain our parent block hash to reference in our new block.
-	parentBlockHash := t.Head().Hash
-
 	// Note we do not perform any block number or timestamp validation since cheatcodes can permanently update the
 	// block number or timestamp which could violate the invariants of a blockchain (e.g. block.number is strictly
 	// increasing)
 
+	// Obtain our parent block hash to reference in our new block.
+	parentBlockHash := t.Head().Hash
+
 	// Create a block header for this block:
 	// - State root hash reflects the state after applying block updates (no transactions, so unchanged from last block)
+	// - Other hashes will populate as we apply transactions
 	// - Bloom is aggregated for each transaction in the block (for now empty).
-	// - TODO: Difficulty should be revisited/checked.
 	// - GasUsed is aggregated for each transaction in the block (for now zero).
-	// - Mix digest is only useful for randomness, so we just fake randomness by using the previous block hash.
-	// - TODO: BaseFee should be revisited/checked.
-	header := &types.Header{
+	// - We don't care too much about difficulty and mix digest so setting them to random things
+	header := &gethTypes.Header{
 		ParentHash:  parentBlockHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    t.Head().Header.Coinbase,
+		UncleHash:   gethTypes.EmptyUncleHash,
 		Root:        t.Head().Header.Root,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
-		Bloom:       types.Bloom{},
-		Difficulty:  common.Big0,
-		Number:      big.NewInt(int64(blockNumber)),
+		TxHash:      gethTypes.EmptyRootHash,
+		ReceiptHash: gethTypes.EmptyRootHash,
+		Bloom:       gethTypes.Bloom{},
 		GasLimit:    *blockGasLimit,
 		GasUsed:     0,
-		Time:        blockTime,
 		Extra:       []byte{},
+		Nonce:       gethTypes.BlockNonce{},
+		Coinbase:    baseBlockContext.Coinbase,
+		Difficulty:  common.Big0,
+		Number:      new(big.Int).Set(baseBlockContext.Number),
+		Time:        baseBlockContext.Time,
 		MixDigest:   parentBlockHash,
-		Nonce:       types.BlockNonce{},
-		BaseFee:     new(big.Int).Set(t.Head().Header.BaseFee),
+		BaseFee:     new(big.Int).Set(baseBlockContext.BaseFee),
 	}
 
-	// Create a new block for our test node
-	t.pendingBlock = chainTypes.NewBlock(header)
+	// Create a new block for our test chain
+	t.pendingBlock = types.NewBlock(header)
+
+	// Set the block hash
+	// Note that this block hash may change if cheatcodes that update the block header are used (e.g. warp)
 	t.pendingBlock.Hash = t.pendingBlock.Header.Hash()
 
 	// Emit our event for the pending block being created
@@ -602,6 +643,21 @@ func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTi
 
 	// Return our created block.
 	return t.pendingBlock, nil
+}
+
+// PendingBlockCreateWithParameters constructs an empty block which is pending addition to the chain, using the block number
+// and timestamp provided. Returns the constructed block, or an error if one occurred.
+func (t *TestChain) PendingBlockCreateWithParameters(blockNumber uint64, blockTime uint64, blockGasLimit *uint64) (*types.Block, error) {
+	// We will create a base block context with the provided parameters in addition to using the current head block.
+	// All values that are not the block number and timestamp are taken from the current head block.
+	baseBlockContext := types.NewBaseBlockContext(
+		blockNumber,
+		blockTime,
+		t.Head().Header.BaseFee,
+		t.Head().Header.Coinbase,
+	)
+
+	return t.PendingBlockCreateWithBaseBlockContext(baseBlockContext, blockGasLimit)
 }
 
 // PendingBlockAddTx takes a message (internal txs) and adds it to the current pending block, updating the header
@@ -660,7 +716,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	}
 
 	// Create our message result
-	messageResult := &chainTypes.MessageResults{
+	messageResult := &types.MessageResults{
 		PostStateRoot:     common.BytesToHash(receipt.PostState),
 		ExecutionResult:   executionResult,
 		Receipt:           receipt,
@@ -715,7 +771,7 @@ func (t *TestChain) PendingBlockCommit() error {
 
 	// Committing the state invalidates the cached tries and we need to reload the state.
 	// Otherwise, methods such as FillFromTestChainProperties will not work correctly.
-	t.state, err = state.New(root, t.stateDatabase, nil)
+	t.state, err = t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
 		return err
 	}
@@ -788,7 +844,7 @@ func (t *TestChain) PendingBlockDiscard() error {
 
 // emitContractChangeEvents emits events for contract deployments being added or removed by playing through a list
 // of provided message results. If reverting, the inverse events are emitted.
-func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*chainTypes.MessageResults) error {
+func (t *TestChain) emitContractChangeEvents(reverting bool, messageResults ...*types.MessageResults) error {
 	// If we're not reverting, we simply play events for our contract deployment changes in order. If we are, inverse
 	// all the events.
 	var err error

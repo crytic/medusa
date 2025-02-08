@@ -172,26 +172,34 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Difficulty: Updates difficulty
-	// TODO: Make changes to difficulty permanent and make it revert for post-Paris EVM versions
+	// Difficulty: Updates difficulty. Since we do not allow users to choose the fork that
+	// they are using (for now), and we are using a post-Paris fork, the difficulty cheatcode is a no-op.
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			spoofedDifficulty := inputs[0].(*big.Int)
-			spoofedDifficultyHash := common.BigToHash(spoofedDifficulty)
+			return nil, nil
+		},
+	)
+
+	// Prevrandao: Updates random.
+	contract.addMethod(
+		"prevrandao", abi.Arguments{{Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Store our original random
 			originalRandom := tracer.chain.pendingBlockContext.Random
 
-			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
-			tracer.chain.pendingBlockContext.Random = &spoofedDifficultyHash
+			// Update the pending block context random
+			newRandom := inputs[0].([32]byte)
+			newRandomHash := common.BytesToHash(newRandom[:])
+			tracer.chain.pendingBlockContext.Random = &newRandomHash
+
+			// Restore the original random when top frame exits
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
 				tracer.chain.pendingBlockContext.Random = originalRandom
 			})
 			return nil, nil
 		},
 	)
-
-	// TODO: Add prevrandao cheatcode
 
 	// Coinbase: Updates the block coinbase. Note that this _permanently_ updates the coinbase for the remainder of the
 	// chain's lifecycle

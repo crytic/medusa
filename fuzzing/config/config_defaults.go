@@ -69,13 +69,13 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
+				TestViewMethods:              true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{
-					Enabled:         true,
-					TestViewMethods: false,
+					Enabled: true,
 					PanicCodeConfig: PanicCodeConfig{
 						FailOnAssertion: true,
 					},

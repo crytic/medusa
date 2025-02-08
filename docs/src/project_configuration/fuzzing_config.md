@@ -33,6 +33,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   is provided, no test limit will be enforced.
 - **Default**: 0 calls
 
+### `shrinkLimit`
+
+- **Type**: Integer
+- **Description**: The number of iterations that shrinking will run for before returning the shrunken call sequence.
+- **Default**: 5000 iterations
+-
+
 ### `callSequenceLength`
 
 - **Type**: Integer
@@ -52,7 +59,8 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: String
 - **Description**: The file path where the corpus should be saved. The corpus collects sequences during a fuzzing campaign
   that help drive fuzzer features (e.g. a call sequence that increases code coverage is stored in the corpus). These sequences
-  can then be re-used/mutated by the fuzzer during the next fuzzing campaign.
+  can then be re-used/mutated by the fuzzer during the next fuzzing campaign. Note that if the `corpusDirectory` is
+  left as an empty string (which it is by default), no corpus will be loaded from disk and stored to disk.
 - **Default**: ""
 
 ### `coverageFormats`

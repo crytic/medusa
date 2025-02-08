@@ -139,6 +139,9 @@ type TestingConfig struct {
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
 
+	// TestViewMethods dictates whether constant/pure/view methods should be called and tested.
+	TestViewMethods bool `json:"testViewMethods"`
+
 	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
 	// even if this option is not enabled.
@@ -200,9 +203,6 @@ func (testCfg *TestingConfig) Validate() error {
 type AssertionTestingConfig struct {
 	// Enabled describes whether testing is enabled.
 	Enabled bool `json:"enabled"`
-
-	// TestViewMethods dictates whether constant/pure/view methods should be tested.
-	TestViewMethods bool `json:"testViewMethods"`
 
 	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
 	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`

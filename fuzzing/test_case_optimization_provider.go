@@ -12,6 +12,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// MIN_INT is the minimum value for an int256 in hexadecimal
 const MIN_INT = "-8000000000000000000000000000000000000000000000000000000000000000"
 
 // OptimizationTestCaseProvider is a provider for on-chain optimization tests.
@@ -101,9 +102,9 @@ func (t *OptimizationTestCaseProvider) runOptimizationTest(worker *FuzzerWorker,
 		return nil, nil, fmt.Errorf("failed to call optimization test method: %v", err)
 	}
 
-	// If the execution reverted, then we know that we do not have any valuable return data, so we return the smallest
-	// integer value
-	if executionResult.Failed() {
+	// If the execution reverted or we have an empty return data, we know that we did not retrieve anything valuable
+	// so we maintain the minimum value
+	if executionResult.Failed() || len(executionResult.Return()) == 0 {
 		minInt256, _ := new(big.Int).SetString(MIN_INT, 16)
 		return minInt256, nil, nil
 	}
@@ -167,18 +168,10 @@ func (t *OptimizationTestCaseProvider) onFuzzerStarting(event FuzzerStartingEven
 }
 
 // onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
-// have been destroyed. It clears state tracked for each FuzzerWorker and sets test cases in "running" states to
-// "passed".
+// have been destroyed. It clears state tracked for each FuzzerWorker.
 func (t *OptimizationTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
 	// Clear our optimization test methods
 	t.workerStates = nil
-
-	// Loop through each test case and set any tests with a running status to a passed status.
-	for _, testCase := range t.testCases {
-		if testCase.status == TestCaseStatusRunning {
-			testCase.status = TestCaseStatusPassed
-		}
-	}
 	return nil
 }
 
@@ -328,6 +321,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
+				TestName:             testCase.Name(),
 				CallSequenceToShrink: callSequence,
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 					// First verify the contract to the optimization test is still deployed to call upon.

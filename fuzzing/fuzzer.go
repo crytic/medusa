@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/coverage"
-	"github.com/crytic/medusa/fuzzing/reverts"
 	"math/big"
 	"math/rand"
 	"os"
@@ -16,6 +14,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/fuzzing/reverts"
 
 	"github.com/ethereum/go-ethereum/crypto"
 
@@ -354,7 +355,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
-					f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods)
+					f.config.Fuzzing.Testing.TestViewMethods)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
@@ -430,7 +431,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
-	testChain, err := chain.NewTestChain(genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
@@ -840,7 +841,7 @@ func (f *Fuzzer) Start() error {
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
 		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
-		if !f.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+		if !f.config.Fuzzing.Testing.TestViewMethods {
 			err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz and testing view methods is disabled")
 		}
 		f.logger.Error("Failed to start fuzzer", err)
@@ -949,7 +950,7 @@ func (f *Fuzzer) Terminate() {
 		f.emergencyCtxCancelFunc()
 	}
 
-	// Also cancel the main context just to be safe
+	// Cancel the main context as well
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
 	}

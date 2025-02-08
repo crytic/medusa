@@ -8,11 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crytic/medusa/fuzzing/executiontracer"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -137,7 +136,6 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
-				config.Fuzzing.Testing.AssertionTesting.TestViewMethods = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Slither.UseSlither = false
@@ -280,6 +278,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/prevrandao.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
@@ -750,15 +749,13 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 
 // TestValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
 func TestValueGenerationSolving(t *testing.T) {
-	// TODO: match_ints_xy is slower than match_uints_xy in the value generator because AST doesn't retain negative
-	//  numbers, improve our logic to solve it faster, then re-enable this.
 	filePaths := []string{
 		"testdata/contracts/value_generation/match_addr_contract.sol",
 		"testdata/contracts/value_generation/match_addr_exact.sol",
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
 		"testdata/contracts/value_generation/match_structs_xy.sol",
-		//"testdata/contracts/value_generation/match_ints_xy.sol",
+		"testdata/contracts/value_generation/match_ints_xy.sol",
 		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
@@ -769,7 +766,7 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-				config.Slither.UseSlither = false
+				config.Slither.UseSlither = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -990,7 +987,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"InheritedFirstContract", "InheritedSecondContract"}
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+			config.Slither.UseSlither = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
