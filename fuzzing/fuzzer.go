@@ -592,12 +592,9 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 		MutateArrayStructureProbability: 0.1,
 		MutateBoolProbability:           1.0,
 		MutateBytesProbability:          0.1,
-		MutateBytesGenerateNewBias:      0.45,
 		MutateFixedBytesProbability:     0.1,
 		MutateStringProbability:         0.1,
-		MutateStringGenerateNewBias:     0.7,
 		MutateIntegerProbability:        0.1,
-		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
 			GenerateRandomArrayMinSize:  1,
 			GenerateRandomArrayMaxSize:  32,

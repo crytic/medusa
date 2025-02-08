@@ -7,6 +7,7 @@ import (
 
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -76,7 +77,7 @@ func (g *RandomValueGenerator) GenerateArrayOfLength() int {
 // MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
 // Returns the mutated value. If any element of the returned array is nil, the value generator will be called upon
 // to generate it new.
-func (g *RandomValueGenerator) MutateArray(value []any, fixedLength bool) []any {
+func (g *RandomValueGenerator) MutateArray(value []any, fixedLength bool, abiType *abi.Type) []any {
 	// This value generator does not apply mutations.
 	return value
 }

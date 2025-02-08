@@ -3,12 +3,13 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/utils/reflectionutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -211,41 +212,31 @@ func MutateAbiValue(generator ValueGenerator, mutator ValueMutator, inputType *a
 		// Note: We create a copy, as existing arrays may not be assignable.
 		array := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
 
-		// Mutate our array structure first
-		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(array), true)
+		// Mutate our array structure
+		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(array), true, inputType.Elem)
+
+		// TODO: Make sure that we do not need to create a new copy of the array with some unit tests.
 
 		// Create a new array of the appropriate size
-		array = reflect.New(reflect.ArrayOf(array.Len(), array.Type().Elem())).Elem()
+		/*array = reflect.New(reflect.ArrayOf(array.Len(), array.Type().Elem())).Elem()
 
-		// Next mutate each element in the array.
+		// Next set each element in the new array.
 		for i := 0; i < array.Len(); i++ {
-			// Obtain the element's reflected value to access its getter/setters
-			reflectedElement := array.Index(i)
+			array.Index(i).Set(reflect.ValueOf(mutatedValues[i]))
+		}*/
 
-			// If any item is nil, we generate a new element in its place instead. Otherwise, we mutate the existing value.
-			if mutatedValues[i] == nil {
-				generatedElement := GenerateAbiValue(generator, inputType.Elem)
-				reflectedElement.Set(reflect.ValueOf(generatedElement))
-			} else {
-				mutatedElement, err := MutateAbiValue(generator, mutator, inputType.Elem, mutatedValues[i])
-				if err != nil {
-					return nil, fmt.Errorf("could not mutate array input as the value generator encountered an error: %v", err)
-				}
-				reflectedElement.Set(reflect.ValueOf(mutatedElement))
-			}
-		}
-
-		return array.Interface(), nil
+		return mutatedValues, nil
 	case abi.SliceTy:
 		// Dynamic sized arrays are represented as slices.
 		// Note: We create a copy, as existing slices may not be assignable.
 		slice := reflectionutils.CopyReflectedType(reflect.ValueOf(value))
 
 		// Mutate our slice structure first
-		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(slice), false)
+		mutatedValues := mutator.MutateArray(reflectionutils.GetReflectedArrayValues(slice), false, inputType.Elem)
 
+		// TODO: Same TODO as for arrays above.
 		// Create a new slice of the appropriate size
-		slice = reflect.MakeSlice(reflect.SliceOf(slice.Type().Elem()), len(mutatedValues), len(mutatedValues))
+		/*slice = reflect.MakeSlice(reflect.SliceOf(slice.Type().Elem()), len(mutatedValues), len(mutatedValues))
 
 		// Next mutate each element in the slice.
 		for i := 0; i < slice.Len(); i++ {
@@ -263,8 +254,8 @@ func MutateAbiValue(generator ValueGenerator, mutator ValueMutator, inputType *a
 				}
 				reflectedElement.Set(reflect.ValueOf(mutatedElement))
 			}
-		}
-		return slice.Interface(), nil
+		}*/
+		return mutatedValues, nil
 	case abi.TupleTy:
 		// Structs are used to represent tuples.
 		// Note: We create a copy, as existing tuples may not be assignable.

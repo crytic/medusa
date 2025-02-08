@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"math/rand"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -50,10 +51,9 @@ func (g *ShrinkingValueMutator) MutateAddress(addr common.Address) common.Addres
 }
 
 // MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
-// Returns the mutated value. If any element of the returned array is nil, the value generator will be called upon
-// to generate it new.
+// The ABI type of the array is also provided in case new values need to be generated. Returns the mutated value.
 // This type is not mutated by the ShrinkingValueMutator.
-func (g *ShrinkingValueMutator) MutateArray(value []any, fixedLength bool) []any {
+func (g *ShrinkingValueMutator) MutateArray(value []any, fixedLength bool, abiType *abi.Type) []any {
 	return value
 }
 
@@ -106,14 +106,18 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 // MutateInteger takes an integer input and applies optional mutations to the provided value.
 // Returns an optionally mutated copy of the input.
 func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
-	// Simply generate a new integer between [0, i) so that we are always approaching zero
-	// for unsigned integers.
-	if !signed {
+	// If the integer is zero, we can simply return it as-is.
+	if i.Sign() == 0 {
+		return i
+	}
+
+	// For unsigned integers or positive signed integers, generate a new integer between [0, i)
+	if !signed || i.Sign() > 0 {
 		return big.NewInt(0).Rand(g.randomProvider, i)
 	}
 
-	// For signed integers, we will generate an integer between [1, abs(i)]
-	// and then add it to i.
+	// For negative numbers, generate between (i, 0]
+	// First get absolute value and generate random number between [0, abs(i))
 	offset := big.NewInt(0).Rand(g.randomProvider, big.NewInt(0).Abs(i))
 	offset.Add(offset, big.NewInt(1))
 

@@ -3,10 +3,12 @@ package valuegeneration
 import (
 	"math/big"
 	"math/rand"
+	"sync"
 
 	"github.com/crytic/medusa/utils"
+	"github.com/crytic/medusa/utils/randomutils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 )
 
 // MutationalValueGenerator represents a ValueGenerator and ValueMutator for function inputs and call arguments. It
@@ -60,24 +62,15 @@ type MutationalValueGeneratorConfig struct {
 	// MutateBytesProbability defines the probability in which an existing dynamic-sized byte array value will be
 	// mutated by the value generator. Value range is [0.0, 1.0].
 	MutateBytesProbability float32
-	// MutateBytesGenerateNewBias defines the probability that when an existing dynamic-sized byte array will be
-	// mutated, it is done so by being replaced with a newly generated one instead. Value range is [0.0, 1.0].
-	MutateBytesGenerateNewBias float32
 	// MutateFixedBytesProbability defines the probability in which an existing fixed-sized byte array value will be
 	// mutated by the value generator. Value range is [0.0, 1.0].
 	MutateFixedBytesProbability float32
 	// MutateStringProbability defines the probability in which an existing string value will be mutated by
 	// the value generator. Value range is [0.0, 1.0].
 	MutateStringProbability float32
-	// MutateStringGenerateNewBias defines the probability that when an existing string will be mutated,
-	// it is done so by being replaced with a newly generated one instead. Value range is [0.0, 1.0].
-	MutateStringGenerateNewBias float32
 	// MutateIntegerProbability defines the probability in which an existing integer value will be mutated by
 	// the value generator. Value range is [0.0, 1.0].
 	MutateIntegerProbability float32
-	// MutateIntegerGenerateNewBias defines the probability that when an existing integer will be mutated,
-	// it is done so by being replaced with a newly generated one instead. Value range is [0.0, 1.0].
-	MutateIntegerGenerateNewBias float32
 
 	// RandomValueGeneratorConfig is adhered to in this structure, to power the underlying RandomValueGenerator.
 	*RandomValueGeneratorConfig
@@ -101,280 +94,101 @@ func NewMutationalValueGenerator(config *MutationalValueGeneratorConfig, valueSe
 	return generator
 }
 
-// getMutationParams takes a length of inputs and returns an initial input index to start with as a base value, as well
-// as a random number of mutations which should be performed (within the mutation range specified by the
-// MutationalValueGeneratorConfig).
-func (g *MutationalValueGenerator) getMutationParams(inputsLen int) (int, int) {
-	inputIdx := g.randomProvider.Intn(inputsLen)
-	mutationCount := g.randomProvider.Intn(((g.config.MaxMutationRounds - g.config.MinMutationRounds) + 1) + g.config.MinMutationRounds)
-	return inputIdx, mutationCount
-}
-
-// integerMutationMethods define methods which take a big integer and a set of inputs and
-// transform the integer with a random input and operation. This is used in a loop to create
-// mutated integer values.
-var integerMutationMethods = []func(*MutationalValueGenerator, *big.Int, ...*big.Int) *big.Int{
-	func(g *MutationalValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Add a random input
-		return big.NewInt(0).Add(x, inputs[g.randomProvider.Intn(len(inputs))])
-	},
-	func(g *MutationalValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Subtract a random input
-		return big.NewInt(0).Sub(x, inputs[g.randomProvider.Intn(len(inputs))])
-	},
-	func(g *MutationalValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Multiply a random input
-		return big.NewInt(0).Mul(x, inputs[g.randomProvider.Intn(len(inputs))])
-	},
-	func(g *MutationalValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Divide a random input
-		divisor := inputs[g.randomProvider.Intn(len(inputs))]
-		if divisor.Cmp(big.NewInt(0)) == 0 {
-			return big.NewInt(1) // leave unchanged if divisor was zero (would've caused panic)
-		}
-		return big.NewInt(0).Div(x, divisor)
-	},
-	func(g *MutationalValueGenerator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// Modulo divide a random input
-		divisor := inputs[g.randomProvider.Intn(len(inputs))]
-		if divisor.Cmp(big.NewInt(0)) == 0 {
-			return big.NewInt(0).Set(x) // leave unchanged if divisor was zero (would've caused panic)
-		}
-		return big.NewInt(0).Mod(x, divisor)
-	},
-}
-
-// mutateIntegerInternal takes an integer input and returns either a random new integer, or a mutated value based off the input.
-// If a nil input is provided, this method uses an existing base value set value as the starting point for mutation.
+// mutateIntegerInternal mutates an integer with a given sign and bit length.
 func (g *MutationalValueGenerator) mutateIntegerInternal(i *big.Int, signed bool, bitLength int) *big.Int {
-	// If our bias directs us to, use the random generator instead
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.GenerateRandomIntegerBias {
-		return g.RandomValueGenerator.GenerateInteger(signed, bitLength)
+	// If the integer is nil or it's zero, return zero
+	if i == nil || i.Sign() == 0 {
+		return big.NewInt(0)
 	}
 
-	// Calculate our integer bounds
+	// Get the minimum and maximum values for this integer type
 	min, max := utils.GetIntegerConstraints(signed, bitLength)
 
-	// Obtain our inputs. We also add our min/max values for this range to the list of inputs.
-	// Note: We exclude min being added if we're requesting an unsigned integer, as zero is already
-	// in our set, and we don't want duplicates.
-	var inputs []*big.Int
-	inputs = append(inputs, g.valueSet.Integers()...)
-	if signed {
-		inputs = append(inputs, min, max)
+	// Pick a random value between `[0, abs(i)]`
+	delta := big.NewInt(0).Rand(g.randomProvider, big.NewInt(0).Abs(i))
+
+	// Decide whether we are going to add or subtract this delta
+	if g.randomProvider.Float32() <= 0.5 {
+		// We will add the delta
+		i.Add(i, delta)
 	} else {
-		inputs = append(inputs, max)
+		// We will subtract the delta
+		i.Sub(i, delta)
 	}
 
-	// Determine which value we'll use as an initial input, and how many mutations we will perform.
-	inputIdx, mutationCount := g.getMutationParams(len(inputs))
-	input := new(big.Int)
-	if i != nil {
-		input.Set(i)
-	} else {
-		input.Set(inputs[inputIdx])
-	}
-	input = utils.ConstrainIntegerToBounds(input, min, max)
-
-	// Perform the appropriate number of mutations.
-	for i := 0; i < mutationCount; i++ {
-		// Mutate input
-		input = integerMutationMethods[g.randomProvider.Intn(len(integerMutationMethods))](g, input, inputs...)
-
-		// Correct value boundaries (underflow/overflow)
-		input = utils.ConstrainIntegerToBounds(input, min, max)
-	}
-	return input
+	// Bound the integer to its constraints and return it
+	return utils.ConstrainIntegerToBounds(i, min, max)
 }
 
-// bytesMutationMethods define methods which take an initial bytes and a set of inputs to transform the input. The
-// transformed input is returned. This is used in a loop to mutate byte slices.
-var bytesMutationMethods = []func(*MutationalValueGenerator, []byte, ...[]byte) []byte{
-	// Replace a random index with a random byte
-	func(g *MutationalValueGenerator, b []byte, inputs ...[]byte) []byte {
-		// Generate a random byte and replace an existing byte in our array with it. If our array has no bytes, we add
-		// it.
-		randomByteValue := byte(g.randomProvider.Intn(256))
-		if len(b) > 0 {
-			b[g.randomProvider.Intn(len(b))] = randomByteValue
-		} else {
-			b = append(b, randomByteValue)
-		}
-		return b
-	},
-	// Flip a random bit in it.
-	func(g *MutationalValueGenerator, b []byte, inputs ...[]byte) []byte {
-		// If we have bytes in our array, flip a random bit in a random byte. Otherwise, we add a random byte.
-		if len(b) > 0 {
-			i := g.randomProvider.Intn(len(b))
-			b[i] = b[i] ^ (1 << (g.randomProvider.Intn(8)))
-		} else {
-			b = append(b, byte(g.randomProvider.Intn(256)))
-		}
-		return b
-	},
-	// Add a random byte at a random position
-	func(g *MutationalValueGenerator, b []byte, inputs ...[]byte) []byte {
-		// Generate a random byte to insert
-		by := byte(g.randomProvider.Intn(256))
+// mutateListLikeObject mutates a list-like object (e.g. byte array, string, etc). The function will utilize one
+// of four different mutation methods to mutate the list-like input. Returns the mutated list.
+func mutateListLikeObject[T any](g *MutationalValueGenerator, list []T) []T {
+	// There are four different mutation methods for list-like objects.
+	listMutationMethods := randomutils.NewWeightedRandomChooserWithRand[func(g *MutationalValueGenerator, list []T) []T](g.randomProvider, &sync.Mutex{})
+	listMutationMethods.AddChoices(
+		randomutils.NewWeightedRandomChoice(
+			// No-op: Return the original list as-is with a 1/31 chance
+			func(g *MutationalValueGenerator, list []T) []T {
+				return list
+			},
 
-		// If our provided byte array has no bytes, simply return a new array with this byte.
-		if len(b) == 0 {
-			return []byte{by}
-		}
+			new(big.Int).SetUint64(1),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Delete: Remove a random element from the list with a 10/31 chance
+			func(g *MutationalValueGenerator, list []T) []T {
+				idx := g.randomProvider.Intn(len(list))
+				return append(list[:idx], list[idx+1:]...)
+			},
+			new(big.Int).SetUint64(10),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Expand: Expand the list by expanding a random element from the random list
+			// a random number of times with a 10/31 chance
+			func(g *MutationalValueGenerator, list []T) []T {
+				// We also do not want to expand lists if they are already greater than 32 elements
+				if len(list) >= 32 {
+					return list
+				}
+				// Generate a random index to replicate
+				idx := g.randomProvider.Intn(len(list))
+				// Generate a random number of times to replicate the element
+				num := g.randomProvider.Intn(min(32, len(list))) + 1
 
-		// Determine the index to insert our byte into and insert it accordingly. We add +1 here as we allow appending
-		// to the end here.
-		i := g.randomProvider.Intn(len(b) + 1)
-		if i >= len(b) {
-			return append(b, by)
-		} else {
-			return append(b[:i], append([]byte{by}, b[i:]...)...)
-		}
-	},
-	// Remove a random byte
-	func(g *MutationalValueGenerator, b []byte, inputs ...[]byte) []byte {
-		// If we have no bytes to remove, do nothing.
-		if len(b) == 0 {
-			return b
-		}
+				// Create a new list to store the replicated elements
+				expandedList := make([]T, 0)
+				// Append the elements before the index
+				expandedList = append(expandedList, list[:idx]...)
 
-		i := g.randomProvider.Intn(len(b))
-		return append(b[:i], b[i+1:]...)
-	},
-}
+				// Append the element of choice num time
+				for i := 0; i < num; i++ {
+					expandedList = append(expandedList, list[idx])
+				}
 
-// mutateBytesInternal takes a byte array and a length. This function returns either a fixed length byte array (based on
-// the provided length) or a byte slice. The returned byte array/slice is either randomly generated or mutated using
-// the provided input.
-// If a nil input is provided, this method uses an existing base value set value as the starting point for mutation.
-func (g *MutationalValueGenerator) mutateBytesInternal(b []byte, length int) []byte {
-	// If we have no inputs or our bias directs us to, use the random generator instead
-	inputs := g.valueSet.Bytes()
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if len(inputs) == 0 || randomGeneratorDecision < g.config.GenerateRandomBytesBias {
-		// If the length is non-zero, generate a fixed byte array
-		if length > 0 {
-			return g.RandomValueGenerator.GenerateFixedBytes(length)
-		}
-		// Otherwise, generate a random byte slice
-		return g.RandomValueGenerator.GenerateBytes()
-	}
+				// Append the elements after the index
+				expandedList = append(expandedList, list[idx+1:]...)
+				return expandedList
+			},
+			new(big.Int).SetUint64(10),
+		),
+		randomutils.NewWeightedRandomChoice(
+			// Swap: Swap two random elements in the list with a 10/31 chance
+			func(g *MutationalValueGenerator, list []T) []T {
+				idx1 := g.randomProvider.Intn(len(list))
+				idx2 := g.randomProvider.Intn(len(list))
+				list[idx1], list[idx2] = list[idx2], list[idx1]
+				return list
+			},
+			new(big.Int).SetUint64(10),
+		),
+	)
 
-	// Determine which value we'll use as an initial input, and how many mutations we will perform.
-	inputIdx, mutationCount := g.getMutationParams(len(inputs))
-	var input []byte
-	if b != nil {
-		input = slices.Clone(b)
-	} else {
-		input = slices.Clone(inputs[inputIdx])
-	}
+	// Choose a random mutation method
+	// We shouldn't have any errors here so ignore the error
+	mutationMethod, _ := listMutationMethods.Choose()
 
-	// Mutate the data for our desired number of rounds
-	for i := 0; i < mutationCount; i++ {
-		input = bytesMutationMethods[g.randomProvider.Intn(len(bytesMutationMethods))](g, input, inputs...)
-	}
-
-	// If we want a fixed-byte array and the mutated input is smaller than the requested length, pad the array
-	// with zeros
-	if length > 0 && len(input) < length {
-		paddedZeros := make([]byte, length-len(input))
-		input = append(input, paddedZeros...)
-	}
-
-	// Similarly, if we want a fixed-byte array and the mutated input is larger than the requested length, then truncate
-	// the array
-	if length > 0 && len(input) > length {
-		return input[:length]
-	}
-
-	return input
-}
-
-// stringMutationMethods define methods which take an initial string and a set of inputs to transform the input. The
-// transformed input is returned. This is used in a loop to mutate strings.
-var stringMutationMethods = []func(*MutationalValueGenerator, string, ...string) string{
-	// Replace a random index with a random character
-	func(g *MutationalValueGenerator, s string, inputs ...string) string {
-		// Generate a random rune
-		randomRune := rune(32 + g.randomProvider.Intn(95))
-
-		// If the string is empty, we can simply return a new string with just the rune in it.
-		r := []rune(s)
-		if len(r) == 0 {
-			return string(randomRune)
-		}
-
-		// Otherwise, we replace a rune in it and return it.
-		r[g.randomProvider.Intn(len(r))] = randomRune
-		return string(r)
-	},
-	// Flip a random bit
-	func(g *MutationalValueGenerator, s string, inputs ...string) string {
-		// If the string is empty, simply return a new one with a randomly added character.
-		r := []rune(s)
-		if len(r) == 0 {
-			return string(rune(32 + g.randomProvider.Int()%95))
-		}
-
-		// Otherwise, flip a random bit in it and return it.
-		i := g.randomProvider.Intn(len(r))
-		r[i] = r[i] ^ (1 << (g.randomProvider.Int() % 8))
-		return string(r)
-	},
-	// Insert a random character at a random position
-	func(g *MutationalValueGenerator, s string, inputs ...string) string {
-		// Create a random character.
-		c := string(rune(32 + g.randomProvider.Intn(95)))
-
-		// If we have an empty string, simply return it
-		if len(s) == 0 {
-			return c
-		}
-
-		// Otherwise we insert it into a random position in the string.
-		i := g.randomProvider.Intn(len(s))
-		return s[:i] + c + s[i+1:]
-	},
-	// Remove a random character
-	func(g *MutationalValueGenerator, s string, inputs ...string) string {
-		// If we have no characters to remove, do nothing
-		if len(s) == 0 {
-			return s
-		}
-
-		// Otherwise, remove a random character.
-		i := g.randomProvider.Intn(len(s))
-		return s[:i] + s[i+1:]
-	},
-}
-
-// mutateStringInternal takes a string and returns either a random new string, or a mutated value based off the input.
-// If a nil input is provided, this method uses an existing base value set value as the starting point for mutation.
-func (g *MutationalValueGenerator) mutateStringInternal(s *string) string {
-	// If we have no inputs or our bias directs us to, use the random generator instead
-	inputs := g.valueSet.Strings()
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if len(inputs) == 0 || randomGeneratorDecision < g.config.GenerateRandomStringBias {
-		return g.RandomValueGenerator.GenerateString()
-	}
-
-	// Obtain a random input to mutate
-	inputIdx, mutationCount := g.getMutationParams(len(inputs))
-	var input string
-	if s != nil {
-		input = *s
-	} else {
-		input = inputs[inputIdx]
-	}
-
-	// Mutate the data for our desired number of rounds
-	for i := 0; i < mutationCount; i++ {
-		input = stringMutationMethods[g.randomProvider.Intn(len(stringMutationMethods))](g, input, inputs...)
-	}
-
-	return input
+	// Apply the mutation method to the list
+	return (*mutationMethod)(g, list)
 }
 
 // GenerateAddress obtains an existing address from its underlying value set or generates a random one.
@@ -400,30 +214,42 @@ func (g *MutationalValueGenerator) MutateAddress(addr common.Address) common.Add
 }
 
 // MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
-// Returns the mutated value. If any element of the returned array is nil, the value generator will be called upon
-// to generate it new.
-func (g *MutationalValueGenerator) MutateArray(value []any, fixedLength bool) []any {
+// The ABI type of the array is also provided in case new values need to be generated. Returns the mutated value.
+func (g *MutationalValueGenerator) MutateArray(array []any, fixedLength bool, abiType *abi.Type) []any {
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.MutateArrayStructureProbability {
-		// Determine how many mutations we'll apply
-		_, mutationCount := g.getMutationParams(1)
-		for i := 0; i < mutationCount; i++ {
-			// TODO: Apply array structure mutations (swap, insert, delete)
-		}
-		return value
+	if randomGeneratorDecision > g.config.MutateArrayStructureProbability {
+		return array
 	}
-	return value
+	// Calculate length of the array
+	length := len(array)
+
+	// Mutate the array
+	mutatedArray := mutateListLikeObject(g, array)
+
+	// If it's a dynamic length array, we can return early
+	if !fixedLength {
+		return mutatedArray
+	}
+
+	// If the mutated array is too long, truncate it
+	if len(mutatedArray) > length {
+		return mutatedArray[:length]
+	}
+
+	// If the mutated array is too short, pad it with newly generated elements
+	for i := len(mutatedArray); i < length; i++ {
+		mutatedArray = append(mutatedArray, GenerateAbiValue(g, abiType))
+	}
+
+	// Return the mutated array
+	return mutatedArray
 }
 
 // MutateBool takes a boolean input and returns a mutated value based off the input.
 func (g *MutationalValueGenerator) MutateBool(bl bool) bool {
-	// Determine whether to perform mutations against this input or just return it as-is.
-	randomGeneratorDecision := g.randomProvider.Float32()
-	if randomGeneratorDecision < g.config.MutateBoolProbability {
-		return g.RandomValueGenerator.GenerateBool()
-	}
-	return bl
+	// We do not really mutate booleans, so we just flip the coin again
+	return g.RandomValueGenerator.GenerateBool()
 }
 
 // GenerateBytes generates bytes and returns them.
@@ -448,20 +274,37 @@ func (g *MutationalValueGenerator) MutateBytes(b []byte) []byte {
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.MutateBytesProbability {
-		// Determine whether to return a newly generated value, or mutate our existing.
-		randomGeneratorDecision = g.randomProvider.Float32()
-		if randomGeneratorDecision < g.config.MutateBytesGenerateNewBias {
-			return g.GenerateBytes()
-		} else {
-			return g.mutateBytesInternal(b, 0)
-		}
+		return mutateListLikeObject(g, b)
 	}
+
 	return b
 }
 
 // MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
 func (g *MutationalValueGenerator) MutateFixedBytes(b []byte) []byte {
-	return g.mutateBytesInternal(b, len(b))
+	// Determine whether to perform mutations against this input or just return it as-is.
+	randomGeneratorDecision := g.randomProvider.Float32()
+	if randomGeneratorDecision > g.config.MutateFixedBytesProbability {
+		// Return the original byte array
+		return b
+	}
+	// Capture the original length of the byte array
+	length := len(b)
+
+	// Now, mutate the fixed bytes
+	mutatedFixedBytes := mutateListLikeObject(g, b)
+
+	// If the array is too long, truncate it
+	if len(mutatedFixedBytes) > length {
+		return mutatedFixedBytes[:length]
+	}
+	// The mutated fixed bytes is too short, pad it with random bytes
+	if len(mutatedFixedBytes) < length {
+		randomBytes := g.RandomValueGenerator.GenerateFixedBytes(length - len(mutatedFixedBytes))
+		mutatedFixedBytes = append(mutatedFixedBytes, randomBytes...)
+	}
+
+	return mutatedFixedBytes
 }
 
 // GenerateFixedBytes generates a fixed-sized byte array to use when populating inputs.
@@ -512,14 +355,10 @@ func (g *MutationalValueGenerator) MutateString(s string) string {
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.MutateStringProbability {
-		// Determine whether to return a newly generated value, or mutate our existing.
-		randomGeneratorDecision = g.randomProvider.Float32()
-		if randomGeneratorDecision < g.config.MutateStringGenerateNewBias {
-			return g.GenerateString()
-		} else {
-			return g.mutateStringInternal(&s)
-		}
+		mutatedStringAsRunes := mutateListLikeObject(g, []rune(s))
+		return string(mutatedStringAsRunes)
 	}
+
 	return s
 }
 
@@ -545,13 +384,7 @@ func (g *MutationalValueGenerator) MutateInteger(i *big.Int, signed bool, bitLen
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.MutateIntegerProbability {
-		// Determine whether to return a newly generated value, or mutate our existing.
-		randomGeneratorDecision = g.randomProvider.Float32()
-		if randomGeneratorDecision < g.config.MutateIntegerGenerateNewBias {
-			return g.GenerateInteger(signed, bitLength)
-		} else {
-			return g.mutateIntegerInternal(i, signed, bitLength)
-		}
+		return g.mutateIntegerInternal(i, signed, bitLength)
 	}
 	return i
 }
