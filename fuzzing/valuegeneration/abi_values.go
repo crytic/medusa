@@ -361,7 +361,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any, overrides map[com
 		addr, ok := value.(common.Address)
 		if !ok {
 			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
-		}		
+		}
 		addrStr := utils.AttachLabelToAddress(addr, overrides[addr])
 
 		return addrStr, nil
