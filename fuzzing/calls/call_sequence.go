@@ -275,6 +275,12 @@ func (cse *CallSequenceElement) String() string {
 		blockTimeStr = strconv.FormatUint(cse.ChainReference.Block.Header.Time, 10)
 	}
 
+	// We always trim the leading zeroes and then if the ExecutionTrace is available we attach the possible label
+	fromAddress := utils.TrimLeadingZeroesFromAddress(cse.Call.From)
+	if cse.ExecutionTrace != nil {
+		fromAddress = utils.AttachLabelToAddress(cse.Call.From, cse.ExecutionTrace.Labels[cse.Call.From])
+	}
+
 	// Return a formatted string representing this element.
 	return fmt.Sprintf(
 		"%s.%s(%s) (block=%s, time=%s, gas=%d, gasprice=%s, value=%s, sender=%s)",
@@ -286,7 +292,7 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.GasLimit,
 		cse.Call.GasPrice.String(),
 		cse.Call.Value.String(),
-		cse.Call.From.String(),
+		fromAddress,
 	)
 }
 

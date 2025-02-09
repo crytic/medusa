@@ -3,12 +3,13 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/utils/reflectionutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -333,24 +334,13 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any, overrides ma
 	// Iterate over inputs
 	for i, input := range inputs {
 		// Encode the input value of a given type
-		arg, err := encodeABIArgumentToString(&input.Type, values[i])
+		arg, err := encodeABIArgumentToString(&input.Type, values[i], overrides)
 		if err != nil {
 			// If error occurs while encoding the input value, return error message
 			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
 				"name: %v, abi type: %v, value: %v error: %s",
 				input.Name, input.Type, values[i], err)
 			return "", err
-		}
-
-		// If the ABI-type is an address, see if there is a label override for it
-		// TODO: This is a little hacky and maybe it should be handled by the internal encodeABIArgumentToString
-		//  function. But realistically neither solution is great.
-		if input.Type.T == abi.AddressTy {
-			// It's okay to type assert here without capturing an error since that is handled earlier in the flow
-			if label, ok := overrides[values[i].(common.Address)]; ok {
-				// Attach the label to the address
-				arg = utils.AttachLabelToAddress(values[i].(common.Address), label)
-			}
 		}
 
 		// Store the encoded argument at the current index in the encodedArgs slice
@@ -363,7 +353,7 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any, overrides ma
 // encodeABIArgumentToString encodes a provided go-ethereum ABI packable input value of a given type, into
 // a human-readable string format, depending on the input's type.
 // Returns the string, or an error if one occurs.
-func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
+func encodeABIArgumentToString(inputType *abi.Type, value any, overrides map[common.Address]string) (string, error) {
 	// Switch on the type of the input argument to determine how to encode it
 	switch inputType.T {
 	case abi.AddressTy:
@@ -372,7 +362,9 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
 		}
-		return strings.ToLower(addr.String()), nil
+		addrStr := utils.AttachLabelToAddress(addr, overrides[addr])
+
+		return addrStr, nil
 	case abi.UintTy:
 		// Prepare uint type. Return as a string without "".
 		switch inputType.Size {
@@ -476,7 +468,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Iterate through the elements of the input array
 		for i := 0; i < reflectedArray.Len(); i++ {
 			// Encode the element of a given type at the current index
-			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface(), overrides)
 			if err != nil {
 				return "", err
 			}
@@ -494,7 +486,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Iterate through the elements of the input slice
 		for i := 0; i < reflectedArray.Len(); i++ {
 			// Encode the element of a given type at the current index
-			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface(), overrides)
 			if err != nil {
 				return "", err
 			}
@@ -520,7 +512,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 			// Get the value of the field
 			fieldValue := reflectionutils.GetField(field)
 			// Encode the field value of a given type
-			fieldData, err := encodeABIArgumentToString(inputType.TupleElems[i], fieldValue)
+			fieldData, err := encodeABIArgumentToString(inputType.TupleElems[i], fieldValue, overrides)
 			// Check if there is an error while encoding the field value
 			if err != nil {
 				return "", err
