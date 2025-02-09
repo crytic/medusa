@@ -56,13 +56,14 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	assert.NoError(t, err)
 	projectConfig.Compilation = compilationConfig
 	projectConfig.Fuzzing.Workers = 3
-	projectConfig.Fuzzing.ReversionReporterEnabled = false
+	projectConfig.Fuzzing.RevertReporterEnabled = false
 	projectConfig.Fuzzing.WorkerResetLimit = 50
 	projectConfig.Fuzzing.Timeout = 0
 	projectConfig.Fuzzing.TestLimit = 1_500_000
 	projectConfig.Fuzzing.CallSequenceLength = 100
 	projectConfig.Fuzzing.Testing.StopOnFailedContractMatching = true
 	projectConfig.Fuzzing.Testing.TestAllContracts = false
+	projectConfig.Slither.UseSlither = true
 	return projectConfig
 }
 

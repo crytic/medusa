@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
@@ -59,12 +60,12 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				"0x20000",
 				"0x30000",
 			},
-			DeployerAddress:          "0x30000",
-			MaxBlockNumberDelay:      60480,
-			MaxBlockTimestampDelay:   604800,
-			BlockGasLimit:            125_000_000,
-			TransactionGasLimit:      12_500_000,
-			ReversionReporterEnabled: false,
+			DeployerAddress:        "0x30000",
+			MaxBlockNumberDelay:    60480,
+			MaxBlockTimestampDelay: 604800,
+			BlockGasLimit:          125_000_000,
+			TransactionGasLimit:    12_500_000,
+			RevertReporterEnabled:  true,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,

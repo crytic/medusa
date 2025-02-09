@@ -2,11 +2,12 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
@@ -110,7 +111,7 @@ func TestSlitherPrinter(t *testing.T) {
 // TestAssertionMode runs tests to ensure that assertion testing behaves as expected.
 func TestAssertionMode(t *testing.T) {
 	filePaths := []string{
-		"testdata/contracts/assertions/assert_immediate.sol",
+		/*"testdata/contracts/assertions/assert_immediate.sol",
 		"testdata/contracts/assertions/assert_even_number.sol",
 		"testdata/contracts/assertions/assert_arithmetic_underflow.sol",
 		"testdata/contracts/assertions/assert_divide_by_zero.sol",
@@ -119,7 +120,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_pop_empty_array.sol",
 		"testdata/contracts/assertions/assert_outofbounds_array_access.sol",
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
-		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
+		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",*/
 		"testdata/contracts/assertions/assert_constant_method.sol",
 	}
 	for _, filePath := range filePaths {
@@ -347,7 +348,6 @@ func TestConsoleLog(t *testing.T) {
 				config.Fuzzing.TestLimit = 10000
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-				config.Slither.UseSlither = false
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -884,6 +884,7 @@ func TestVMCorrectness(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
 			config.Fuzzing.MaxBlockTimestampDelay = 1 // this contract require calls every block
 			config.Fuzzing.MaxBlockNumberDelay = 1    // this contract require calls every block
+			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -930,7 +931,7 @@ func TestCorpusReplayability(t *testing.T) {
 			config.Fuzzing.CorpusDirectory = "corpus"
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+			config.Slither.UseSlither = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions

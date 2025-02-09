@@ -160,6 +160,12 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
+	// Create the revert reporter
+	revertReporter, err := reverts.NewRevertReporter(config.Fuzzing.RevertReporterEnabled, config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config:              config,
@@ -169,7 +175,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
-		revertReporter:      reverts.NewRevertsReporter(),
+		revertReporter:      revertReporter,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -778,9 +784,11 @@ func (f *Fuzzer) Start() error {
 		f.logger.Error("Failed to create the corpus", err)
 		return err
 	}
+	// Start the revert reporter
+	f.revertReporter.Start(f.ctx)
 
 	// Initialize our metrics and valueGenerator.
-	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
+	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers, f.revertReporter.RevertMetricsCh)
 
 	// Initialize our test cases and providers
 	f.testCasesLock.Lock()
@@ -838,6 +846,13 @@ func (f *Fuzzer) Start() error {
 	// Start our printing loop now that we're about to begin fuzzing.
 	go f.printMetricsLoop()
 
+	// Publish a fuzzer starting event.
+	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
+	if err != nil {
+		f.logger.Error("FuzzerStarting event subscriber returned an error", err)
+		return err
+	}
+
 	// If StopOnNoTests is true and there are no test cases, then throw an error
 	if f.config.Fuzzing.Testing.StopOnNoTests && len(f.testCases) == 0 {
 		err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz")
@@ -845,19 +860,6 @@ func (f *Fuzzer) Start() error {
 			err = fmt.Errorf("no assertion, property, optimization, or custom tests were found to fuzz and testing view methods is disabled")
 		}
 		f.logger.Error("Failed to start fuzzer", err)
-		return err
-	}
-
-	// Create a reversion reporter if enabled and start tracking revert statistics
-	if f.config.Fuzzing.ReversionReporterEnabled {
-		// Provide the fuzzer's main context so that we can cancel the goroutine when the campaign is complete
-		go f.revertReporter.Start(f.ctx)
-	}
-
-	// Publish a fuzzer starting event.
-	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})
-	if err != nil {
-		f.logger.Error("FuzzerStarting event subscriber returned an error", err)
 		return err
 	}
 
@@ -886,11 +888,6 @@ func (f *Fuzzer) Start() error {
 	}
 	// Print our results on exit.
 	f.printExitingResults()
-
-	err = f.revertReporter.BuildArtifact(f.logger, f.ContractDefinitions(), f.config.Fuzzing.CorpusDirectory)
-	if err != nil {
-		f.logger.Error("Failed to generate reversion stats report", err)
-	}
 
 	// Finally, generate our coverage report if we have set a valid corpus directory.
 	if err == nil && len(f.config.Fuzzing.CoverageFormats) > 0 {
@@ -921,8 +918,9 @@ func (f *Fuzzer) Start() error {
 			}
 		}
 	}
-	// TODO: Fix use of logger and where report is going
-	err = f.revertReporter.WriteReport(f.config.Fuzzing.CorpusDirectory, f.logger)
+
+	// Generate the revert metrics artifacts
+	err = f.revertReporter.BuildArtifacts()
 	if err != nil {
 		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}
