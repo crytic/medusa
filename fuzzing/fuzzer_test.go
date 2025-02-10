@@ -2,11 +2,12 @@ package fuzzing
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"

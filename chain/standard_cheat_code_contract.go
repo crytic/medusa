@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/crytic/medusa/chain/types"
 	"math/big"
 	"os/exec"
 	"strconv"
@@ -23,6 +24,23 @@ var StandardCheatcodeContractAddress = common.HexToAddress("0x7109709ECfa91a8062
 
 // MaxUint64 holds the max value an uint64 can take
 var _, MaxUint64 = utils.GetIntegerConstraints(false, 64)
+
+// labelsKey describes the key to use when attempting to store and retrieve the chain's labels
+const labelsKey = "Labels"
+
+// GetLabels will return the labels attached to the transaction's messages results. Thus, every call sequence
+// element will have access to all the labels that have been created until that point in time.
+func GetLabels(messageResults *types.MessageResults) map[common.Address]string {
+	// Try to obtain the results the tracer should've stored.
+	if genericResult, ok := messageResults.AdditionalResults[labelsKey]; ok {
+		if castedResult, ok := genericResult.(map[common.Address]string); ok {
+			return castedResult
+		}
+	}
+
+	// If we could not obtain them, return nil.
+	return nil
+}
 
 // getStandardCheatCodeContract obtains a CheatCodeContract which implements common cheat codes.
 // Returns the precompiled contract, or an error if one occurs.

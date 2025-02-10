@@ -128,7 +128,6 @@ func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 	t.trace = newExecutionTrace(t.contractDefinitions, t.testChain.Labels)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
-	t.traceMap = make(map[common.Hash]*ExecutionTrace)
 
 	// Store our evm reference
 	t.evmContext = vm

@@ -3,9 +3,9 @@ package calls
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/crytic/medusa/chain"
 	"strconv"
 
-	"github.com/crytic/medusa/chain"
 	chainTypes "github.com/crytic/medusa/chain/types"
 	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -19,20 +19,6 @@ import (
 
 // CallSequence describes a sequence of calls sent to a chain.
 type CallSequence []*CallSequenceElement
-
-// AttachExecutionTraces takes a given chain which executed the call sequence, and a list of contract definitions,
-// and it replays each call of the sequence with an execution tracer attached to it, it then sets each
-// CallSequenceElement.ExecutionTrace to the resulting trace. Returns an error if one occurred.
-func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
-	// For each call sequence element, attach an execution trace.
-	for _, cse := range cs {
-		err := cse.AttachExecutionTrace(chain, contractDefinitions)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // Log returns a logging.LogBuffer that represents this call sequence. This buffer will be passed to the underlying
 // logger which will format it accordingly for console or file.
@@ -257,11 +243,14 @@ func (cse *CallSequenceElement) String() string {
 		methodName = method.Sig
 	}
 
+	// Get our labels that we can use to make the string look better
+	labels := chain.GetLabels(cse.ChainReference.MessageResults())
+
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, nil)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, labels)
 		if err != nil {
 			argsText = "<unresolved args>"
 		}
@@ -275,11 +264,8 @@ func (cse *CallSequenceElement) String() string {
 		blockTimeStr = strconv.FormatUint(cse.ChainReference.Block.Header.Time, 10)
 	}
 
-	// We always trim the leading zeroes and then if the ExecutionTrace is available we attach the possible label
-	fromAddress := utils.TrimLeadingZeroesFromAddress(cse.Call.From)
-	if cse.ExecutionTrace != nil {
-		fromAddress = utils.AttachLabelToAddress(cse.Call.From, cse.ExecutionTrace.Labels[cse.Call.From])
-	}
+	// Trim the leading zeros and use the labels
+	fromAddress := utils.AttachLabelToAddress(cse.Call.From, labels[cse.Call.From])
 
 	// Return a formatted string representing this element.
 	return fmt.Sprintf(
@@ -294,25 +280,6 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.Value.String(),
 		fromAddress,
 	)
-}
-
-// AttachExecutionTrace takes a given chain which executed the call sequence element, and a list of contract definitions,
-// and it replays the call with an execution tracer attached to it, it then sets CallSequenceElement.ExecutionTrace to
-// the resulting trace.
-// Returns an error if one occurred.
-func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
-	// Verify the element has been executed before.
-	if cse.ChainReference == nil {
-		return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
-	}
-
-	var err error
-	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), nil)
-	if err != nil {
-		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
-	}
-	return nil
 }
 
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being
