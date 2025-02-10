@@ -247,6 +247,10 @@ func (cm *CoverageMaps) RevertAll() (bool, error) {
 
 // UniquePCs is a function that returns the total number of unique program counters (PCs)
 func (cm *CoverageMaps) UniquePCs() uint64 {
+	// Acquire our thread lock and defer our unlocking for when we exit this method
+	cm.updateLock.Lock()
+	defer cm.updateLock.Unlock()
+
 	uniquePCs := uint64(0)
 	// Iterate across each contract deployment
 	for _, mapsByAddress := range cm.maps {
