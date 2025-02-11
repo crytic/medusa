@@ -17,7 +17,7 @@ import (
 func main() {
 	// Write heap profile to file every minute
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
 		i := 0
 		for {
 			select {
