@@ -21,8 +21,8 @@ func addFuzzFlags() error {
 	// Config file
 	fuzzCmd.Flags().String("config", "", "path to config file")
 
-	// Target
-	fuzzCmd.Flags().String("target", "", TargetFlagDescription)
+	// Compilation Target
+	fuzzCmd.Flags().String("compilation-target", "", TargetFlagDescription)
 
 	// Number of workers
 	fuzzCmd.Flags().Int("workers", 0,
@@ -40,14 +40,13 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().Int("seq-len", 0,
 		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.CallSequenceLength))
 
-	// Deployment order
-	fuzzCmd.Flags().StringSlice("deployment-order", []string{},
-		fmt.Sprintf("order in which to deploy target contracts (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.DeploymentOrder))
+	// Target contracts
+	fuzzCmd.Flags().StringSlice("target-contracts", []string{},
+		fmt.Sprintf("target contracts for fuzz testing (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.TargetContracts))
 
 	// Corpus directory
-	// TODO: Update description when we add "coverage reports" feature
 	fuzzCmd.Flags().String("corpus-dir", "",
-		fmt.Sprintf("directory path for corpus items (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
+		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
 
 	// Senders
 	fuzzCmd.Flags().StringSlice("senders", []string{},
@@ -57,21 +56,30 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().String("deployer", "",
 		"account address used to deploy contracts")
 
-	// Assertion mode
-	fuzzCmd.Flags().Bool("assertion-mode", false,
-		fmt.Sprintf("enable assertion mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.AssertionTesting.Enabled))
-
-	// Optimization mode
-	fuzzCmd.Flags().Bool("optimization-mode", false,
-		fmt.Sprintf("enable optimization mode (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.OptimizationTesting.Enabled))
-
 	// Trace all
 	fuzzCmd.Flags().Bool("trace-all", false,
 		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
 
 	// Logging color
-	fuzzCmd.Flags().Bool("no-color", false, "disabled colored terminal output")
+	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
+	// Enable stop on failed test
+	fuzzCmd.Flags().Bool("fail-fast", false, "enables stop on failed test")
+
+	// Exploration mode
+	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
+
+	// Run slither while still trying to use the cache
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+
+	// Run slither and overwrite the cache
+	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
+
+	// RPC url
+	fuzzCmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
+
+	// RPC block
+	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
 	return nil
 }
 
@@ -79,14 +87,13 @@ func addFuzzFlags() error {
 func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.ProjectConfig) error {
 	var err error
 
-	// If --target was used
-	if cmd.Flags().Changed("target") {
+	// If --compilation-target was used
+	if cmd.Flags().Changed("compilation-target") {
 		// Get the new target
-		newTarget, err := cmd.Flags().GetString("target")
+		newTarget, err := cmd.Flags().GetString("compilation-target")
 		if err != nil {
 			return err
 		}
-
 		err = projectConfig.Compilation.SetTarget(newTarget)
 		if err != nil {
 			return err
@@ -125,9 +132,9 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update deployment order
-	if cmd.Flags().Changed("deployment-order") {
-		projectConfig.Fuzzing.DeploymentOrder, err = cmd.Flags().GetStringSlice("deployment-order")
+	// Update target contracts
+	if cmd.Flags().Changed("target-contracts") {
+		projectConfig.Fuzzing.TargetContracts, err = cmd.Flags().GetStringSlice("target-contracts")
 		if err != nil {
 			return err
 		}
@@ -157,22 +164,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update assertion mode enablement
-	if cmd.Flags().Changed("assertion-mode") {
-		projectConfig.Fuzzing.Testing.AssertionTesting.Enabled, err = cmd.Flags().GetBool("assertion-mode")
-		if err != nil {
-			return err
-		}
-	}
-
-	// Update optimization mode enablement
-	if cmd.Flags().Changed("optimization-mode") {
-		projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled, err = cmd.Flags().GetBool("optimization-mode")
-		if err != nil {
-			return err
-		}
-	}
-
 	// Update trace all enablement
 	if cmd.Flags().Changed("trace-all") {
 		projectConfig.Fuzzing.Testing.TraceAll, err = cmd.Flags().GetBool("trace-all")
@@ -188,5 +179,69 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			return err
 		}
 	}
+
+	// Update stop on failed test feature
+	if cmd.Flags().Changed("fail-fast") {
+		projectConfig.Fuzzing.Testing.StopOnFailedTest, err = cmd.Flags().GetBool("fail-fast")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update configuration to exploration mode
+	if cmd.Flags().Changed("explore") {
+		explore, err := cmd.Flags().GetBool("explore")
+		if err != nil {
+			return err
+		}
+		if explore {
+			projectConfig.Fuzzing.Testing.StopOnFailedTest = false
+			projectConfig.Fuzzing.Testing.StopOnNoTests = false
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		}
+	}
+
+	// Update configuration to run slither while using current cache
+	if cmd.Flags().Changed("use-slither") {
+		projectConfig.Slither.UseSlither, err = cmd.Flags().GetBool("use-slither")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update configuration to run slither and overwrite the current cache
+	if cmd.Flags().Changed("use-slither-force") {
+		useSlitherForce, err := cmd.Flags().GetBool("use-slither-force")
+		if err != nil {
+			return err
+		}
+		if useSlitherForce {
+			projectConfig.Slither.UseSlither = true
+			projectConfig.Slither.OverwriteCache = true
+		}
+	}
+
+	// Update RPC url
+	if cmd.Flags().Changed("rpc-url") {
+		rpcUrl, err := cmd.Flags().GetString("rpc-url")
+		if err != nil {
+			return err
+		}
+
+		// Enable on-chain fuzzing with the given URL
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.ForkModeEnabled = true
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl = rpcUrl
+	}
+
+	// Update RPC block
+	if cmd.Flags().Changed("rpc-block") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcBlock, err = cmd.Flags().GetUint64("rpc-block")
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

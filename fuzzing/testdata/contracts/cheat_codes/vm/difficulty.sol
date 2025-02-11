@@ -1,4 +1,4 @@
-// This test ensures that the block difficulty can be set with cheat codes
+// This test ensures that the difficulty cheatcode is a no-op
 interface CheatCodes {
     function difficulty(uint256) external;
 }
@@ -8,10 +8,10 @@ contract TestContract {
         // Obtain our cheat code contract reference.
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-        // Change value and verify.
+        uint256 originalDifficulty = block.difficulty;
+        // Update the difficulty
         cheats.difficulty(x);
-        assert(block.difficulty == x);
-        cheats.difficulty(7);
-        assert(block.difficulty == 7);
+        // Make sure that the new difficulty is the same as the original
+        assert(block.difficulty == originalDifficulty);
     }
 }

@@ -68,8 +68,9 @@ func TestDisabledColors(t *testing.T) {
 	colors.DisableColor()
 	logger.Info("foo")
 
-	// Ensure that msg doesn't include colors afterwards
-	prefix := fmt.Sprintf("%s %s", colors.LEFT_ARROW, "foo")
+	// Ensure that msg doesn't include colors afterwards (it is bolded)
+	prefix := fmt.Sprintf("%s \033[1m%s\033[0m", colors.LEFT_ARROW, "foo")
+
 	_, _, ok := strings.Cut(buf.String(), prefix)
 	assert.True(t, ok)
 }

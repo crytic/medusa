@@ -2,11 +2,13 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
-	"math/big"
 )
 
 // CallSequenceGenerator generates call sequences iteratively per element, for use in fuzzing campaigns. It is attached
@@ -194,7 +196,7 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 
 	//fmt.Printf("Base sequence created")
 
-	// Check if there are any previously une-xecuted corpus call sequences. If there are, the fuzzer should execute
+	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
 	// those first.
 	//fmt.Printf("Retrieving new unexecuted call sequence")
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
@@ -279,19 +281,31 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 	return element, nil
 }
 
-// generateNewElement generates a new call sequence element which targets a state changing method in a contract
+// generateNewElement generates a new call sequence element which targets a method in a contract
 // deployed to the CallSequenceGenerator's parent FuzzerWorker chain, with fuzzed call data.
 // Returns the call sequence element, or an error if one was encountered.
 func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement, error) {
-	//fmt.Printf("generateNewElement: generating new element")
-	// Verify we have state changing methods to call
-	if len(g.worker.stateChangingMethods) == 0 {
-		//fmt.Printf("generateNewElement: no state changing methods")
-		return nil, fmt.Errorf("cannot generate fuzzed tx as there are no state changing methods to call")
+	// Check to make sure that we have any functions to call
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) == 0 {
+		return nil, fmt.Errorf("cannot generate fuzzed call as there are no methods to call")
 	}
 
-	// Select a random method and sender
-	selectedMethod := &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	// Only call view functions if there are no state-changing methods
+	var callOnlyPureFunctions bool
+	if len(g.worker.stateChangingMethods) == 0 && len(g.worker.pureMethods) > 0 {
+		callOnlyPureFunctions = true
+	}
+
+	// Select a random method
+	// There is a 1/1000 chance that a pure method will be invoked or if there are only pure functions that are callable
+	var selectedMethod *contracts.DeployedContractMethod
+	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(1000) == 0) || callOnlyPureFunctions {
+		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
+	} else {
+		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
+	}
+
+	// Select a random sender
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
 
 	// Generate fuzzed parameters for the function call
@@ -317,7 +331,10 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		Method:      &selectedMethod.Method,
 		InputValues: args,
 	})
-	//fmt.Printf("generateNewElement: created new call message with abi values")
+
+	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {
+		msg.SkipAccountChecks = true
+	}
 
 	// Determine our delay values for this element
 	blockNumberDelay := uint64(0)
@@ -353,11 +370,10 @@ func callSeqGenFuncCorpusHead(sequenceGenerator *CallSequenceGenerator, sequence
 	// Obtain a call sequence from the corpus
 	corpusSequence, err := sequenceGenerator.worker.fuzzer.corpus.RandomMutationTargetSequence()
 	if err != nil {
-		//fmt.Printf("callSeqGenFuncCorpusHead: Received error when choosing a call sequence from the corpus")
-		return fmt.Errorf("could not obtain corpus call sequence for tail mutation: %v", err)
+		return fmt.Errorf("could not obtain corpus call sequence for head mutation: %v", err)
 	}
 
-	// Determine a random position to slice the call sequence.
+	// Determine the length of the slice to be copied in the head.
 	maxLength := utils.Min(len(sequence), len(corpusSequence))
 	copy(sequence, corpusSequence[:maxLength])
 	//fmt.Printf("callSeqGenFuncCorpusHead: We have a sequence")
@@ -488,6 +504,8 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		}
 		abiValuesMsgData.InputValues[i] = mutatedInput
 	}
-	//fmt.Printf("prefetchModifyCallFuncMutate: mutation complete")
+	// Re-encode the message's calldata
+	element.Call.WithDataAbiValues(abiValuesMsgData)
+
 	return nil
 }

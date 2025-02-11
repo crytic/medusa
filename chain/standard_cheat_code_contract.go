@@ -4,14 +4,18 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 // StandardCheatcodeContractAddress is the address for the standard cheatcode contract
@@ -68,80 +72,160 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
-	// Warp: Sets VM timestamp
+	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp for the remainder of the
+	// chain's lifecycle.
 	contract.addMethod(
 		"warp", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			originalTime := tracer.evm.Context.Time
+			// Capture the original time
+			originalTime := tracer.chain.pendingBlockContext.Time
 
-			// Retrieve new timestamp and make sure it is LEQ max value of an uint64
+			// Retrieve the new timestamp and make sure it is LEQ max value of an uint64
 			newTime := inputs[0].(*big.Int)
 			if newTime.Cmp(MaxUint64) > 0 {
 				return nil, cheatCodeRevertData([]byte("warp: timestamp exceeds max value of type(uint64).max"))
 			}
 
-			// Set the time
-			tracer.evm.Context.Time = newTime.Uint64()
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				// Reset the time
-				tracer.evm.Context.Time = originalTime
+			// Set the time for the pending block context and the pending block
+			// The block context will reflect the time change in the current EVM context
+			// And the pending block time will allow for the new time to reflect
+			// permanently for the remainder of the chain's existence.
+			tracer.chain.pendingBlockContext.Time = newTime.Uint64()
+			tracer.chain.pendingBlock.Header.Time = newTime.Uint64()
+
+			// If the transaction reverts, we will restore the original time
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				// The warp's effect will naturally revert if the chain reverts. Thus, we only want to handle the
+				// case if the transaction that called warp reverts (which is why we have the nil checks).
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.Time = originalTime
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.Time = originalTime
+				}
 			})
 			return nil, nil
 		},
 	)
 
-	// Roll: Sets VM block number
+	// Roll: Sets VM block number. Note that this _permanently_ updates the block number for the remainder of the
+	// chain's lifecycle
 	contract.addMethod(
 		"roll", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			original := new(big.Int).Set(tracer.evm.Context.BlockNumber)
-			tracer.evm.Context.BlockNumber.Set(inputs[0].(*big.Int))
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.BlockNumber.Set(original)
+			// Capture the original block number
+			originalBlockNumber := tracer.chain.pendingBlockContext.BlockNumber
+
+			// Retrieve the new block number
+			newBlockNumber := inputs[0].(*big.Int)
+
+			// Set the block number for the pending block context and the pending block
+			// The block context will reflect the block number change in the current EVM context
+			// And the pending block number will allow for the number to reflect
+			// permanently for the remainder of the chain.
+			tracer.chain.pendingBlockContext.BlockNumber.Set(newBlockNumber)
+			tracer.chain.pendingBlock.Header.Number.Set(newBlockNumber)
+
+			// If the transaction reverts, we will restore the original block number
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				// The roll's effect will naturally revert if the chain reverts. Thus, we only want to handle the
+				// case if the transaction that called roll reverts (which is why we have the nil checks).
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.BlockNumber.Set(originalBlockNumber)
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.Number.Set(originalBlockNumber)
+				}
 			})
+
 			return nil, nil
 		},
 	)
 
-	// Fee: Update base fee
+	// Fee: Update the base bee. Note that this _permanently_ updates the base fee for the remainder of the
+	// chain's lifecycle
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			original := new(big.Int).Set(tracer.evm.Context.BaseFee)
-			tracer.evm.Context.BaseFee.Set(inputs[0].(*big.Int))
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.BaseFee.Set(original)
+			// Capture the original value
+			original := new(big.Int).Set(tracer.chain.pendingBlockContext.BaseFee)
+
+			// Update the pending block context and pending block's base fee
+			// The block context will reflect the base fee change in the current EVM context
+			// And the pending block will allow for the base fee to reflect
+			// permanently for the remainder of the chain.
+			tracer.chain.pendingBlockContext.BaseFee.Set(inputs[0].(*big.Int))
+			tracer.chain.pendingBlock.Header.BaseFee.Set(inputs[0].(*big.Int))
+
+			// If the transaction reverts, we will restore the original base fee
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				// The fee's effect will naturally revert if the chain reverts. Thus, we only want to handle the
+				// case if the transaction that called fee reverts (which is why we have the nil checks).
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.BaseFee.Set(original)
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.BaseFee.Set(original)
+				}
 			})
 			return nil, nil
 		},
 	)
 
-	// Difficulty: Sets VM block number
+	// Difficulty: Updates difficulty. Since we do not allow users to choose the fork that
+	// they are using (for now), and we are using a post-Paris fork, the difficulty cheatcode is a no-op.
 	contract.addMethod(
 		"difficulty", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
+			return nil, nil
+		},
+	)
 
-			// Obtain our spoofed difficulty
-			spoofedDifficulty := inputs[0].(*big.Int)
-			spoofedDifficultyHash := common.BigToHash(spoofedDifficulty)
+	// Prevrandao: Updates random.
+	contract.addMethod(
+		"prevrandao", abi.Arguments{{Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Store our original random
+			originalRandom := tracer.chain.pendingBlockContext.Random
 
-			// Change difficulty in block context.
-			originalDifficulty := new(big.Int).Set(tracer.evm.Context.Difficulty)
-			tracer.evm.Context.Difficulty.Set(spoofedDifficulty)
+			// Update the pending block context random
+			newRandom := inputs[0].([32]byte)
+			newRandomHash := common.BytesToHash(newRandom[:])
+			tracer.chain.pendingBlockContext.Random = &newRandomHash
+
+			// Restore the original random when top frame exits
 			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Difficulty.Set(originalDifficulty)
+				tracer.chain.pendingBlockContext.Random = originalRandom
 			})
+			return nil, nil
+		},
+	)
 
-			// In newer evm versions, block.difficulty uses opRandom instead of opDifficulty.
-			// TODO: Check chain config here to see if the EVM version is 'Paris' or the consensus upgrade occurred.
-			originalRandom := tracer.evm.Context.Random
-			tracer.evm.Context.Random = &spoofedDifficultyHash
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Random = originalRandom
+	// Coinbase: Updates the block coinbase. Note that this _permanently_ updates the coinbase for the remainder of the
+	// chain's lifecycle
+	contract.addMethod(
+		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Capture the original coinbase
+			original := tracer.chain.pendingBlockContext.Coinbase
+
+			// Update the pending block context and the pending block's coinbase
+			// The block context will reflect the coinbase change in the current EVM context
+			// And the pending block will allow for the coinbase change to reflect
+			// permanently for the remainder of the chain.
+			tracer.chain.pendingBlockContext.Coinbase = inputs[0].(common.Address)
+			tracer.chain.pendingBlock.Header.Coinbase = inputs[0].(common.Address)
+
+			// If the transaction reverts, we will restore the original base fee
+			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
+				// The coinbase's effect will naturally revert if the chain reverts. Thus, we only want to handle the
+				// case if the transaction that called coinbase reverts (which is why we have the nil checks).
+				if tracer.chain.pendingBlockContext != nil {
+					tracer.chain.pendingBlockContext.Coinbase = original
+				}
+				if tracer.chain.pendingBlock != nil {
+					tracer.chain.pendingBlock.Header.Coinbase = original
+				}
 			})
 			return nil, nil
 		},
@@ -152,7 +236,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		"chainId", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			// Maintain our changes unless this code path reverts or the whole transaction is reverted in the chain.
-			chainConfig := tracer.evm.ChainConfig()
+			chainConfig := tracer.chain.pendingBlockChainConfig
 			original := chainConfig.ChainID
 			chainConfig.ChainID = inputs[0].(*big.Int)
 			tracer.CurrentCallFrame().onChainRevertRestoreHooks.Push(func() {
@@ -169,7 +253,18 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			account := inputs[0].(common.Address)
 			slot := inputs[1].([32]byte)
 			value := inputs[2].([32]byte)
-			tracer.evm.StateDB.SetState(account, slot, value)
+			tracer.chain.State().SetState(account, slot, value)
+			return nil, nil
+		},
+	)
+
+	// Label: Sets a label for an address.
+	contract.addMethod(
+		"label", abi.Arguments{{Type: typeAddress}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			addr := inputs[0].(common.Address)
+			label := inputs[1].(string)
+			tracer.chain.Labels[addr] = label
 			return nil, nil
 		},
 	)
@@ -180,7 +275,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			slot := inputs[1].([32]byte)
-			value := tracer.evm.StateDB.GetState(account, slot)
+			value := tracer.chain.State().GetState(account, slot)
 			return []any{value}, nil
 		},
 	)
@@ -191,7 +286,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			code := inputs[1].([]byte)
-			tracer.evm.StateDB.SetCode(account, code)
+			tracer.chain.State().SetCode(account, code)
 			return nil, nil
 		},
 	)
@@ -202,9 +297,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			newBalance := inputs[1].(*big.Int)
-			originalBalance := tracer.evm.StateDB.GetBalance(account)
-			diff := new(big.Int).Sub(newBalance, originalBalance)
-			tracer.evm.StateDB.AddBalance(account, diff)
+			newBalanceUint256 := new(uint256.Int)
+			newBalanceUint256.SetFromBig(newBalance)
+			tracer.chain.State().SetBalance(account, newBalanceUint256, tracing.BalanceChangeUnspecified)
 			return nil, nil
 		},
 	)
@@ -214,7 +309,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		"getNonce", abi.Arguments{{Type: typeAddress}}, abi.Arguments{{Type: typeUint64}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
-			nonce := tracer.evm.StateDB.GetNonce(account)
+			nonce := tracer.chain.State().GetNonce(account)
 			return []any{nonce}, nil
 		},
 	)
@@ -225,21 +320,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			nonce := inputs[1].(uint64)
-			tracer.evm.StateDB.SetNonce(account, nonce)
-			return nil, nil
-		},
-	)
-
-	// Coinbase: Sets the block coinbase.
-	contract.addMethod(
-		"coinbase", abi.Arguments{{Type: typeAddress}}, abi.Arguments{},
-		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Maintain our changes until the transaction exits.
-			original := tracer.evm.Context.Coinbase
-			tracer.evm.Context.Coinbase = inputs[0].(common.Address)
-			tracer.CurrentCallFrame().onTopFrameExitRestoreHooks.Push(func() {
-				tracer.evm.Context.Coinbase = original
-			})
+			tracer.chain.State().SetNonce(account, nonce)
 			return nil, nil
 		},
 	)
@@ -255,10 +336,12 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// We entered the scope we want to prank, store the original value, patch, and add a hook to restore it
 				// when this frame is exited.
 				prankCallFrame := tracer.CurrentCallFrame()
-				original := prankCallFrame.vmScope.Contract.CallerAddress
-				prankCallFrame.vmScope.Contract.CallerAddress = inputs[0].(common.Address)
+				// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+				scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
+				original := scopeContext.Caller()
+				scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
 				prankCallFrame.onFrameExitRestoreHooks.Push(func() {
-					prankCallFrame.vmScope.Contract.CallerAddress = original
+					scopeContext.Contract.CallerAddress = original
 				})
 			})
 			return nil, nil
@@ -274,12 +357,35 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			cheatCodeCallerFrame := tracer.PreviousCallFrame()
 
 			// Store the original value, patch, and add a hook to restore it when this frame is exited.
-			original := cheatCodeCallerFrame.vmScope.Contract.CallerAddress
-			cheatCodeCallerFrame.vmScope.Contract.CallerAddress = inputs[0].(common.Address)
+			// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+			scopeContext := cheatCodeCallerFrame.vmScope.(*vm.ScopeContext)
+			original := scopeContext.Caller()
+			scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
 			cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
-				cheatCodeCallerFrame.vmScope.Contract.CallerAddress = original
+				scopeContext.Contract.CallerAddress = original
 			})
 			return nil, nil
+		},
+	)
+
+	// snapshot: Takes a snapshot of the current state of the evm and returns the id associated with the snapshot
+	contract.addMethod(
+		"snapshot", abi.Arguments{}, abi.Arguments{{Type: typeUint256}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			snapshotID := tracer.chain.State().Snapshot()
+
+			return []any{snapshotID}, nil
+		},
+	)
+
+	// revertTo(uint256): Revert the state of the evm to a previous snapshot. Takes the snapshot id to revert to.
+	contract.addMethod(
+		"revertTo", abi.Arguments{{Type: typeUint256}}, abi.Arguments{{Type: typeBool}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			snapshotID := inputs[0].(*big.Int)
+			tracer.chain.State().RevertToSnapshot(int(snapshotID.Int64()))
+
+			return []any{true}, nil
 		},
 	)
 
@@ -452,7 +558,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Use a fixed array and copy the data over
 			var bArray [32]byte
-			copy(bArray[:], bSlice[:32])
+			copy(bArray[:], bSlice)
 
 			return []any{bArray}, nil
 		},

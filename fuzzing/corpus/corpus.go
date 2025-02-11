@@ -3,18 +3,23 @@ package corpus
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"math/big"
-	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
@@ -29,13 +34,8 @@ type Corpus struct {
 	// coverageMaps describes the total code coverage known to be achieved across all corpus call sequences.
 	coverageMaps *coverage.CoverageMaps
 
-	// mutableSequenceFiles represents a corpus directory with files which describe call sequences that should
-	// be used for mutations.
-	mutableSequenceFiles *corpusDirectory[calls.CallSequence]
-
-	// immutableSequenceFiles represents a corpus directory with files which describe call sequences that should not be
-	// used for mutations.
-	immutableSequenceFiles *corpusDirectory[calls.CallSequence]
+	// callSequenceFiles represents a corpus directory with files that should be used for mutations.
+	callSequenceFiles *corpusDirectory[calls.CallSequence]
 
 	// testResultSequenceFiles represents a corpus directory with files which describe call sequences that were flagged
 	// to be saved by a test case provider. These are not used in mutations.
@@ -65,8 +65,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	corpus := &Corpus{
 		storageDirectory:        corpusDirectory,
 		coverageMaps:            coverage.NewCoverageMaps(),
-		mutableSequenceFiles:    newCorpusDirectory[calls.CallSequence](""),
-		immutableSequenceFiles:  newCorpusDirectory[calls.CallSequence](""),
+		callSequenceFiles:       newCorpusDirectory[calls.CallSequence](""),
 		testResultSequenceFiles: newCorpusDirectory[calls.CallSequence](""),
 		unexecutedCallSequences: make([]calls.CallSequence, 0),
 		logger:                  logging.GlobalLogger.NewSubLogger("module", "corpus"),
@@ -74,16 +73,17 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 
 	// If we have a corpus directory set, parse our call sequences.
 	if corpus.storageDirectory != "" {
-		// Read mutable call sequences.
-		corpus.mutableSequenceFiles.path = filepath.Join(corpus.storageDirectory, "call_sequences", "mutable")
-		err = corpus.mutableSequenceFiles.readFiles("*.json")
+		// Migrate the legacy corpus structure
+		// Note that it is important to call this first since we want to move all the call sequence files before reading
+		// them into the corpus
+		err = corpus.migrateLegacyCorpus()
 		if err != nil {
 			return nil, err
 		}
 
-		// Read immutable call sequences.
-		corpus.immutableSequenceFiles.path = filepath.Join(corpus.storageDirectory, "call_sequences", "immutable")
-		err = corpus.immutableSequenceFiles.readFiles("*.json")
+		// Read call sequences.
+		corpus.callSequenceFiles.path = filepath.Join(corpus.storageDirectory, "call_sequences")
+		err = corpus.callSequenceFiles.readFiles("*.json")
 		if err != nil {
 			return nil, err
 		}
@@ -99,26 +99,90 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	return corpus, nil
 }
 
+// migrateLegacyCorpus is used to read in the legacy corpus standard where call sequences were stored in two separate
+// directories (mutable/immutable).
+func (c *Corpus) migrateLegacyCorpus() error {
+	// Check to see if the mutable and/or the immutable directories exist
+	callSequencePath := filepath.Join(c.storageDirectory, "call_sequences")
+	mutablePath := filepath.Join(c.storageDirectory, "call_sequences", "mutable")
+	immutablePath := filepath.Join(c.storageDirectory, "call_sequences", "immutable")
+
+	// Only return an error if the error is something other than "filepath does not exist"
+	mutableDirInfo, err := os.Stat(mutablePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	immutableDirInfo, err := os.Stat(immutablePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	// Return early if these directories do not exist
+	if mutableDirInfo == nil && immutableDirInfo == nil {
+		return nil
+	}
+
+	// Now, we need to notify the user that we have detected a legacy structure
+	c.logger.Info("Migrating legacy corpus")
+
+	// If the mutable directory exists, read in all the files and add them to the call sequence files
+	if mutableDirInfo != nil {
+		// Discover all corpus files in the given directory.
+		filePaths, err := filepath.Glob(filepath.Join(mutablePath, "*.json"))
+		if err != nil {
+			return err
+		}
+
+		// Move each file from the mutable directory to the parent call_sequences directory
+		for _, filePath := range filePaths {
+			err = utils.MoveFile(filePath, filepath.Join(callSequencePath, filepath.Base(filePath)))
+			if err != nil {
+				return err
+			}
+		}
+
+		// Delete the mutable directory
+		err = utils.DeleteDirectory(mutablePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	// If the immutable directory exists, read in all the files and add them to the call sequence files
+	if immutableDirInfo != nil {
+		// Discover all corpus files in the given directory.
+		filePaths, err := filepath.Glob(filepath.Join(immutablePath, "*.json"))
+		if err != nil {
+			return err
+		}
+
+		// Move each file from the immutable directory to the parent call_sequences directory
+		for _, filePath := range filePaths {
+			err = utils.MoveFile(filePath, filepath.Join(callSequencePath, filepath.Base(filePath)))
+			if err != nil {
+				return err
+			}
+		}
+
+		// Delete the immutable directory
+		err = utils.DeleteDirectory(immutablePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // CoverageMaps exposes coverage details for all call sequences known to the corpus.
 func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 	return c.coverageMaps
 }
 
-// CallSequenceEntryCount returns the total number of call sequences entries in the corpus, based on the provided filter
-// flags. Some call sequences may not be valid for use if they fail validation when initializing the corpus.
-// Returns the count of the requested call sequence entries.
-func (c *Corpus) CallSequenceEntryCount(mutable bool, immutable bool, testResults bool) int {
-	count := 0
-	if mutable {
-		count += len(c.mutableSequenceFiles.files)
-	}
-	if immutable {
-		count += len(c.immutableSequenceFiles.files)
-	}
-	if testResults {
-		count += len(c.testResultSequenceFiles.files)
-	}
-	return count
+// CallSequenceEntryCount returns the total number of call sequences that increased coverage and also any test results
+// that led to a failure.
+func (c *Corpus) CallSequenceEntryCount() (int, int) {
+	return len(c.callSequenceFiles.files), len(c.testResultSequenceFiles.files)
 }
 
 // ActiveMutableSequenceCount returns the count of call sequences recorded in the corpus which have been validated
@@ -154,8 +218,8 @@ func (c *Corpus) RandomMutationTargetSequence() (calls.CallSequence, error) {
 // If this sequence list being initialized is for use with mutations, it is added to the mutationTargetSequenceChooser.
 // Returns an error if one occurs.
 func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSequence], testChain *chain.TestChain, deployedContracts map[common.Address]*contracts.Contract, useInMutations bool) error {
-	// Cache current HeadBlockNumber so that you can reset back to it after every sequence
-	baseBlockNumber := testChain.HeadBlockNumber()
+	// Cache the base block index so that you can reset back to it after every sequence
+	baseBlockIndex := uint64(len(testChain.CommittedBlocks()))
 
 	// Loop for each sequence
 	var err error
@@ -192,6 +256,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			if callAbiValues != nil {
 				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
 				if sequenceInvalidError != nil {
+					sequenceInvalidError = fmt.Errorf("error resolving method in contract '%v': %v", currentSequenceElement.Contract.Name(), sequenceInvalidError)
 					return nil, nil
 				}
 			}
@@ -215,13 +280,28 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v\n", err)
+			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v", err)
 		}
 
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
 		if sequenceInvalidError == nil {
 			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+				// If the filename is a timestamp as expected, use it as a weight for the mutation chooser.
+				re := regexp.MustCompile("[0-9]+")
+				var weight *big.Int
+				if filename := re.FindAllString(sequenceFileData.fileName, 1); len(filename) > 0 {
+					// The timestamp will be the only element in the filename array
+					// If we can parse the timestamp with no errors, set the weight
+					if timestamp, err := strconv.ParseUint(filename[0], 10, 64); err == nil {
+						weight = new(big.Int).SetUint64(timestamp)
+					}
+				}
+
+				// Fallback to 1 if we couldn't parse the timestamp.
+				if weight == nil {
+					weight = big.NewInt(1)
+				}
+				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, weight))
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
@@ -229,9 +309,8 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
-		err = testChain.RevertToBlockNumber(baseBlockNumber)
-		if err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
+		if err := testChain.RevertToBlockIndex(baseBlockIndex); err != nil {
+			return fmt.Errorf("failed to reset the chain while seeding coverage: %v", err)
 		}
 	}
 	return nil
@@ -239,7 +318,9 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 // Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
 // (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
-func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) error {
+// Returns the active number of corpus items, total number of corpus items, or an error if one occurred. If an error
+// is returned, then the corpus counts returned will always be zero.
+func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) (int, int, error) {
 	// Acquire our call sequences lock during the duration of this method.
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
@@ -258,7 +339,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	// Clone our test chain, adding listeners for contract deployment events from genesis.
 	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
 		// After genesis, prior to adding other blocks, we attach our coverage tracer
-		newChain.AddTracer(coverageTracer, true, false)
+		newChain.AddTracer(coverageTracer.NativeTracer(), true, false)
 
 		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
 		// sequences.
@@ -276,7 +357,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+		return 0, 0, fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 
 	// Set our coverage maps to those collected when replaying all blocks when cloning.
@@ -286,27 +367,32 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return err
+				return 0, 0, covErr
 			}
 		}
 	}
 
 	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. Valid sequences
 	// are added to the corpus for mutations, re-execution, etc.
-	err = c.initializeSequences(c.mutableSequenceFiles, testChain, deployedContracts, true)
-	if err != nil {
-		return err
-	}
-	err = c.initializeSequences(c.immutableSequenceFiles, testChain, deployedContracts, false)
-	if err != nil {
-		return err
-	}
+	//
+	// The order of initializations here is important, as it determines the order of "unexecuted sequences" to replay
+	// when the fuzzer's worker starts up. We want to replay test results first, so that other corpus items
+	// do not trigger the same test failures instead.
 	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	return nil
+	err = c.initializeSequences(c.callSequenceFiles, testChain, deployedContracts, true)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Calculate corpus health metrics
+	corpusSequencesTotal := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
+	corpusSequencesActive := len(c.unexecutedCallSequences)
+
+	return corpusSequencesActive, corpusSequencesTotal, nil
 }
 
 // addCallSequence adds a call sequence to the corpus in a given corpus directory.
@@ -401,17 +487,9 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	}
 
 	// If we had an increase in non-reverted or reverted coverage, we save the sequence.
-	// Note: We only want to save the sequence once. We're most interested if it can be used for mutations first.
-	if coverageUpdated {
-		// If we achieved new non-reverting coverage, save this sequence for mutation purposes.
-		err = c.addCallSequence(c.mutableSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
-		if err != nil {
-			return err
-		}
-	} else if revertedCoverageUpdated {
-		// If we did not achieve new successful coverage, but achieved an increase in reverted coverage, save this
-		// sequence for non-mutation purposes.
-		err = c.addCallSequence(c.immutableSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
+	if coverageUpdated || revertedCoverageUpdated {
+		// If we achieved new coverage, save this sequence for mutation purposes.
+		err = c.addCallSequence(c.callSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
 			return err
 		}
@@ -463,20 +541,14 @@ func (c *Corpus) Flush() error {
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
 
-	// Write mutation target call sequences.
-	err := c.mutableSequenceFiles.writeFiles()
+	// Write all coverage-increasing call sequences.
+	err := c.callSequenceFiles.writeFiles()
 	if err != nil {
 		return err
 	}
 
 	// Write test case provider related call sequences (test failures, etc).
 	err = c.testResultSequenceFiles.writeFiles()
-	if err != nil {
-		return err
-	}
-
-	// Write other call sequences.
-	err = c.immutableSequenceFiles.writeFiles()
 	if err != nil {
 		return err
 	}

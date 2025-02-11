@@ -3,11 +3,13 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa/logging"
 	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa/utils/reflectionutils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -347,16 +349,17 @@ func EncodeJSONArgumentsToSlice(inputs abi.Arguments, values []any) ([]any, erro
 }
 
 // EncodeABIArgumentsToString encodes provided go-ethereum ABI package input values into string that is
-// human-readable for console output purpose.
+// human-readable for console output purpose. A mapping of overrides can also be provided to override the string
+// representation of addresses for something else (useful for the vm.label cheatcode).
 // Returns the string, or an error if one occurs.
-func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, error) {
+func EncodeABIArgumentsToString(inputs abi.Arguments, values []any, overrides map[common.Address]string) (string, error) {
 	// Create a variable to store string arguments, fill it with the respective arguments
 	var encodedArgs = make([]string, len(inputs))
 
 	// Iterate over inputs
 	for i, input := range inputs {
 		// Encode the input value of a given type
-		arg, err := encodeABIArgumentToString(&input.Type, values[i])
+		arg, err := encodeABIArgumentToString(&input.Type, values[i], overrides)
 		if err != nil {
 			// If error occurs while encoding the input value, return error message
 			err = fmt.Errorf("ABI value argument could not be decoded from JSON: \n"+
@@ -364,6 +367,7 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, err
 				input.Name, input.Type, values[i], err)
 			return "", err
 		}
+
 		// Store the encoded argument at the current index in the encodedArgs slice
 		encodedArgs[i] = arg
 	}
@@ -374,7 +378,7 @@ func EncodeABIArgumentsToString(inputs abi.Arguments, values []any) (string, err
 // encodeABIArgumentToString encodes a provided go-ethereum ABI packable input value of a given type, into
 // a human-readable string format, depending on the input's type.
 // Returns the string, or an error if one occurs.
-func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
+func encodeABIArgumentToString(inputType *abi.Type, value any, overrides map[common.Address]string) (string, error) {
 	// Switch on the type of the input argument to determine how to encode it
 	switch inputType.T {
 	case abi.AddressTy:
@@ -383,7 +387,9 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("could not encode address input as the value provided is not an address type")
 		}
-		return strings.ToLower(addr.String()), nil
+		addrStr := utils.AttachLabelToAddress(addr, overrides[addr])
+
+		return addrStr, nil
 	case abi.UintTy:
 		// Prepare uint type. Return as a string without "".
 		switch inputType.Size {
@@ -468,21 +474,17 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		}
 		return strconv.QuoteToASCII(str), nil
 	case abi.BytesTy:
-		// Prepare a byte array. Return as a string enclosed with "". The returned string uses Go escape
-		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
 		b, ok := value.([]byte)
 		if !ok {
 			return "", fmt.Errorf("could not encode dynamic-sized bytes as the value provided is not of the correct type")
 		}
-		return strconv.QuoteToASCII(string(b)), nil
+		// Convert the fixed byte array to a hex string
+		return hex.EncodeToString(b), nil
 	case abi.FixedBytesTy:
-		// Prepare a fixed-size byte array. Return as a string enclosed with "". The returned string uses Go escape
-		// sequences (\t, \n, \xFF, \u0100) for non-ASCII characters and non-printable characters.
-
 		// TODO: Error checking to ensure `value` is of the correct type.
 		b := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
-		// Convert the byte array to a string and use the QuoteToASCII method to format the string with Go escape sequences.
-		return strconv.QuoteToASCII(string(b)), nil
+		// Convert the byte array to a hex string
+		return hex.EncodeToString(b), nil
 	case abi.ArrayTy:
 		// Prepare an array. Return as a string enclosed with [], where specific elements are comma-separated.
 		reflectedArray := reflect.ValueOf(value)
@@ -491,7 +493,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Iterate through the elements of the input array
 		for i := 0; i < reflectedArray.Len(); i++ {
 			// Encode the element of a given type at the current index
-			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface(), overrides)
 			if err != nil {
 				return "", err
 			}
@@ -509,7 +511,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 		// Iterate through the elements of the input slice
 		for i := 0; i < reflectedArray.Len(); i++ {
 			// Encode the element of a given type at the current index
-			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface())
+			elementData, err := encodeABIArgumentToString(inputType.Elem, reflectedArray.Index(i).Interface(), overrides)
 			if err != nil {
 				return "", err
 			}
@@ -535,7 +537,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any) (string, error) {
 			// Get the value of the field
 			fieldValue := reflectionutils.GetField(field)
 			// Encode the field value of a given type
-			fieldData, err := encodeABIArgumentToString(inputType.TupleElems[i], fieldValue)
+			fieldData, err := encodeABIArgumentToString(inputType.TupleElems[i], fieldValue, overrides)
 			// Check if there is an error while encoding the field value
 			if err != nil {
 				return "", err
@@ -704,7 +706,7 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 	for i, input := range inputs {
 		value, ok := values[input.Name]
 		if !ok {
-			err := fmt.Errorf("constructor argument not provided for: name: %v", input.Name)
+			err := fmt.Errorf("value not not provided for argument: name: %v", input.Name)
 			return nil, err
 		}
 		arg, err := decodeJSONArgument(&input.Type, value, deployedContractAddr)

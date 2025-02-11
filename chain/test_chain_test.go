@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"context"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -25,30 +26,13 @@ func verifyChain(t *testing.T, chain *TestChain) {
 	assert.EqualValues(t, chain.blocks[len(chain.blocks)-1], chain.Head())
 
 	// Loop through all blocks
-	// Note: We use the API here rather than internally committed blocks (chain.blocks) to validate spoofed blocks
-	// from height jumps as well.
-	for i := int(chain.HeadBlockNumber()); i >= 0; i-- {
+	for _, currentBlock := range chain.blocks {
 		// Verify our count of messages, message results, and receipts match.
-		currentBlock, err := chain.BlockFromNumber(uint64(i))
-		assert.NoError(t, err)
 		assert.EqualValues(t, len(currentBlock.Messages), len(currentBlock.MessageResults))
 
-		// Verify our method to fetch block hashes works appropriately.
-		blockHash, err := chain.BlockHashFromNumber(uint64(i))
-		assert.NoError(t, err)
-		assert.EqualValues(t, currentBlock.Hash, blockHash)
-
 		// Try to obtain the state for this block
-		_, err = chain.StateAfterBlockNumber(uint64(i))
+		_, err := chain.StateAfterBlockNumber(uint64(currentBlock.Header.Number.Uint64()))
 		assert.NoError(t, err)
-
-		// If we didn't reach genesis, verify our previous block hash matches, and our timestamp is greater.
-		if i > 0 {
-			previousBlock, err := chain.BlockFromNumber(uint64(i - 1))
-			assert.NoError(t, err)
-			assert.EqualValues(t, previousBlock.Hash, currentBlock.Header.ParentHash)
-			assert.Less(t, previousBlock.Header.Time, currentBlock.Header.Time)
-		}
 	}
 }
 
@@ -64,18 +48,18 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	assert.NoError(t, err)
 
 	// NOTE: Sharing GenesisAlloc between nodes will result in some accounts not being funded for some reason.
-	genesisAlloc := make(core.GenesisAlloc)
+	genesisAlloc := make(types.GenesisAlloc)
 
 	// Fund all of our sender addresses in the genesis block
 	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2))
 	for _, sender := range senders {
-		genesisAlloc[sender] = core.GenesisAccount{
+		genesisAlloc[sender] = types.Account{
 			Balance: initBalance,
 		}
 	}
 
 	// Create a test chain with a default test chain configuration
-	chain, err := NewTestChain(genesisAlloc, nil)
+	chain, err := NewTestChain(context.Background(), genesisAlloc, nil)
 
 	assert.NoError(t, err)
 
@@ -132,7 +116,7 @@ func TestChainReverting(t *testing.T) {
 		chainBackup := chainBackups[i]
 
 		// Revert our main chain to this block height.
-		err := chain.RevertToBlockNumber(chainBackup.HeadBlockNumber())
+		err := chain.RevertToBlockIndex(uint64(len(chainBackup.CommittedBlocks())))
 		assert.NoError(t, err)
 
 		// Verify state matches
@@ -215,7 +199,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -223,7 +207,7 @@ func TestChainDynamicDeployments(t *testing.T) {
 		// Deploy each contract that has no construct arguments.
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -329,7 +313,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		compilations, _, err := cryticCompile.Compile()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, len(compilations))
-		assert.EqualValues(t, 1, len(compilations[0].Sources))
+		assert.EqualValues(t, 1, len(compilations[0].SourcePathToArtifact))
 
 		// Obtain our chain and senders
 		chain, senders := createChain(t)
@@ -346,7 +330,7 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		// Deploy each contract
 		deployCount := 0
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for contractName, contract := range source.Contracts {
 					contract := contract
 
@@ -467,7 +451,7 @@ func TestChainCloning(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -539,7 +523,7 @@ func TestChainCloning(t *testing.T) {
 	})
 }
 
-// TestCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
+// TestChainCallSequenceReplayMatchSimple creates a TestChain, sends some messages to it, then creates another chain which
 // it replays the same sequence on. It ensures that the ending state is the same.
 // Note: this does not set block timestamps or other data that might be non-deterministic.
 // This does not test replaying with a previous call sequence with different timestamps, etc. It expects the TestChain
@@ -563,7 +547,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 
 		// Deploy each contract that has no construct arguments 10 times.
 		for _, compilation := range compilations {
-			for _, source := range compilation.Sources {
+			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
 					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
@@ -619,7 +603,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil)
+		recreatedChain, err := NewTestChain(context.Background(), chain.genesisDefinition.Alloc, nil)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

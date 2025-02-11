@@ -9,6 +9,15 @@
             font-size: 15px;
             margin: 15px;
             background-color: #eee;
+            height: 100%;
+            display: flex;
+            flex-flow: column;
+        }
+        header {
+            flex: 0 1 auto;
+        }
+        footer {
+            flex: 0 1 auto;
         }
         hr {
             margin: 15px 0px;
@@ -42,6 +51,30 @@
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
+        }
+        .button-sort {
+
+        }
+        .split-panel {
+            display: flex;
+            position: relative;
+            height: 100%;
+        }
+        #file-split-panel {
+            flex-flow: column;
+            flex: 1 1 auto;
+            overflow-y: auto;
+        }
+        #file-tree-panel {
+            min-width: 250px;
+            width: 20%;
+            height: 100%;
+            overflow: scroll;
+        }
+        #main-view-panel {
+            width: 100%;
+            height: 100%;
+            overflow: scroll;
         }
         .collapsible {
             background-color: #777;
@@ -121,6 +154,7 @@
 </head>
 
 <body>
+    <!-- Total coverage metrics/controls -->
     <header>
         <h1>Coverage Report</h1>
         <hr />
@@ -141,96 +175,193 @@
                     <progress class="progress-coverage" value="{{percentageStr $totalLinesCovered $totalLinesActive 0}}" max="100" style="accent-color: hsl({{$totalPercentCoverageInt}}, 100%, 60%)"></progress>
                 </td>
             </tr>
+            <tr>
+                <th>Actions: </th>
+                <td>
+                    <button class="button button-sort" onclick="setAllSourceFilesCollapsed(false)">Expand All</button>
+                    <button class="button button-sort" onclick="setAllSourceFilesCollapsed(true)">Collapse All</button> /
+                    <button class="button button-sort" onclick="setEmptySourceFilesCollapsed(false)">Expand Empty</button>
+                    <button class="button button-sort" onclick="setEmptySourceFilesCollapsed(true)">Collapse Empty</button>
+                </td>
+            </tr>
         </table>
     </header>
     <hr />
+    <!-- Create a vertically split panel for our file explorer / coverage view -->
+    <div class="split-panel" id="file-split-panel">
+        <!-- Main panel (coverage) -->
+        <div id="main-view-panel">
+            <!-- Individual file coverage -->
+            {{/* Loop through all sources */}}
+            {{range $sourceFile := .SortedFiles}}
+                {{/* Analyze some initial coverage metrics */}}
+                {{$linesCovered := $sourceFile.CoveredLineCount}}
+                {{$linesActive := $sourceFile.ActiveLineCount}}
+                {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
 
-    {{/* Loop through all sources */}}
-    {{range $sourceFile := .SortedFiles}}
-        {{/* Analyze some initial coverage metrics */}}
-        {{$linesCovered := $sourceFile.CoveredLineCount}}
-        {{$linesActive := $sourceFile.ActiveLineCount}}
-        {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
-
-        {{/* Output a collapsible header/container for each source*/}}
-        {{if not $linesCoveredPercentInt}}
-            <button class="collapsible">
-                {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
-                <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
-                <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
-                <span>{{relativePath $sourceFile.Path}}</span>
-            </button>
-        {{else}}
-            <button class="collapsible collapsible-active">
-                {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
-                <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
-                <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
-                <span>{{relativePath $sourceFile.Path}}</span>
-            </button>
-        {{end}}
-        <div class="collapsible-container">
-            <div class="collapsible-container-content">
-            <hr />
-            {{/* Output the total line coverage statistics*/}}
-            <table>
-                <tr>
-                    <th>Lines covered: </th>
-                    <td>{{$linesCovered}} / {{$linesActive}} ({{percentageStr $linesCovered $linesActive 1}}%)</td>
-                </tr>
-            </table>
-            <hr />
-            {{/* Output a tables with a row for each source line*/}}
-            <table class="code-coverage-table">
-                {{range $lineIndex, $line := $sourceFile.Lines}}
-                    {{/* Create a row for this source line */}}
-                    <tr>
-                        {{/* Output a cell for the line number */}}
-                        <td class="row-line-number unselectable">{{add $lineIndex 1}}</td>
+                {{/* Output a container for each source file, with a collapsible header and source container.*/}}
+                <div class="source-file" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
+                    <button class="collapsible">
+                        {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
+                        <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
+                        <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
+                        <span>{{relativePath $sourceFile.Path}}</span>
+                    </button>
+                    <div class="collapsible-container">
+                        <div class="collapsible-container-content">
+                        <hr />
+                        {{/* Output the total line coverage statistics*/}}
+                        <table>
+                            <tr>
+                                <th>Lines covered: </th>
+                                <td>{{$linesCovered}} / {{$linesActive}} ({{percentageStr $linesCovered $linesActive 1}}%)</td>
+                            </tr>
+                        </table>
+                        <hr />
+                        {{/* Output a tables with a row for each source line*/}}
+                        <table class="code-coverage-table">
+                            {{range $lineIndex, $line := $sourceFile.Lines}}
+                                {{/* Create a row for this source line */}}
+                                <tr>
+                                    {{/* Output a cell for the line number */}}
+                                    <td class="row-line-number unselectable">{{add $lineIndex 1}}</td>
 
                         {{/* Output two cells for the reverted/non-reverted execution status */}}
                         <td class="row-reverted-status unselectable">
                             {{if $line.IsCovered}}
-                                <div title="The source line executed without reverting.">√</div>
+                                <div title="The source line executed without reverting.">√ {{$line.SuccessHitCount}}</div>
                             {{end}}
                         </td>
                         <td class="row-reverted-status unselectable">
                             {{if $line.IsCoveredReverted}}
-                                <div title="The source line executed, but was reverted.">⟳</div>
+                                <div title="The source line executed, but was reverted.">⟳ {{$line.RevertHitCount}}</div>
                             {{end}}
                         </td>
 
-                        {{/* Output a cell for the source line */}}
-                        {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}
-                        {{/* If a source line is "covered", it is green, otherwise it is red. */}}
-                        <td class="row-source">
-                            {{if not $line.IsActive}}
-                                    <pre>{{printf "%s" $line.Contents}}</pre>
-                            {{else if or $line.IsCovered $line.IsCoveredReverted}}
-                                    <pre class="row-line-covered">{{printf "%s" $line.Contents}}</pre>
-                            {{else}}
-                                    <pre class="row-line-uncovered">{{printf "%s" $line.Contents}}</pre>
+                                    {{/* Output a cell for the source line */}}
+                                    {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}
+                                    {{/* If a source line is "covered", it is green, otherwise it is red. */}}
+                                    <td class="row-source">
+                                        {{if not $line.IsActive}}
+                                                <pre>{{printf "%s" $line.Contents}}</pre>
+                                        {{else if or $line.IsCovered $line.IsCoveredReverted}}
+                                                <pre class="row-line-covered">{{printf "%s" $line.Contents}}</pre>
+                                        {{else}}
+                                                <pre class="row-line-uncovered">{{printf "%s" $line.Contents}}</pre>
+                                        {{end}}
+                                    </td>
+                                </tr>
                             {{end}}
-                        </td>
-                    </tr>
-                {{end}}
-            </table>
-            </div>
+                        </table>
+                        </div>
+                    </div>
+                </div>
+            {{end}}
         </div>
-    {{end}}
-
+    </div>
 
 <script>
     // Add event listeners for collapsible sections to collapse/expand on click.
     const collapsibleHeaders = document.getElementsByClassName("collapsible");
-    let i;
-    for (i = 0; i < collapsibleHeaders.length; i++) {
+    for (let i = 0; i < collapsibleHeaders.length; i++) {
         collapsibleHeaders[i].addEventListener("click", function() {
             this.classList.toggle("collapsible-active");
-
         });
     }
 
-    // If there's only one item and that item has 0% coverage, expand it by default.
+    // Build our file explorer tree
+    const fileTree = document.getElementById("file-tree");
+    const sourceFiles = document.getElementsByClassName("source-file");
+    for (let i = 0; i < sourceFiles.length; i++) {
+        // Obtain our file path, split by the delimiter '\' or '/' (to support various platforms).
+        let sourceFileDataSet = sourceFiles[i].dataset;
+        let filePathParts = sourceFileDataSet.filePath.split(/[\/\\]+/)
+        if (filePathParts.length > 0) {
+            addSourceFileToTree(fileTree, filePathParts, sourceFileDataSet)
+        }
+    }
+
+    // File tree building method
+    // This works by taking the current node, and adding or finding children for each file path part recursively
+    // below it. When the source file data set is empty, the last node/leaf (the file) is annotated with the coverage
+    // information.
+    function addSourceFileToTree(currentList, filePathParts, sourceFileDataSet) {
+        // If we're at the leaf (source file), stop.
+        if (filePathParts.length === 0) {
+            return;
+        }
+
+        // Find any child which is annotated with the next file path part.
+        let currentListItems = currentList.getElementsByTagName("li");
+        let currentListItem = null;
+        for (let i = 0; i < currentListItems.length; i++) {
+            // Get the data set for the list item.
+            if (currentListItems[i].getAttribute("data-name") === filePathParts[0]) {
+                currentListItem = currentListItems[i];
+            }
+        }
+        // If we didn't find the next element, we create it.
+        if (currentListItem === null) {
+            // Add a list item.
+            currentListItem = document.createElement("li");
+            currentListItem.setAttribute("data-name", filePathParts[0]);
+            currentList.appendChild(currentListItem);
+
+            // If this is a directory, we add a <span>, and set text on that, otherwise we set text in the list item.
+            let textElement = currentListItem;
+            if (filePathParts.length > 1) {
+                let spanElement = document.createElement("span");
+                currentListItem.appendChild(spanElement);
+                textElement = spanElement;
+            }
+
+            // Set the text in our text element.
+            textElement.innerText = filePathParts[0]
+
+            // Add the inner list for this list item.
+            let nextList = document.createElement("ul");
+            currentListItem.appendChild(nextList);
+        }
+
+        // If this is the last item, set the attributes, otherwise recurse.
+        if (filePathParts.length >= 1) {
+            // Get the child list within the next list item.
+            let nextList = currentListItem.getElementsByTagName("ul")[0];
+
+            // Recurse on the next element.
+            addSourceFileToTree(nextList, filePathParts.slice(1), sourceFileDataSet)
+        }
+    }
+
+    // Button click event handler for expanding/collapsing all files.
+    function setAllSourceFilesCollapsed(collapsed) {
+        let i;
+        for (i = 0; i < collapsibleHeaders.length; i++) {
+            if (collapsed) {
+                collapsibleHeaders[i].classList.remove("collapsible-active");
+            } else {
+                collapsibleHeaders[i].classList.add("collapsible-active");
+            }
+        }
+    }
+
+    // Button click event handler for expanding/collapsing empty files.
+    function setEmptySourceFilesCollapsed(collapsed) {
+        let i;
+        for (i = 0; i < sourceFiles.length; i++) {
+            // Verify the item is an empty source file.
+            if (sourceFiles[i].dataset.linesActive <= 0) {
+                let collapsibleHeader = sourceFiles[i].querySelector('.collapsible');
+                if (collapsed) {
+                    collapsibleHeader.classList.remove("collapsible-active");
+                } else {
+                    collapsibleHeader.classList.add("collapsible-active");
+                }
+            }
+        }
+    }
+
+    // If there's only one item, expand it by default.
     if (collapsibleHeaders.length === 1 && !collapsibleHeaders.className.contains("collapsible-active")) {
         collapsibleHeaders[0].click();
     }

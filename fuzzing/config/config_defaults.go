@@ -1,6 +1,9 @@
 package config
 
 import (
+	"github.com/crytic/medusa/compilation/types"
+	"math/big"
+
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/rs/zerolog"
@@ -29,18 +32,28 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 		return nil, err
 	}
 
+	// Obtain a default slither configuration
+	slitherConfig, err := types.NewDefaultSlitherConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
-			Workers:            10,
-			WorkerResetLimit:   50,
-			Timeout:            0,
-			TestLimit:          0,
-			CallSequenceLength: 100,
-			DeploymentOrder:    []string{},
-			ConstructorArgs:    map[string]map[string]any{},
-			CorpusDirectory:    "",
-			CoverageEnabled:    true,
+			Workers:                 10,
+			WorkerResetLimit:        50,
+			Timeout:                 0,
+			TestLimit:               0,
+			ShrinkLimit:             5_000,
+			CallSequenceLength:      100,
+			TargetContracts:         []string{},
+			TargetContractsBalances: []*big.Int{},
+			PredeployedContracts:    map[string]string{},
+			ConstructorArgs:         map[string]map[string]any{},
+			CorpusDirectory:         "",
+			CoverageEnabled:         true,
+			CoverageFormats:         []string{"html", "lcov"},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -55,23 +68,25 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
+				TestViewMethods:              true,
 				TestAllContracts:             false,
 				TraceAll:                     false,
+				TargetFunctionSignatures:     []string{},
+				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{
-					Enabled:         false,
-					TestViewMethods: false,
-					AssertionModes: AssertionModesConfig{
+					Enabled: true,
+					PanicCodeConfig: PanicCodeConfig{
 						FailOnAssertion: true,
 					},
 				},
-				PropertyTesting: PropertyTestConfig{
+				PropertyTesting: PropertyTestingConfig{
 					Enabled: true,
 					TestPrefixes: []string{
-						"fuzz_",
+						"property_",
 					},
 				},
 				OptimizationTesting: OptimizationTestingConfig{
-					Enabled: false,
+					Enabled: true,
 					TestPrefixes: []string{
 						"optimize_",
 					},
@@ -80,6 +95,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestChainConfig: *chainConfig,
 		},
 		Compilation: compilationConfig,
+		Slither:     slitherConfig,
 		Logging: LoggingConfig{
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",

@@ -23,7 +23,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	// Add the requested number of entries.
 	numSequences := minSequences + (rand.Int() % (maxSequences - minSequences))
 	for i := 0; i < numSequences; i++ {
-		err := corpus.addCallSequence(corpus.mutableSequenceFiles, getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), true, nil, false)
+		err := corpus.addCallSequence(corpus.callSequenceFiles, getMockCallSequence(minBlocks+(rand.Int()%(maxBlocks-minBlocks))), true, nil, false)
 		if err != nil {
 			return nil, err
 		}
@@ -31,7 +31,7 @@ func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlock
 	return corpus, nil
 }
 
-// getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
+// getMockCallSequence creates a mock CorpusCallSequence with numBlocks blocks for testing
 func getMockCallSequence(size int) calls.CallSequence {
 	cs := make(calls.CallSequence, size)
 	for i := 0; i < size; i++ {
@@ -40,7 +40,7 @@ func getMockCallSequence(size int) calls.CallSequence {
 	return cs
 }
 
-// getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
+// getMockCallSequenceElement creates a mock CorpusBlock with numTransactions transactions and receipts for testing
 func getMockCallSequenceElement() *calls.CallSequenceElement {
 	return &calls.CallSequenceElement{
 		Contract:            nil,
@@ -100,9 +100,9 @@ func TestCorpusReadWrite(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Ensure that there are the correct number of call sequence files
-		matches, err := filepath.Glob(filepath.Join(corpus.mutableSequenceFiles.path, "*.json"))
+		matches, err := filepath.Glob(filepath.Join(corpus.callSequenceFiles.path, "*.json"))
 		assert.NoError(t, err)
-		assert.EqualValues(t, len(corpus.mutableSequenceFiles.files), len(matches))
+		assert.EqualValues(t, len(corpus.callSequenceFiles.files), len(matches))
 
 		// Wipe corpus clean so that you can now read it in from disk
 		corpus, err = NewCorpus("corpus")
@@ -124,7 +124,7 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 	// Run the test in our temporary test directory to avoid artifact pollution.
 	testutils.ExecuteInDirectory(t, t.TempDir(), func() {
 		// For each entry, marshal it and then unmarshal the byte array
-		for _, entryFile := range corpus.mutableSequenceFiles.files {
+		for _, entryFile := range corpus.callSequenceFiles.files {
 			// Marshal the entry
 			b, err := json.Marshal(entryFile.data)
 			assert.NoError(t, err)
@@ -139,9 +139,9 @@ func TestCorpusCallSequenceMarshaling(t *testing.T) {
 		}
 
 		// Remove all items
-		for i := 0; i < len(corpus.mutableSequenceFiles.files); {
-			corpus.mutableSequenceFiles.removeFile(corpus.mutableSequenceFiles.files[i].fileName)
+		for i := 0; i < len(corpus.callSequenceFiles.files); {
+			corpus.callSequenceFiles.removeFile(corpus.callSequenceFiles.files[i].fileName)
 		}
-		assert.Empty(t, corpus.mutableSequenceFiles.files)
+		assert.Empty(t, corpus.callSequenceFiles.files)
 	})
 }

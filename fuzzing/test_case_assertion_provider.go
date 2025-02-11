@@ -1,13 +1,15 @@
 package fuzzing
 
 import (
+	"math/big"
+	"sync"
+
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+
 	"golang.org/x/exp/slices"
-	"sync"
 )
 
 // AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
@@ -41,13 +43,6 @@ func attachAssertionTestCaseProvider(fuzzer *Fuzzer) *AssertionTestCaseProvider 
 	return t
 }
 
-// isTestableMethod checks whether the method is configured by the attached fuzzer to be a target of assertion testing.
-// Returns true if this target should be tested, false otherwise.
-func (t *AssertionTestCaseProvider) isTestableMethod(method abi.Method) bool {
-	// Only test constant methods (pure/view) if we are configured to.
-	return !method.IsConstant() || t.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods
-}
-
 // checkAssertionFailures checks the results of the last call for assertion failures.
 // Returns the method ID, a boolean indicating if an assertion test failed, or an error if one occurs.
 func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.CallSequence) (*contracts.ContractMethodID, bool, error) {
@@ -73,7 +68,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	panicCode := abiutils.GetSolidityPanicCode(lastExecutionResult.Err, lastExecutionResult.ReturnData, true)
 	failure := false
 	if panicCode != nil {
-		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.AssertionModes)
+		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig)
 	}
 
 	return &methodId, failure, nil
@@ -87,17 +82,12 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
-		// If we're not testing all contracts, verify the current contract is one we specified in our deployment order.
-		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.DeploymentOrder, contract.Name()) {
+		// If we're not testing all contracts, verify the current contract is one we specified in our target contracts
+		if !t.fuzzer.config.Fuzzing.Testing.TestAllContracts && !slices.Contains(t.fuzzer.config.Fuzzing.TargetContracts, contract.Name()) {
 			continue
 		}
 
-		for _, method := range contract.CompiledContract().Abi.Methods {
-			// Verify this method is an assertion testable method
-			if !t.isTestableMethod(method) {
-				continue
-			}
-
+		for _, method := range contract.AssertionTestMethods {
 			// Create local variables to avoid pointer types in the loop being overridden.
 			contract := contract
 			method := method
@@ -201,6 +191,8 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
+			TestName:             testCase.Name(),
+			CallSequenceToShrink: callSequence,
 			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
 				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(shrunkenCallSequence)
@@ -211,10 +203,10 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) error {
-				// When we're finished shrinking, attach an execution trace to the last call
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+				// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 				if len(shrunkenCallSequence) > 0 {
-					err = shrunkenCallSequence[len(shrunkenCallSequence)-1].AttachExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions)
+					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
 					if err != nil {
 						return err
 					}
@@ -223,6 +215,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// Update our test state and report it finalized.
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
+				worker.workerMetrics().failedSequences.Add(worker.workerMetrics().failedSequences, big.NewInt(1))
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil
 			},
@@ -241,7 +234,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 // code was enabled in the config. Note that the panic codes are defined in the abiutils package and that this function
 // panic if it is provided a panic code that is not defined in the abiutils package.
 // TODO: This is a terrible design and a future PR should be made to maintain assertion and panic logic correctly
-func encounteredAssertionFailure(panicCode uint64, conf config.AssertionModesConfig) bool {
+func encounteredAssertionFailure(panicCode uint64, conf config.PanicCodeConfig) bool {
 	// Switch on panic code
 	switch panicCode {
 	case abiutils.PanicCodeCompilerInserted:
