@@ -1,6 +1,8 @@
 package fuzzing
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -121,6 +123,15 @@ func (m *fuzzerWorkerMetrics) updateRevertMetrics(callSequenceElement *calls.Cal
 	if callSequenceElement == nil || m.revertMetricsChan == nil {
 		return
 	}
+
+	abi := callSequenceElement.Contract.CompiledContract().Abi
+	executionResult := callSequenceElement.ChainReference.MessageResults().ExecutionResult
+	if executionResult == nil || executionResult.Err == nil || executionResult.Err != vm.ErrExecutionReverted {
+		return
+	}
+	str := string(executionResult.ReturnData[:4])
+	myErr := abi.Errors[str].String()
+	fmt.Sprintf("My err is %v", myErr)
 
 	// Send the revert metrics update to the revert reporter
 	m.revertMetricsChan <- reverts.RevertMetricsUpdate{

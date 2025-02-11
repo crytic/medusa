@@ -3,7 +3,9 @@ package reverts
 import (
 	"encoding/json"
 	"errors"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"os"
+	"path/filepath"
 
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/logging"
@@ -40,9 +42,15 @@ type FunctionRevertMetrics struct {
 // RevertMetricsUpdate is used to update the RevertMetrics struct.
 // The fuzzer workers will send these updates via the metrics channel.
 type RevertMetricsUpdate struct {
-	ContractName    string
-	FunctionName    string
+	// ContractName is the name of the contract which was called
+	ContractName string
+	// FunctionName is the name of the function which was called
+	FunctionName string
+	// ExecutionResult is the result of the execution
 	ExecutionResult *core.ExecutionResult
+	// ContractErrorsABI is the error-portion of the contract's ABI so that we can resolve the return data
+	// provided by the execution result.
+	ContractErrorsABI map[string]abi.Error
 }
 
 func NewRevertMetrics() *RevertMetrics {
@@ -105,7 +113,7 @@ func (m *RevertMetrics) Update(update *RevertMetricsUpdate) {
 
 	// Otherwise, use the selector of the error return data as the revert reason
 	// TODO: Make sure this is what we want to use after some testing.
-	if len(executionResult.ReturnData) > 4 {
+	if len(executionResult.ReturnData) >= 4 {
 		revertReason := string(executionResult.ReturnData[:4])
 		functionRevertMetrics.RevertReasonCounts[revertReason]++
 	}
@@ -118,8 +126,11 @@ func NewRevertMetricsFromPath(path string) (*RevertMetrics, error) {
 		return nil, errors.New("empty path was provided")
 	}
 
+	// Get the file path
+	filePath := filepath.Join(path, "revert_metrics.json")
+
 	// Read the file
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filePath)
 	if err != nil {
 		// Don't throw an error if the file does not exist.
 		if errors.Is(err, os.ErrNotExist) {

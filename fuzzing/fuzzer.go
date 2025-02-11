@@ -163,6 +163,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create the revert reporter
 	revertReporter, err := reverts.NewRevertReporter(config.Fuzzing.RevertReporterEnabled, config.Fuzzing.CorpusDirectory)
 	if err != nil {
+		logger.Error("Failed to create revert reporter", err)
 		return nil, err
 	}
 
