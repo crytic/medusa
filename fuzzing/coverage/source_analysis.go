@@ -180,6 +180,37 @@ type SourceLineAnalysis struct {
 	IsCoveredReverted bool
 }
 
+// TODO.
+func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps) (int, error) {
+	uniquePCs := 0
+
+	// Loop through all sources in all compilations to process coverage information.
+	for _, compilation := range compilations {
+		for _, source := range compilation.SourcePathToArtifact {
+			// Loop for each contract in this source
+			for _, contract := range source.Contracts {
+				// Skip interfaces.
+				if contract.Kind == types.ContractKindInterface {
+					continue
+				}
+				// Obtain coverage map data for this contract.
+				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
+				if err != nil {
+					return 0, fmt.Errorf("could not perform source code analysis due to error fetching init coverage map data: %v", err)
+				}
+				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
+				if err != nil {
+					return 0, fmt.Errorf("could not perform source code analysis due to error fetching runtime coverage map data: %v", err)
+				}
+
+				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData, true)
+				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData, false)
+			}
+		}
+	}
+	return uniquePCs, nil
+}
+
 // AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
 // to determine source coverage information.
 // Returns a SourceAnalysis object, or an error if one occurs.
@@ -290,6 +321,23 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 		}
 	}
 	return sourceAnalysis, nil
+}
+
+func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) int {
+	if len(bytecode) == 0 || contractCoverageData == nil {
+		return 0
+	}
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
+	if succHitCounts == nil || revertHitCounts == nil {
+		return 0
+	}
+	pcsHit := 0
+	for i, ct := range succHitCounts {
+		if ct > 0 || revertHitCounts[i] > 0 {
+			pcsHit++
+		}
+	}
+	return pcsHit
 }
 
 // analyzeContractSourceCoverage takes a compilation, a SourceAnalysis, the source map they were derived from,
