@@ -988,7 +988,7 @@ func (f *Fuzzer) printMetricsLoop() {
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 
-			if time.Now().Sub(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
+			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
 				start := time.Now()
 				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps())
 				// This is just for a log message. This shouldn't error but if it does we don't need to exit out

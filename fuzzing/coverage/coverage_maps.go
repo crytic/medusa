@@ -219,7 +219,7 @@ func (cm *CoverageMaps) BranchesHit() uint64 {
 		uniqueFlagsForHash := make(map[uint64]struct{})
 
 		for _, contractCoverageMap := range mapsByAddress {
-			for branch, _ := range contractCoverageMap.coverage.executedFlags {
+			for branch := range contractCoverageMap.coverage.executedFlags {
 				uniqueFlagsForHash[branch] = struct{}{}
 			}
 		}

@@ -142,7 +142,7 @@ func (t *CoverageTracer) recordExit(reverted bool) {
 			markerXor = RETURN_MARKER_XOR
 		}
 		marker := bits.RotateLeft64(callFrameState.lastPC, 32) ^ markerXor
-		callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker)
+		_, _ = callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker) // TODO ignored error
 	}
 }
 
@@ -223,7 +223,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 
 	// Record coverage for this location in our map.
-	callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker)
+	_, _ = callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker) // TODO ignored error
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
