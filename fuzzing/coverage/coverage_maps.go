@@ -1,10 +1,10 @@
 package coverage
 
 import (
-	"sync"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"sync"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
@@ -358,6 +358,6 @@ func (cm *CoverageMapBytecodeData) updateCoveredAt(marker uint64) (bool, error) 
 	}
 
 	newCoverage := previousVal == 0
-	cm.executedFlags[marker] = previousVal+1
+	cm.executedFlags[marker] = previousVal + 1
 	return newCoverage, nil
 }

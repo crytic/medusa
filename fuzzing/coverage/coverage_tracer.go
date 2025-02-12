@@ -76,8 +76,8 @@ type coverageTracerCallFrameState struct {
 	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
 	lookupHash *common.Hash
 
-	lastPC uint64
-	address common.Address
+	lastPC     uint64
+	address    common.Address
 	justJumped bool
 }
 
