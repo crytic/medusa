@@ -182,9 +182,6 @@ type SourceLineAnalysis struct {
 
 // TODO.
 func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps) (int, error) {
-	coverageMaps.updateLock.Lock()
-	defer coverageMaps.updateLock.Unlock()
-
 	uniquePCs := 0
 
 	// Loop through all sources in all compilations to process coverage information.
@@ -206,8 +203,10 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 					return 0, fmt.Errorf("could not perform source code analysis due to error fetching runtime coverage map data: %v", err)
 				}
 
+				coverageMaps.updateLock.Lock()
 				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData, true)
 				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData, false)
+				coverageMaps.updateLock.Unlock()
 			}
 		}
 	}
@@ -218,9 +217,6 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 // to determine source coverage information.
 // Returns a SourceAnalysis object, or an error if one occurs.
 func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps) (*SourceAnalysis, error) {
-	coverageMaps.updateLock.Lock()
-	defer coverageMaps.updateLock.Unlock()
-
 	// Create a new source analysis object
 	sourceAnalysis := &SourceAnalysis{
 		Files: make(map[string]*SourceFileAnalysis),
