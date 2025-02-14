@@ -422,8 +422,8 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
-	execFlags := cm.executedFlags
-	execFlagsSrcDst, execFlagsDstSrc := getExecFlagsMapping(execFlags)
+	execMarkers := cm.executedMarkers
+	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(execMarkers)
 
 	successfulHits := make([]uint, len(indexToOffset))
 	revertedHits := make([]uint, len(indexToOffset))
@@ -434,14 +434,14 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 		revertCount := uint(0)
 		allLeaveCount := uint(0)
 
-		if flagsHere, ok := execFlagsDstSrc[uint64(pc)]; ok {
-			for _, hitHere := range flagsHere {
+		if markersHere, ok := execMarkersDstSrc[uint64(pc)]; ok {
+			for _, hitHere := range markersHere {
 				enterCount += hitHere
 			}
 		}
-		if flagsHere, ok := execFlagsSrcDst[uint64(pc)]; ok {
-			revertCount = flagsHere[REVERT_MARKER_XOR]
-			for _, hitHere := range flagsHere {
+		if markersHere, ok := execMarkersSrcDst[uint64(pc)]; ok {
+			revertCount = markersHere[REVERT_MARKER_XOR]
+			for _, hitHere := range markersHere {
 				allLeaveCount += hitHere
 			}
 		}
@@ -501,24 +501,24 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 	return indexToOffsetLookup
 }
 
-func getExecFlagsMapping(execFlags map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
-	execFlagsSrcDst := make(map[uint64]map[uint64]uint)
-	execFlagsDstSrc := make(map[uint64]map[uint64]uint)
+func getExecMarkersMapping(execMarkers map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
+	execMarkersSrcDst := make(map[uint64]map[uint64]uint)
+	execMarkersDstSrc := make(map[uint64]map[uint64]uint)
 
-	for marker, hitCount := range execFlags {
+	for marker, hitCount := range execMarkers {
 		dst := marker & 0xFFFFFFFF
 		src := marker >> 32
-		if _, ok := execFlagsSrcDst[src]; !ok {
-			execFlagsSrcDst[src] = make(map[uint64]uint, 1)
+		if _, ok := execMarkersSrcDst[src]; !ok {
+			execMarkersSrcDst[src] = make(map[uint64]uint, 1)
 		}
-		if _, ok := execFlagsDstSrc[dst]; !ok {
-			execFlagsDstSrc[dst] = make(map[uint64]uint, 1)
+		if _, ok := execMarkersDstSrc[dst]; !ok {
+			execMarkersDstSrc[dst] = make(map[uint64]uint, 1)
 		}
-		execFlagsSrcDst[src][dst] = hitCount
-		execFlagsDstSrc[dst][src] = hitCount
+		execMarkersSrcDst[src][dst] = hitCount
+		execMarkersDstSrc[dst][src] = hitCount
 	}
 
-	return execFlagsSrcDst, execFlagsDstSrc
+	return execMarkersSrcDst, execMarkersDstSrc
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are removed.
