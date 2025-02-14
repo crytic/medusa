@@ -463,7 +463,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(1)}
+			config.Fuzzing.TargetContractsBalances = []string{"1"}
 			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -488,7 +488,7 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
 		configUpdates: func(config *config.ProjectConfig) {
 			config.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
+			config.Fuzzing.TargetContractsBalances = []string{"0", "1000000000000000000"}
 			config.Fuzzing.TestLimit = 1 // this should happen immediately
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false

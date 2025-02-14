@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/crytic/medusa/compilation/types"
-	"math/big"
 
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
@@ -48,7 +47,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
-			TargetContractsBalances: []*big.Int{},
+			TargetContractsBalances: []string{},
 			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",

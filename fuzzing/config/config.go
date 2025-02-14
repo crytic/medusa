@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
-	"math/big"
 	"os"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
 )
 
@@ -77,7 +76,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+	TargetContractsBalances []string `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -116,7 +115,7 @@ type FuzzingConfig struct {
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
 // For example, this enables serialization of big.Int but specifying a different field type to control serialization.
 type fuzzingConfigMarshaling struct {
-	TargetContractsBalances []*hexutil.Big
+	TargetContractsBalances []string
 }
 
 // TestingConfig describes the configuration options used for testing
