@@ -504,14 +504,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
-				// if len(balances) > i {
-				// 	contractBalance = new(big.Int).Set(balances[i])
-				// }
 				if len(balances) > i {
-					_, success := contractBalance.SetString(balances[i], 10) // Base 10
+					_, success := contractBalance.SetString(balances[i], 10)
 					if !success {
-						// contractBalance = big.NewInt(0) // Fallback to 0 if conversion fails
-						contractBalance.SetString("0", 10)
+						contractBalance = big.NewInt(0)
 					}
 				}
 
