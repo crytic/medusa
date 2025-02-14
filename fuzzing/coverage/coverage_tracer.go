@@ -137,23 +137,23 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 	})
 }
 
-func (t *CoverageTracer) recordExit(reverted bool) {
-	callFrameState := t.callFrameStates[t.callDepth]
-	if callFrameState != nil && callFrameState.lookupHash != nil && callFrameState.initialized { // TODO last one necessary?
+// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
+func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	currentCallFrameState := t.callFrameStates[t.callDepth]
+	currentCoverageMap := currentCallFrameState.pendingCoverageMap
+
+	// Record the exit in our coverage map
+	// We should always be initialized here, but if we aren't then fields like address will be messed up, so we check to be sure
+	if currentCallFrameState.initialized && currentCallFrameState.lookupHash != nil {
 		var markerXor uint64
 		if reverted {
 			markerXor = REVERT_MARKER_XOR
 		} else {
 			markerXor = RETURN_MARKER_XOR
 		}
-		marker := bits.RotateLeft64(callFrameState.lastPC, 32) ^ markerXor
-		_, _ = callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker) // TODO ignored error
+		marker := bits.RotateLeft64(currentCallFrameState.lastPC, 32) ^ markerXor
+		_, _ = currentCoverageMap.UpdateAt(currentCallFrameState.address, *currentCallFrameState.lookupHash, marker) // TODO ignored error
 	}
-}
-
-// OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
-func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	t.recordExit(reverted)
 
 	// Check to see if this is the top level call frame
 	isTopLevelFrame := depth == 0
@@ -162,10 +162,10 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 	var coverageUpdateErr error
 	if isTopLevelFrame {
 		// Update the final coverage map if this is the top level call frame
-		_, coverageUpdateErr = t.coverageMaps.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+		_, coverageUpdateErr = t.coverageMaps.Update(currentCoverageMap)
 	} else {
 		// Move coverage up one call frame
-		_, coverageUpdateErr = t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(t.callFrameStates[t.callDepth].pendingCoverageMap)
+		_, coverageUpdateErr = t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(currentCoverageMap)
 
 		// Pop the state tracking struct for this call frame off the stack and decrement the call depth
 		t.callFrameStates = t.callFrameStates[:t.callDepth]
