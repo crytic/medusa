@@ -180,7 +180,7 @@ type SourceLineAnalysis struct {
 	IsCoveredReverted bool
 }
 
-// TODO.
+// GetUniquePCsCount returns the number of PCs in all contracts hit by our tests.
 func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps) (int, error) {
 	uniquePCs := 0
 
@@ -204,8 +204,8 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 				}
 
 				coverageMaps.updateLock.Lock()
-				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData, true)
-				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData, false)
+				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData)
+				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData)
 				coverageMaps.updateLock.Unlock()
 			}
 		}
@@ -311,11 +311,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData, true)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData, false)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData)
 				if err != nil {
 					return nil, err
 				}
@@ -325,11 +325,12 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 	return sourceAnalysis, nil
 }
 
-func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) int {
+// getContractPCsHit returns the number of PCs in this contract hit by our tests.
+func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap) int {
 	if len(bytecode) == 0 || contractCoverageData == nil {
 		return 0
 	}
-	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, isInit)
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode)
 	if succHitCounts == nil || revertHitCounts == nil {
 		return 0
 	}
@@ -346,10 +347,10 @@ func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMa
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, isInit bool) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap) error {
 	var succHitCounts, revertHitCounts []uint
 	if len(bytecode) > 0 && contractCoverageData != nil {
-		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, isInit)
+		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode)
 	} else { // Probably because we didn't hit this contract at all...
 		succHitCounts = nil
 		revertHitCounts = nil
@@ -419,36 +420,36 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 	return nil
 }
 
-func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
+// determineLinesCovered takes a ContractCoverageMap and a contract's bytecode, and determines which program counters were hit.
+// Returns two slices: one for successful hits and one for reverts. These slices are indexed by program counter,
+// and their values are the number of hits (0 if the PC was not hit).
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
-	execMarkers := cm.executedMarkers
-	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(execMarkers)
+	// executedMakers as src -> dst -> hit count, and dst -> src -> hit count
+	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(cm.executedMarkers)
 
 	successfulHits := make([]uint, len(indexToOffset))
 	revertedHits := make([]uint, len(indexToOffset))
 
+	// Traverse the instructions from top to bottom, keeping track of hit count as we go
 	hit := uint(0)
 	for idx, pc := range indexToOffset {
-		enterCount := uint(0)
-		revertCount := uint(0)
-		allLeaveCount := uint(0)
+		enterCount := uint(0)    // count of jumpdest + contract initial enter (ENTER_MARKER_XOR)
+		revertCount := uint(0)   // count of revert (REVERT_MARKER_XOR)
+		allLeaveCount := uint(0) // count of jump + return (RETURN_MAKRER_XOR) + revert (REVERT_MARKER_XOR)
 
-		if markersHere, ok := execMarkersDstSrc[uint64(pc)]; ok {
-			for _, hitHere := range markersHere {
-				enterCount += hitHere
-			}
+		for _, hitHere := range execMarkersDstSrc[uint64(pc)] {
+			enterCount += hitHere
 		}
-		if markersHere, ok := execMarkersSrcDst[uint64(pc)]; ok {
-			revertCount = markersHere[REVERT_MARKER_XOR]
-			for _, hitHere := range markersHere {
-				allLeaveCount += hitHere
-			}
+		revertCount = execMarkersSrcDst[uint64(pc)][REVERT_MARKER_XOR]
+		for _, hitHere := range execMarkersSrcDst[uint64(pc)] {
+			allLeaveCount += hitHere
 		}
 
 		// Test some conditions that should always hold...
-		op := vm.OpCode(bytecode[pc])                                                         // Used only for tests below
-		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for tests below
+		op := vm.OpCode(bytecode[pc])                                                         // Used only for checks below
+		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for checks below
 		if hit+enterCount < revertCount {
 			fmt.Println("WARNING: Overflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
@@ -459,9 +460,11 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 			fmt.Println("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
 		if allLeaveCount-revertCount > 0 && hit+enterCount != allLeaveCount {
+			// The check is allLeaveCount-revertCount > 0 rather than just allLeaveCount > 0 since reverts don't have to reset hit to 0
 			fmt.Println("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
 
+		// Modify hit based on coverage for this line, and record results
 		hit += enterCount
 		successfulHits[idx] = hit - revertCount
 		revertedHits[idx] = revertCount
@@ -473,7 +476,6 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 
 // GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
 // and the element of the slice represents the instruction offset.
-// Returns the slice lookup, or an error if one occurs.
 func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 	// Create our resulting lookup
 	indexToOffsetLookup := make([]int, 0, len(bytecode)/2)
@@ -501,11 +503,14 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 	return indexToOffsetLookup
 }
 
+// getExecMarkersMapping takes a set of executed markers, and sorts it into a map from src -> dst -> hit count, and a map of dst -> src -> hit count.
+// This is a helper function used by determineLinesCovered.
 func getExecMarkersMapping(execMarkers map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
 	execMarkersSrcDst := make(map[uint64]map[uint64]uint)
 	execMarkersDstSrc := make(map[uint64]map[uint64]uint)
 
 	for marker, hitCount := range execMarkers {
+		// Lower, upper 32 bits
 		dst := marker & 0xFFFFFFFF
 		src := marker >> 32
 		if _, ok := execMarkersSrcDst[src]; !ok {

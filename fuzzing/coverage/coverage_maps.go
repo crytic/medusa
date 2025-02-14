@@ -242,6 +242,7 @@ type ContractCoverageMap struct {
 }
 
 // Constants used in markers. See comments on ContractCoverageMap.executedMarkers for more details on how these are used.
+// These are high (> 1 billion) so that it should never overlap with real PCs, ie so that these markers should never overlap with jump markers.
 const (
 	REVERT_MARKER_XOR = 0x40000000
 	RETURN_MARKER_XOR = 0x80000000
