@@ -56,15 +56,14 @@ type CoverageTracer struct {
 
 	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
 	// so that this expensive calculation doesn't need to be done every opcode.
-	// The [2] array is to differentiate between contract init (0) vs runtime (1),
-	// since init vs runtime produces different results from getContractCoverageMapHash.
-	// The Hash key is a contract's codehash, which uniquely identifies it.
-	// TODO rewrite description
+	// The Hash key is a contract's codehash, which uniquely identifies it (TODO with caveat about init vs runtime).
 	codeHashCache map[common.Hash]common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
 type coverageTracerCallFrameState struct {
+	// Some fields, such as address, are not initialized until OnOpcode is called.
+	// initialized tracks whether or not this has happened yet.
 	initialized bool
 
 	// create indicates whether the current call frame is executing on init bytecode (deploying a contract).
@@ -76,8 +75,14 @@ type coverageTracerCallFrameState struct {
 	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
 	lookupHash *common.Hash
 
+	// lastPC is the most recent PC that has been executed. Used for coverage tracking.
 	lastPC     uint64
+
+	// address is used by OnOpcode to cache the result of scope.Address(), which is slow.
+	// It records the address of the current contract.
 	address    common.Address
+
+	// justJumped indicates whether or not the most recent instruction (the one indicated by lastPC) was JUMP/JUMPI.
 	justJumped bool
 }
 

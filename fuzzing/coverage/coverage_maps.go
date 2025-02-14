@@ -154,7 +154,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 				}
 			} else {
 				mapsByAddress[codeAddress] = coverageMapToMerge
-				coverageChanged = coverageMapToMerge.coverage != nil
+				coverageChanged = coverageMapToMerge.executedFlags != nil
 			}
 		}
 	}
@@ -163,8 +163,8 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 	return coverageChanged, nil
 }
 
-// UpdateAt updates the hit count of a given program counter location within code coverage data.
-func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, pc uint64) (bool, error) {
+// UpdateAt updates the hit count of a given marker within code coverage data.
+func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, marker uint64) (bool, error) {
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
@@ -200,12 +200,14 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 	}
 
 	// Set our coverage in the map and return our change state
-	changedInMap, err = coverageMap.updateCoveredAt(pc)
+	changedInMap, err = coverageMap.updateCoveredAt(marker)
 
 	return addedNewMap || changedInMap, err
 }
 
-// BranchesHit is a function that TODO // returns the total number of unique program counters (PCs)
+// BranchesHit is a function that returns the total number of unique markers.
+// Technically these markers can also refer to contract entrance, return, and revert,
+// but calling it "branches" is close enough.
 func (cm *CoverageMaps) BranchesHit() uint64 {
 	// Acquire our thread lock and defer our unlocking for when we exit this method
 	cm.updateLock.Lock()
@@ -219,7 +221,7 @@ func (cm *CoverageMaps) BranchesHit() uint64 {
 		uniqueFlagsForHash := make(map[uint64]struct{})
 
 		for _, contractCoverageMap := range mapsByAddress {
-			for branch := range contractCoverageMap.coverage.executedFlags {
+			for branch := range contractCoverageMap.executedFlags {
 				uniqueFlagsForHash[branch] = struct{}{}
 			}
 		}
@@ -228,13 +230,18 @@ func (cm *CoverageMaps) BranchesHit() uint64 {
 	return branchesHit
 }
 
-// ContractCoverageMap represents a data structure used to identify instruction execution coverage of a contract.
+// ContractCoverageMap represents a data structure used to identify execution coverage of a contract.
 type ContractCoverageMap struct {
-	// coverage represents coverage for the contract bytecode, TODO
-	coverage *CoverageMapBytecodeData
+	// executedFlags is a map of flag to number of times this flag has been hit.
+	// A flag can be one of four things: jump instruction, revert, return, or entering a contract.
+	// Flags are 64-bit integers, storing two values: "source" in the upper 32 bits, and "destination" in lower 32 bits.
+	// For flags corresponding to jump instructions, source and dest mean the source and dest of the jump.
+	// For revert and return, the "source" is the PC of the opcode causing the revert/return, and the "destination" is REVERT_MARKER_XOR or RETURN_MARKER_XOR.
+	// For contract entrance, the "source" is ENTER_MARKER_XOR and the "destination" is the first PC executed.
+	executedFlags map[uint64]uint
 }
 
-// TODO comment and maybe move
+// Constants used in flags. See comments on ContractCoverageMap.executedFlags for more details on how these are used.
 const (
 	REVERT_MARKER_XOR = 0x40000000
 	RETURN_MARKER_XOR = 0x80000000
@@ -243,47 +250,12 @@ const (
 
 // newContractCoverageMap creates and returns a new ContractCoverageMap.
 func newContractCoverageMap() *ContractCoverageMap {
-	return &ContractCoverageMap{
-		coverage: &CoverageMapBytecodeData{},
-	}
+	return &ContractCoverageMap{}
 }
 
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
-	// Compare both our underlying bytecode coverage maps.
-	return cm.coverage.Equal(b.coverage)
-}
-
-// update updates the current ContractCoverageMap with the provided one.
-// Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
-// TODO change text above, coverage.update might need text change as well
-func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
-	return cm.coverage.update(coverageMap.coverage)
-}
-
-// updateCoveredAt updates the hit counter at a given program counter location within a ContractCoverageMap used for
-// "successful" coverage (non-reverted).
-// Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *ContractCoverageMap) updateCoveredAt(pc uint64) (bool, error) {
-	// Set our coverage data for the successful path.
-	return cm.coverage.updateCoveredAt(pc)
-}
-
-// CoverageMapBytecodeData represents a data structure used to identify instruction execution coverage of some init
-// or runtime bytecode.
-type CoverageMapBytecodeData struct {
-	executedFlags map[uint64]uint
-}
-
-// Reset resets the bytecode coverage map data to be empty.
-func (cm *CoverageMapBytecodeData) Reset() {
-	cm.executedFlags = nil
-}
-
-// Equal checks whether the provided CoverageMapBytecodeData contains the same data as the current one.
-// Returns a boolean indicating whether the two maps match.
-func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
 	//  it may make sense to just check that both of them are greater than zero
 
@@ -300,26 +272,9 @@ func (cm *CoverageMapBytecodeData) Equal(b *CoverageMapBytecodeData) bool {
 	return true
 }
 
-// HitCount returns the number of times that the provided program counter (PC) has been hit. If zero is returned, then
-// the PC has not been hit, the map is empty, or the PC is out-of-bounds
-func (cm *CoverageMapBytecodeData) HitCount(marker uint64) uint {
-	// If the coverage map bytecode data is nil, this is not covered.
-	if cm == nil {
-		return 0
-	}
-
-	// If this map has no execution data, it is not covered.
-	if cm.executedFlags == nil {
-		return 0
-	}
-
-	// Otherwise, return the hit count
-	return cm.executedFlags[marker]
-}
-
-// update updates the hit count of the current CoverageMapBytecodeData with the provided one.
-// Returns a boolean indicating whether new coverage was achieved, or an error if one was encountered.
-func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) (bool, error) {
+// update updates the current ContractCoverageMap with the provided one.
+// Returns two booleans indicating whether successful or reverted coverage changed, or an error if one was encountered.
+func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
 	// If the coverage map execution data provided is nil, exit early
 	if coverageMap.executedFlags == nil {
 		return false, nil
@@ -343,13 +298,13 @@ func (cm *CoverageMapBytecodeData) update(coverageMap *CoverageMapBytecodeData) 
 	return changed, nil
 }
 
-// updateCoveredAt updates the hit count at a given program counter location within a CoverageMapBytecodeData.
+// updateCoveredAt updates the hit counter at a marker within a ContractCoverageMap.
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
-func (cm *CoverageMapBytecodeData) updateCoveredAt(marker uint64) (bool, error) {
+func (cm *ContractCoverageMap) updateCoveredAt(marker uint64) (bool, error) {
 	// We could factor this out but doing it this way saves a single map read and this function is called often
 	var previousVal uint
 
-	// If the execution flags don't exist, create them for this code size.
+	// If the execution flags map doesn't exist, create it.
 	if cm.executedFlags == nil {
 		cm.executedFlags = map[uint64]uint{}
 		previousVal = uint(0)
@@ -360,4 +315,21 @@ func (cm *CoverageMapBytecodeData) updateCoveredAt(marker uint64) (bool, error) 
 	newCoverage := previousVal == 0
 	cm.executedFlags[marker] = previousVal + 1
 	return newCoverage, nil
+}
+
+// HitCount returns the number of times that the provided marker has been hit. If zero is returned, then
+// the marker has not been hit or the map is nil
+func (cm *ContractCoverageMap) HitCount(marker uint64) uint {
+	// If the coverage map bytecode data is nil, this is not covered.
+	if cm == nil {
+		return 0
+	}
+
+	// If this map has no execution data, it is not covered.
+	if cm.executedFlags == nil {
+		return 0
+	}
+
+	// Otherwise, return the hit count
+	return cm.executedFlags[marker]
 }

@@ -422,7 +422,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool) ([]uint, []uint) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
-	execFlags := cm.coverage.executedFlags
+	execFlags := cm.executedFlags
 	execFlagsSrcDst, execFlagsDstSrc := getExecFlagsMapping(execFlags)
 
 	successfulHits := make([]uint, len(indexToOffset))
