@@ -76,11 +76,11 @@ type coverageTracerCallFrameState struct {
 	lookupHash *common.Hash
 
 	// lastPC is the most recent PC that has been executed. Used for coverage tracking.
-	lastPC     uint64
+	lastPC uint64
 
 	// address is used by OnOpcode to cache the result of scope.Address(), which is slow.
 	// It records the address of the current contract.
-	address    common.Address
+	address common.Address
 
 	// justJumped indicates whether or not the most recent instruction (the one indicated by lastPC) was JUMP/JUMPI.
 	justJumped bool

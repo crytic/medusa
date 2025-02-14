@@ -446,15 +446,15 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, isInit bool
 			}
 		}
 
-		// Test some conditions that should always hold.........
+		// Test some conditions that should always hold...
+		op := vm.OpCode(bytecode[pc])                                                         // Used only for tests below
+		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for tests below
 		if hit+enterCount < revertCount {
 			fmt.Println("WARNING: Overflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
 		if hit+enterCount < allLeaveCount {
 			fmt.Println("WARNING: Overflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
-		op := vm.OpCode(bytecode[pc])
-		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP
 		if isJumpOrReturn && hit+enterCount != allLeaveCount {
 			fmt.Println("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues.")
 		}
