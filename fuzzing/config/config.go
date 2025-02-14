@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/crytic/medusa/compilation/types"
@@ -76,7 +77,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []string `json:"targetContractsBalances"`
+	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -113,7 +114,7 @@ type FuzzingConfig struct {
 
 // fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
 // have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
+// For example, this enables serialization of string but specifying a different field type to control serialization.
 type fuzzingConfigMarshaling struct {
 	TargetContractsBalances []string
 }
