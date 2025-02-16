@@ -361,7 +361,13 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.coverageMaps = coverage.NewCoverageMaps()
 	for _, block := range testChain.CommittedBlocks() {
 		for _, messageResults := range block.MessageResults {
+			// Grab the coverage maps
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
+
+			// Memory optimization:Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(messageResults)
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return 0, 0, covErr
