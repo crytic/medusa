@@ -262,9 +262,14 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// Define actions to perform after executing each call in the sequence.
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-			// Update our coverage maps for each call executed in our sequence.
+			// Grab the coverage maps for the last executed sequence element
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
@@ -364,7 +369,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			// Grab the coverage maps
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
 
-			// Memory optimization:Remove the coverage maps from the message results
+			// Memory optimization: Remove the coverage maps from the message results
 			coverage.RemoveCoverageTracerResults(messageResults)
 
 			// Update the global coverage maps
