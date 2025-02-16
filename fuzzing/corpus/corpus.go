@@ -268,10 +268,15 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			// Update our coverage maps for each call executed in our sequence.
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
 			}
+
 			return false, nil
 		}
 
