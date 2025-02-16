@@ -4,11 +4,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa/chain/types"
 	"math/big"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/crytic/medusa/chain/types"
 
 	"github.com/crytic/medusa/utils"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -446,7 +447,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			}
 
 			// Attempt to hex decode the output
-			hexOut, err := hex.DecodeString(strings.TrimPrefix(string(stdout), "0x"))
+			// Trim newlines, spaces, and the "0x" prefix
+			trimmed := strings.TrimSpace(string(stdout))
+			hexOut, err := hex.DecodeString(strings.TrimPrefix(trimmed, "0x"))
 			if err != nil {
 				// Return the byte array as itself if hex decoding does not work
 				return []any{stdout}, nil

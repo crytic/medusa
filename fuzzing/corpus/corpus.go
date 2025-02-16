@@ -6,8 +6,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"sync"
 	"time"
 
@@ -262,9 +260,14 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// Define actions to perform after executing each call in the sequence.
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-			// Update our coverage maps for each call executed in our sequence.
+			// Grab the coverage maps for the last executed sequence element
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
@@ -283,22 +286,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
 		if sequenceInvalidError == nil {
 			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				// If the filename is a timestamp as expected, use it as a weight for the mutation chooser.
-				re := regexp.MustCompile("[0-9]+")
-				var weight *big.Int
-				if filename := re.FindAllString(sequenceFileData.fileName, 1); len(filename) > 0 {
-					// The timestamp will be the only element in the filename array
-					// If we can parse the timestamp with no errors, set the weight
-					if timestamp, err := strconv.ParseUint(filename[0], 10, 64); err == nil {
-						weight = new(big.Int).SetUint64(timestamp)
-					}
-				}
-
-				// Fallback to 1 if we couldn't parse the timestamp.
-				if weight == nil {
-					weight = big.NewInt(1)
-				}
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, weight))
+				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
@@ -361,7 +349,13 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.coverageMaps = coverage.NewCoverageMaps()
 	for _, block := range testChain.CommittedBlocks() {
 		for _, messageResults := range block.MessageResults {
+			// Grab the coverage maps
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(messageResults)
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return 0, 0, covErr
