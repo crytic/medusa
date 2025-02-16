@@ -352,7 +352,6 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
-
 	if !isNewSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
