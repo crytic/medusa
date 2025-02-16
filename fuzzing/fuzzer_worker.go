@@ -2,9 +2,10 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging/colors"
 	"math/big"
 	"math/rand"
+
+	"github.com/crytic/medusa/logging/colors"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
