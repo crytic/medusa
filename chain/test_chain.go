@@ -201,7 +201,8 @@ func newTestChainWithStateFactory(
 	// Create an in-memory database
 	db := rawdb.NewMemoryDatabase()
 	dbConfig := &triedb.Config{
-		HashDB: hashdb.Defaults,
+		HashDB:    hashdb.Defaults,
+		Preimages: true,
 		// TODO	Add cleanCacheSize of 256 depending on the resolution of this issue https://github.com/ethereum/go-ethereum/issues/30099
 		// PathDB: pathdb.Defaults,
 	}
