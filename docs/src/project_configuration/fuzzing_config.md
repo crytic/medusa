@@ -70,6 +70,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   in the `coverage` directory within `crytic-export/` or `corpusDirectory` if configured.
 - **Default**: `["lcov", "html"]`
 
+### `reversionReporterEnabled`
+
+- **Type**: Boolean
+- **Description**: Enables or disables the reversion reporting plugin.
+- **Default**: `false`
+
 ### `targetContracts`
 
 - **Type**: [String] (e.g. `[FirstContract, SecondContract, ThirdContract]`)

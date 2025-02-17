@@ -24,6 +24,7 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		CorpusDirectory         string                    `json:"corpusDirectory"`
 		CoverageEnabled         bool                      `json:"coverageEnabled"`
 		CoverageFormats         []string                  `json:"coverageFormats"`
+		RevertReporterEnabled   bool                      `json:"revertReporterEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
@@ -47,6 +48,7 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CorpusDirectory = f.CorpusDirectory
 	enc.CoverageEnabled = f.CoverageEnabled
 	enc.CoverageFormats = f.CoverageFormats
+	enc.RevertReporterEnabled = f.RevertReporterEnabled
 	enc.TargetContracts = f.TargetContracts
 	enc.PredeployedContracts = f.PredeployedContracts
 	if f.TargetContractsBalances != nil {
@@ -79,6 +81,7 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		CorpusDirectory         *string                   `json:"corpusDirectory"`
 		CoverageEnabled         *bool                     `json:"coverageEnabled"`
 		CoverageFormats         []string                  `json:"coverageFormats"`
+		RevertReporterEnabled   *bool                     `json:"revertReporterEnabled"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
 		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
@@ -122,6 +125,9 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.CoverageFormats != nil {
 		f.CoverageFormats = dec.CoverageFormats
+	}
+	if dec.RevertReporterEnabled != nil {
+		f.RevertReporterEnabled = *dec.RevertReporterEnabled
 	}
 	if dec.TargetContracts != nil {
 		f.TargetContracts = dec.TargetContracts

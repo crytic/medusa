@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
@@ -67,6 +68,9 @@ type FuzzingConfig struct {
 
 	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
 	CoverageFormats []string `json:"coverageFormats"`
+
+	// RevertReporterEnabled determines whether revert metrics should be collected and reported.
+	RevertReporterEnabled bool `json:"revertReporterEnabled"`
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
