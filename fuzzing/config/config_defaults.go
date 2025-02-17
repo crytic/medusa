@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"

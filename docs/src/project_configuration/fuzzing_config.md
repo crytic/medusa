@@ -87,15 +87,14 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > 🚩 Predeployed contracts do not accept constructor arguments. This may be added in the future.
 - **Default**: `{}`
 
-### `targetContractBalances`
+### `targetContractsBalances`
 
-- **Type**: [Base-16 Strings] (e.g. `[0x123, 0x456, 0x789]`)
+- **Type**: [Base-10 Strings] (e.g. `["123", "1000000", "115792089237316195423570985008687907853269984665640564039457584007913129639935"]`)
 - **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract
   is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
   has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is
-  `["0", "0xff", "0"]`, then `B` will have a starting balance of 255 wei and `A` and `C` will have zero wei. Note that the wei-value
-  has to be hex-encoded and _cannot_ have leading zeros. For an improved user-experience, the balances may be encoded as base-10
-  format strings in the future.
+  `["0", "255", "0"]`, then `B` will have a starting balance of 255 wei and `A` and `C` will have zero wei. Note that the wei-value
+  has to be encoded as base-10 format strings and _cannot_ have leading zeros.
 - **Default**: `[]`
 
 ### `constructorArgs`
