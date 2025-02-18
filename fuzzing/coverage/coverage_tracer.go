@@ -56,7 +56,8 @@ type CoverageTracer struct {
 
 	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
 	// so that this expensive calculation doesn't need to be done every opcode.
-	// The Hash key is a contract's codehash, which uniquely identifies it (TODO with caveat about init vs runtime).
+	// The Hash key is a contract's codehash, which uniquely identifies it
+	// (with the caveat that contracts have different codehashes during init vs runtime, and different getContractCoverageMapHash values).
 	codeHashCache map[common.Hash]common.Hash
 }
 
@@ -152,7 +153,10 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 			markerXor = RETURN_MARKER_XOR
 		}
 		marker := bits.RotateLeft64(currentCallFrameState.lastPC, 32) ^ markerXor
-		_, _ = currentCoverageMap.UpdateAt(currentCallFrameState.address, *currentCallFrameState.lookupHash, marker) // TODO ignored error
+		_, coverageUpdateErr := currentCoverageMap.UpdateAt(currentCallFrameState.address, *currentCallFrameState.lookupHash, marker)
+		if coverageUpdateErr != nil {
+			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
+		}
 	}
 
 	// Check to see if this is the top level call frame
@@ -228,7 +232,10 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 
 	// Record coverage for this location in our map.
-	_, _ = callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker) // TODO ignored error
+	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker)
+	if coverageUpdateErr != nil {
+		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
+	}
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
