@@ -171,10 +171,10 @@ type SourceLineAnalysis struct {
 	IsCovered bool
 
 	// SuccessHitCount describes how many times this line was executed successfully
-	SuccessHitCount uint
+	SuccessHitCount uint64
 
 	// RevertHitCount describes how many times this line reverted during execution
-	RevertHitCount uint
+	RevertHitCount uint64
 
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
@@ -348,7 +348,7 @@ func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMa
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
 func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap) error {
-	var succHitCounts, revertHitCounts []uint
+	var succHitCounts, revertHitCounts []uint64
 	if len(bytecode) > 0 && contractCoverageData != nil {
 		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode)
 	} else { // Probably because we didn't hit this contract at all...
@@ -374,7 +374,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		var succHitCount, revertHitCount uint
+		var succHitCount, revertHitCount uint64
 		if succHitCounts != nil {
 			succHitCount = succHitCounts[sourceMapElement.Index]
 		} else {
@@ -423,21 +423,21 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 // determineLinesCovered takes a ContractCoverageMap and a contract's bytecode, and determines which program counters were hit.
 // Returns two slices: one for successful hits and one for reverts. These slices are indexed by program counter,
 // and their values are the number of hits (0 if the PC was not hit).
-func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint, []uint) {
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint64, []uint64) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
 	// executedMakers as src -> dst -> hit count, and dst -> src -> hit count
 	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(cm.executedMarkers)
 
-	successfulHits := make([]uint, len(indexToOffset))
-	revertedHits := make([]uint, len(indexToOffset))
+	successfulHits := make([]uint64, len(indexToOffset))
+	revertedHits := make([]uint64, len(indexToOffset))
 
 	// Traverse the instructions from top to bottom, keeping track of hit count as we go
-	hit := uint(0)
+	hit := uint64(0)
 	for idx, pc := range indexToOffset {
-		enterCount := uint(0)    // count of jumpdest + contract initial enter (ENTER_MARKER_XOR)
-		revertCount := uint(0)   // count of revert (REVERT_MARKER_XOR)
-		allLeaveCount := uint(0) // count of jump + return (RETURN_MAKRER_XOR) + revert (REVERT_MARKER_XOR)
+		enterCount := uint64(0)    // count of jumpdest + contract initial enter (ENTER_MARKER_XOR)
+		revertCount := uint64(0)   // count of revert (REVERT_MARKER_XOR)
+		allLeaveCount := uint64(0) // count of jump + return (RETURN_MAKRER_XOR) + revert (REVERT_MARKER_XOR)
 
 		for _, hitHere := range execMarkersDstSrc[uint64(pc)] {
 			enterCount += hitHere
@@ -505,19 +505,19 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 
 // getExecMarkersMapping takes a set of executed markers, and sorts it into a map from src -> dst -> hit count, and a map of dst -> src -> hit count.
 // This is a helper function used by determineLinesCovered.
-func getExecMarkersMapping(execMarkers map[uint64]uint) (map[uint64]map[uint64]uint, map[uint64]map[uint64]uint) {
-	execMarkersSrcDst := make(map[uint64]map[uint64]uint)
-	execMarkersDstSrc := make(map[uint64]map[uint64]uint)
+func getExecMarkersMapping(execMarkers map[uint64]uint64) (map[uint64]map[uint64]uint64, map[uint64]map[uint64]uint64) {
+	execMarkersSrcDst := make(map[uint64]map[uint64]uint64)
+	execMarkersDstSrc := make(map[uint64]map[uint64]uint64)
 
 	for marker, hitCount := range execMarkers {
 		// Lower, upper 32 bits
 		dst := marker & 0xFFFFFFFF
 		src := marker >> 32
 		if _, ok := execMarkersSrcDst[src]; !ok {
-			execMarkersSrcDst[src] = make(map[uint64]uint, 1)
+			execMarkersSrcDst[src] = make(map[uint64]uint64, 1)
 		}
 		if _, ok := execMarkersDstSrc[dst]; !ok {
-			execMarkersDstSrc[dst] = make(map[uint64]uint, 1)
+			execMarkersDstSrc[dst] = make(map[uint64]uint64, 1)
 		}
 		execMarkersSrcDst[src][dst] = hitCount
 		execMarkersDstSrc[dst][src] = hitCount

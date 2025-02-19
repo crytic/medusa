@@ -238,7 +238,7 @@ type ContractCoverageMap struct {
 	// For markers corresponding to jump instructions, source and dest mean the source and dest of the jump.
 	// For revert and return, the "source" is the PC of the opcode causing the revert/return, and the "destination" is REVERT_MARKER_XOR or RETURN_MARKER_XOR.
 	// For contract entrance, the "source" is ENTER_MARKER_XOR and the "destination" is the first PC executed.
-	executedMarkers map[uint64]uint
+	executedMarkers map[uint64]uint64
 }
 
 // Constants used in markers. See comments on ContractCoverageMap.executedMarkers for more details on how these are used.
@@ -303,12 +303,12 @@ func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, e
 // Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
 func (cm *ContractCoverageMap) updateCoveredAt(marker uint64) (bool, error) {
 	// We could factor this out but doing it this way saves a single map read and this function is called often
-	var previousVal uint
+	var previousVal uint64
 
 	// If the execution marker map doesn't exist, create it.
 	if cm.executedMarkers == nil {
-		cm.executedMarkers = map[uint64]uint{}
-		previousVal = uint(0)
+		cm.executedMarkers = map[uint64]uint64{}
+		previousVal = uint64(0)
 	} else {
 		previousVal = cm.executedMarkers[marker]
 	}
@@ -320,7 +320,7 @@ func (cm *ContractCoverageMap) updateCoveredAt(marker uint64) (bool, error) {
 
 // HitCount returns the number of times that the provided marker has been hit. If zero is returned, then
 // the marker has not been hit or the map is nil
-func (cm *ContractCoverageMap) HitCount(marker uint64) uint {
+func (cm *ContractCoverageMap) HitCount(marker uint64) uint64 {
 	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return 0

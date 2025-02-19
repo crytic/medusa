@@ -56,9 +56,9 @@ type CoverageTracer struct {
 
 	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
 	// so that this expensive calculation doesn't need to be done every opcode.
-	// The Hash key is a contract's codehash, which uniquely identifies it
-	// (with the caveat that contracts have different codehashes during init vs runtime, and different getContractCoverageMapHash values).
-	// TODO bring back old comments
+	// The [2] array is to differentiate between contract init (0) vs runtime (1),
+	// since init vs runtime produces different results from getContractCoverageMapHash.
+	// The Hash key is a contract's codehash, which uniquely identifies it.
 	codeHashCache [2]map[common.Hash]common.Hash
 }
 
