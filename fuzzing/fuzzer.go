@@ -15,11 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa/fuzzing/reverts"
+
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
-	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
@@ -80,6 +82,9 @@ type Fuzzer struct {
 	metrics *FuzzerMetrics
 	// corpus stores a list of transaction sequences that can be used for coverage-guided fuzzing
 	corpus *corpus.Corpus
+
+	// revertReporter tracks per-function reversion metrics, if enabled
+	revertReporter *reverts.RevertReporter
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -155,6 +160,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
+	// Create the revert reporter
+	revertReporter, err := reverts.NewRevertReporter(config.Fuzzing.RevertReporterEnabled, config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		logger.Error("Failed to create revert reporter", err)
+		return nil, err
+	}
+
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config:              config,
@@ -164,6 +176,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
+		revertReporter:      revertReporter,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -772,9 +785,11 @@ func (f *Fuzzer) Start() error {
 		f.logger.Error("Failed to create the corpus", err)
 		return err
 	}
+	// Start the revert reporter
+	f.revertReporter.Start(f.ctx)
 
 	// Initialize our metrics and valueGenerator.
-	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers)
+	f.metrics = newFuzzerMetrics(f.config.Fuzzing.Workers, f.revertReporter.RevertMetricsCh)
 
 	// Initialize our test cases and providers
 	f.testCasesLock.Lock()
@@ -854,7 +869,6 @@ func (f *Fuzzer) Start() error {
 	if err != nil {
 		f.logger.Error("Encountered an error in the main fuzzing loop", err)
 	}
-
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
@@ -873,7 +887,6 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
-
 	// Print our results on exit.
 	f.printExitingResults()
 
@@ -885,7 +898,6 @@ func (f *Fuzzer) Start() error {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
 		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
-
 		if err != nil {
 			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
@@ -906,6 +918,12 @@ func (f *Fuzzer) Start() error {
 				}
 			}
 		}
+	}
+
+	// Generate the revert metrics artifacts
+	err = f.revertReporter.BuildArtifacts()
+	if err != nil {
+		f.logger.Error("Failed to write reversion metrics to disk", err)
 	}
 
 	// Return any encountered error.
