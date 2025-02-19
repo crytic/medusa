@@ -9,13 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
@@ -214,8 +213,8 @@ func (c *Corpus) RandomMutationTargetSequence() (calls.CallSequence, error) {
 // If this sequence list being initialized is for use with mutations, it is added to the mutationTargetSequenceChooser.
 // Returns an error if one occurs.
 func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSequence], testChain *chain.TestChain, deployedContracts map[common.Address]*contracts.Contract, useInMutations bool) error {
-	// Cache current HeadBlockNumber so that you can reset back to it after every sequence
-	baseBlockNumber := testChain.HeadBlockNumber()
+	// Cache the base block index so that you can reset back to it after every sequence
+	baseBlockIndex := uint64(len(testChain.CommittedBlocks()))
 
 	// Loop for each sequence
 	var err error
@@ -261,9 +260,14 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// Define actions to perform after executing each call in the sequence.
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-			// Update our coverage maps for each call executed in our sequence.
+			// Grab the coverage maps for the last executed sequence element
 			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
@@ -276,7 +280,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 
 		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
 		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v\n", err)
+			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v", err)
 		}
 
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
@@ -290,8 +294,8 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		}
 
 		// Revert chain state to our starting point to test the next sequence.
-		if err := testChain.RevertToBlockNumber(baseBlockNumber); err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v\n", err)
+		if err := testChain.RevertToBlockIndex(baseBlockIndex); err != nil {
+			return fmt.Errorf("failed to reset the chain while seeding coverage: %v", err)
 		}
 	}
 	return nil
@@ -345,10 +349,16 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	c.coverageMaps = coverage.NewCoverageMaps()
 	for _, block := range testChain.CommittedBlocks() {
 		for _, messageResults := range block.MessageResults {
+			// Grab the coverage maps
 			covMaps := coverage.GetCoverageTracerResults(messageResults)
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(messageResults)
+
+			// Update the global coverage maps
 			_, _, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
-				return 0, 0, err
+				return 0, 0, covErr
 			}
 		}
 	}

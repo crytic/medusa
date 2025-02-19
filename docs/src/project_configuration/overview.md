@@ -7,6 +7,8 @@ configuration is a `.json` file that is broken down into five core components.
 - [Testing Configuration](./testing_config.md): The testing configuration dictates how and what `medusa` should fuzz test.
 - [Chain Configuration](./chain_config.md): The chain configuration dictates how `medusa`'s underlying blockchain should be configured.
 - [Compilation Configuration](./compilation_config.md): The compilation configuration dictates how to compile the fuzzing target.
+- [Slither Configuration](./slither_config.md): The Slither configuration dictates whether Slither should be used in
+  `medusa` and whether the results from Slither should be cached.
 - [Logging Configuration](./logging_config.md): The logging configuration dictates when and where to log events.
 
 To generate a project configuration file, run [`medusa init`](../cli/init.md).
