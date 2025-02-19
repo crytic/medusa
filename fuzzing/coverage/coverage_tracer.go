@@ -58,7 +58,8 @@ type CoverageTracer struct {
 	// so that this expensive calculation doesn't need to be done every opcode.
 	// The Hash key is a contract's codehash, which uniquely identifies it
 	// (with the caveat that contracts have different codehashes during init vs runtime, and different getContractCoverageMapHash values).
-	codeHashCache map[common.Hash]common.Hash
+	// TODO bring back old comments
+	codeHashCache [2]map[common.Hash]common.Hash
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -92,7 +93,7 @@ func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
 		coverageMaps:    NewCoverageMaps(),
 		callFrameStates: make([]*coverageTracerCallFrameState, 0),
-		codeHashCache:   make(map[common.Hash]common.Hash),
+		codeHashCache:   [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -216,16 +217,21 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	isCreate := callFrameState.create
 	gethCodeHash := scopeContext.Contract.CodeHash
 
+	cacheArrayKey := 1
+	if isCreate {
+		cacheArrayKey = 0
+	}
+
 	// Obtain our contract coverage map lookup hash.
 	if callFrameState.lookupHash == nil {
 		if isCreate {
 			lookupHash := getContractCoverageMapHash(code, isCreate)
 			callFrameState.lookupHash = &lookupHash
 		} else {
-			lookupHash, cacheHit := t.codeHashCache[gethCodeHash]
+			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
 			if !cacheHit {
 				lookupHash = getContractCoverageMapHash(code, isCreate)
-				t.codeHashCache[gethCodeHash] = lookupHash
+				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
 			}
 			callFrameState.lookupHash = &lookupHash
 		}
