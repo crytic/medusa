@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/Masterminds/semver v1.5.0
-	github.com/ethereum/go-ethereum v1.14.6
+	github.com/crytic/medusa-geth v0.0.0-20250220164529-4bb0d2a5508f
 	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.0
@@ -88,5 +88,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20250202002730-6e6ee9a60299

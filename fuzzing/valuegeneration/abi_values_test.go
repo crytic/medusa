@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/stretchr/testify/assert"
 )
 

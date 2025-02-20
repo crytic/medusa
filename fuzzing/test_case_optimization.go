@@ -2,14 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"math/big"
-	"strings"
 )
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.

@@ -1,12 +1,13 @@
 package state
 
 import (
+	"testing"
+
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain/state/cache"
 	types2 "github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 /* This file is exclusively for test fixtures. */

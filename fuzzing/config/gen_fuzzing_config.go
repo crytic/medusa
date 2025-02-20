@@ -7,7 +7,7 @@ import (
 	"math/big"
 
 	"github.com/crytic/medusa/chain/config"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/crytic/medusa-geth/common/hexutil"
 )
 
 var _ = (*fuzzingConfigMarshaling)(nil)

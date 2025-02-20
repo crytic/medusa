@@ -6,13 +6,13 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/compilation/platforms"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/testutils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 )
 

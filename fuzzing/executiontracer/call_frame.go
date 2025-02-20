@@ -1,9 +1,10 @@
 package executiontracer
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // CallFrames represents a list of call frames recorded by the ExecutionTracer.

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/crytic/medusa-geth/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
