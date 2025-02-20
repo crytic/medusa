@@ -46,6 +46,10 @@ type CallSequenceGeneratorConfig struct {
 	// sequence rather than mutating one from the corpus.
 	NewSequenceProbability float32
 
+	// MutateCallSequenceElementProbability defines the probability that the CallSequenceGenerator should mutate a call
+	// sequence element.
+	MutateCallSequenceElementProbability float32
+
 	// RandomUnmodifiedCorpusHeadWeight defines the weight that the CallSequenceGenerator should use the call sequence
 	// generation strategy of taking the head of a corpus sequence (without mutations) and append newly generated calls
 	// to the end of it.
@@ -467,15 +471,28 @@ func prefetchModifyCallFuncMutate(sequenceGenerator *CallSequenceGenerator, elem
 		return nil
 	}
 
-	// Loop for each input value and mutate it
-	abiValuesMsgData := element.Call.DataAbiValues
-	for i := 0; i < len(abiValuesMsgData.InputValues); i++ {
-		mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[i].Type, abiValuesMsgData.InputValues[i])
-		if err != nil {
-			return fmt.Errorf("error when mutating call sequence input argument: %v", err)
-		}
-		abiValuesMsgData.InputValues[i] = mutatedInput
+	// If our bias directs us to it, do not mutate the element at all
+	randomGeneratorDecision := sequenceGenerator.worker.randomProvider.Float32()
+	if randomGeneratorDecision > sequenceGenerator.config.MutateCallSequenceElementProbability {
+		return nil
 	}
+
+	// If this element has no input values, exit early.
+	if len(element.Call.DataAbiValues.InputValues) == 0 {
+		return nil
+	}
+
+	// Choose which input value to mutate
+	idx := sequenceGenerator.worker.randomProvider.Intn(len(element.Call.DataAbiValues.InputValues))
+
+	// Mutate selected input value and replace the value
+	abiValuesMsgData := element.Call.DataAbiValues
+	mutatedInput, err := valuegeneration.MutateAbiValue(sequenceGenerator.config.ValueGenerator, sequenceGenerator.config.ValueMutator, &abiValuesMsgData.Method.Inputs[idx].Type, abiValuesMsgData.InputValues[idx])
+	if err != nil {
+		return fmt.Errorf("error when mutating call sequence input argument: %v", err)
+	}
+	abiValuesMsgData.InputValues[idx] = mutatedInput
+
 	// Re-encode the message's calldata
 	element.Call.WithDataAbiValues(abiValuesMsgData)
 
