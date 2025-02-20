@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa-geth/common/hexutil"
+	"github.com/crytic/medusa/chain/config"
 )
 
 var _ = (*fuzzingConfigMarshaling)(nil)
