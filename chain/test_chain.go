@@ -8,25 +8,25 @@ import (
 	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"
 
+	"github.com/crytic/medusa-geth/core/rawdb"
+	"github.com/crytic/medusa-geth/core/tracing"
+	"github.com/crytic/medusa-geth/triedb"
+	"github.com/crytic/medusa-geth/triedb/hashdb"
 	"github.com/crytic/medusa/chain/config"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/common/math"
+	"github.com/crytic/medusa-geth/core"
+	gethState "github.com/crytic/medusa-geth/core/state"
+	gethTypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/ethdb"
+	"github.com/crytic/medusa-geth/params"
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	gethState "github.com/ethereum/go-ethereum/core/state"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
@@ -202,7 +202,7 @@ func newTestChainWithStateFactory(
 	db := rawdb.NewMemoryDatabase()
 	dbConfig := &triedb.Config{
 		HashDB: hashdb.Defaults,
-		// TODO	Add cleanCacheSize of 256 depending on the resolution of this issue https://github.com/ethereum/go-ethereum/issues/30099
+		// TODO	Add cleanCacheSize of 256 depending on the resolution of this issue https://github.com/crytic/medusa-geth/issues/30099
 		// PathDB: pathdb.Defaults,
 	}
 	trieDB := triedb.NewDatabase(db, dbConfig)

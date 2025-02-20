@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // HexStringToAddress converts a hex string (with or without the "0x" prefix) to a common.Address. Returns the parsed

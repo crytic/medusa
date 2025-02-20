@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/crytic/medusa-geth/common"
+	"go.etcd.io/bbolt"
 )
-import "go.etcd.io/bbolt"
 
 // persistentCache provides a thread-safe cache for storing objects/slots that persists the cache to disk.
 type persistentCache struct {

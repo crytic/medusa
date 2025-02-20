@@ -2,10 +2,11 @@ package state
 
 import (
 	"context"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/common/hexutil"
 	"github.com/crytic/medusa/chain/state/cache"
 	"github.com/crytic/medusa/chain/state/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
 )
 

@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // DeployedContractBytecodeChange describes a change made to a given contract addresses' code due to state updates

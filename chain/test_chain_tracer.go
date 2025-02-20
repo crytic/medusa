@@ -3,12 +3,12 @@ package chain
 import (
 	"math/big"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/tracing"
+	coretypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	coretypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"golang.org/x/exp/slices"
 )
 

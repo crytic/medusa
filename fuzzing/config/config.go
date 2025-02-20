@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
 
+	"github.com/crytic/medusa/compilation/types"
+
+	"github.com/crytic/medusa-geth/common/hexutil"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
 )
 

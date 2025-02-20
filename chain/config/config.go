@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/vm"
 )
 
 // TestChainConfig represents the chain configuration.

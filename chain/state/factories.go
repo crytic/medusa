@@ -1,9 +1,9 @@
 package state
 
 import (
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/state"
 	"github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 /*

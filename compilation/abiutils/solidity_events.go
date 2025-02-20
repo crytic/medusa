@@ -1,8 +1,8 @@
 package abiutils
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/crytic/medusa-geth/accounts/abi"
+	coreTypes "github.com/crytic/medusa-geth/core/types"
 )
 
 // UnpackEventAndValues takes a given contract ABI, and an emitted event log from VM, and attempts to find an

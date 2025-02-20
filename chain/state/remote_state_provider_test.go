@@ -1,10 +1,11 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/cache"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa/chain/state/cache"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRemoteStateProvider_ImportStateObject(t *testing.T) {

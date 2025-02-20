@@ -2,7 +2,8 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/crytic/medusa-geth/crypto"
 	"github.com/pkg/errors"
 )
 

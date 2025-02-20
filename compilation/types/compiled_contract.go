@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"golang.org/x/exp/slices"
 )
 

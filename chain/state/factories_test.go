@@ -1,17 +1,18 @@
 package state
 
 import (
+	"testing"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/rawdb"
+	gethstate "github.com/crytic/medusa-geth/core/state"
+	"github.com/crytic/medusa-geth/core/tracing"
+	"github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/triedb"
 	"github.com/crytic/medusa/chain/state/cache"
 	types2 "github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	gethstate "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 /* TestForkedStateDB provides unit testing for medusa-geth's ForkedStateDb */

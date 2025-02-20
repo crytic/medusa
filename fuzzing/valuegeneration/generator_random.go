@@ -1,10 +1,11 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"math/rand"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa/utils"
 )
 
 // RandomValueGenerator represents a ValueGenerator used to generate transaction fields and call arguments with values

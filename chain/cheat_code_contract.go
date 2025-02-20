@@ -3,10 +3,11 @@ package chain
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // CheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is

@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/types"
 )
 
 // MessageToTransaction derives a types.Transaction from a types.Message.

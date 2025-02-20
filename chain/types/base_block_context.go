@@ -3,7 +3,7 @@ package types
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // BaseBlockContext stores block-level information (e.g. block.number or block.timestamp) when the block is first

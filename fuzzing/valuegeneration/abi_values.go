@@ -11,9 +11,9 @@ import (
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/utils/reflectionutils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // addressJSONContractNameOverridePrefix defines a string prefix which is to be followed by a contract name. The

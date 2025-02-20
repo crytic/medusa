@@ -1,8 +1,9 @@
 package contracts
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"strings"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
 )
 
 // ContractMethodID is a string-based identifier which is meant to be unique for any contract-method definition
