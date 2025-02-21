@@ -284,14 +284,15 @@ func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, e
 		return false, nil
 	}
 
+	changed := false
+
 	// If the current map has no execution data, simply set it to the provided one.
 	if cm.executedMarkers == nil {
-		cm.executedMarkers = coverageMap.executedMarkers
-		return true, nil
+		cm.executedMarkers = map[uint64]uint64{}
+		changed = true
 	}
 
 	// Update each byte which represents a position in the bytecode which was covered.
-	changed := false
 	for marker, hitcount := range coverageMap.executedMarkers {
 		if hitcount != 0 { // It shouldn't be zero, but just to make sure
 			// If we have a hit count where it used to be zero, then coverage increased
