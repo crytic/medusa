@@ -18,11 +18,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
-// templates defined below. They should be preserved for re-use in case we change our structures.
-//go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
-
 type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
 	Fuzzing FuzzingConfig `json:"fuzzing"`
