@@ -47,7 +47,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
-			TargetContractsBalances: []*ContractBalance{},
+			TargetContractsBalances: []ContractBalance{},
 			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
