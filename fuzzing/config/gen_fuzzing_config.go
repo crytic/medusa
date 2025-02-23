@@ -4,8 +4,10 @@ package config
 
 import (
 	"encoding/json"
+	"math/big"
 
 	"github.com/crytic/medusa/chain/config"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 var _ = (*fuzzingConfigMarshaling)(nil)
@@ -24,7 +26,7 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 		CoverageFormats         []string                  `json:"coverageFormats"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
-		TargetContractsBalances []string                  `json:"targetContractsBalances"`
+		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         string                    `json:"deployerAddress"`
 		SenderAddresses         []string                  `json:"senderAddresses"`
@@ -47,7 +49,12 @@ func (f FuzzingConfig) MarshalJSON() ([]byte, error) {
 	enc.CoverageFormats = f.CoverageFormats
 	enc.TargetContracts = f.TargetContracts
 	enc.PredeployedContracts = f.PredeployedContracts
-	enc.TargetContractsBalances = f.TargetContractsBalances
+	if f.TargetContractsBalances != nil {
+		enc.TargetContractsBalances = make([]*hexutil.Big, len(f.TargetContractsBalances))
+		for k, v := range f.TargetContractsBalances {
+			enc.TargetContractsBalances[k] = (*hexutil.Big)(v)
+		}
+	}
 	enc.ConstructorArgs = f.ConstructorArgs
 	enc.DeployerAddress = f.DeployerAddress
 	enc.SenderAddresses = f.SenderAddresses
@@ -74,7 +81,7 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		CoverageFormats         []string                  `json:"coverageFormats"`
 		TargetContracts         []string                  `json:"targetContracts"`
 		PredeployedContracts    map[string]string         `json:"predeployedContracts"`
-		TargetContractsBalances []string                  `json:"targetContractsBalances"`
+		TargetContractsBalances []*hexutil.Big            `json:"targetContractsBalances"`
 		ConstructorArgs         map[string]map[string]any `json:"constructorArgs"`
 		DeployerAddress         *string                   `json:"deployerAddress"`
 		SenderAddresses         []string                  `json:"senderAddresses"`
@@ -123,7 +130,10 @@ func (f *FuzzingConfig) UnmarshalJSON(input []byte) error {
 		f.PredeployedContracts = dec.PredeployedContracts
 	}
 	if dec.TargetContractsBalances != nil {
-		f.TargetContractsBalances = dec.TargetContractsBalances
+		f.TargetContractsBalances = make([]*big.Int, len(dec.TargetContractsBalances))
+		for k, v := range dec.TargetContractsBalances {
+			f.TargetContractsBalances[k] = (*big.Int)(v)
+		}
 	}
 	if dec.ConstructorArgs != nil {
 		f.ConstructorArgs = dec.ConstructorArgs

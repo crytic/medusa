@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/crytic/medusa/compilation/types"
 
@@ -77,7 +79,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+	TargetContractsBalances []ContractBalance `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -112,11 +114,47 @@ type FuzzingConfig struct {
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
-// fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
-// have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of string but specifying a different field type to control serialization.
-type fuzzingConfigMarshaling struct {
-	TargetContractsBalances []string
+type ContractBalance struct {
+	big.Int
+}
+
+func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), "\"")
+
+	if s == "null" || s == "" {
+		cb.Int.SetInt64(0)
+		return nil
+	}
+
+	// hex handling
+	if strings.HasPrefix(strings.ToLower(s), "0x") {
+		if _, ok := cb.Int.SetString(s[2:], 16); ok {
+			return nil
+		}
+		return fmt.Errorf("Error: innvalid hex string: %s", s)
+	}
+
+	// scientific notation handling
+	if strings.ContainsAny(s, "eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err == nil {
+			plainStr := strconv.FormatFloat(f, 'f', 0, 64)
+			if _, ok := cb.Int.SetString(plainStr, 10); ok {
+				return nil
+			}
+		}
+	}
+
+	// base-10 string
+	if _, ok := cb.Int.SetString(s, 10); ok {
+		return nil
+	}
+
+	return fmt.Errorf("invalid number format: %s", s)
+}
+
+func (cb ContractBalance) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%s\"", cb.Int.String())), nil
 }
 
 // TestingConfig describes the configuration options used for testing
