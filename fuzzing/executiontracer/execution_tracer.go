@@ -20,9 +20,9 @@ import (
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB, verbosity int) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
-	executionTracer := NewExecutionTracer(contractDefinitions, testChain)
+	executionTracer := NewExecutionTracer(contractDefinitions, testChain, verbosity)
 	defer executionTracer.Close()
 
 	// Call the contract on our chain with the provided state.
@@ -69,14 +69,17 @@ type ExecutionTracer struct {
 
 	// nativeTracer is the underlying tracer interface that the execution tracer follows
 	nativeTracer *chain.TestChainTracer
+
+	verbosity int
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
-func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain) *ExecutionTracer {
+func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain, verbosity int) *ExecutionTracer {
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
 		testChain:           testChain,
 		traceMap:            make(map[common.Hash]*ExecutionTrace),
+		verbosity:           verbosity,
 	}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -125,7 +128,7 @@ func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.trace = newExecutionTrace(t.contractDefinitions, t.testChain.Labels)
+	t.trace = newExecutionTrace(t.contractDefinitions, t.testChain.Labels, t.verbosity)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
 

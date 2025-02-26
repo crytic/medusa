@@ -185,7 +185,11 @@ type TestingConfig struct {
 	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
 	// even if this option is not enabled.
-	TraceAll bool `json:"traceAll"`
+	//TraceAll bool `json:"traceAll"`
+
+	// Verbosity describes the level of verbosity for logging. Higher values mean more verbose output.
+	// 0 = verbose (-v), 1 = (default) very verbose (-vv), 2 = more verbose (-vvv) or equivalent to trace all
+	Verbosity int `json:"verbosity"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`

@@ -34,14 +34,17 @@ type ExecutionTrace struct {
 
 	// labels is a mapping that maps an address to its string representation for cleaner execution traces
 	labels map[common.Address]string
+
+	verbosity int
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string, verbosity int) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
 		labels:              labels,
+		verbosity:           verbosity,
 	}
 }
 

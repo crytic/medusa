@@ -170,9 +170,9 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 }
 
 // ExecuteCallSequenceWithExecutionTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
-func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
+func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verbosity int) (CallSequence, error) {
 	// Create a new execution tracer
-	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain)
+	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain, verbosity)
 	defer executionTracer.Close()
 
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
@@ -189,7 +189,7 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 	// By default, we only trace the last element in the call sequence.
 	traceFrom := len(callSequence) - 1
 	// If verbose tracing is enabled, we want to trace all elements in the call sequence.
-	if verboseTracing {
+	if verbosity == 2 {
 		traceFrom = 0
 	}
 
