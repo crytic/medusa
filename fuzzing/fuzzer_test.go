@@ -487,10 +487,11 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
 		configUpdates: func(pkgConfig *config.ProjectConfig) {
-			pkgConfig.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
+			pkgConfig.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract", "ThirdContract"}
 			pkgConfig.Fuzzing.TargetContractsBalances = []config.ContractBalance{
 				{Int: *big.NewInt(0)},
 				{Int: *big.NewInt(1e18)},
+				{Int: *big.NewInt(0x1234)},
 			}
 			pkgConfig.Fuzzing.TestLimit = 1 // this should happen immediately
 			pkgConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
