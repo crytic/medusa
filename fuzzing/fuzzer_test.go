@@ -463,7 +463,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
 		configUpdates: func(pkgConfig *config.ProjectConfig) {
 			pkgConfig.Fuzzing.TargetContracts = []string{"TestContract"}
-			pkgConfig.Fuzzing.TargetContractsBalances = []config.ContractBalance{{Int: *big.NewInt(1)}}
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{{Int: *big.NewInt(1)}}
 			pkgConfig.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
 			pkgConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
 			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -488,7 +488,7 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
 		configUpdates: func(pkgConfig *config.ProjectConfig) {
 			pkgConfig.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract", "ThirdContract"}
-			pkgConfig.Fuzzing.TargetContractsBalances = []config.ContractBalance{
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{
 				{Int: *big.NewInt(0)},
 				{Int: *big.NewInt(1e18)},
 				{Int: *big.NewInt(0x1234)},

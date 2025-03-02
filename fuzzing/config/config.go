@@ -74,7 +74,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []ContractBalance `json:"targetContractsBalances"`
+	TargetContractsBalances []*ContractBalance `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -109,15 +109,16 @@ type FuzzingConfig struct {
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
+// ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling
+// for contract balance values in different numeric formats
 type ContractBalance struct {
 	big.Int
 }
 
 // UnmarshalJSON parses JSON data into big.Int from empty strings, hex ("0x"),
 // scientific notation (e/E), and base-10 formats
-
 func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
-	s := strings.Trim(string(data), "\"")
+	s := string(data)
 
 	// Empty string handling
 	if s == "" {
@@ -136,15 +137,14 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 	// Scientific notation handling
 	if strings.ContainsAny(s, "eE") {
 		f, err := strconv.ParseFloat(s, 64)
-		if err == nil {
-			plainStr := strconv.FormatFloat(f, 'f', 0, 64)
-			if _, ok := cb.Int.SetString(plainStr, 10); !ok {
-				return fmt.Errorf("invalid format for contract balance (scientific notation) while unmarshaling contract balance: %s", s)
-			}
-			return nil
-		} else {
+		if err != nil {
 			return fmt.Errorf("error parsing scientific notation while unmarshaling contract balance: %w", err)
 		}
+		plainStr := strconv.FormatFloat(f, 'f', 0, 64)
+		if _, ok := cb.Int.SetString(plainStr, 10); !ok {
+			return fmt.Errorf("invalid format for contract balance (scientific notation) while unmarshaling contract balance: %s", s)
+		}
+		return nil
 	}
 
 	// Base-10 string handling
@@ -154,8 +154,9 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON marshals a ContractBalance to JSON.
 func (cb ContractBalance) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%s\"", cb.Int.String())), nil
+	return []byte(fmt.Sprintf("%s", cb.Int.String())), nil
 }
 
 // TestingConfig describes the configuration options used for testing
