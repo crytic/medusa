@@ -506,7 +506,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
 				if len(balances) > i {
-					contractBalance = new(big.Int).Set(&balances[i].Int) // FIX
+					contractBalance = new(big.Int).Set(&balances[i].Int)
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
