@@ -92,8 +92,8 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: [Base-10 Strings, Hexadecimal Strings, Scientific notation for base-10 values] (e.g. `["1234", "0x1234", "1.2e18"]`)
 - **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract
   is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
-  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is `["1234", "0x1234", "1.2e18"]`, 
-  then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`. 
+  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is `["1234", "0x1234", "1.2e18"]`,
+  then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
 ### `constructorArgs`
