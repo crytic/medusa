@@ -268,7 +268,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
 
 			// Update the global coverage maps
-			_, _, covErr := c.coverageMaps.Update(covMaps)
+			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return true, covErr
 			}
@@ -356,7 +356,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 			coverage.RemoveCoverageTracerResults(messageResults)
 
 			// Update the global coverage maps
-			_, _, covErr := c.coverageMaps.Update(covMaps)
+			_, covErr := c.coverageMaps.Update(covMaps)
 			if covErr != nil {
 				return 0, 0, covErr
 			}
@@ -472,13 +472,13 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	coverage.RemoveCoverageTracerResults(lastMessageResult)
 
 	// Merge the coverage maps into our total coverage maps and check if we had an update.
-	coverageUpdated, revertedCoverageUpdated, err := c.coverageMaps.Update(lastMessageCoverageMaps)
+	coverageUpdated, err := c.coverageMaps.Update(lastMessageCoverageMaps)
 	if err != nil {
 		return err
 	}
 
-	// If we had an increase in non-reverted or reverted coverage, we save the sequence.
-	if coverageUpdated || revertedCoverageUpdated {
+	// If we had an increase in coverage, we save the sequence.
+	if coverageUpdated {
 		// If we achieved new coverage, save this sequence for mutation purposes.
 		err = c.addCallSequence(c.callSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
