@@ -4,22 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
 )
-
-// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
-// templates defined below. They should be preserved for re-use in case we change our structures.
-//go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
 
 type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
@@ -77,7 +74,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+	TargetContractsBalances []*ContractBalance `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -112,11 +109,54 @@ type FuzzingConfig struct {
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
-// fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
-// have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
-type fuzzingConfigMarshaling struct {
-	TargetContractsBalances []*hexutil.Big
+// ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling
+// for contract balance values in different numeric formats
+type ContractBalance struct {
+	big.Int
+}
+
+// UnmarshalJSON parses JSON data into big.Int from empty strings, hex ("0x"),
+// scientific notation (e/E), and base-10 formats
+func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
+	s := string(data)
+
+	// Empty string handling
+	if s == "" {
+		cb.Int.SetInt64(0)
+		return nil
+	}
+
+	// Hex notation handling
+	if strings.HasPrefix(strings.ToLower(s), "0x") {
+		if _, ok := cb.Int.SetString(s[2:], 16); !ok {
+			return fmt.Errorf("invalid hex string provided while unmarshaling contract balance: %s", s)
+		}
+		return nil
+	}
+
+	// Scientific notation handling
+	if strings.ContainsAny(s, "eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return fmt.Errorf("error parsing scientific notation while unmarshaling contract balance: %w", err)
+		}
+		plainStr := strconv.FormatFloat(f, 'f', 0, 64)
+		if _, ok := cb.Int.SetString(plainStr, 10); !ok {
+			return fmt.Errorf("invalid format for contract balance (scientific notation) while unmarshaling contract balance: %s", s)
+		}
+		return nil
+	}
+
+	// Base-10 string handling
+	if _, ok := cb.Int.SetString(s, 10); !ok {
+		return fmt.Errorf("invalid base-10 string provided while unmarshaling contract balance: %s", s)
+	}
+	return nil
+}
+
+// MarshalJSON marshals a ContractBalance to JSON.
+func (cb ContractBalance) MarshalJSON() ([]byte, error) {
+	return []byte(cb.Int.String()), nil
 }
 
 // TestingConfig describes the configuration options used for testing
