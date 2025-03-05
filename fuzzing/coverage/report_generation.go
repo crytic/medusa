@@ -40,6 +40,18 @@ func WriteHTMLReport(sourceAnalysis *SourceAnalysis, reportDir string) (string, 
 
 			return relativePath
 		},
+		"filePathToId": func(path string) string {
+			// Convert a file path to a safe HTML ID by replacing non-alphanumeric characters with underscores
+			safeId := ""
+			for _, c := range path {
+				if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+					safeId += string(c)
+				} else {
+					safeId += "_"
+				}
+			}
+			return safeId
+		},
 		"percentageStr": func(x int, y int, decimals int) string {
 			// Determine our precision string
 			formatStr := "%." + strconv.Itoa(decimals) + "f"

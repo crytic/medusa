@@ -7,17 +7,21 @@
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 15px;
-            margin: 15px;
+            margin: 0;
             background-color: #eee;
-            height: 100%;
+            height: 100vh;
             display: flex;
-            flex-flow: column;
+            flex-direction: column;
+            overflow: hidden;
         }
         header {
-            flex: 0 1 auto;
+            flex: 0 0 auto;
+            padding: 15px;
         }
         footer {
-            flex: 0 1 auto;
+            flex: 0 0 auto;
+            padding: 15px;
+            line-height: 1.5;
         }
         hr {
             margin: 15px 0px;
@@ -38,9 +42,6 @@
         a:visited {
             color: #2A5DB0;
         }
-        footer {
-            line-height: 1.5;
-        }
         .progress-coverage {
             width: 50px;
         }
@@ -53,28 +54,147 @@
             user-select: none;
         }
         .button-sort {
-
+            cursor: pointer;
         }
+        /* Split panel layout */
         .split-panel {
             display: flex;
+            flex: 1 1 auto;
+            overflow: hidden;
             position: relative;
-            height: 100%;
         }
         #file-split-panel {
-            flex-flow: column;
-            flex: 1 1 auto;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: row;
         }
-        #file-tree-panel {
-            min-width: 250px;
-            width: 20%;
+        #file-explorer {
+            flex: 0 0 250px;
             height: 100%;
-            overflow: scroll;
+            overflow: auto;
+            background-color: #f5f5f5;
+            border-right: 1px solid #ccc;
+            padding: 10px;
+            box-sizing: border-box;
+            position: relative;
+            min-width: 40px;
+            max-width: 500px;
+            resize: horizontal;
+            transition: width 0.3s ease;
+        }
+        #file-explorer.collapsed {
+            flex: 0 0 40px;
+            overflow: hidden;
+        }
+        .file-explorer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        #toggle-explorer {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        #file-explorer.collapsed #toggle-explorer {
+            transform: rotate(180deg);
+        }
+        #file-explorer.collapsed .file-tree,
+        #file-explorer.collapsed h3 {
+            display: none;
         }
         #main-view-panel {
-            width: 100%;
+            flex: 1 1 auto;
             height: 100%;
-            overflow: scroll;
+            overflow: auto;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        #resizer {
+            width: 5px;
+            height: 100%;
+            background-color: #ccc;
+            cursor: col-resize;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        
+        /* File tree styles */
+        .file-tree {
+            list-style-type: none;
+            padding-left: 0;
+            margin: 0;
+        }
+        .file-tree li {
+            margin: 3px 0;
+        }
+        .file-tree ul {
+            list-style-type: none;
+            padding-left: 20px;
+            margin: 0;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 3px 5px;
+            border-radius: 3px;
+        }
+        .file-item:hover {
+            background-color: #e0e0e0;
+        }
+        .file-item.active {
+            background-color: #d0d0d0;
+        }
+        .file-toggle {
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+            color: #555;
+            font-size: 10px;
+        }
+        .file-icon {
+            margin: 0 5px;
+            color: #555;
+        }
+        .file-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-coverage {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        .directory > .file-item > .file-icon:before {
+            content: "📁";
+        }
+        .directory.expanded > .file-item > .file-icon:before {
+            content: "📂";
+        }
+        .file > .file-item > .file-icon:before {
+            content: "📄";
+        }
+        .directory > .file-item > .file-toggle:before {
+            content: "►";
+        }
+        .directory.expanded > .file-item > .file-toggle:before {
+            content: "▼";
+        }
+        .file > .file-item > .file-toggle {
+            visibility: hidden;
+        }
+        .directory > ul {
+            display: none;
+        }
+        .directory.expanded > ul {
+            display: block;
         }
         .collapsible {
             background-color: #777;
@@ -187,8 +307,18 @@
         </table>
     </header>
     <hr />
-    <!-- Create a vertically split panel for our file explorer / coverage view -->
+    <!-- Create a horizontally split panel for our file explorer / coverage view -->
     <div class="split-panel" id="file-split-panel">
+        <!-- File Explorer Sidebar -->
+        <div id="file-explorer">
+            <div class="file-explorer-header">
+                <h3>Files</h3>
+                <button id="toggle-explorer" title="Toggle file explorer">⟪</button>
+            </div>
+            <ul id="file-tree-root" class="file-tree file-tree-root"></ul>
+            <div id="resizer"></div>
+        </div>
+        
         <!-- Main panel (coverage) -->
         <div id="main-view-panel">
             <!-- Individual file coverage -->
@@ -200,7 +330,7 @@
                 {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
 
                 {{/* Output a container for each source file, with a collapsible header and source container.*/}}
-                <div class="source-file" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
+                <div class="source-file" id="{{$sourceFile.Path | filePathToId}}" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
                     <button class="collapsible">
                         {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
                         <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
@@ -269,67 +399,193 @@
         });
     }
 
-    // Build our file explorer tree
-    const fileTree = document.getElementById("file-tree");
-    const sourceFiles = document.getElementsByClassName("source-file");
-    for (let i = 0; i < sourceFiles.length; i++) {
-        // Obtain our file path, split by the delimiter '\' or '/' (to support various platforms).
-        let sourceFileDataSet = sourceFiles[i].dataset;
-        let filePathParts = sourceFileDataSet.filePath.split(/[\/\\]+/)
-        if (filePathParts.length > 0) {
-            addSourceFileToTree(fileTree, filePathParts, sourceFileDataSet)
+    // Helper function to convert a path to a safe HTML ID
+    function pathToId(path) {
+        return path.replace(/[^a-zA-Z0-9]/g, '_');
+    }
+    
+    // Helper function to get color based on coverage percentage
+    function getCoverageColor(covered, total) {
+        if (total === 0) return '#aaa'; // No coverage data
+        const percentage = (covered / total) * 100;
+        // Color gradient from red (0%) to yellow (50%) to green (100%)
+        if (percentage < 50) {
+            // Red to yellow (0-50%)
+            const g = Math.floor((percentage / 50) * 255);
+            return `rgb(255, ${g}, 0)`;
+        } else {
+            // Yellow to green (50-100%)
+            const r = Math.floor(255 - ((percentage - 50) / 50) * 255);
+            return `rgb(${r}, 255, 0)`;
         }
     }
 
-    // File tree building method
-    // This works by taking the current node, and adding or finding children for each file path part recursively
-    // below it. When the source file data set is empty, the last node/leaf (the file) is annotated with the coverage
-    // information.
-    function addSourceFileToTree(currentList, filePathParts, sourceFileDataSet) {
-        // If we're at the leaf (source file), stop.
-        if (filePathParts.length === 0) {
-            return;
-        }
-
-        // Find any child which is annotated with the next file path part.
-        let currentListItems = currentList.getElementsByTagName("li");
-        let currentListItem = null;
-        for (let i = 0; i < currentListItems.length; i++) {
-            // Get the data set for the list item.
-            if (currentListItems[i].getAttribute("data-name") === filePathParts[0]) {
-                currentListItem = currentListItems[i];
+    // Build file tree structure from file paths
+    function buildFileTree() {
+        const root = { name: '', type: 'directory', children: {}, path: '' };
+        const sourceFiles = document.getElementsByClassName("source-file");
+        
+        // First pass: build the tree structure
+        for (let i = 0; i < sourceFiles.length; i++) {
+            const filePath = sourceFiles[i].dataset.filePath;
+            const pathParts = filePath.split(/[\/\\]+/);
+            let current = root;
+            
+            // Build the directory structure
+            let currentPath = '';
+            for (let j = 0; j < pathParts.length; j++) {
+                const part = pathParts[j];
+                if (part === '') continue;
+                
+                currentPath += (currentPath ? '/' : '') + part;
+                
+                if (j === pathParts.length - 1) {
+                    // This is a file
+                    current.children[part] = {
+                        name: part,
+                        type: 'file',
+                        path: filePath,
+                        element: sourceFiles[i],
+                        coveredLines: parseInt(sourceFiles[i].dataset.linesCovered),
+                        activeLines: parseInt(sourceFiles[i].dataset.linesActive)
+                    };
+                } else {
+                    // This is a directory
+                    if (!current.children[part]) {
+                        current.children[part] = {
+                            name: part,
+                            type: 'directory',
+                            children: {},
+                            path: currentPath
+                        };
+                    }
+                    current = current.children[part];
+                }
             }
         }
-        // If we didn't find the next element, we create it.
-        if (currentListItem === null) {
-            // Add a list item.
-            currentListItem = document.createElement("li");
-            currentListItem.setAttribute("data-name", filePathParts[0]);
-            currentList.appendChild(currentListItem);
-
-            // If this is a directory, we add a <span>, and set text on that, otherwise we set text in the list item.
-            let textElement = currentListItem;
-            if (filePathParts.length > 1) {
-                let spanElement = document.createElement("span");
-                currentListItem.appendChild(spanElement);
-                textElement = spanElement;
-            }
-
-            // Set the text in our text element.
-            textElement.innerText = filePathParts[0]
-
-            // Add the inner list for this list item.
-            let nextList = document.createElement("ul");
-            currentListItem.appendChild(nextList);
+        
+        // Second pass: calculate directory coverage
+        calculateDirectoryCoverage(root);
+        
+        return root;
+    }
+    
+    // Calculate coverage for directories by aggregating file coverage
+    function calculateDirectoryCoverage(node) {
+        if (node.type === 'file') {
+            return {
+                coveredLines: node.coveredLines,
+                activeLines: node.activeLines
+            };
         }
-
-        // If this is the last item, set the attributes, otherwise recurse.
-        if (filePathParts.length >= 1) {
-            // Get the child list within the next list item.
-            let nextList = currentListItem.getElementsByTagName("ul")[0];
-
-            // Recurse on the next element.
-            addSourceFileToTree(nextList, filePathParts.slice(1), sourceFileDataSet)
+        
+        let totalCovered = 0;
+        let totalActive = 0;
+        
+        for (const childName in node.children) {
+            const child = node.children[childName];
+            const childCoverage = calculateDirectoryCoverage(child);
+            
+            totalCovered += childCoverage.coveredLines;
+            totalActive += childCoverage.activeLines;
+        }
+        
+        node.coveredLines = totalCovered;
+        node.activeLines = totalActive;
+        
+        return {
+            coveredLines: totalCovered,
+            activeLines: totalActive
+        };
+    }
+    
+    // Render the file tree to the DOM
+    function renderFileTree(node, parentElement, isRoot = false) {
+        const list = isRoot ? parentElement : document.createElement('ul');
+        
+        // Sort children: directories first, then files, both alphabetically
+        const sortedChildren = Object.values(node.children).sort((a, b) => {
+            if (a.type !== b.type) {
+                return a.type === 'directory' ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+        
+        for (const child of sortedChildren) {
+            const li = document.createElement('li');
+            li.className = child.type;
+            
+            // Create item container
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'file-item';
+            
+            // Create toggle button for directories
+            const toggle = document.createElement('span');
+            toggle.className = 'file-toggle';
+            itemDiv.appendChild(toggle);
+            
+            // Create file/folder icon
+            const icon = document.createElement('span');
+            icon.className = 'file-icon';
+            itemDiv.appendChild(icon);
+            
+            // Create name span
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = child.name;
+            itemDiv.appendChild(nameSpan);
+            
+            // Add coverage indicator
+            if (child.activeLines > 0) {
+                const coverage = document.createElement('span');
+                coverage.className = 'file-coverage';
+                coverage.style.backgroundColor = getCoverageColor(child.coveredLines, child.activeLines);
+                coverage.title = `${child.coveredLines}/${child.activeLines} lines covered (${Math.round((child.coveredLines / child.activeLines) * 100)}%)`;
+                itemDiv.appendChild(coverage);
+            }
+            
+            li.appendChild(itemDiv);
+            
+            // Handle click events
+            if (child.type === 'directory') {
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    li.classList.toggle('expanded');
+                });
+                itemDiv.addEventListener('click', () => {
+                    li.classList.toggle('expanded');
+                });
+                
+                // Recursively render children
+                renderFileTree(child, li);
+            } else {
+                // Add click handler for files
+                itemDiv.addEventListener('click', () => {
+                    // Deactivate all other items
+                    document.querySelectorAll('.file-item.active').forEach(el => {
+                        el.classList.remove('active');
+                    });
+                    
+                    // Activate this item
+                    itemDiv.classList.add('active');
+                    
+                    // Navigate to the file
+                    const fileElement = child.element;
+                    fileElement.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // Expand the file if it's collapsed
+                    const collapsible = fileElement.querySelector('.collapsible');
+                    if (!collapsible.classList.contains('collapsible-active')) {
+                        collapsible.click();
+                    }
+                });
+            }
+            
+            list.appendChild(li);
+        }
+        
+        if (!isRoot) {
+            parentElement.appendChild(list);
         }
     }
 
@@ -360,9 +616,97 @@
             }
         }
     }
+    
+    // Initialize the file tree when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        const fileTreeRoot = document.getElementById('file-tree-root');
+        const fileTree = buildFileTree();
+        renderFileTree(fileTree, fileTreeRoot, true);
+        
+        // Expand the first level directories by default
+        document.querySelectorAll('#file-tree-root > li.directory').forEach(dir => {
+            dir.classList.add('expanded');
+        });
+        
+        // Initialize resizer
+        initResizer();
+        
+        // Initialize toggle explorer
+        initToggleExplorer();
+    });
+    
+    // Initialize the toggle explorer functionality
+    function initToggleExplorer() {
+        const toggleButton = document.getElementById('toggle-explorer');
+        const fileExplorer = document.getElementById('file-explorer');
+        let explorerWidth = 250; // Default width to restore to
+        
+        toggleButton.addEventListener('click', () => {
+            if (fileExplorer.classList.contains('collapsed')) {
+                // Expand
+                fileExplorer.classList.remove('collapsed');
+                fileExplorer.style.width = explorerWidth + 'px';
+            } else {
+                // Collapse
+                explorerWidth = parseInt(window.getComputedStyle(fileExplorer).width, 10);
+                fileExplorer.classList.add('collapsed');
+            }
+        });
+    }
+    
+    // Initialize the resizer functionality
+    function initResizer() {
+        const resizer = document.getElementById('resizer');
+        const fileExplorer = document.getElementById('file-explorer');
+        
+        // The current position of mouse
+        let x = 0;
+        let w = 0;
+        
+        // Handle the mousedown event that triggers resizing
+        const mouseDownHandler = function(e) {
+            // Get the current mouse position
+            x = e.clientX;
+            
+            // Get the current width of the file explorer
+            const styles = window.getComputedStyle(fileExplorer);
+            w = parseInt(styles.width, 10);
+            
+            // Add event listeners for mousemove and mouseup
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler);
+            
+            // Add custom cursor style during resize
+            document.body.style.cursor = 'col-resize';
+            fileExplorer.style.userSelect = 'none';
+            fileExplorer.style.pointerEvents = 'none';
+        };
+        
+        // Handle the mousemove event that resizes
+        const mouseMoveHandler = function(e) {
+            // Calculate the new width
+            const dx = e.clientX - x;
+            fileExplorer.style.width = `${w + dx}px`;
+        };
+        
+        // Handle the mouseup event that stops resizing
+        const mouseUpHandler = function() {
+            // Remove the handlers
+            document.removeEventListener('mousemove', mouseMoveHandler);
+            document.removeEventListener('mouseup', mouseUpHandler);
+            
+            // Reset cursor and selection
+            document.body.style.cursor = '';
+            fileExplorer.style.userSelect = '';
+            fileExplorer.style.pointerEvents = '';
+        };
+        
+        // Attach the handler
+        resizer.addEventListener('mousedown', mouseDownHandler);
+    }
 
     // If there's only one item, expand it by default.
-    if (collapsibleHeaders.length === 1 && !collapsibleHeaders.className.contains("collapsible-active")) {
+    if (collapsibleHeaders.length === 1 && collapsibleHeaders[0].className.indexOf("collapsible-active") === -1) {
         collapsibleHeaders[0].click();
     }
 </script>
