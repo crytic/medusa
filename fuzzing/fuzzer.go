@@ -582,29 +582,27 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (*CallSequenceGeneratorConfig, error) {
 	// Create the value generator and mutator for the worker.
 	mutationalGeneratorConfig := &valuegeneration.MutationalValueGeneratorConfig{
-		MinMutationRounds:               0,
-		MaxMutationRounds:               1,
-		GenerateRandomAddressBias:       0.05,
-		GenerateRandomIntegerBias:       0.5,
-		GenerateRandomStringBias:        0.05,
-		GenerateRandomBytesBias:         0.05,
-		MutateAddressProbability:        0.1,
+		MinMutationRounds: 0,
+		MaxMutationRounds: 1,
+		// Echidna: Generate a random ABI value 40% of the time
+		GenerateRandomAddressBias:       0.4,
+		GenerateRandomIntegerBias:       0.4,
+		GenerateRandomStringBias:        0.4,
+		GenerateRandomBytesBias:         0.4,
+		MutateAddressProbability:        0.0,
 		MutateArrayStructureProbability: 0.1,
-		MutateBoolProbability:           0.1,
+		MutateBoolProbability:           1.0,
 		MutateBytesProbability:          0.1,
-		MutateBytesGenerateNewBias:      0.45,
 		MutateFixedBytesProbability:     0.1,
 		MutateStringProbability:         0.1,
-		MutateStringGenerateNewBias:     0.7,
 		MutateIntegerProbability:        0.1,
-		MutateIntegerGenerateNewBias:    0.5,
 		RandomValueGeneratorConfig: &valuegeneration.RandomValueGeneratorConfig{
-			GenerateRandomArrayMinSize:  0,
-			GenerateRandomArrayMaxSize:  100,
-			GenerateRandomBytesMinSize:  0,
-			GenerateRandomBytesMaxSize:  100,
-			GenerateRandomStringMinSize: 0,
-			GenerateRandomStringMaxSize: 100,
+			GenerateRandomArrayMinSize:  1,
+			GenerateRandomArrayMaxSize:  32,
+			GenerateRandomBytesMinSize:  1,
+			GenerateRandomBytesMaxSize:  32,
+			GenerateRandomStringMinSize: 1,
+			GenerateRandomStringMaxSize: 32,
 		},
 	}
 	mutationalGenerator := valuegeneration.NewMutationalValueGenerator(mutationalGeneratorConfig, valueSet, randomProvider)
@@ -612,6 +610,7 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 	// Create a sequence generator config which uses the created value generator.
 	sequenceGenConfig := &CallSequenceGeneratorConfig{
 		NewSequenceProbability:                   0.3,
+		MutateCallSequenceElementProbability:     0.1,
 		RandomUnmodifiedCorpusHeadWeight:         800,
 		RandomUnmodifiedCorpusTailWeight:         100,
 		RandomUnmodifiedSpliceAtRandomWeight:     200,
