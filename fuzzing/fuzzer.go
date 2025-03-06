@@ -467,11 +467,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
-	balances := make([]*big.Int, 0)
+	balances := make([]*config.ContractBalance, 0)
+
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
 		// Preserve index of target contract balances
-		balances = append(balances, big.NewInt(0))
+		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
 	}
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
@@ -513,7 +514,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
 				if len(balances) > i {
-					contractBalance = new(big.Int).Set(balances[i])
+					contractBalance = new(big.Int).Set(&balances[i].Int)
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
