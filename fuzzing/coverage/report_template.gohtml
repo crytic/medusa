@@ -1,725 +1,1043 @@
-<html lang=en>
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Coverage Report</title>
+    <title>Medusa Coverage Report</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap">
     <style>
+        :root {
+            /* Colors */
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: rgba(99,102,241,0.1);
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --surface: #fff;
+            --text: var(--gray-800);
+            --text-light: var(--gray-500);
+            --radius: 0.375rem;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            /* RGB values for opacity variants */
+            --success-rgb: 34,197,94;
+            --warning-rgb: 234,179,8;
+            --danger-rgb: 239,68,68;
+        }
+
+        /* Reset */
+        * {box-sizing:border-box;margin:0;padding:0}
+        
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 15px;
-            margin: 0;
-            background-color: #eee;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        header {
-            flex: 0 0 auto;
-            padding: 15px;
-        }
-        footer {
-            flex: 0 0 auto;
-            padding: 15px;
-            line-height: 1.5;
-        }
-        hr {
-            margin: 15px 0px;
-            background-color: transparent;
-            border: 0;
-            border-top: 1px solid #ccc;
-        }
-        a {
-            color: #2A5DB0;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        a:active {
-            color: black;
-        }
-        a:visited {
-            color: #2A5DB0;
-        }
-        .progress-coverage {
-            width: 50px;
-        }
-        .unselectable {
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -khtml-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-        .button-sort {
-            cursor: pointer;
-        }
-        /* Split panel layout */
-        .split-panel {
-            display: flex;
-            flex: 1 1 auto;
-            overflow: hidden;
-            position: relative;
-        }
-        #file-split-panel {
-            display: flex;
-            flex-direction: row;
-        }
-        #file-explorer {
-            flex: 0 0 250px;
-            height: 100%;
-            overflow: auto;
-            background-color: #f5f5f5;
-            border-right: 1px solid #ccc;
-            padding: 10px;
-            box-sizing: border-box;
-            position: relative;
-            min-width: 40px;
-            max-width: 500px;
-            resize: horizontal;
-            transition: width 0.3s ease;
-        }
-        #file-explorer.collapsed {
-            flex: 0 0 40px;
-            overflow: hidden;
-        }
-        .file-explorer-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        #toggle-explorer {
-            background: none;
-            border: none;
-            font-size: 16px;
-            cursor: pointer;
-            padding: 0 5px;
-        }
-        #file-explorer.collapsed #toggle-explorer {
-            transform: rotate(180deg);
-        }
-        #file-explorer.collapsed .file-tree,
-        #file-explorer.collapsed h3 {
-            display: none;
-        }
-        #main-view-panel {
-            flex: 1 1 auto;
-            height: 100%;
-            overflow: auto;
-            padding: 15px;
-            box-sizing: border-box;
-        }
-        #resizer {
-            width: 5px;
-            height: 100%;
-            background-color: #ccc;
-            cursor: col-resize;
-            position: absolute;
-            right: 0;
-            top: 0;
+            font-family:'Inter',-apple-system,sans-serif;
+            font-size:0.875rem;
+            line-height:1.5;
+            color:var(--text);
+            background:var(--gray-50);
+            height:100vh;
+            display:flex;
+            flex-direction:column;
+            overflow:hidden;
         }
         
-        /* File tree styles */
+        a {color:var(--primary);text-decoration:none}
+        a:hover {color:var(--primary-hover);text-decoration:underline}
+        
+        button {
+            cursor:pointer;
+            background:transparent;
+            border:none;
+            padding:0;
+            font:inherit;
+            color:inherit;
+            outline:none;
+        }
+        
+        /* Layout */
+        .app-container {
+            display:flex;
+            flex-direction:column;
+            height:100vh;
+            overflow:hidden;
+        }
+        
+        header {
+            background:var(--surface);
+            border-bottom:1px solid var(--gray-200);
+            padding:1rem 1.5rem;
+            z-index:10;
+            box-shadow:var(--shadow-sm);
+        }
+        
+        .header-content {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            max-width:1400px;
+            margin:0 auto;
+            width:100%;
+        }
+        
+        .logo-text {
+            font-size:1.5rem;
+            font-weight:600;
+            color:var(--gray-800);
+        }
+        
+        /* Buttons */
+        .btn {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            height:2.25rem;
+            padding:0 1rem;
+            font-size:0.875rem;
+            font-weight:500;
+            border-radius:var(--radius);
+            transition:all 0.2s;
+            border:1px solid transparent;
+        }
+        
+        .btn-secondary {
+            background:#B92B3D;
+            border-color:#B92B3D;
+            color:white;
+        }
+        
+        .btn-secondary:hover {
+            background:#9e2434;
+            border-color:#9e2434;
+        }
+        
+        .btn-sm {
+            height:2rem;
+            padding:0 1rem;
+            font-size:0.75rem;
+        }
+        
+        .button-group {
+            display:flex;
+            gap:0.75rem;
+            width:100%;
+        }
+        
+        .button-group .btn {
+            flex:1;
+        }
+        
+        /* Split panel layout */
+        .split-panel {
+            display:flex;
+            flex:1;
+            overflow:hidden;
+            position:relative;
+        }
+        
+        #file-split-panel {
+            display:flex;
+            flex-direction:row;
+        }
+        
+        /* File explorer panel */
+        #file-explorer {
+            flex:0 0 260px;
+            height:100%;
+            overflow:auto;
+            background:var(--surface);
+            border-right:1px solid var(--gray-200);
+            padding:0;
+            position:relative;
+            min-width:200px;
+            max-width:500px;
+            display:flex;
+            flex-direction:column;
+        }
+        
+        #file-explorer-resizer {
+            position:absolute;
+            top:0;
+            right:-5px;
+            width:10px;
+            height:100%;
+            cursor:col-resize;
+            z-index:10;
+            background:linear-gradient(to right,transparent,rgba(0,0,0,0.05),transparent);
+        }
+        
+        #file-explorer-resizer:hover {
+            background:linear-gradient(to right,transparent,rgba(0,0,0,0.1),transparent);
+        }
+        
+        .file-explorer-header {
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            padding:1rem;
+            border-bottom:1px solid var(--gray-200);
+        }
+        
+        .file-search {
+            padding:0.5rem 1rem;
+            border-bottom:1px solid var(--gray-200);
+            display:flex;
+            align-items:center;
+        }
+        
+        .file-search input {
+            flex:1;
+            border:1px solid var(--gray-300);
+            border-radius:var(--radius);
+            padding:0.5rem;
+            font-size:0.875rem;
+            outline:none;
+        }
+        
+        .file-search input:focus {
+            border-color:var(--primary);
+            box-shadow:0 0 0 1px var(--primary-light);
+        }
+        
+        #file-search-clear {
+            margin-left:0.5rem;
+            color:var(--gray-500);
+            font-size:1.25rem;
+            line-height:1;
+            padding:0.25rem;
+            border-radius:var(--radius);
+        }
+        
+        #file-search-clear:hover {
+            background:var(--gray-100);
+        }
+        
+        .search-highlight {
+            background:var(--primary-light);
+            color:var(--primary);
+            font-weight:500;
+        }
+        
+        .search-no-results {
+            padding:1rem;
+            font-style:italic;
+            color:var(--gray-500);
+            text-align:center;
+        }
+        
+        .file-explorer-content {
+            overflow:auto;
+            flex:1;
+            padding:1rem;
+        }
+        
+        .file-explorer-title {
+            font-size:0.875rem;
+            font-weight:600;
+            margin:0;
+            color:var(--gray-600);
+            text-transform:uppercase;
+            letter-spacing:0.05em;
+        }
+        
+        /* Main view panel */
+        #main-view-panel {
+            flex:1;
+            height:100%;
+            overflow:auto;
+            padding:1.5rem;
+            background:var(--gray-50);
+        }
+        
+        /* Stats cards */
+        .stats-container {
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+            gap:1rem;
+            margin-bottom:1.5rem;
+        }
+        
+        .stat-card {
+            background:var(--surface);
+            border-radius:var(--radius);
+            padding:1.25rem;
+            box-shadow:var(--shadow);
+            display:flex;
+            flex-direction:column;
+        }
+        
+        .stat-title {
+            font-size:0.875rem;
+            color:var(--text-light);
+            margin-bottom:0.5rem;
+        }
+        
+        .stat-value {
+            font-size:1.5rem;
+            font-weight:600;
+            margin-bottom:0.5rem;
+        }
+        
+        .stat-badge {
+            display:inline-flex;
+            align-items:center;
+            padding:0.25rem 0.5rem;
+            border-radius:9999px;
+            font-size:0.75rem;
+            font-weight:500;
+            background:var(--primary-light);
+            color:var(--primary);
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            width:100%;
+            height:0.5rem;
+            background:var(--gray-200);
+            border-radius:9999px;
+            overflow:hidden;
+            margin-top:0.5rem;
+        }
+        
+        .progress-bar {
+            height:100%;
+            border-radius:9999px;
+            transition:width 0.3s;
+        }
+        
+        /* File tree */
         .file-tree {
-            list-style-type: none;
-            padding-left: 0;
-            margin: 0;
+            list-style:none;
+            padding-left:0;
+            margin:0;
+            font-size:0.875rem;
         }
+        
         .file-tree li {
-            margin: 3px 0;
+            margin:0.25rem 0;
         }
+        
         .file-tree ul {
-            list-style-type: none;
-            padding-left: 20px;
-            margin: 0;
+            list-style:none;
+            padding-left:1.25rem;
+            margin:0.25rem 0;
         }
+        
         .file-item {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            padding: 3px 5px;
-            border-radius: 3px;
+            display:flex;
+            align-items:center;
+            cursor:pointer;
+            padding:0.375rem 0.5rem;
+            border-radius:var(--radius);
+            transition:background-color 0.2s;
         }
+        
         .file-item:hover {
-            background-color: #e0e0e0;
+            background:var(--gray-100);
         }
+        
         .file-item.active {
-            background-color: #d0d0d0;
+            background:var(--primary-light);
+            color:var(--primary);
         }
+        
         .file-toggle {
-            width: 16px;
-            text-align: center;
-            cursor: pointer;
-            color: #555;
-            font-size: 10px;
+            width:1.25rem;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:0.75rem;
+            color:var(--gray-500);
         }
+        
         .file-icon {
-            margin: 0 5px;
-            color: #555;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            margin-right:0.5rem;
+            color:var(--gray-500);
         }
+        
         .file-name {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            flex:1;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
         }
+        
         .file-coverage {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-left: 5px;
+            width:0.75rem;
+            height:0.75rem;
+            border-radius:50%;
+            margin-left:0.5rem;
         }
-        .directory > .file-item > .file-icon:before {
-            content: "📁";
+        
+        /* File tree icons */
+        .directory > .file-item > .file-icon:before {content:"📁"}
+        .directory.expanded > .file-item > .file-icon:before {content:"📂"}
+        .file > .file-item > .file-icon:before {content:"📄"}
+        .directory > .file-item > .file-toggle:before {content:"▶"}
+        .directory.expanded > .file-item > .file-toggle:before {content:"▼"}
+        .file > .file-item > .file-toggle {visibility:hidden}
+        .directory > ul {display:none}
+        .directory.expanded > ul {display:block}
+        
+        /* Source files */
+        .source-file {
+            margin-bottom:1.5rem;
+            border-radius:var(--radius);
+            overflow:hidden;
+            box-shadow:var(--shadow);
+            background:var(--surface);
         }
-        .directory.expanded > .file-item > .file-icon:before {
-            content: "📂";
+        
+        .source-file-header {
+            padding:0.75rem 1rem;
+            background:#12181E;
+            color:white;
+            cursor:pointer;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            transition:background-color 0.2s;
         }
-        .file > .file-item > .file-icon:before {
-            content: "📄";
+        
+        .source-file-header:hover {
+            background:#1e2832;
         }
-        .directory > .file-item > .file-toggle:before {
-            content: "►";
+        
+        .source-file-header .file-info {
+            display:flex;
+            align-items:center;
+            gap:1rem;
         }
-        .directory.expanded > .file-item > .file-toggle:before {
-            content: "▼";
+        
+        .source-file-header .file-name {
+            font-weight:500;
         }
-        .file > .file-item > .file-toggle {
-            visibility: hidden;
+        
+        .source-file-header .coverage-badge {
+            display:inline-flex;
+            align-items:center;
+            padding:0.25rem 0.5rem;
+            border-radius:9999px;
+            font-size:0.75rem;
+            font-weight:500;
         }
-        .directory > ul {
-            display: none;
+        
+        .source-file-content {
+            max-height:0;
+            overflow:hidden;
+            transition:max-height 0.3s ease;
         }
-        .directory.expanded > ul {
-            display: block;
+        
+        .source-file.expanded .source-file-content {
+            max-height:none;
         }
-        .collapsible {
-            background-color: #777;
-            color: white;
-            cursor: pointer;
-            padding: 8px;
-            width: 100%;
-            border: none;
-            text-align: left;
-            outline: none;
-            font-size: 12px;
+        
+        .source-file-stats {
+            padding:0.75rem 1rem;
+            border-bottom:1px solid var(--gray-200);
+            font-size:0.875rem;
+            color:var(--text-light);
         }
-        .collapsible-active, .collapsible:hover {
-            background-color: #555;
+        
+        /* Code styling */
+        .code-container {
+            position:relative;
+            overflow:auto;
+            max-height:600px;
         }
-        .collapsible:after {
-            content: "\002B";
-            color: white;
-            font-weight: bold;
-            float: left;
-            margin-left: 5px;
-            margin-right: 5px;
-        }
-        .collapsible-active:after {
-            content: "\2212";
-        }
-        .collapsible-active + .collapsible-container {
-            max-height: none;
-        }
-        .collapsible-container {
-            margin-bottom: 5px;
-            max-height: 0;
-            overflow: hidden;
-            background-color: #ddd;
-        }
-        .collapsible-container-content {
-            padding: 15px;
-        }
+        
         .code-coverage-table {
-            border-collapse: collapse;
-            font-family: "Lucida Console", Monaco, monospace;
-            font-size: 12px;
-            font-style: normal;
-            font-variant: normal;
-            font-weight: 400;
-            line-height: 1.5;
-            tab-size: 4;
-            width: 100%;
+            border-collapse:collapse;
+            font-family:'JetBrains Mono',monospace;
+            font-size:0.8125rem;
+            line-height:1.5;
+            tab-size:4;
+            width:100%;
         }
+        
+        .code-coverage-table pre {
+            margin:0;
+            font-family:inherit;
+        }
+        
         .row-line-number {
-            width: 10px;
-            text-align: right;
-            padding-right: 3px;
-            color: rgba(0, 0, 0, 0.50);
+            user-select:none;
+            text-align:right;
+            padding:0 0.75rem;
+            width:1%;
+            min-width:2.5rem;
+            color:var(--gray-400);
+            background:var(--gray-100);
+            border-right:1px solid var(--gray-200);
         }
+        
         .row-reverted-status {
-            font-size: 12px;
-            text-align: center;
-            min-width: 10px;
-            background-color: rgba(0, 0, 0, 0.04);
-            color: rgba(0, 0, 0, 0.70);
-            white-space: nowrap;
+            user-select:none;
+            text-align:center;
+            width:auto;
+            min-width:2.25rem;
+            padding:0 0.25rem;
+            color:var(--gray-600);
+            background:var(--gray-100);
+            border-right:1px solid var(--gray-200);
+            white-space:nowrap;
         }
+        
         .row-source {
-            width: 100%;
-            padding-left: 20px;
+            padding:0 0.75rem;
         }
+        
         .row-line-covered {
-            background-color: rgba(23, 255, 0, 0.12);
-            width: min-content;
+            background:rgba(var(--success-rgb),0.1);
         }
+        
         .row-line-uncovered {
-            background-color: rgba(255, 0, 0, 0.10);
-            width: min-content;
+            background:rgba(var(--danger-rgb),0.1);
+        }
+        
+        /* Footer */
+        footer {
+            background:var(--surface);
+            border-top:1px solid var(--gray-200);
+            padding:1rem;
+            text-align:center;
+            font-size:0.875rem;
+            color:var(--gray-500);
+        }
+        
+        /* Responsive */
+        @media (max-width:768px) {
+            .stats-container {grid-template-columns:1fr}
+            #file-explorer {display:none}
         }
     </style>
 </head>
 
 <body>
-    <!-- Total coverage metrics/controls -->
-    <header>
-        <h1>Coverage Report</h1>
-        <hr />
-        <table>
-            <tr><th>Files: </th><td>{{len .Files}}</td></tr>
-            <tr><th>Lines: </th><td>{{.LineCount}}</td></tr>
-            <tr>
-                <th>Covered: </th>
-                <td>
-                    {{/* Analyze some initial coverage metrics */}}
-                    {{$totalLinesCovered := .CoveredLineCount}}
-                    {{$totalLinesActive := .ActiveLineCount}}
-                    {{$totalPercentCoverageInt := percentageInt $totalLinesCovered $totalLinesActive}}
-
-                    {{/* Output our coverage info with a progress bar alongside it.*/}}
-                    {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
-                    {{$totalLinesCovered}} / {{$totalLinesActive}} ({{percentageStr $totalLinesCovered $totalLinesActive 1}}%)
-                    <progress class="progress-coverage" value="{{percentageStr $totalLinesCovered $totalLinesActive 0}}" max="100" style="accent-color: hsl({{$totalPercentCoverageInt}}, 100%, 60%)"></progress>
-                </td>
-            </tr>
-            <tr>
-                <th>Actions: </th>
-                <td>
-                    <button class="button button-sort" onclick="setAllSourceFilesCollapsed(false)">Expand All</button>
-                    <button class="button button-sort" onclick="setAllSourceFilesCollapsed(true)">Collapse All</button> /
-                    <button class="button button-sort" onclick="setEmptySourceFilesCollapsed(false)">Expand Empty</button>
-                    <button class="button button-sort" onclick="setEmptySourceFilesCollapsed(true)">Collapse Empty</button>
-                </td>
-            </tr>
-        </table>
-    </header>
-    <hr />
-    <!-- Create a horizontally split panel for our file explorer / coverage view -->
-    <div class="split-panel" id="file-split-panel">
-        <!-- File Explorer Sidebar -->
-        <div id="file-explorer">
-            <div class="file-explorer-header">
-                <h3>Files</h3>
-                <button id="toggle-explorer" title="Toggle file explorer">⟪</button>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <span class="logo-text">Medusa Coverage Report</span>
+                <a href="https://github.com/crytic/medusa" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
             </div>
-            <ul id="file-tree-root" class="file-tree file-tree-root"></ul>
-            <div id="resizer"></div>
-        </div>
-        
-        <!-- Main panel (coverage) -->
-        <div id="main-view-panel">
-            <!-- Individual file coverage -->
-            {{/* Loop through all sources */}}
-            {{range $sourceFile := .SortedFiles}}
-                {{/* Analyze some initial coverage metrics */}}
-                {{$linesCovered := $sourceFile.CoveredLineCount}}
-                {{$linesActive := $sourceFile.ActiveLineCount}}
-                {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
+        </header>
 
-                {{/* Output a container for each source file, with a collapsible header and source container.*/}}
-                <div class="source-file" id="{{$sourceFile.Path | filePathToId}}" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
-                    <button class="collapsible">
-                        {{/*The progress bar's color is set from HSL values (hue 0-100 is red->orange->yellow->green)*/}}
-                        <span><progress class="progress-coverage" value="{{percentageStr $linesCovered $linesActive 0}}" max="100" style="accent-color: hsl({{$linesCoveredPercentInt}}, 100%, 60%)"></progress></span>
-                        <span>[{{percentageStr $linesCovered $linesActive 0}}%]</span>
-                        <span>{{relativePath $sourceFile.Path}}</span>
-                    </button>
-                    <div class="collapsible-container">
-                        <div class="collapsible-container-content">
-                        <hr />
-                        {{/* Output the total line coverage statistics*/}}
-                        <table>
-                            <tr>
-                                <th>Lines covered: </th>
-                                <td>{{$linesCovered}} / {{$linesActive}} ({{percentageStr $linesCovered $linesActive 1}}%)</td>
-                            </tr>
-                        </table>
-                        <hr />
-                        {{/* Output a tables with a row for each source line*/}}
-                        <table class="code-coverage-table">
-                            {{range $lineIndex, $line := $sourceFile.Lines}}
-                                {{/* Create a row for this source line */}}
-                                <tr>
-                                    {{/* Output a cell for the line number */}}
-                                    <td class="row-line-number unselectable">{{add $lineIndex 1}}</td>
-
-                        {{/* Output two cells for the reverted/non-reverted execution status */}}
-                        <td class="row-reverted-status unselectable">
-                            {{if $line.IsCovered}}
-                                <div title="The source line executed without reverting.">√ {{$line.SuccessHitCount}}</div>
-                            {{end}}
-                        </td>
-                        <td class="row-reverted-status unselectable">
-                            {{if $line.IsCoveredReverted}}
-                                <div title="The source line executed, but was reverted.">⟳ {{$line.RevertHitCount}}</div>
-                            {{end}}
-                        </td>
-
-                                    {{/* Output a cell for the source line */}}
-                                    {{/* If a source line is "active", it has a source mapping so we mark it green/red */}}
-                                    {{/* If a source line is "covered", it is green, otherwise it is red. */}}
-                                    <td class="row-source">
-                                        {{if not $line.IsActive}}
-                                                <pre>{{printf "%s" $line.Contents}}</pre>
-                                        {{else if or $line.IsCovered $line.IsCoveredReverted}}
-                                                <pre class="row-line-covered">{{printf "%s" $line.Contents}}</pre>
-                                        {{else}}
-                                                <pre class="row-line-uncovered">{{printf "%s" $line.Contents}}</pre>
-                                        {{end}}
-                                    </td>
-                                </tr>
-                            {{end}}
-                        </table>
+        <!-- Main content -->
+        <div class="split-panel" id="file-split-panel">
+            <!-- File Explorer -->
+            <div id="file-explorer">
+                <div class="file-explorer-header">
+                    <h3 class="file-explorer-title">Files</h3>
+                </div>
+                <div class="file-search">
+                    <input type="text" id="file-search-input" placeholder="Search files..." />
+                    <button id="file-search-clear" title="Clear search">×</button>
+                </div>
+                <div class="file-explorer-content">
+                    <ul id="file-tree-root" class="file-tree"></ul>
+                    <div id="search-no-results" class="search-no-results" style="display: none;">No matching files found</div>
+                </div>
+                <div id="file-explorer-resizer"></div>
+            </div>
+            
+            <!-- Main panel -->
+            <div id="main-view-panel">
+                <!-- Overview -->
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-title">Files</div>
+                        <div class="stat-value">{{len .Files}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total Lines</div>
+                        <div class="stat-value">{{.LineCount}}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Coverage</div>
+                        {{$totalLinesCovered := .CoveredLineCount}}
+                        {{$totalLinesActive := .ActiveLineCount}}
+                        {{$totalPercentCoverageInt := percentageInt $totalLinesCovered $totalLinesActive}}
+                        <div class="stat-value">{{percentageStr $totalLinesCovered $totalLinesActive 1}}%</div>
+                        <div class="progress-container">
+                            <div class="progress-bar" style="width: {{percentageStr $totalLinesCovered $totalLinesActive 0}}%; background-color: {{getCoverageColor $totalPercentCoverageInt}}"></div>
+                        </div>
+                        <div style="margin-top: 0.5rem">
+                            <span class="stat-badge">{{$totalLinesCovered}} / {{$totalLinesActive}} lines</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Actions</div>
+                        <div class="button-group">
+                            <button class="btn btn-secondary btn-sm" onclick="setAllSourceFilesCollapsed(false)">Expand All</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setAllSourceFilesCollapsed(true)">Collapse All</button>
+                        </div>
+                        <div class="button-group" style="margin-top: 0.5rem">
+                            <button class="btn btn-secondary btn-sm" onclick="setEmptySourceFilesCollapsed(false)">Expand Empty</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setEmptySourceFilesCollapsed(true)">Collapse Empty</button>
                         </div>
                     </div>
                 </div>
-            {{end}}
+
+                <!-- Individual file coverage -->
+                {{range $sourceFile := .SortedFiles}}
+                    {{$linesCovered := $sourceFile.CoveredLineCount}}
+                    {{$linesActive := $sourceFile.ActiveLineCount}}
+                    {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
+                    <div class="source-file" id="{{$sourceFile.Path | filePathToId}}" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
+                        <div class="source-file-header">
+                            <div class="file-info">
+                                <span class="coverage-badge" style="background-color: {{getCoverageColorAlpha $linesCoveredPercentInt}}; color: {{getCoverageColor $linesCoveredPercentInt}}">
+                                    {{percentageStr $linesCovered $linesActive 1}}%
+                                </span>
+                                <span class="file-name">{{relativePath $sourceFile.Path}}</span>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div class="source-file-content">
+                            <div class="source-file-stats">
+                                <span>Lines covered: <strong>{{$linesCovered}} / {{$linesActive}}</strong> ({{percentageStr $linesCovered $linesActive 1}}%)</span>
+                            </div>
+                            <div class="code-container">
+                                <table class="code-coverage-table">
+                                    {{range $lineIndex, $line := $sourceFile.Lines}}
+                                        <tr>
+                                            <td class="row-line-number">{{add $lineIndex 1}}</td>
+                                            <td class="row-reverted-status">
+                                                {{if $line.IsCovered}}
+                                                    <div title="The source line executed without reverting {{$line.SuccessHitCount}} times." style="color: var(--success); padding: 0;">✓ {{formatNumber $line.SuccessHitCount}}</div>
+                                                {{end}}
+                                            </td>
+                                            <td class="row-reverted-status">
+                                                {{if $line.IsCoveredReverted}}
+                                                    <div title="The source line executed, but was reverted {{$line.RevertHitCount}} times." style="color: var(--warning); padding: 0;">⟲ {{formatNumber $line.RevertHitCount}}</div>
+                                                {{end}}
+                                            </td>
+                                            <td class="row-source">
+                                                {{if not $line.IsActive}}
+                                                    <pre>{{printf "%s" $line.Contents}}</pre>
+                                                {{else if or $line.IsCovered $line.IsCoveredReverted}}
+                                                    <pre class="row-line-covered">{{printf "%s" $line.Contents}}</pre>
+                                                {{else}}
+                                                    <pre class="row-line-uncovered">{{printf "%s" $line.Contents}}</pre>
+                                                {{end}}
+                                            </td>
+                                        </tr>
+                                    {{end}}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                {{end}}
+            </div>
         </div>
+
+        <!-- Footer -->
+        <footer>
+            <div>Report generated by Medusa on {{timeNow.UTC.Format "January 02, 2006 at 15:04:05 UTC"}}</div>
+            <div style="margin-top: 0.5rem">
+                <a href="https://github.com/crytic/medusa" target="_blank">github.com/crytic/medusa</a>
+            </div>
+        </footer>
     </div>
 
-<script>
-    // Add event listeners for collapsible sections to collapse/expand on click.
-    const collapsibleHeaders = document.getElementsByClassName("collapsible");
-    for (let i = 0; i < collapsibleHeaders.length; i++) {
-        collapsibleHeaders[i].addEventListener("click", function() {
-            this.classList.toggle("collapsible-active");
+    <script>
+        // Initialize the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            initSourceFileExpansion();
+            initializeFileTree();
+            initResizer();
         });
-    }
-
-    // Helper function to convert a path to a safe HTML ID
-    function pathToId(path) {
-        return path.replace(/[^a-zA-Z0-9]/g, '_');
-    }
-    
-    // Helper function to get color based on coverage percentage
-    function getCoverageColor(covered, total) {
-        if (total === 0) return '#aaa'; // No coverage data
-        const percentage = (covered / total) * 100;
-        // Color gradient from red (0%) to yellow (50%) to green (100%)
-        if (percentage < 50) {
-            // Red to yellow (0-50%)
-            const g = Math.floor((percentage / 50) * 255);
-            return `rgb(255, ${g}, 0)`;
-        } else {
-            // Yellow to green (50-100%)
-            const r = Math.floor(255 - ((percentage - 50) / 50) * 255);
-            return `rgb(${r}, 255, 0)`;
-        }
-    }
-
-    // Build file tree structure from file paths
-    function buildFileTree() {
-        const root = { name: '', type: 'directory', children: {}, path: '' };
-        const sourceFiles = document.getElementsByClassName("source-file");
         
-        // First pass: build the tree structure
-        for (let i = 0; i < sourceFiles.length; i++) {
-            const filePath = sourceFiles[i].dataset.filePath;
-            const pathParts = filePath.split(/[\/\\]+/);
-            let current = root;
+        // Initialize source file expansion behavior
+        function initSourceFileExpansion() {
+            document.querySelectorAll('.source-file').forEach(file => {
+                const header = file.querySelector('.source-file-header');
+                header.addEventListener('click', () => {
+                    file.classList.toggle('expanded');
+                    const chevron = header.querySelector('.chevron-icon');
+                    chevron.style.transform = file.classList.contains('expanded') ? 'rotate(180deg)' : 'rotate(0)';
+                });
+            });
+        }
+
+        // Initialize the resizer functionality
+        function initResizer() {
+            const fileExplorer = document.getElementById('file-explorer');
+            const resizer = document.getElementById('file-explorer-resizer');
+            let startX, startWidth;
             
-            // Build the directory structure
-            let currentPath = '';
-            for (let j = 0; j < pathParts.length; j++) {
-                const part = pathParts[j];
-                if (part === '') continue;
+            // Handle mousedown on the resizer
+            resizer.addEventListener('mousedown', e => {
+                startX = e.clientX;
+                startWidth = parseInt(window.getComputedStyle(fileExplorer).width, 10);
                 
-                currentPath += (currentPath ? '/' : '') + part;
+                // Add event listeners for resizing
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
                 
-                if (j === pathParts.length - 1) {
-                    // This is a file
-                    current.children[part] = {
-                        name: part,
-                        type: 'file',
-                        path: filePath,
-                        element: sourceFiles[i],
-                        coveredLines: parseInt(sourceFiles[i].dataset.linesCovered),
-                        activeLines: parseInt(sourceFiles[i].dataset.linesActive)
-                    };
-                } else {
-                    // This is a directory
-                    if (!current.children[part]) {
-                        current.children[part] = {
-                            name: part,
-                            type: 'directory',
-                            children: {},
-                            path: currentPath
-                        };
-                    }
-                    current = current.children[part];
+                // Prevent text selection during resize
+                document.body.style.userSelect = 'none';
+                document.body.style.cursor = 'col-resize';
+            });
+            
+            // Handle mousemove for resizing
+            function handleMouseMove(e) {
+                const newWidth = startWidth + (e.clientX - startX);
+                
+                // Apply width constraints
+                if (newWidth >= 200 && newWidth <= 500) {
+                    fileExplorer.style.width = newWidth + 'px';
+                    fileExplorer.style.flex = `0 0 ${newWidth}px`;
                 }
             }
+            
+            // Handle mouseup to end resizing
+            function handleMouseUp() {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+            }
+        }
+
+        // Helper function to get color based on coverage percentage
+        function getCoverageColor(percentage) {
+            return percentage < 50 
+                ? `hsl(${percentage * 1.2}, 90%, 50%)`
+                : `hsl(${60 + (percentage - 50) * 1.2}, 90%, 45%)`;
+        }
+
+        // Helper function for transparent background with coverage color
+        function getCoverageColorAlpha(percentage) {
+            return percentage < 50 
+                ? `hsla(${percentage * 1.2}, 90%, 50%, 0.15)`
+                : `hsla(${60 + (percentage - 50) * 1.2}, 90%, 45%, 0.15)`;
+        }
+
+        // Build file tree structure from file paths
+        function buildFileTree() {
+            const root = { name: '', type: 'directory', children: {}, path: '' };
+            const sourceFiles = document.getElementsByClassName("source-file");
+            
+            // First pass: build the tree structure
+            for (let i = 0; i < sourceFiles.length; i++) {
+                const filePath = sourceFiles[i].dataset.filePath;
+                const pathParts = filePath.split(/[\/\\]+/);
+                let current = root;
+                let currentPath = '';
+                
+                for (let j = 0; j < pathParts.length; j++) {
+                    const part = pathParts[j];
+                    if (part === '') continue;
+                    
+                    currentPath += (currentPath ? '/' : '') + part;
+                    
+                    if (j === pathParts.length - 1) {
+                        // This is a file
+                        current.children[part] = {
+                            name: part,
+                            type: 'file',
+                            path: filePath,
+                            element: sourceFiles[i],
+                            coveredLines: parseInt(sourceFiles[i].dataset.linesCovered),
+                            activeLines: parseInt(sourceFiles[i].dataset.linesActive)
+                        };
+                    } else {
+                        // This is a directory
+                        if (!current.children[part]) {
+                            current.children[part] = {
+                                name: part,
+                                type: 'directory',
+                                children: {},
+                                path: currentPath
+                            };
+                        }
+                        current = current.children[part];
+                    }
+                }
+            }
+            
+            // Second pass: calculate directory coverage
+            calculateDirectoryCoverage(root);
+            
+            return root;
         }
         
-        // Second pass: calculate directory coverage
-        calculateDirectoryCoverage(root);
-        
-        return root;
-    }
-    
-    // Calculate coverage for directories by aggregating file coverage
-    function calculateDirectoryCoverage(node) {
-        if (node.type === 'file') {
+        // Calculate coverage for directories by aggregating file coverage
+        function calculateDirectoryCoverage(node) {
+            if (node.type === 'file') {
+                return {
+                    coveredLines: node.coveredLines,
+                    activeLines: node.activeLines
+                };
+            }
+            
+            let totalCovered = 0;
+            let totalActive = 0;
+            
+            for (const childName in node.children) {
+                const child = node.children[childName];
+                const { coveredLines, activeLines } = calculateDirectoryCoverage(child);
+                totalCovered += coveredLines;
+                totalActive += activeLines;
+            }
+            
+            node.coveredLines = totalCovered;
+            node.activeLines = totalActive;
+            
             return {
-                coveredLines: node.coveredLines,
-                activeLines: node.activeLines
+                coveredLines: totalCovered,
+                activeLines: totalActive
             };
         }
         
-        let totalCovered = 0;
-        let totalActive = 0;
-        
-        for (const childName in node.children) {
-            const child = node.children[childName];
-            const childCoverage = calculateDirectoryCoverage(child);
+        // Render the file tree to the DOM
+        function renderFileTree(node, parentElement, isRoot = false) {
+            const list = isRoot ? parentElement : document.createElement('ul');
             
-            totalCovered += childCoverage.coveredLines;
-            totalActive += childCoverage.activeLines;
-        }
-        
-        node.coveredLines = totalCovered;
-        node.activeLines = totalActive;
-        
-        return {
-            coveredLines: totalCovered,
-            activeLines: totalActive
-        };
-    }
-    
-    // Render the file tree to the DOM
-    function renderFileTree(node, parentElement, isRoot = false) {
-        const list = isRoot ? parentElement : document.createElement('ul');
-        
-        // Sort children: directories first, then files, both alphabetically
-        const sortedChildren = Object.values(node.children).sort((a, b) => {
-            if (a.type !== b.type) {
-                return a.type === 'directory' ? -1 : 1;
-            }
-            return a.name.localeCompare(b.name);
-        });
-        
-        for (const child of sortedChildren) {
-            const li = document.createElement('li');
-            li.className = child.type;
+            // Sort children: directories first, then files, both alphabetically
+            const sortedChildren = Object.values(node.children).sort((a, b) => {
+                if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
             
-            // Create item container
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'file-item';
-            
-            // Create toggle button for directories
-            const toggle = document.createElement('span');
-            toggle.className = 'file-toggle';
-            itemDiv.appendChild(toggle);
-            
-            // Create file/folder icon
-            const icon = document.createElement('span');
-            icon.className = 'file-icon';
-            itemDiv.appendChild(icon);
-            
-            // Create name span
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'file-name';
-            nameSpan.textContent = child.name;
-            itemDiv.appendChild(nameSpan);
-            
-            // Add coverage indicator
-            if (child.activeLines > 0) {
-                const coverage = document.createElement('span');
-                coverage.className = 'file-coverage';
-                coverage.style.backgroundColor = getCoverageColor(child.coveredLines, child.activeLines);
-                coverage.title = `${child.coveredLines}/${child.activeLines} lines covered (${Math.round((child.coveredLines / child.activeLines) * 100)}%)`;
-                itemDiv.appendChild(coverage);
-            }
-            
-            li.appendChild(itemDiv);
-            
-            // Handle click events
-            if (child.type === 'directory') {
-                toggle.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    li.classList.toggle('expanded');
-                });
-                itemDiv.addEventListener('click', () => {
-                    li.classList.toggle('expanded');
-                });
+            for (const child of sortedChildren) {
+                const li = document.createElement('li');
+                li.className = child.type;
                 
-                // Recursively render children
-                renderFileTree(child, li);
-            } else {
-                // Add click handler for files
-                itemDiv.addEventListener('click', () => {
-                    // Deactivate all other items
-                    document.querySelectorAll('.file-item.active').forEach(el => {
-                        el.classList.remove('active');
+                // Create item container
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'file-item';
+                
+                // Create toggle button for directories
+                const toggle = document.createElement('span');
+                toggle.className = 'file-toggle';
+                itemDiv.appendChild(toggle);
+                
+                // Create file/folder icon
+                const icon = document.createElement('span');
+                icon.className = 'file-icon';
+                itemDiv.appendChild(icon);
+                
+                // Create name span
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'file-name';
+                nameSpan.textContent = child.name;
+                itemDiv.appendChild(nameSpan);
+                
+                // Add coverage indicator
+                if (child.activeLines > 0) {
+                    const coverage = document.createElement('span');
+                    coverage.className = 'file-coverage';
+                    const percentage = Math.round((child.coveredLines / child.activeLines) * 100);
+                    coverage.style.backgroundColor = getCoverageColor(percentage);
+                    coverage.title = `${child.coveredLines}/${child.activeLines} lines covered (${percentage}%)`;
+                    itemDiv.appendChild(coverage);
+                }
+                
+                li.appendChild(itemDiv);
+                
+                // Handle click events
+                if (child.type === 'directory') {
+                    toggle.addEventListener('click', e => {
+                        e.stopPropagation();
+                        li.classList.toggle('expanded');
                     });
                     
-                    // Activate this item
-                    itemDiv.classList.add('active');
+                    itemDiv.addEventListener('click', () => {
+                        li.classList.toggle('expanded');
+                    });
                     
-                    // Navigate to the file
-                    const fileElement = child.element;
-                    fileElement.scrollIntoView({ behavior: 'smooth' });
+                    // Recursively render children
+                    renderFileTree(child, li);
+                } else {
+                    // Add click handler for files
+                    itemDiv.addEventListener('click', () => {
+                        // Deactivate all other items
+                        document.querySelectorAll('.file-item.active').forEach(el => {
+                            el.classList.remove('active');
+                        });
+                        
+                        // Activate this item
+                        itemDiv.classList.add('active');
+                        
+                        // Navigate to the file
+                        const fileElement = child.element;
+                        fileElement.scrollIntoView({ behavior: 'smooth' });
+                        
+                        // Expand the file if it's collapsed
+                        if (!fileElement.classList.contains('expanded')) {
+                            fileElement.querySelector('.source-file-header').click();
+                        }
+                    });
+                }
+                
+                list.appendChild(li);
+            }
+            
+            if (!isRoot) {
+                parentElement.appendChild(list);
+            }
+        }
+        
+        // Initialize the file tree
+        function initializeFileTree() {
+            const fileTreeRoot = document.getElementById('file-tree-root');
+            const fileTree = buildFileTree();
+            renderFileTree(fileTree, fileTreeRoot, true);
+            
+            // Expand the first level directories by default
+            document.querySelectorAll('#file-tree-root > li.directory').forEach(dir => {
+                dir.classList.add('expanded');
+            });
+            
+            // Initialize search functionality
+            initializeFileSearch();
+        }
+        
+        // Initialize file search functionality
+        function initializeFileSearch() {
+            const searchInput = document.getElementById('file-search-input');
+            const clearButton = document.getElementById('file-search-clear');
+            const noResultsMessage = document.getElementById('search-no-results');
+            
+            // Debounce function to limit how often the search is performed during typing
+            function debounce(func, delay) {
+                let timeout;
+                return function() {
+                    const context = this;
+                    const args = arguments;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(context, args), delay);
+                };
+            }
+            
+            // Function to highlight text that matches the search term
+            function highlightText(element, searchTerm) {
+                if (!searchTerm) return element.textContent;
+                
+                const text = element.textContent;
+                const lowerText = text.toLowerCase();
+                const lowerSearchTerm = searchTerm.toLowerCase();
+                
+                if (lowerText.includes(lowerSearchTerm)) {
+                    const startIndex = lowerText.indexOf(lowerSearchTerm);
+                    const endIndex = startIndex + lowerSearchTerm.length;
                     
-                    // Expand the file if it's collapsed
-                    const collapsible = fileElement.querySelector('.collapsible');
-                    if (!collapsible.classList.contains('collapsible-active')) {
-                        collapsible.click();
+                    const beforeMatch = text.substring(0, startIndex);
+                    const match = text.substring(startIndex, endIndex);
+                    const afterMatch = text.substring(endIndex);
+                    
+                    element.innerHTML = beforeMatch + '<span class="search-highlight">' + match + '</span>' + afterMatch;
+                    return true;
+                }
+                
+                element.textContent = text;
+                return false;
+            }
+            
+            // Function to filter the file tree based on search term
+            function filterFileTree(searchTerm) {
+                const fileTreeItems = document.querySelectorAll('.file-tree li');
+                let hasVisibleItems = false;
+                
+                fileTreeItems.forEach(item => {
+                    const nameElement = item.querySelector('.file-name');
+                    const isMatch = highlightText(nameElement, searchTerm);
+                    
+                    if (searchTerm === '') {
+                        // If search is cleared, show everything
+                        item.style.display = '';
+                        
+                        // Only expand first level by default
+                        if (item.classList.contains('directory') && !item.parentElement.classList.contains('file-tree-root')) {
+                            item.classList.remove('expanded');
+                        }
+                    } else if (isMatch) {
+                        // Show this item if it matches
+                        item.style.display = '';
+                        hasVisibleItems = true;
+                        
+                        // Expand all parent directories
+                        let parent = item.parentElement.closest('.directory');
+                        while (parent) {
+                            parent.classList.add('expanded');
+                            parent.style.display = '';
+                            parent = parent.parentElement.closest('.directory');
+                        }
+                    } else {
+                        // For directories, only hide if none of their children match
+                        if (item.classList.contains('directory')) {
+                            const hasVisibleChildren = Array.from(item.querySelectorAll('li')).some(
+                                child => child.style.display !== 'none'
+                            );
+                            
+                            if (hasVisibleChildren) {
+                                item.style.display = '';
+                                hasVisibleItems = true;
+                            } else {
+                                item.style.display = 'none';
+                            }
+                        } else {
+                            item.style.display = 'none';
+                        }
                     }
                 });
+                
+                // Show/hide the "no results" message
+                noResultsMessage.style.display = searchTerm && !hasVisibleItems ? 'block' : 'none';
             }
             
-            list.appendChild(li);
+            // Debounced search function to avoid excessive filtering while typing
+            const debouncedSearch = debounce(filterFileTree, 200);
+            
+            // Search input event
+            searchInput.addEventListener('input', function() {
+                debouncedSearch(this.value.trim());
+            });
+            
+            // Clear button event
+            clearButton.addEventListener('click', function() {
+                searchInput.value = '';
+                filterFileTree('');
+                searchInput.focus();
+            });
         }
         
-        if (!isRoot) {
-            parentElement.appendChild(list);
-        }
-    }
-
-    // Button click event handler for expanding/collapsing all files.
-    function setAllSourceFilesCollapsed(collapsed) {
-        let i;
-        for (i = 0; i < collapsibleHeaders.length; i++) {
-            if (collapsed) {
-                collapsibleHeaders[i].classList.remove("collapsible-active");
-            } else {
-                collapsibleHeaders[i].classList.add("collapsible-active");
-            }
-        }
-    }
-
-    // Button click event handler for expanding/collapsing empty files.
-    function setEmptySourceFilesCollapsed(collapsed) {
-        let i;
-        for (i = 0; i < sourceFiles.length; i++) {
-            // Verify the item is an empty source file.
-            if (sourceFiles[i].dataset.linesActive <= 0) {
-                let collapsibleHeader = sourceFiles[i].querySelector('.collapsible');
-                if (collapsed) {
-                    collapsibleHeader.classList.remove("collapsible-active");
-                } else {
-                    collapsibleHeader.classList.add("collapsible-active");
+        // Button click handler for expanding/collapsing all files
+        function setAllSourceFilesCollapsed(collapsed) {
+            document.querySelectorAll('.source-file').forEach(file => {
+                if ((collapsed && file.classList.contains('expanded')) || 
+                    (!collapsed && !file.classList.contains('expanded'))) {
+                    file.querySelector('.source-file-header').click();
                 }
-            }
+            });
         }
-    }
-    
-    // Initialize the file tree when the page loads
-    document.addEventListener('DOMContentLoaded', () => {
-        const fileTreeRoot = document.getElementById('file-tree-root');
-        const fileTree = buildFileTree();
-        renderFileTree(fileTree, fileTreeRoot, true);
         
-        // Expand the first level directories by default
-        document.querySelectorAll('#file-tree-root > li.directory').forEach(dir => {
-            dir.classList.add('expanded');
-        });
-        
-        // Initialize resizer
-        initResizer();
-        
-        // Initialize toggle explorer
-        initToggleExplorer();
-    });
-    
-    // Initialize the toggle explorer functionality
-    function initToggleExplorer() {
-        const toggleButton = document.getElementById('toggle-explorer');
-        const fileExplorer = document.getElementById('file-explorer');
-        let explorerWidth = 250; // Default width to restore to
-        
-        toggleButton.addEventListener('click', () => {
-            if (fileExplorer.classList.contains('collapsed')) {
-                // Expand
-                fileExplorer.classList.remove('collapsed');
-                fileExplorer.style.width = explorerWidth + 'px';
-            } else {
-                // Collapse
-                explorerWidth = parseInt(window.getComputedStyle(fileExplorer).width, 10);
-                fileExplorer.classList.add('collapsed');
-            }
-        });
-    }
-    
-    // Initialize the resizer functionality
-    function initResizer() {
-        const resizer = document.getElementById('resizer');
-        const fileExplorer = document.getElementById('file-explorer');
-        
-        // The current position of mouse
-        let x = 0;
-        let w = 0;
-        
-        // Handle the mousedown event that triggers resizing
-        const mouseDownHandler = function(e) {
-            // Get the current mouse position
-            x = e.clientX;
-            
-            // Get the current width of the file explorer
-            const styles = window.getComputedStyle(fileExplorer);
-            w = parseInt(styles.width, 10);
-            
-            // Add event listeners for mousemove and mouseup
-            document.addEventListener('mousemove', mouseMoveHandler);
-            document.addEventListener('mouseup', mouseUpHandler);
-            
-            // Add custom cursor style during resize
-            document.body.style.cursor = 'col-resize';
-            fileExplorer.style.userSelect = 'none';
-            fileExplorer.style.pointerEvents = 'none';
-        };
-        
-        // Handle the mousemove event that resizes
-        const mouseMoveHandler = function(e) {
-            // Calculate the new width
-            const dx = e.clientX - x;
-            fileExplorer.style.width = `${w + dx}px`;
-        };
-        
-        // Handle the mouseup event that stops resizing
-        const mouseUpHandler = function() {
-            // Remove the handlers
-            document.removeEventListener('mousemove', mouseMoveHandler);
-            document.removeEventListener('mouseup', mouseUpHandler);
-            
-            // Reset cursor and selection
-            document.body.style.cursor = '';
-            fileExplorer.style.userSelect = '';
-            fileExplorer.style.pointerEvents = '';
-        };
-        
-        // Attach the handler
-        resizer.addEventListener('mousedown', mouseDownHandler);
-    }
-
-    // If there's only one item, expand it by default.
-    if (collapsibleHeaders.length === 1 && collapsibleHeaders[0].className.indexOf("collapsible-active") === -1) {
-        collapsibleHeaders[0].click();
-    }
-</script>
-
-<hr />
-<footer>
-    <center>
-        Report generated by medusa
-        <br />
-        {{timeNow.UTC}}
-        <br />
-        <a href="https://github.com/crytic/medusa">github.com/crytic/medusa</a>
-    </center>
-</footer>
+        // Button click handler for expanding/collapsing empty files
+        function setEmptySourceFilesCollapsed(collapsed) {
+            document.querySelectorAll('.source-file').forEach(file => {
+                if (parseInt(file.dataset.linesActive) <= 0) {
+                    if ((collapsed && file.classList.contains('expanded')) || 
+                        (!collapsed && !file.classList.contains('expanded'))) {
+                        file.querySelector('.source-file-header').click();
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>
