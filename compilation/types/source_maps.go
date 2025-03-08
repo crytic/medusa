@@ -1,11 +1,8 @@
 package types
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:
@@ -146,39 +143,4 @@ func ParseSourceMap(sourceMapStr string) (SourceMap, error) {
 
 	// Return the resulting map
 	return sourceMap, nil
-}
-
-// GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
-// and the element of the slice represents the instruction offset.
-// Returns the slice lookup, or an error if one occurs.
-func (s SourceMap) GetInstructionIndexToOffsetLookup(bytecode []byte) ([]int, error) {
-	// Create our resulting lookup
-	indexToOffsetLookup := make([]int, len(s))
-
-	// Loop through all byte code
-	currentOffset := 0
-	for i := 0; i < len(indexToOffsetLookup); i++ {
-		// If we're going to read out of bounds, return an error.
-		if currentOffset >= len(bytecode) {
-			return nil, fmt.Errorf("failed to obtain a lookup of instruction indexes to offsets. instruction index: %v, current offset: %v, length: %v", i, currentOffset, len(bytecode))
-		}
-
-		// Obtain the indexed instruction and add the current offset to our lookup at this index.
-		op := vm.OpCode(bytecode[currentOffset])
-		indexToOffsetLookup[i] = currentOffset
-
-		// Next, calculate the length of data that follows this instruction.
-		operandCount := 0
-		if op.IsPush() {
-			if op == vm.PUSH0 {
-				operandCount = 0
-			} else {
-				operandCount = int(op) - int(vm.PUSH1) + 1
-			}
-		}
-
-		// Advance the offset past this instruction and its operands.
-		currentOffset += operandCount + 1
-	}
-	return indexToOffsetLookup, nil
 }
