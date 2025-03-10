@@ -892,7 +892,7 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
-		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.logger)
 
 		if err != nil {
 			f.logger.Error("Failed to analyze source coverage", err)
@@ -992,7 +992,7 @@ func (f *Fuzzer) printMetricsLoop() {
 
 			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
 				start := time.Now()
-				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps())
+				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
 				// This is just for a log message. This shouldn't error but if it does we don't need to exit out
 				if err == nil {
 					end := time.Now()

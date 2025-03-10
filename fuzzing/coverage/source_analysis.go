@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/logging"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/exp/maps"
 )
@@ -181,7 +182,7 @@ type SourceLineAnalysis struct {
 }
 
 // GetUniquePCsCount returns the number of PCs in all contracts hit by our tests.
-func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps) (int, error) {
+func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps, logger *logging.Logger) (int, error) {
 	uniquePCs := 0
 
 	// Loop through all sources in all compilations to process coverage information.
@@ -204,8 +205,8 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 				}
 
 				coverageMaps.updateLock.Lock()
-				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData)
-				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData)
+				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData, logger)
+				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData, logger)
 				coverageMaps.updateLock.Unlock()
 			}
 		}
@@ -216,7 +217,7 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 // AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
 // to determine source coverage information.
 // Returns a SourceAnalysis object, or an error if one occurs.
-func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps) (*SourceAnalysis, error) {
+func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, logger *logging.Logger) (*SourceAnalysis, error) {
 	// Create a new source analysis object
 	sourceAnalysis := &SourceAnalysis{
 		Files: make(map[string]*SourceFileAnalysis),
@@ -311,11 +312,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData, logger)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData, logger)
 				if err != nil {
 					return nil, err
 				}
@@ -326,11 +327,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 }
 
 // getContractPCsHit returns the number of PCs in this contract hit by our tests.
-func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap) int {
+func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap, logger *logging.Logger) int {
 	if len(bytecode) == 0 || contractCoverageData == nil {
 		return 0
 	}
-	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode)
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, logger)
 	if succHitCounts == nil || revertHitCounts == nil {
 		return 0
 	}
@@ -347,10 +348,10 @@ func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMa
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, logger *logging.Logger) error {
 	var succHitCounts, revertHitCounts []uint64
 	if len(bytecode) > 0 && contractCoverageData != nil {
-		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode)
+		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, logger)
 	} else { // Probably because we didn't hit this contract at all...
 		succHitCounts = nil
 		revertHitCounts = nil
@@ -425,7 +426,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 // determineLinesCovered takes a ContractCoverageMap and a contract's bytecode, and determines which program counters were hit.
 // Returns two slices: one for successful hits and one for reverts. These slices are indexed by instruction index (not program counter),
 // and their values are the number of hits (0 if the PC was not hit).
-func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint64, []uint64) {
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *logging.Logger) ([]uint64, []uint64) {
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
 	// executedMakers as src -> dst -> hit count, and dst -> src -> hit count
@@ -453,20 +454,20 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint64, 
 		op := vm.OpCode(bytecode[pc])                                                         // Used only for checks below
 		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for checks below
 		if hit+enterCount < hit {
-			fmt.Printf("WARNING: Overflow while generating coverage report, during `hit += enterCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn("WARNING: Overflow while generating coverage report, during `hit += enterCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
 		}
 		if hit+enterCount < revertCount {
-			fmt.Printf("WARNING: Underflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn("WARNING: Underflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
 		}
 		if hit+enterCount < allLeaveCount {
-			fmt.Printf("WARNING: Underflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn("WARNING: Underflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
 		}
 		if isJumpOrReturn && hit+enterCount != allLeaveCount {
-			fmt.Printf("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
 		}
 		if allLeaveCount-revertCount > 0 && hit+enterCount != allLeaveCount {
 			// The check is allLeaveCount-revertCount > 0 rather than just allLeaveCount > 0 since reverts don't have to reset hit to 0
-			fmt.Printf("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
 		}
 
 		// Modify hit based on coverage for this line, and record results
@@ -476,7 +477,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte) ([]uint64, 
 		hit -= allLeaveCount
 	}
 	if hit != 0 {
-		fmt.Printf("WARNING: Nonzero final hit count. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset))
+		logger.Warn("WARNING: Nonzero final hit count. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset))
 	}
 
 	return successfulHits, revertedHits
