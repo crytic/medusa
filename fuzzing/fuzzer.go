@@ -477,6 +477,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
+				testChain.CompiledContracts[contractName] = contract.CompiledContract()
 				testChain.ContractBytecodes[contractName] = contract.CompiledContract().InitBytecode
 				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
