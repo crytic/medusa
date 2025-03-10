@@ -1,8 +1,10 @@
 package valuegeneration
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ValueMutator represents an interface for a provider used to mutate function inputs and call arguments for use
@@ -12,9 +14,8 @@ type ValueMutator interface {
 	MutateAddress(addr common.Address) common.Address
 
 	// MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
-	// Returns the mutated value. If any element of the returned array is nil, the value generator will be called upon
-	// to generate a new value in its place.
-	MutateArray(value []any, fixedLength bool) []any
+	// The ABI type of the array is also provided in case new values need to be generated. Returns the mutated value.
+	MutateArray(value []any, fixedLength bool, abiType *abi.Type) []any
 
 	// MutateBool takes a boolean input and returns a mutated value based off the input.
 	MutateBool(bl bool) bool
