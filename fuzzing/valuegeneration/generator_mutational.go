@@ -1,11 +1,12 @@
 package valuegeneration
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 	"math/big"
 	"math/rand"
+	"slices"
+	
+	"github.com/crytic/medusa/utils"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // MutationalValueGenerator represents a ValueGenerator and ValueMutator for function inputs and call arguments. It

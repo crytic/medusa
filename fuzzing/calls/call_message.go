@@ -2,6 +2,7 @@ package calls
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
@@ -9,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	coreTypes "github.com/ethereum/go-ethereum/core/types"
-	"golang.org/x/exp/slices"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from

@@ -3,6 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 
 	"github.com/crytic/medusa/chain/state"
@@ -14,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"

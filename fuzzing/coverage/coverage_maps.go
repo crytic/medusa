@@ -1,8 +1,7 @@
 package coverage
 
 import (
-	"golang.org/x/exp/slices"
-
+	"syslicesnc"
 	"sync"
 
 	compilationTypes "github.com/crytic/medusa/compilation/types"

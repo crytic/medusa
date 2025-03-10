@@ -3,13 +3,13 @@ package fuzzing
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/ethereum/go-ethereum/core"
-	"golang.org/x/exp/slices"
 )
 
 // PropertyTestCaseProvider is a provider for on-chain property tests.

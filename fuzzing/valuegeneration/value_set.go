@@ -4,12 +4,12 @@ import (
 	"encoding/hex"
 	"github.com/crytic/medusa/utils/reflectionutils"
 	"hash"
+	"maps"
 	"math/big"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/maps"
 )
 
 // ValueSet represents potential values of significance within the source code to be used in fuzz tests.

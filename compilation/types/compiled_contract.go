@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"golang.org/x/exp/slices"
 )
 
 // CompiledContract represents a single contract unit from a smart contract compilation.
