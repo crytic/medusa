@@ -633,26 +633,24 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			return []any{b}, nil
 		},
 	)
-
-	// getCode: Retrieves the creation bytecode for a contract by its file path
+	// getCode: Retrieves the creation bytecode for a contract
 	contract.addMethod("getCode", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Extract the contract path
-			// cheats.getCode("MyContract");
 			contractPath := inputs[0].(string)
 
-			// Parse the contract path to extract file, contract name, and version
-			_, contractName, _, err := parseContractPath(contractPath)
+			_, contractName, err := parseContractPath(contractPath)
 			if err != nil {
-				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: invalid path format: %v", err))
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: invalid path format: %v", err)))
 			}
 
-			// Look up the bytecode in the chain's map
+			// Check for the bytecode in the chain's map
 			bytecode, exists := tracer.chain.ContractBytecodes[contractName]
 			if !exists {
-				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: contract not found: %s", contractName))
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractName)))
 			}
-			return []any{bytecode}, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractPath)))
+
+			// Return the bytecode
+			return []any{bytecode}, nil
 		},
 	)
 
@@ -660,41 +658,43 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	return contract, nil
 }
 
-// Helper function to parse contract path formats
-func parseContractPath(path string) (string, string, string, error) {
+// parseContractPath parses a contract path in the following formats:
+// - "MyContract.sol:MyContract"
+// - "MyContract"
+// Returns file name and contract name
+
+func parseContractPath(path string) (string, string, error) {
 	// Handle empty path
 	if path == "" {
-		return "", "", "", fmt.Errorf("empty path provided")
+		return "", "", fmt.Errorf("empty path provided")
 	}
 
 	// Split by colon separator
 	parts := strings.Split(path, ":")
 
 	if len(parts) > 2 {
-		return "", "", "", fmt.Errorf("too many path segments")
+		return "", "", fmt.Errorf("too many path segments")
 	}
 
-	// Handle first part (file or contract name)
+	// When given "MyContract"
+	if len(parts) == 1 && !strings.HasSuffix(parts[0], ".sol") {
+		contractName := parts[0]
+		fileName := contractName + ".sol"
+		return fileName, contractName, nil
+	}
+
+	// When file specified: "MyContract.sol:MyContract" or "MyContract.sol"
 	file := parts[0]
 	if !strings.HasSuffix(file, ".sol") {
 		file = file + ".sol"
 	}
 
-	// Default contract name from file (without extension)
-	contractName := strings.TrimSuffix(filepath.Base(file), ".sol")
-	version := ""
-
-	// Process second part if present
+	// If contract name is explicitly provided after colon
 	if len(parts) == 2 {
-		secondPart := parts[1]
-
-		// Check if second part looks like a version (starts with number)
-		if len(secondPart) > 0 && secondPart[0] >= '0' && secondPart[0] <= '9' {
-			version = secondPart
-		} else {
-			contractName = secondPart
-		}
+		return file, parts[1], nil
 	}
 
-	return file, contractName, version, nil
+	// Otherwise derive contract name from file name
+	contractName := strings.TrimSuffix(filepath.Base(file), ".sol")
+	return file, contractName, nil
 }

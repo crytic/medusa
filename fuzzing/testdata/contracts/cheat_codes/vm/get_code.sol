@@ -19,7 +19,7 @@ contract SimpleStorage {
 // Test contract to verify getCode functionality
 contract TestGetCode {
     function testGetCode() public {
-        // Obtain our cheat code contract reference
+        // Get cheat code contract reference
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
         
         // Get bytecode for SimpleStorage contract
@@ -41,5 +41,54 @@ contract TestGetCode {
         SimpleStorage simpleStorage = SimpleStorage(deployedAddr);
         simpleStorage.set(22);
         require(simpleStorage.get() == 22, "Contract functionality doesn't work correctly");
-    }        
+    }
+    
+    // Test different formats for getCode
+    function testGetCodeFormats() public {
+        CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        
+        // Test different path formats
+        bytes memory bytecode1 = cheats.getCode("SimpleStorage.sol:SimpleStorage");
+        bytes memory bytecode2 = cheats.getCode("SimpleStorage");
+        
+        // Verify both formats return the same bytecode
+        require(keccak256(bytecode1) == keccak256(bytecode2), "Different formats returned different bytecode");
+    }
+    
+    // Test error cases
+    function testGetCodeErrors() public {
+        CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        
+        // This should revert because NonExistentContract doesn't exist
+        try cheats.getCode("NonExistentContract") returns (bytes memory) {
+            revert("Should have reverted with non-existent contract");
+        } catch {
+            // Expected to catch error
+        }
+    }
+    
+    // Verify correct bytecode is returned
+    function testVerifyCorrectBytecode() public {
+        CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        
+        // Get bytecode and deploy
+        bytes memory bytecode = cheats.getCode("SimpleStorage");
+        address deployedAddr;
+        assembly {
+            deployedAddr := create(0, add(bytecode, 0x20), mload(bytecode))
+        }
+        
+        // Create reference contract
+        SimpleStorage reference = new SimpleStorage();
+        
+        // Compare code hashes
+        bytes32 deployedHash;
+        bytes32 referenceHash;
+        assembly {
+            deployedHash := extcodehash(deployedAddr)
+            referenceHash := extcodehash(reference)
+        }
+        
+        require(deployedHash == referenceHash, "Retrieved bytecode doesn't match reference");
+    }
 }
