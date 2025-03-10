@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
+	"strslicesings"
 	"strings"
 
 	"github.com/spf13/cobra"

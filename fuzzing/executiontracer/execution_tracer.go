@@ -2,6 +2,7 @@ package executiontracer
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/chain/types"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"golang.org/x/exp/slices"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
