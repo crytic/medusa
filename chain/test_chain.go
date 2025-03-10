@@ -94,6 +94,8 @@ type TestChain struct {
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
 	stateFactory state.MedusaStateFactory
+
+	ContractBytecodes map[string][]byte
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -235,6 +237,7 @@ func newTestChainWithStateFactory(
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
 		stateFactory:            stateFactory,
+		ContractBytecodes:       make(map[string][]byte),
 	}
 
 	// Add our internal tracers to this chain.

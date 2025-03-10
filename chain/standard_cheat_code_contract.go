@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -633,6 +634,67 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// getCode: Retrieves the creation bytecode for a contract by its file path
+	contract.addMethod("getCode", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Extract the contract path
+			// cheats.getCode("MyContract");
+			contractPath := inputs[0].(string)
+
+			// Parse the contract path to extract file, contract name, and version
+			_, contractName, _, err := parseContractPath(contractPath)
+			if err != nil {
+				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: invalid path format: %v", err))
+			}
+
+			// Look up the bytecode in the chain's map
+			bytecode, exists := tracer.chain.ContractBytecodes[contractName]
+			if !exists {
+				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: contract not found: %s", contractName))
+			}
+			return []any{bytecode}, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractPath)))
+		},
+	)
+
 	// Return our precompile contract information.
 	return contract, nil
+}
+
+// Helper function to parse contract path formats
+func parseContractPath(path string) (string, string, string, error) {
+	// Handle empty path
+	if path == "" {
+		return "", "", "", fmt.Errorf("empty path provided")
+	}
+
+	// Split by colon separator
+	parts := strings.Split(path, ":")
+
+	if len(parts) > 2 {
+		return "", "", "", fmt.Errorf("too many path segments")
+	}
+
+	// Handle first part (file or contract name)
+	file := parts[0]
+	if !strings.HasSuffix(file, ".sol") {
+		file = file + ".sol"
+	}
+
+	// Default contract name from file (without extension)
+	contractName := strings.TrimSuffix(filepath.Base(file), ".sol")
+	version := ""
+
+	// Process second part if present
+	if len(parts) == 2 {
+		secondPart := parts[1]
+
+		// Check if second part looks like a version (starts with number)
+		if len(secondPart) > 0 && secondPart[0] >= '0' && secondPart[0] <= '9' {
+			version = secondPart
+		} else {
+			contractName = secondPart
+		}
+	}
+
+	return file, contractName, version, nil
 }
