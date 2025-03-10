@@ -31,3 +31,24 @@ func TestDeserializeBalances(t *testing.T) {
 		}
 	}
 }
+
+func TestSerializeBalances(t *testing.T) {
+	testCases := []struct {
+		input           ContractBalance
+		expectedBalance string
+	}{
+		{ContractBalance{*big.NewInt(0)}, "\"0\""},
+		{ContractBalance{*big.NewInt(1)}, "\"1\""},
+		{ContractBalance{*big.NewInt(0).Mul(big.NewInt(1000000000000000000), big.NewInt(1000000000000000000))}, "\"1000000000000000000000000000000000000\""},
+	}
+
+	for _, tc := range testCases {
+		out, err := json.Marshal(tc.input)
+		if err != nil {
+			t.Errorf("Marshal(%v): unexpected error: %v", tc.input, err)
+		}
+		if string(out) != tc.expectedBalance {
+			t.Errorf("Marshal(%v) = %v, want %v", tc.input, out, tc.expectedBalance)
+		}
+	}
+}

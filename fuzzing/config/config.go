@@ -159,7 +159,7 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON marshals a ContractBalance to JSON.
 func (cb ContractBalance) MarshalJSON() ([]byte, error) {
-	return []byte(cb.Int.String()), nil
+	return json.Marshal(cb.Int.String())
 }
 
 // TestingConfig describes the configuration options used for testing
