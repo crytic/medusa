@@ -387,7 +387,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	const START_PRANK_EXTRADATA_KEY = "cheatCodeStartPrankData"
+	// Define our prank context and key mapping key to store it with.
+	const extraDataKeyStartPrank = "cheatCodeStartPrankData"
 	type StartPrankData struct {
 		enabled        bool
 		msgSender      common.Address
@@ -400,10 +401,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	stopPrankFn := func() {
 		// Mark any `startPrank` data as disabled and delete it
 		topLevelCallFrame := tracer.TopLevelCallFrame()
-		phd := utils.MapFetchCasted[string, *StartPrankData](topLevelCallFrame.extraData, START_PRANK_EXTRADATA_KEY)
+		phd := utils.MapFetchCasted[string, *StartPrankData](topLevelCallFrame.extraData, extraDataKeyStartPrank)
 		if phd != nil {
 			(*phd).enabled = false
-			delete(topLevelCallFrame.extraData, START_PRANK_EXTRADATA_KEY)
+			delete(topLevelCallFrame.extraData, extraDataKeyStartPrank)
 		}
 	}
 	startPrankFn := func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
@@ -439,13 +440,13 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		// Since startPrank/stopPrank don't act as a stack, we will simply set the prank data
 		// across the whole transaction. So we'll store it within the top level call frame for easy access.
 		topLevelCallFrame := tracer.TopLevelCallFrame()
-		topLevelCallFrame.extraData[START_PRANK_EXTRADATA_KEY] = &prankData
+		topLevelCallFrame.extraData[extraDataKeyStartPrank] = &prankData
 
 		// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
 		// so when it enters the next frame in its scope, we trigger the prank.
 		var hookFn func() = nil
 		hookFn = func() {
-			// If it's disabled, do nothing
+			// If this prank was disabled but the hooks remain, do nothing until they clear out.
 			if !prankData.enabled {
 				return
 			}
@@ -462,8 +463,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// TODO: Do tx.origin spoofing.
 
-			// This will recurse for all or below this depth.
-			prankCallFrame.onNextFrameEnterHooks.Push(hookFn)
+			// Propogate the prank into next call in the same scope.
 			if tracer.callDepth > prankData.setAtCallDepth {
 				tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
 			}
@@ -472,8 +472,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Restore on exit (though pranking will continue for other frames)
 			prankCallFrame.onFrameExitRestoreHooks.Push(func() {
-				// If this prank was stopped, do nothing
-				// We do not want to affect other prank data by stopping it.
+				// If this prank was disabled but the hooks remain, do nothing until they clear out.
 				if !prankData.enabled {
 					return
 				}
@@ -481,7 +480,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				scopeContext.Contract.CallerAddress = original
 				// TODO: Restore tx.origin
 
-				// If we exit above the depth we started pranking at, we remove the prank.
+				// If we exit the depth we started pranking at, remove the prank.
 				if tracer.callDepth == prankData.setAtCallDepth {
 					stopPrankFn()
 				}
@@ -500,13 +499,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	contract.addMethod(
 		"stopPrank", abi.Arguments{}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
-			// Mark any `startPrank` data as disabled and delete it
-			topLevelCallFrame := tracer.TopLevelCallFrame()
-			phd := utils.MapFetchCasted[string, *StartPrankData](topLevelCallFrame.extraData, START_PRANK_EXTRADATA_KEY)
-			if phd != nil {
-				(*phd).enabled = false
-				delete(topLevelCallFrame.extraData, START_PRANK_EXTRADATA_KEY)
-			}
+			stopPrankFn()
 			return nil, nil
 		},
 	)

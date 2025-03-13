@@ -51,6 +51,17 @@ contract TestContract {
 
         assert(msg.sender == address(2)); // from oneStartPrankDeep
         //assert(tx.origin == address(22));
+
+        thisExternal.threeStartPrankDeep(originalMsgSender);
+    }
+
+    function threeStartPrankDeep(address originalMsgSender) external
+    {
+        // This can't be called directly
+        require(calledThroughTestFunction);
+
+        assert(msg.sender == address(thisExternal)); // startPrank only works one level below invocation, not two.
+        //assert(tx.origin == address(22)); // tx.origin is tx-wide, shared across scopes
     }
 
     function checkStartPrankInner(address value, bool equal) external
