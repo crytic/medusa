@@ -473,6 +473,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			originalCodeAddress := scopeContext.Contract.Address()
 			if isPrankedDelegateCall {
 				// TODO: Prank CodeAddress.
+				_ = originalCodeAddress // remove me (temp to avoid linter warnings)
 				//  This is an addr field in `scopeContext.Contract.self`, which is unexposed in medusa-geth for now.
 			}
 			// TODO: Spoof tx.origin
