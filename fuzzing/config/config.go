@@ -118,7 +118,10 @@ type ContractBalance struct {
 // UnmarshalJSON parses JSON data into big.Int from empty strings, hex ("0x"),
 // scientific notation (e/E), and base-10 formats
 func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
-	s := string(data)
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
 
 	// Empty string handling
 	if s == "" {
@@ -156,7 +159,7 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON marshals a ContractBalance to JSON.
 func (cb ContractBalance) MarshalJSON() ([]byte, error) {
-	return []byte(cb.Int.String()), nil
+	return json.Marshal(cb.Int.String())
 }
 
 // TestingConfig describes the configuration options used for testing
