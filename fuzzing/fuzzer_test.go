@@ -277,6 +277,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/startPrank.sol",
+		//"testdata/contracts/cheat_codes/vm/startPrankDelegate.sol", // TODO: Enable when startPrank `delegateCall` flag supported.
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",

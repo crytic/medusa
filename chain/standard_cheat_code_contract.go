@@ -457,18 +457,30 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 			scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
 
+			// Determine if this is a delegatecall.
+			isPrankedDelegateCall := false
+			if prankData.delegateCall {
+				if scopeContext.Contract.CodeAddr != nil && *scopeContext.Contract.CodeAddr != prankCallFrame.vmScope.Address() {
+					isPrankedDelegateCall = true
+				}
+			}
+
 			// Store the original value and spoof our prank address.
-			original := scopeContext.Caller()
+			originalMsgSender := scopeContext.Caller()
 			scopeContext.Contract.CallerAddress = prankData.msgSender
 
-			// TODO: Do tx.origin spoofing.
+			// Spoof the CodeAddress if we're pranking a delegatecall now.
+			originalCodeAddress := scopeContext.Contract.Address()
+			if isPrankedDelegateCall {
+				// TODO: Prank CodeAddress.
+				//  This is an addr field in `scopeContext.Contract.self`, which is unexposed in medusa-geth for now.
+			}
+			// TODO: Spoof tx.origin
 
 			// Propogate the prank into next call in the same scope.
 			if tracer.callDepth > prankData.setAtCallDepth {
 				tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
 			}
-
-			// TODO: The problem is this only adds on next frame enter, but doesn't re-add!
 
 			// Restore on exit (though pranking will continue for other frames)
 			prankCallFrame.onFrameExitRestoreHooks.Push(func() {
@@ -477,7 +489,13 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 					return
 				}
 
-				scopeContext.Contract.CallerAddress = original
+				// Restore msg.sender and, if delegatecall flag enabled, code address
+				scopeContext.Contract.CallerAddress = originalMsgSender
+				if isPrankedDelegateCall {
+					// TODO: Restore CodeAddress
+					_ = originalCodeAddress
+				}
+
 				// TODO: Restore tx.origin
 
 				// If we exit the depth we started pranking at, remove the prank.
@@ -487,13 +505,14 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			})
 		}
 		tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
-		// TODO: Add an event for the parent frame reverting and set prankData.enabled = false
 		return nil, nil
 	}
 	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{}, startPrankFn)
-	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
-	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{}, startPrankFn)
-	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
+	// TODO: Implement `delegateCall` for startPrank
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
+	// TODO: Implement tx.origin for startPrank
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{}, startPrankFn)
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
 
 	// StopPrank: Stops a StartPrank operation.
 	contract.addMethod(
