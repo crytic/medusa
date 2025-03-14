@@ -1,7 +1,6 @@
 package coverage
 
 import (
-	"github.com/crytic/medusa/utils"
 	"math/big"
 	"math/bits"
 
@@ -22,7 +21,15 @@ const coverageTracerResultsKey = "CoverageTracerResults"
 // GetCoverageTracerResults obtains CoverageMaps stored by a CoverageTracer from message results. This is nil if
 // no CoverageMaps were recorded by a tracer (e.g. CoverageTracer was not attached during this message execution).
 func GetCoverageTracerResults(messageResults *types.MessageResults) *CoverageMaps {
-	return utils.MapFetchCasted[string, CoverageMaps](messageResults.AdditionalResults, coverageTracerResultsKey)
+	// Try to obtain the results the tracer should've stored.
+	if genericResult, ok := messageResults.AdditionalResults[coverageTracerResultsKey]; ok {
+		if castedResult, ok := genericResult.(*CoverageMaps); ok {
+			return castedResult
+		}
+	}
+
+	// If we could not obtain them, return nil.
+	return nil
 }
 
 // RemoveCoverageTracerResults removes CoverageMaps stored by a CoverageTracer from message results.
