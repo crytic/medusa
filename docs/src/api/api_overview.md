@@ -1,6 +1,6 @@
 # API Overview (WIP)
 
-`medusa` offers a lower level API to hook into various parts of the fuzzer, its workers, and underlying chains. Although assertion and property testing are two built-in testing providers, they are implementing using events and hooks offered throughout the `Fuzzer`, `FuzzerWorker`(s), and underlying `TestChain`. These same hooks can be used by external developers wishing to implement their own customing testing methodology. In the sections below, we explore some of the relevant components throughout `medusa`, their events/hooks, an example of creating custom testing methodology with it.
+`medusa` offers a lower level API to hook into various parts of the fuzzer, its workers, and underlying chains. Although assertion and property testing are two built-in testing providers, they are implemented using events and hooks offered throughout the `Fuzzer`, `FuzzerWorker`(s), and underlying `TestChain`. These same hooks can be used by external developers wishing to implement their own custom testing methodology. In the sections below, we explore some of the relevant components throughout `medusa`, their events/hooks, an example of creating custom testing methodology with it.
 
 ## Component overview
 
@@ -28,7 +28,7 @@ A rudimentary description of the objects/providers and their roles are explained
 
   - Maintaining state of the chain (blocks, transactions in them, results/receipts)
   - Providing methods to create blocks, add transactions to them, commit them to chain, revert to previous block numbers.
-  - Allowing spoofing of block number and timestamp (commiting block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
+  - Allowing spoofing of block number and timestamp (committing block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
   - Provides methods to add tracers such as `evm.Logger` (standard go-ethereum tracers) or extend them with an additional interface (`TestChainTracer`) to also store any captured traced information in the execution results. This allows you to trace EVM execution for certain conditions, store results, and query them at a later time for testing.
 
 - `Fuzzer`: This is the main provider for the fuzzing process. It takes a `ProjectConfig` and is responsible for:
@@ -104,7 +104,7 @@ After you have created a `ProjectConfig`, you can create a new `Fuzzer` with it,
 
 Now it may be the case that you wish to hook the `Fuzzer`, `FuzzerWorker`, or `TestChain` to provide your own functionality. You can add your own testing methodology, and even power it with your own low-level EVM execution tracers to store and query results about each call.
 
-There are a few events/hooks that may be useful of the bat:
+There are a few events/hooks that may be useful off the bat:
 
 The `Fuzzer` maintains event emitters for the following events under `Fuzzer.Events.*`:
 

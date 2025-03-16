@@ -54,7 +54,6 @@ contract MyContract {
 - **Type**: Boolean
 - **Description**: Whether `pure` / `view` functions should be called and tested.
 - **Default**: `true`
--
 
 ### `testAllContracts`
 
