@@ -16,7 +16,7 @@ current working directory.
 
 ```shell
 # Set config file path
-medusa fuzz --out myConfig.json
+medusa fuzz --config myConfig.json
 ```
 
 ### `--compilation-target`
@@ -26,7 +26,7 @@ warning [here](../project_configuration/compilation_config.md#target) about chan
 
 ```shell
 # Set compilation target
-medusa fuzz --target TestMyContract.sol
+medusa fuzz --compilation-target TestMyContract.sol
 ```
 
 ### `--workers`
