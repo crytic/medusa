@@ -2,7 +2,7 @@
 
 Stateful fuzzing is an incredibly powerful feature because it allows medusa to test your system **end-to-end**. Let's
 take, for example, a staking system where you have the ability to `deposit`, `stake`, `unstake`, and `withdraw`. Because
-medusa can execute an array of transactions, medusa can call [`deposit`, `stake`, `unstake`, `withdraw`] inorder and test the
+medusa can execute an array of transactions, medusa can call [`deposit`, `stake`, `unstake`, `withdraw`] in order and test the
 whole system in one fell swoop. It is very important to note that medusa was not _forced_ to call those functions in
 sequence. Medusa, over time, will identify that calling deposit allows it to stake tokens and having a staked balance
 allows it to unstake, and so on.

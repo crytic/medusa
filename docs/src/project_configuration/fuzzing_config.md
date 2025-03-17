@@ -38,7 +38,6 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: Integer
 - **Description**: The number of iterations that shrinking will run for before returning the shrunken call sequence.
 - **Default**: 5000 iterations
--
 
 ### `callSequenceLength`
 
