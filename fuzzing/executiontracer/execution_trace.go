@@ -329,6 +329,11 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 	// Create list of elements and logs
 	elements := make([]any, 0)
 	consoleLogs := make([]any, 0)
+	
+	// If verbosity is 0 and this is not a top-level call frame, skip processing this frame
+	if t.verbosity == 0 && currentDepth > 0 {
+		return elements, consoleLogs
+	}
 
 	// Create our current call line prefix (indented by call depth)
 	prefix := strings.Repeat("\t", currentDepth) + " => "
@@ -360,6 +365,7 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 		for _, operation := range callFrame.Operations {
 			if childCallFrame, ok := operation.(*CallFrame); ok {
 				// If this is a call frame being entered, generate information recursively.
+				// For verbosity level 0, child frames will handle their own filtering based on depth
 				childOutputLines, childConsoleLogStrings := t.generateElementsAndLogsForCallFrame(currentDepth+1, childCallFrame)
 				elements = append(elements, childOutputLines...)
 				consoleLogs = append(consoleLogs, childConsoleLogStrings...)
