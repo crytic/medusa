@@ -482,7 +482,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 	})
 }
 
-// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+// TestDeploymentsWithPayableConstructors runs a test to ensure that we can send ether to payable constructors
 func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
