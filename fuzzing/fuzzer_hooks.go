@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"github.com/crytic/medusa/fuzzing/config"
 	"math/rand"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -67,7 +68,7 @@ type ShrinkCallSequenceRequest struct {
 	VerifierFunction func(worker *FuzzerWorker, callSequence calls.CallSequence) (bool, error)
 	// FinishedCallback is a method called upon when the shrink request has concluded. It provides the finalized
 	// shrunken call sequence.
-	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity int) error
+	FinishedCallback func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity config.VerbosityLevel) error
 	// RecordResultInCorpus indicates whether the shrunken call sequence should be recorded in the corpus. If so, when
 	// the shrinking operation is completed, the sequence will be added to the corpus if it doesn't already exist.
 	RecordResultInCorpus bool

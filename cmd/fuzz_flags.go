@@ -236,11 +236,23 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update the verbosity levels
 	if cmd.Flags().Changed("verbosity") || cmd.Flags().Changed("v") {
-		verbosity, err := cmd.Flags().GetCount("verbosity")
+		verbosityCount, err := cmd.Flags().GetCount("verbosity")
 		if err != nil {
 			return err
 		}
-		projectConfig.Fuzzing.Testing.Verbosity = verbosity - 1
+
+		// Map verbosity count to VerbosityLevel enum
+		// -v = Verbose (0)
+		// -vv = VeryVerbose (1)
+		// -vvv = VeryVeryVerbose (2)
+		switch {
+		case verbosityCount == 1:
+			projectConfig.Fuzzing.Testing.Verbosity = config.Verbose
+		case verbosityCount == 2:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVerbose
+		case verbosityCount >= 3:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVeryVerbose
+		}
 	}
 
 	return nil

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/config"
 	"regexp"
 	"strings"
 
@@ -35,11 +36,11 @@ type ExecutionTrace struct {
 	// labels is a mapping that maps an address to its string representation for cleaner execution traces
 	labels map[common.Address]string
 
-	verbosity int
+	verbosity config.VerbosityLevel
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string, verbosity int) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string, verbosity config.VerbosityLevel) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
@@ -329,9 +330,9 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 	// Create list of elements and logs
 	elements := make([]any, 0)
 	consoleLogs := make([]any, 0)
-	
+
 	// If verbosity is 0 and this is not a top-level call frame, skip processing this frame
-	if t.verbosity == 0 && currentDepth > 0 {
+	if t.verbosity == config.Verbose && currentDepth > 0 {
 		return elements, consoleLogs
 	}
 

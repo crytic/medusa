@@ -203,7 +203,7 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity int) error {
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity config.VerbosityLevel) error {
 				// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 				if len(shrunkenCallSequence) > 0 {
 					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verbosity)

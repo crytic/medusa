@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
 	"sync"
 
@@ -344,7 +345,7 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 
 					return shrunkenSequenceNewValue.Cmp(newValue) >= 0, err
 				},
-				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity int) error {
+				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity config.VerbosityLevel) error {
 					// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 					if len(shrunkenCallSequence) > 0 {
 						_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verbosity)

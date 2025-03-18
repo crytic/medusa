@@ -1,6 +1,7 @@
 package executiontracer
 
 import (
+	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
 
 	"github.com/crytic/medusa/chain"
@@ -20,7 +21,7 @@ import (
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB, verbosity int) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB, verbosity config.VerbosityLevel) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
 	executionTracer := NewExecutionTracer(contractDefinitions, testChain, verbosity)
 	defer executionTracer.Close()
@@ -70,11 +71,11 @@ type ExecutionTracer struct {
 	// nativeTracer is the underlying tracer interface that the execution tracer follows
 	nativeTracer *chain.TestChainTracer
 
-	verbosity int
+	verbosity config.VerbosityLevel
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
-func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain, verbosity int) *ExecutionTracer {
+func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain, verbosity config.VerbosityLevel) *ExecutionTracer {
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
 		testChain:           testChain,
