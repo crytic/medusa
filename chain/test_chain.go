@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/crytic/medusa/chain/config"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -94,6 +95,10 @@ type TestChain struct {
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
 	stateFactory state.MedusaStateFactory
+
+	ContractBytecodes map[string][]byte
+
+	CompiledContracts map[string]*compilationTypes.CompiledContract
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -235,6 +240,8 @@ func newTestChainWithStateFactory(
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
 		stateFactory:            stateFactory,
+		ContractBytecodes:       make(map[string][]byte),
+		CompiledContracts:       make(map[string]*compilationTypes.CompiledContract),
 	}
 
 	// Add our internal tracers to this chain.
