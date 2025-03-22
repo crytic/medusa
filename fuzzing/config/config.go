@@ -162,6 +162,22 @@ func (cb ContractBalance) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cb.Int.String())
 }
 
+// VerbosityLevel defines different verbosity levels
+type VerbosityLevel int
+
+const (
+	// Verbose corresponds to (-v) - Only top-level transactions in the execution trace
+	// Only events in the top-level call frame and return data are handled
+	Verbose VerbosityLevel = 0
+	
+	// VeryVerbose corresponds to (-vv) - Default behavior, current level of detail
+	VeryVerbose VerbosityLevel = 1
+	
+	// VeryVeryVerbose corresponds to (-vvv) - Maximum verbosity
+	// Every call sequence element in the call sequence has a trace
+	VeryVeryVerbose VerbosityLevel = 2
+)
+
 // TestingConfig describes the configuration options used for testing
 type TestingConfig struct {
 	// StopOnFailedTest describes whether the fuzzing.Fuzzer should stop after detecting the first failed test.
@@ -185,7 +201,11 @@ type TestingConfig struct {
 	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
 	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
 	// even if this option is not enabled.
-	TraceAll bool `json:"traceAll"`
+	//TraceAll bool `json:"traceAll"`
+
+	// Verbosity describes the level of verbosity for logging. Higher values mean more verbose output.
+	// Verbose (-v), VeryVerbose (-vv),VeryVeryVerbose(TraceAll) (-vvv)
+	Verbosity VerbosityLevel `json:"verbosity"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
