@@ -198,13 +198,11 @@ type TestingConfig struct {
 	// TestViewMethods dictates whether constant/pure/view methods should be called and tested.
 	TestViewMethods bool `json:"testViewMethods"`
 
-	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
-	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
-	// even if this option is not enabled.
-	//TraceAll bool `json:"traceAll"`
-
-	// Verbosity describes the level of verbosity for logging. Higher values mean more verbose output.
-	// Verbose (-v), VeryVerbose (-vv),VeryVeryVerbose(TraceAll) (-vvv)
+	// Verbosity controls the level of detail in execution traces:
+	// - Verbose (0): Only shows top-level transactions; hides nested calls
+	// - VeryVerbose (1): Shows nested calls with standard detail (default)
+	// - VeryVeryVerbose (2): Shows all call sequence elements with maximum detail
+	// CLI flags: -v, -vv, -vvv set levels 0, 1, 2 respectively
 	Verbosity VerbosityLevel `json:"verbosity"`
 
 	// AssertionTesting describes the configuration used for assertion testing.

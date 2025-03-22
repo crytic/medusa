@@ -78,7 +78,7 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
 
 	// Verbosity levels (-v, -vv, -vvv)
-	fuzzCmd.Flags().CountP("verbosity", "v", "increase verbosity level (can be used multiple times: -v, -vv, -vvv)")
+	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
 	return nil
 }
 
