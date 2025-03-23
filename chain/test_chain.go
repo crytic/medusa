@@ -94,10 +94,7 @@ type TestChain struct {
 
 	// stateFactory used to construct state databases from db/root. Abstracts away the backing RPC when running in
 	// fork mode.
-	stateFactory state.MedusaStateFactory
-
-	ContractBytecodes map[string][]byte
-
+	stateFactory      state.MedusaStateFactory
 	CompiledContracts map[string]*compilationTypes.CompiledContract
 }
 
@@ -240,7 +237,6 @@ func newTestChainWithStateFactory(
 		chainConfig:             genesisDefinition.Config,
 		vmConfigExtensions:      vmConfigExtensions,
 		stateFactory:            stateFactory,
-		ContractBytecodes:       make(map[string][]byte),
 		CompiledContracts:       make(map[string]*compilationTypes.CompiledContract),
 	}
 
