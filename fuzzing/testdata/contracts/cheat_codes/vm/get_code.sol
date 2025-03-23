@@ -78,17 +78,17 @@ contract TestGetCode {
             deployedAddr := create(0, add(bytecode, 0x20), mload(bytecode))
         }
         
-        // Create reference contract
-        SimpleStorage reference = new SimpleStorage();
+        // Create contract
+        SimpleStorage storageInstance = new SimpleStorage();
         
         // Compare code hashes
         bytes32 deployedHash;
-        bytes32 referenceHash;
+        bytes32 storageInstanceHash;
         assembly {
             deployedHash := extcodehash(deployedAddr)
-            referenceHash := extcodehash(reference)
+            storageInstanceHash := extcodehash(storageInstance)
         }
         
-        require(deployedHash == referenceHash, "Retrieved bytecode doesn't match reference");
+        require(deployedHash == storageInstanceHash, "Retrieved bytecode doesn't match storageInstanceHash");
     }
 }
