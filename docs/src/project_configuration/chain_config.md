@@ -48,8 +48,7 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
 ### `rpcBlock`
 
 - **Type**: Integer
-- **Description**: Determines the block height that fork state will be queried for. Block tags like `LATEST` are not supported
-- yet.
+- **Description**: Determines the block height that fork state will be queried for. Block tags like `LATEST` are not supported yet.
 - **Default**: `1`
 
 ### `poolSize`
