@@ -169,10 +169,10 @@ const (
 	// Verbose corresponds to (-v) - Only top-level transactions in the execution trace
 	// Only events in the top-level call frame and return data are handled
 	Verbose VerbosityLevel = 0
-	
+
 	// VeryVerbose corresponds to (-vv) - Default behavior, current level of detail
 	VeryVerbose VerbosityLevel = 1
-	
+
 	// VeryVeryVerbose corresponds to (-vvv) - Maximum verbosity
 	// Every call sequence element in the call sequence has a trace
 	VeryVeryVerbose VerbosityLevel = 2

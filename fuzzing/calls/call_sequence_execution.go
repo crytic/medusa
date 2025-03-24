@@ -189,7 +189,7 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 
 	// Determine which elements of the call sequence to trace based on verbosity level
 	traceFrom := len(callSequence) - 1 // Default: only trace the last element
-	
+
 	// VeryVeryVerbose (level 2): Trace all elements in the call sequence
 	if verbosity == config.VeryVeryVerbose {
 		traceFrom = 0
