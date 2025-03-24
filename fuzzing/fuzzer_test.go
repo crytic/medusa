@@ -282,6 +282,7 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/warp.sol",
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/prevrandao.sol",
+		"testdata/contracts/cheat_codes/vm/get_code.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -784,7 +785,72 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			return []any{b}, nil
 		},
 	)
+	// getCode: Retrieves the creation bytecode for a contract
+	contract.addMethod("getCode", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			contractPath := inputs[0].(string)
+
+			_, contractName, err := parseContractPath(contractPath)
+			if err != nil {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: invalid path format: %v", err)))
+			}
+
+			compiledContract, exists := tracer.chain.CompiledContracts[contractName]
+			if !exists {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractName)))
+			}
+
+			bytecode := compiledContract.InitBytecode
+			if len(bytecode) == 0 {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract bytecode is empty: %s", contractName)))
+			}
+
+			// Return the bytecode
+			return []any{bytecode}, nil
+		},
+	)
 
 	// Return our precompile contract information.
 	return contract, nil
+}
+
+// parseContractPath parses a contract path in the following formats:
+// - "MyContract.sol:MyContract"
+// - "MyContract"
+// Returns file name and contract name
+
+func parseContractPath(path string) (string, string, error) {
+	// Handle empty path
+	if path == "" {
+		return "", "", fmt.Errorf("empty path provided")
+	}
+
+	// Split by colon separator
+	parts := strings.Split(path, ":")
+
+	if len(parts) > 2 {
+		return "", "", fmt.Errorf("too many path segments")
+	}
+
+	// When given "MyContract"
+	if len(parts) == 1 && !strings.HasSuffix(parts[0], ".sol") {
+		contractName := parts[0]
+		fileName := contractName + ".sol"
+		return fileName, contractName, nil
+	}
+
+	// When file specified: "MyContract.sol:MyContract" or "MyContract.sol"
+	file := parts[0]
+	if !strings.HasSuffix(file, ".sol") {
+		file = file + ".sol"
+	}
+
+	// If contract name is explicitly provided after colon
+	if len(parts) == 2 {
+		return file, parts[1], nil
+	}
+
+	// Otherwise derive contract name from file name
+	contractName := strings.TrimSuffix(filepath.Base(file), ".sol")
+	return file, contractName, nil
 }
