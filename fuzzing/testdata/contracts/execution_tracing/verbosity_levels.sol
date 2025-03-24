@@ -105,11 +105,7 @@ contract TestContract {
         require(isXValueSet, "X Value is not set");
         emit settingUpY(value);
 
-        // Call internal function - tests internal call visibility
-        // This call should NOT be visible in Verbose mode
-        // but SHOULD be visible in VeryVerbose and VeryVeryVerbose modes
         _processYValue(value);
-
         emit setUpCompleted();
         isXValueSet = false;
         isYValueSet = false;

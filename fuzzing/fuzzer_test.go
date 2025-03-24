@@ -1080,33 +1080,25 @@ func TestVerbosityLevels(t *testing.T) {
 	// Map to store trace messages for each verbosity level
 	executedTraceMessages := map[int][]string{
 		0: { // Verbose level - should only contain top-level calls
-			"[call] TestMarketplace.buyItem(uint256)",
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
 		},
 		1: { // VeryVerbose level - should contain nested calls
-			"[call] TestMarketplace.buyItem(uint256)",
-			"[call] TestToken.balanceOf(address)",
-			"return",
-			"[call] TestToken.allowance(address,address)",
-			"return",
-			"[call] TestToken.transferFrom(address,address,uint256)",
-			"[event] Transfer",
-			"return",
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[return (true)]",
 		},
 		2: { // VeryVeryVerbose level - should contain all calls with full detail
-			"[call] TestMarketplace.listItem(uint256,uint256)",
-			"[event] ItemListed",
-			"return ()",
-			"[call] TestToken.approve(address,uint256)",
-			"[event] Approval",
-			"return",
-			"[call] TestMarketplace.buyItem(uint256)",
-			"[call] TestToken.balanceOf(address)",
-			"return",
-			"[call] TestToken.allowance(address,address)",
-			"return",
-			"[call] TestToken.transferFrom(address,address,uint256)",
-			"[event] Transfer",
-			"return",
+			"[call] TestContract.setXValue(uint256)",
+			"[call] HelperContract.setX(uint256)",
+			"[event] setUpX",
+			"[return (true)]",
+			"[return ()]",
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
 		},
 	}
 	verbosityTests := []config.VerbosityLevel{config.Verbose, config.VeryVerbose, config.VeryVeryVerbose}
@@ -1115,20 +1107,11 @@ func TestVerbosityLevels(t *testing.T) {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
 			filePath: "testdata/contracts/execution_tracing/verbosity_levels.sol",
 			configUpdates: func(projectConfig *config.ProjectConfig) {
-				projectConfig.Fuzzing.TargetContracts = []string{"TestToken", "TestMarketplace"}
+				projectConfig.Fuzzing.TargetContracts = []string{"TestContract", "HelperContract"}
 				projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
 				projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
 				projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				projectConfig.Slither.UseSlither = false
-				projectConfig.Fuzzing.ConstructorArgs = map[string]map[string]any{
-					"TestToken": {
-						"_name":          "test_token",
-						"_initialSupply": "100000000",
-					},
-					"TestMarketplace": {
-						"_paymentToken": "DeployedContract:TestToken",
-					},
-				}
 				// Start with a default verbosity
 				projectConfig.Fuzzing.Testing.Verbosity = config.VerbosityLevel(verbosityLevel)
 			},

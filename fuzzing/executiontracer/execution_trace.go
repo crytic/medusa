@@ -36,6 +36,7 @@ type ExecutionTrace struct {
 	// labels is a mapping that maps an address to its string representation for cleaner execution traces
 	labels map[common.Address]string
 
+	// verbosity describes the verbosity levels of the execution trace
 	verbosity config.VerbosityLevel
 }
 

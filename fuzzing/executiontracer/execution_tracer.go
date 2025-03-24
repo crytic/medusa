@@ -71,6 +71,7 @@ type ExecutionTracer struct {
 	// nativeTracer is the underlying tracer interface that the execution tracer follows
 	nativeTracer *chain.TestChainTracer
 
+	// verbosity describes the verbosity level that will be used for the execution trace
 	verbosity config.VerbosityLevel
 }
 
