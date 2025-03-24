@@ -26,7 +26,7 @@ contract TestContract {
         bytes memory bytecode = cheats.getCode("SimpleStorage");
         
         // Verify we got bytecode
-        require(bytecode.length > 0, "Failed to get contract bytecode");
+        assert(bytecode.length > 0, "Failed to get contract bytecode");
         
         // Deploy the contract using the retrieved bytecode
         address deployedAddr;
@@ -35,12 +35,12 @@ contract TestContract {
         }
         
         // Verify deployment was successful
-        require(deployedAddr != address(0), "Failed to deploy contract using retrieved bytecode");
+        assert(deployedAddr != address(0), "Failed to deploy contract using retrieved bytecode");
         
         // Test that we can interact with the deployed contract
         SimpleStorage simpleStorage = SimpleStorage(deployedAddr);
         simpleStorage.set(22);
-        require(simpleStorage.get() == 22, "Contract functionality doesn't work correctly");
+        assert(simpleStorage.get() == 22, "Contract functionality doesn't work correctly");
     }
     
     // Test different formats for getCode
@@ -52,7 +52,7 @@ contract TestContract {
         bytes memory bytecode2 = cheats.getCode("SimpleStorage");
         
         // Verify both formats return the same bytecode
-        require(keccak256(bytecode1) == keccak256(bytecode2), "Different formats returned different bytecode");
+        assert(keccak256(bytecode1) == keccak256(bytecode2), "Different formats returned different bytecode");
     }
     
     // Test error cases
@@ -61,7 +61,7 @@ contract TestContract {
         
         // This should revert because NonExistentContract doesn't exist
         try cheats.getCode("NonExistentContract") returns (bytes memory) {
-            revert("Should have reverted with non-existent contract");
+            assert(False)
         } catch {
             // Expected to catch error
         }
@@ -89,6 +89,6 @@ contract TestContract {
             storageInstanceHash := extcodehash(storageInstance)
         }
         
-        require(deployedHash == storageInstanceHash, "Retrieved bytecode doesn't match storageInstanceHash");
+        assert(deployedHash == storageInstanceHash, "Retrieved bytecode doesn't match storageInstanceHash");
     }
 }
