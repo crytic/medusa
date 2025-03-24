@@ -26,7 +26,7 @@ contract TestContract {
         bytes memory bytecode = cheats.getCode("SimpleStorage");
         
         // Verify we got bytecode
-        assert(bytecode.length > 0, "Failed to get contract bytecode");
+        assert(bytecode.length > 0);
         
         // Deploy the contract using the retrieved bytecode
         address deployedAddr;
@@ -35,12 +35,12 @@ contract TestContract {
         }
         
         // Verify deployment was successful
-        assert(deployedAddr != address(0), "Failed to deploy contract using retrieved bytecode");
+        assert(deployedAddr != address(0));
         
         // Test that we can interact with the deployed contract
         SimpleStorage simpleStorage = SimpleStorage(deployedAddr);
         simpleStorage.set(22);
-        assert(simpleStorage.get() == 22, "Contract functionality doesn't work correctly");
+        assert(simpleStorage.get() == 22);
     }
     
     // Test different formats for getCode
@@ -52,7 +52,7 @@ contract TestContract {
         bytes memory bytecode2 = cheats.getCode("SimpleStorage");
         
         // Verify both formats return the same bytecode
-        assert(keccak256(bytecode1) == keccak256(bytecode2), "Different formats returned different bytecode");
+        assert(keccak256(bytecode1) == keccak256(bytecode2));
     }
     
     // Test error cases
@@ -89,6 +89,6 @@ contract TestContract {
             storageInstanceHash := extcodehash(storageInstance)
         }
         
-        assert(deployedHash == storageInstanceHash, "Retrieved bytecode doesn't match storageInstanceHash");
+        assert(deployedHash == storageInstanceHash);
     }
 }
