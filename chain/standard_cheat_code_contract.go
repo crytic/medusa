@@ -389,15 +389,23 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 	// Define our prank context and key mapping key to store it with.
 	const extraDataKeyStartPrank = "cheatCodeStartPrankData"
+	// StartPrankData holds the data for a startPrank operation.
 	type StartPrankData struct {
-		enabled        bool
-		msgSender      common.Address
-		txOrigin       *common.Address
-		delegateCall   bool
+		// enabled describes if this prank is currently active.
+		enabled bool
+		// msgSender describes the msg.sender to spoof for this prank.
+		msgSender common.Address
+		// txOrigin describes the tx.origin to spoof for this prank.
+		// TODO: This is currently not used since we don't support spoofing of tx.origin.
+		txOrigin *common.Address
+		// delegateCall is an optional flag to handle delegatecalls.
+		// TODO: This is currently not used since we don't support delegatecalls yet.
+		delegateCall bool
+		// setAtCallDepth describes the call depth at which this prank was set.
 		setAtCallDepth uint64
 	}
 
-	// StartPrank: Sets the msg.sender within all subsequent calls until StopPrank is called.
+	// stopPrankFn holds the core functionality to stop an ongoing startPrank operation.
 	stopPrankFn := func() {
 		// Mark any `startPrank` data as disabled and delete it
 		topLevelCallFrame := tracer.TopLevelCallFrame()
@@ -407,12 +415,16 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			delete(topLevelCallFrame.extraData, extraDataKeyStartPrank)
 		}
 	}
+
+	// startPrankFn holds the core functionality to prank the msg.sender for subsequent calls until stopPrank is called.
 	startPrankFn := func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 		// Support all function prototypes by checking arg types and fetching appropriately.
 		prankData := StartPrankData{
 			enabled:        true,
 			setAtCallDepth: tracer.callDepth - 1,
 		}
+
+		// Since the startPrank function has multiple overloads, we need to check the argument count and fetch appropriately.
 		if len(inputs) == 1 {
 			// 1 arg: argument is always the msg.sender prank address
 			prankData.msgSender = inputs[0].(common.Address)
@@ -508,6 +520,8 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
 		return nil, nil
 	}
+
+	// startPrank: Sets the msg.sender within all subsequent calls until stopPrank is called.
 	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{}, startPrankFn)
 	// TODO: Implement `delegateCall` for startPrank
 	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
@@ -515,10 +529,11 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{}, startPrankFn)
 	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
 
-	// StopPrank: Stops a StartPrank operation.
+	// stopPrank: Stops a startPrank operation.
 	contract.addMethod(
 		"stopPrank", abi.Arguments{}, abi.Arguments{},
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Call the core stopPrankFn to disable any active prank.
 			stopPrankFn()
 			return nil, nil
 		},

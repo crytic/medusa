@@ -70,6 +70,7 @@ type cheatCodeTracerCallFrame struct {
 	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
 	vmErr error
 
+	// extraData describes additional data to be stored for this call frame.
 	extraData map[string]any
 }
 
