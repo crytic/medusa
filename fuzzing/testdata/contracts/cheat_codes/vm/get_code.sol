@@ -61,7 +61,7 @@ contract TestContract {
         
         // This should revert because NonExistentContract doesn't exist
         try cheats.getCode("NonExistentContract") returns (bytes memory) {
-            assert(False)
+            assert(false)
         } catch {
             // Expected to catch error
         }
