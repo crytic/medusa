@@ -17,7 +17,7 @@ contract SimpleStorage {
 }
 
 // Test contract to verify getCode functionality
-contract TestGetCode {
+contract TestContract {
     function testGetCode() public {
         // Get cheat code contract reference
         CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
