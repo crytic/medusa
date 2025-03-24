@@ -68,7 +68,7 @@ func getMockCallSequenceElementCall() *calls.CallMessage {
 	return &txn
 }
 
-// testCorpusCallSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
+// testCorpusCallSequencesEqual tests whether two CorpusCallSequence objects are equal to each other
 func testCorpusCallSequencesEqual(t *testing.T, expected calls.CallSequence, actual calls.CallSequence) {
 	// Ensure the lengths of both sequences are the same
 	assert.EqualValues(t, len(expected), len(actual), "Different number of calls in sequences")
@@ -79,7 +79,7 @@ func testCorpusCallSequencesEqual(t *testing.T, expected calls.CallSequence, act
 	}
 }
 
-// testCorpusBlockHeadersAreEqual tests whether two CorpusBlockHeader objects are equal to each other
+// testCorpusCallSequenceElementsEqual tests whether two CorpusBlockHeader objects are equal to each other
 func testCorpusCallSequenceElementsEqual(t *testing.T, expected calls.CallSequenceElement, actual calls.CallSequenceElement) {
 	// Make sure the call is equal
 	assert.EqualValues(t, *expected.Call, *actual.Call)
