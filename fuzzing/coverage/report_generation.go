@@ -22,7 +22,7 @@ var (
 func WriteHTMLReport(sourceAnalysis *SourceAnalysis, reportDir string) (string, error) {
 	// Define mappings onto some useful variables/functions.
 	functionMap := template.FuncMap{
-		"formatNumber": func(num uint) string {
+		"formatNumber": func(num uint64) string {
 			// Format large numbers to be more readable (e.g., 1234 → 1.2K, 1500000 → 1.5M)
 			if num < 1000 {
 				return fmt.Sprintf("%d", num) // Keep small numbers as is
