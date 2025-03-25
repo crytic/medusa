@@ -9,11 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "embed"
 
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/logging"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 var (
@@ -30,6 +33,10 @@ type RevertReporter struct {
 	// We will also look at this directory for the RevertMetricsArtifact from the previous campaign.
 	Path string
 
+	// CustomErrors is a map of different error IDs to their custom errors. This is used to resolve the revert reasons
+	// when updating the revert metrics.
+	CustomErrors map[string]abi.Error
+
 	// RevertMetricsCh is the channel that will receive RevertMetricsUpdate objects from fuzzer workers to update the revert metrics.
 	// We will be receiving pointers to the execution result object within the RevertMetricsUpdate object since we are confident that
 	// will be no races on that value.
@@ -44,7 +51,7 @@ type RevertReporter struct {
 
 // NewRevertReporter creates a new RevertsReporter. If there is any issue loading the previous artifact (if it exists),
 // an error is returned.
-func NewRevertReporter(enabled bool, corpusDirectory string) (*RevertReporter, error) {
+func NewRevertReporter(enabled bool, corpusDirectory string, contractDefinitions contracts.Contracts) (*RevertReporter, error) {
 	if !enabled {
 		return &RevertReporter{}, nil
 	}
@@ -66,11 +73,30 @@ func NewRevertReporter(enabled bool, corpusDirectory string) (*RevertReporter, e
 		Enabled:           enabled,
 		Path:              path,
 		RevertMetrics:     NewRevertMetrics(),
+		CustomErrors:      getCustomErrors(contractDefinitions),
 		PrevRevertMetrics: prevRevertMetrics,
 		// We are going to make a buffered channel here to avoid blocking the worker.
 		// Praying that 1000 is enough to avoid any issues.
 		RevertMetricsCh: make(chan RevertMetricsUpdate, 1000),
 	}, nil
+}
+
+// getCustomErrors returns a map of different error IDs to their corresponding error names.
+func getCustomErrors(contractDefinitions contracts.Contracts) map[string]abi.Error {
+	// Create a map to store the error IDs
+	customErrors := make(map[string]abi.Error)
+
+	// Iterate over the contract definitions and get the error IDs
+	for _, contract := range contractDefinitions {
+		// Iterate over the errors in the contract's ABI
+		for _, err := range contract.CompiledContract().Abi.Errors {
+			// Add the error ID to the map (first four bytes)
+			errID := strings.TrimPrefix(err.ID.Hex(), "0x")
+			customErrors[errID[:8]] = err
+		}
+	}
+
+	return customErrors
 }
 
 // Start starts the revert reporter goroutine. It will continue to run until the context is cancelled.
@@ -89,7 +115,7 @@ func (r *RevertReporter) Start(ctx context.Context) {
 				return
 			case update := <-r.RevertMetricsCh:
 				// Update the revert metrics
-				r.RevertMetrics.Update(&update)
+				r.RevertMetrics.Update(&update, r.CustomErrors)
 			}
 		}
 	}()
@@ -100,6 +126,9 @@ func (r *RevertReporter) BuildArtifacts() error {
 	if !r.Enabled {
 		return nil
 	}
+
+	// If we have a previous revert metrics, we need to merge them with the current revert metrics
+	r.RevertMetrics.Finalize(r.PrevRevertMetrics)
 
 	// Write JSON report to disk
 	err := r.writeJSONReport()
@@ -206,6 +235,12 @@ func (r *RevertReporter) writeHTMLReport() error {
 				return "No Change"
 			}
 		},
+		"contains": func(s, substr string) bool {
+			return strings.Contains(s, substr)
+		},
+		"floatPtr": func(f float64) *float64 {
+			return &f
+		},
 	}
 
 	tmpl, err := template.New("revert_report.html").Funcs(functionMap).Parse(string(htmlReportTemplate))
@@ -221,33 +256,3 @@ func (r *RevertReporter) writeHTMLReport() error {
 	logging.GlobalLogger.Info("HTML revert report written to: ", path)
 	return nil
 }
-
-/*func convertMetricsToRevertArtifact(
-	stats *TxCallMetrics,
-	contractDefs fuzzerTypes.Contracts,
-	prevMetrics *RevertMetricsArtifact) *RevertMetricsArtifact {
-
-	artifact := stats.ToRevertArtifact(contractDefs)
-
-	// iterate over the fields of the previous artifact to populate the prev fields of the new artifact
-	for _, prevFuncMetrics := range prevMetrics.ContractRevertMetrics {
-		newFuncMetrics := artifact.getFunctionMetrics(prevFuncMetrics.Name)
-		if newFuncMetrics == nil {
-			continue
-		}
-		// prevent looppointer issue
-		prevFuncRevertPct := prevFuncMetrics.RevertPct
-		newFuncMetrics.PrevRevertPct = &prevFuncRevertPct
-		updateRevertReasons(prevFuncMetrics, newFuncMetrics)
-
-		// sort the revert reasons while we're here
-		sort.Slice(newFuncMetrics.RevertReasons, func(i, j int) bool {
-			return newFuncMetrics.RevertReasons[i].Reason < newFuncMetrics.RevertReasons[j].Reason
-		})
-	}
-	// sort the functions by name
-	sort.Slice(artifact.ContractRevertMetrics, func(i, j int) bool {
-		return artifact.ContractRevertMetrics[i].Name < artifact.ContractRevertMetrics[j].Name
-	})
-	return artifact
-}*/

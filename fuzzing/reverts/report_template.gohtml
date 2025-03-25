@@ -2,89 +2,256 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reversion Report</title>
+    <title>Revert Report</title>
     <style>
-        table, th, td {
-            border: 1px solid black;
-            border-collapse: collapse;
-            padding: 1px;
-            padding-left: 4px;
-            padding-right: 4px;
-            white-space: nowrap;
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 15px;
+            margin: 15px;
+            background-color: #eee;
+            height: 100%;
+            display: flex;
+            flex-flow: column;
         }
-        .table-grid{
-            display: grid;
-            grid-template-columns: 1fr;
-            width: max-content;
+        header {
+            flex: 0 1 auto;
         }
-        .table-grid th.col-name {
-            width: 10%;
-        }
-        .table-grid th.col-reason {
-            width: 40%;
-        }
-        .table-grid th.col-count {
-            width: 6%;
-        }
-        .table-grid th.col-pct-attrib {
-            width: 13%;
-        }
-        .table-grid th.col-pct-attrib2 {
-            width: 13%;
-        }
-        .table-grid th.col-pct-change {
-            width: 23%;
-        }
-        .numericdata {
-            text-align: center;
+        footer {
+            flex: 0 1 auto;
         }
         hr {
+            margin: 15px 0px;
+            background-color: transparent;
+            border: 0;
+            border-top: 1px solid #ccc;
+        }
+        a {
+            color: #2A5DB0;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        a:active {
+            color: black;
+        }
+        a:visited {
+            color: #2A5DB0;
+        }
+        footer {
+            line-height: 1.5;
+        }
+        .progress-bar {
+            width: 150px;
+            height: 15px;
+            background-color: #e0e0e0;
+            border-radius: 3px;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease-in-out;
+        }
+        .unselectable {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .button-sort {
+
+        }
+        .split-panel {
+            display: flex;
+            position: relative;
+            height: 100%;
+        }
+        #contract-split-panel {
+            flex-flow: column;
+            flex: 1 1 auto;
+            overflow-y: auto;
+        }
+        #main-view-panel {
             width: 100%;
+            height: 100%;
+            overflow: scroll;
         }
-        svg{
-            vertical-align: middle;
+        h2 {
+            background-color: #777;
+            color: white;
+            padding: 8px;
+            width: 100%;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 16px;
         }
-
-
+        .revert-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .revert-table th {
+            padding: 10px;
+            text-align: left;
+            background-color: #f2f2f2;
+            border: 1px solid #ddd;
+        }
+        .revert-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        .revert-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .revert-table tr:hover {
+            background-color: #f0f0f0;
+        }
+        .revert-percentage {
+            text-align: center;
+            white-space: nowrap;
+        }
+        .revert-reason {
+            padding: 5px 8px;
+            margin: 2px 0;
+            border-radius: 3px;
+            background-color: #f8f8f8;
+            border-left: 3px solid #e74c3c;
+            font-family: monospace;
+        }
+        .change-positive {
+            color: #e74c3c;
+        }
+        .change-negative {
+            color: #2ecc71;
+        }
+        .change-neutral {
+            color: #7f8c8d;
+        }
     </style>
 </head>
 
 <body>
-<svg style="display: none;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="notstatsig" viewBox="0 0 24 24">
-    <title>Not enough samples for statistical significance</title>
-    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zm-1.5-5.009c0-.867.659-1.491 1.491-1.491.85 0 1.509.624 1.509 1.491 0 .867-.659 1.509-1.509 1.509-.832 0-1.491-.642-1.491-1.509zM11.172 6a.5.5 0 0 0-.499.522l.306 7a.5.5 0 0 0 .5.478h1.043a.5.5 0 0 0 .5-.478l.305-7a.5.5 0 0 0-.5-.522h-1.655z" fill="#000000"/>
-    </symbol>
-</svg>
+    <!-- Total revert metrics/controls -->
+    <header>
+        <h1>Revert Report</h1>
+        <hr />
+        <p>This report shows how often contract functions revert during fuzzing and the reasons for those reverts.</p>
+    </header>
+    <hr />
+    <!-- Create a vertically split panel for our contract explorer / revert view -->
+    <div class="split-panel" id="contract-split-panel">
+        <!-- Main panel (revert metrics) -->
+        <div id="main-view-panel">
+            <!-- Individual contract revert metrics -->
+            {{range $contractName, $contractMetrics := .ContractRevertMetrics}}
+                <div class="contract-data">
+                    <h2>{{$contractMetrics.Name}}</h2>
+                    <h3>Function Revert Summary</h3>
+                    <table class="revert-table">
+                        <tr>
+                            <th>Function</th>
+                            <th>Total Calls</th>
+                            <th>Total Reverts</th>
+                            <th>Revert Rate</th>
+                            <th>Previous Rate</th>
+                            <th>Change</th>
+                        </tr>
+                        {{range $functionName, $functionMetrics := $contractMetrics.FunctionRevertMetrics}}
+                        <tr>
+                            <td>{{$functionMetrics.Name}}</td>
+                            <td>{{$functionMetrics.TotalCalls}}</td>
+                            <td>{{$functionMetrics.TotalReverts}}</td>
+                            <td class="revert-percentage">
+                                {{percentageFmt $functionMetrics.Pct}}
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: {{percentageFmt $functionMetrics.Pct}}; background-color: {{ if gt $functionMetrics.Pct 0.5 }}#e74c3c{{ else if gt $functionMetrics.Pct 0.25 }}#f39c12{{ else }}#2ecc71{{ end }};"></div>
+                                </div>
+                            </td>
+                            <td class="revert-percentage">
+                                {{if eq $functionMetrics.PrevPct 0.0}}
+                                    No prev. data
+                                {{else}}
+                                    {{percentageFmt $functionMetrics.PrevPct}}
+                                {{end}}
+                            </td>
+                            <td>
+                                {{if eq $functionMetrics.PrevPct 0.0}}
+                                    N/A
+                                {{else}}
+                                    {{$change := percentageChangeOpt (floatPtr $functionMetrics.PrevPct) $functionMetrics.Pct}}
+                                    <span class="{{ if contains $change "Increased" }}change-positive{{ else if contains $change "Decreased" }}change-negative{{ else }}change-neutral{{ end }}">
+                                        {{$change}}
+                                    </span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        {{end}}
+                    </table>
 
-<header>
-    <h1>Revert Report</h1>
-</header>
-<hr/>
+                    <h3>Revert Reasons by Function</h3>
+                    {{range $functionName, $functionMetrics := $contractMetrics.FunctionRevertMetrics}}
+                        {{if gt (len $functionMetrics.RevertReasonMetrics) 0}}
+                        <h4>{{$functionMetrics.Name}}</h4>
+                        <table class="revert-table">
+                            <tr>
+                                <th>Revert Reason</th>
+                                <th>Count</th>
+                                <th>Percentage of Calls</th>
+                                <th>Previous Rate</th>
+                                <th>Change</th>
+                            </tr>
+                            {{range $reason, $reasonMetrics := $functionMetrics.RevertReasonMetrics}}
+                            <tr>
+                                <td>
+                                    <div class="revert-reason">{{$reasonMetrics.Reason}}</div>
+                                </td>
+                                <td>{{$reasonMetrics.Count}}</td>
+                                <td class="revert-percentage">
+                                    {{percentageFmt $reasonMetrics.Pct}}
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: {{percentageFmt $reasonMetrics.Pct}}; background-color: {{ if gt $reasonMetrics.Pct 0.5 }}#e74c3c{{ else if gt $reasonMetrics.Pct 0.25 }}#f39c12{{ else }}#2ecc71{{ end }};"></div>
+                                    </div>
+                                </td>
+                                <td class="revert-percentage">
+                                    {{if eq $reasonMetrics.PrevPct 0.0}}
+                                        No prev. data
+                                    {{else}}
+                                        {{percentageFmt $reasonMetrics.PrevPct}}
+                                    {{end}}
+                                </td>
+                                <td>
+                                    {{if eq $reasonMetrics.PrevPct 0.0}}
+                                        N/A
+                                    {{else}}
+                                        {{$change := percentageChangeOpt (floatPtr $reasonMetrics.PrevPct) $reasonMetrics.Pct}}
+                                        <span class="{{ if contains $change "Increased" }}change-positive{{ else if contains $change "Decreased" }}change-negative{{ else }}change-neutral{{ end }}">
+                                            {{$change}}
+                                        </span>
+                                    {{end}}
+                                </td>
+                            </tr>
+                            {{end}}
+                        </table>
+                        {{end}}
+                    {{end}}
+                    <hr />
+                </div>
+            {{end}}
+        </div>
+    </div>
 
-<h2>Summary</h2>
-{{range $contractMetrics := .ContractRevertMetrics}}
-<h3>{{$contractMetrics.Name}}</h3>
-<table>
-    <tr>
-        <th>Function</th>
-        <th>Call Count</th>
-        <th>Revert Count</th>
-        <th>Percent Reverted</th>
-        <th>Change vs. Prev Run</th>
-        <th>Percent Reverted Prev</th>
-    </tr>
-{{range $funcMetrics := $contractMetrics.FunctionRevertMetrics}}
-    <tr>
-        <td><a href="#{{$funcMetrics.Name}}">{{$funcMetrics.Name}}</a></td>
-        <td class="numericdata">{{$funcMetrics.TotalCalls}}</td>
-        <td class="numericdata">{{$funcMetrics.TotalReverts}}</td>
-    </tr>
-{{end}}
-</table>
-{{end}}
+<script>
+    // Helper function to check if a string contains a substring
+    function contains(str, substr) {
+        return str.indexOf(substr) !== -1;
+    }
+</script>
 
-<hr/>
+<hr />
 <footer>
     <center>
         Report generated by medusa

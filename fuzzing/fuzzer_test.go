@@ -163,6 +163,7 @@ func TestRevertReporter(t *testing.T) {
 			config.Fuzzing.TestLimit = 10000
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAssertion = false
 			config.Slither.UseSlither = false
 			config.Fuzzing.RevertReporterEnabled = true
 		},
@@ -188,6 +189,7 @@ func TestAssertionsNotRequire(t *testing.T) {
 			config.Fuzzing.TestLimit = 500
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.RevertReporterEnabled = true
 			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
@@ -501,6 +503,30 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
+			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+func TestRevertReasonReporter(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/revert_reporter_test.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
+			config.Fuzzing.TestLimit = 1 // this should happen immediately
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for any failed tests and verify coverage was captured
+			assertFailedTestsExpected(f, false)
 			assertCorpusCallSequencesCollected(f, true)
 		},
 	})

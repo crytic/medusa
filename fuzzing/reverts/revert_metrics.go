@@ -1,14 +1,15 @@
 package reverts
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"os"
 	"path/filepath"
 
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/logging"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -35,8 +36,24 @@ type FunctionRevertMetrics struct {
 	TotalCalls uint `json:"totalCalls"`
 	// TotalReverts is the total number of times the function reverted.
 	TotalReverts uint `json:"totalReverts"`
-	// RevertReasonCounts holds the number of times a revert reason occurred for the function.
-	RevertReasonCounts map[string]uint `json:"revertReasonCounts"`
+	// Pct is the percent of times a call to this function reverted
+	Pct float64 `json:"pct"`
+	// PrevPct is the percentage of total calls that reverted in the previous campaign.
+	PrevPct float64 `json:"prevPct"`
+	// RevertReasonMetrics holds the revert reason metrics for the function.
+	RevertReasonMetrics map[string]*RevertReasonMetrics `json:"revertReasonMetrics"`
+}
+
+// RevertReasonMetrics is used to track the number of times a revert reason occurred for a function.
+type RevertReasonMetrics struct {
+	// Reason is the revert reason.
+	Reason string `json:"reason"`
+	// Count is the number of times the revert reason occurred.
+	Count uint `json:"count"`
+	// Pct is the percentage of total calls to that resulted in the revert reason.
+	Pct float64 `json:"pct"`
+	// PrevPct is the percentage of total calls to that resulted in the revert reason in the previous campaign.
+	PrevPct float64 `json:"prevPct"`
 }
 
 // RevertMetricsUpdate is used to update the RevertMetrics struct.
@@ -48,74 +65,12 @@ type RevertMetricsUpdate struct {
 	FunctionName string
 	// ExecutionResult is the result of the execution
 	ExecutionResult *core.ExecutionResult
-	// ContractErrorsABI is the error-portion of the contract's ABI so that we can resolve the return data
-	// provided by the execution result.
-	ContractErrorsABI map[string]abi.Error
 }
 
+// NewRevertMetrics will create a new RevertMetrics object.
 func NewRevertMetrics() *RevertMetrics {
 	return &RevertMetrics{
 		ContractRevertMetrics: make(map[string]*ContractRevertMetrics),
-	}
-}
-
-// Update updates the RevertMetrics based on the execution result of a call sequence element.
-func (m *RevertMetrics) Update(update *RevertMetricsUpdate) {
-	// Guard clause for nil updates or nil execution results
-	if update == nil || update.ExecutionResult == nil {
-		return
-	}
-
-	// Capture the contract, function, and execution result
-	contractName := update.ContractName
-	functionName := update.FunctionName
-	executionResult := update.ExecutionResult
-
-	// Retrieve or create the contract revert metrics
-	contractRevertMetrics := m.ContractRevertMetrics[contractName]
-	if contractRevertMetrics == nil {
-		contractRevertMetrics = &ContractRevertMetrics{
-			Name:                  contractName,
-			FunctionRevertMetrics: make(map[string]*FunctionRevertMetrics),
-		}
-		m.ContractRevertMetrics[contractName] = contractRevertMetrics
-	}
-
-	// Retrieve or create the function revert metrics
-	functionRevertMetrics := contractRevertMetrics.FunctionRevertMetrics[functionName]
-	if functionRevertMetrics == nil {
-		functionRevertMetrics = &FunctionRevertMetrics{
-			Name:               functionName,
-			TotalCalls:         0,
-			TotalReverts:       0,
-			RevertReasonCounts: make(map[string]uint),
-		}
-		contractRevertMetrics.FunctionRevertMetrics[functionName] = functionRevertMetrics
-	}
-
-	// Increment the total calls for this contract/function combination
-	functionRevertMetrics.TotalCalls++
-
-	// Exit early if the execution result is not a revert or the error is not an EVM revert error
-	if executionResult.Err == nil || (executionResult.Err != nil && !errors.Is(executionResult.Err, vm.ErrExecutionReverted)) {
-		return
-	}
-
-	// Increment the reverted calls for this contract/function combination
-	functionRevertMetrics.TotalReverts++
-
-	// Try to capture if we hit an EVM panic
-	panicCode := abiutils.GetSolidityPanicCode(executionResult.Err, executionResult.ReturnData, true)
-	if panicCode != nil {
-		revertReason := abiutils.GetPanicReason(panicCode.Uint64())
-		functionRevertMetrics.RevertReasonCounts[revertReason]++
-	}
-
-	// Otherwise, use the selector of the error return data as the revert reason
-	// TODO: Make sure this is what we want to use after some testing.
-	if len(executionResult.ReturnData) >= 4 {
-		revertReason := string(executionResult.ReturnData[:4])
-		functionRevertMetrics.RevertReasonCounts[revertReason]++
 	}
 }
 
@@ -150,4 +105,116 @@ func NewRevertMetricsFromPath(path string) (*RevertMetrics, error) {
 	}
 
 	return metrics, nil
+}
+
+// Update updates the RevertMetrics based on the execution result of a call sequence element.
+// A mapping of error IDs to their custom error names is also provided to aid with decoding the revert reason.
+func (m *RevertMetrics) Update(update *RevertMetricsUpdate, errorIDs map[string]abi.Error) {
+	// Guard clause for nil updates or nil execution results
+	if update == nil || update.ExecutionResult == nil {
+		return
+	}
+
+	// Capture the contract, function, and execution result
+	contractName := update.ContractName
+	functionName := update.FunctionName
+	executionResult := update.ExecutionResult
+
+	// Retrieve or create the contract revert metrics
+	contractRevertMetrics := m.ContractRevertMetrics[contractName]
+	if contractRevertMetrics == nil {
+		contractRevertMetrics = &ContractRevertMetrics{
+			Name:                  contractName,
+			FunctionRevertMetrics: make(map[string]*FunctionRevertMetrics),
+		}
+		m.ContractRevertMetrics[contractName] = contractRevertMetrics
+	}
+
+	// Retrieve or create the function revert metrics
+	functionRevertMetrics := contractRevertMetrics.FunctionRevertMetrics[functionName]
+	if functionRevertMetrics == nil {
+		functionRevertMetrics = &FunctionRevertMetrics{
+			Name:                functionName,
+			RevertReasonMetrics: make(map[string]*RevertReasonMetrics),
+		}
+		contractRevertMetrics.FunctionRevertMetrics[functionName] = functionRevertMetrics
+	}
+
+	// Increment the total calls for this contract/function combination
+	functionRevertMetrics.TotalCalls++
+
+	// Exit early if the execution result is not a revert or the error is not an EVM revert error
+	if executionResult.Err == nil || (executionResult.Err != nil && !errors.Is(executionResult.Err, vm.ErrExecutionReverted)) {
+		return
+	}
+
+	// Now we know that the transaction reverted
+	functionRevertMetrics.TotalReverts++
+
+	revertReason := "unknown"
+	// First, figure out whether the revert reason is a panic
+	panicCode := abiutils.GetSolidityPanicCode(executionResult.Err, executionResult.ReturnData, false)
+	if panicCode != nil {
+		revertReason = abiutils.GetPanicReason(panicCode.Uint64())
+	}
+
+	// Next, check to see if the error is a custom, user-defined error
+	if revertReason == "unknown" && len(executionResult.ReturnData) >= 4 {
+		if err, ok := errorIDs[hex.EncodeToString(executionResult.ReturnData[:4])]; ok {
+			revertReason = err.Name
+		}
+	}
+
+	// Finally, we will try to decide an error string (e.g. `require("this is an error")`)
+	if revertReason == "unknown" {
+		revertReasonPtr := abiutils.GetSolidityRevertErrorString(executionResult.Err, executionResult.ReturnData)
+		if revertReasonPtr != nil {
+			revertReason = *revertReasonPtr
+		}
+	}
+
+	revertReasonMetrics := functionRevertMetrics.RevertReasonMetrics[revertReason]
+	if revertReasonMetrics == nil {
+		revertReasonMetrics = &RevertReasonMetrics{
+			Reason: revertReason,
+		}
+		functionRevertMetrics.RevertReasonMetrics[revertReason] = revertReasonMetrics
+	}
+	revertReasonMetrics.Count++
+}
+
+// Finalize finalizes the revert metrics by updating the percentages for each function and revert reason.
+// Additionally, if an optional RevertMetrics object is provided, it is merged into the current RevertMetrics object.
+func (m *RevertMetrics) Finalize(other *RevertMetrics) {
+	// Iterate over the contract revert metrics in the current object
+	for contractName, contractRevertMetrics := range m.ContractRevertMetrics {
+		var otherContractRevertMetrics *ContractRevertMetrics
+		if other != nil {
+			otherContractRevertMetrics = other.ContractRevertMetrics[contractName]
+		}
+		for functionName, functionRevertMetrics := range contractRevertMetrics.FunctionRevertMetrics {
+			// Update the percentage
+			functionRevertMetrics.Pct = float64(functionRevertMetrics.TotalReverts) / float64(functionRevertMetrics.TotalCalls)
+
+			// Update the previous percentage if the function existed in the previous campaign
+			var otherFunctionRevertMetrics *FunctionRevertMetrics
+			if otherContractRevertMetrics != nil {
+				if otherFunctionRevertMetrics = otherContractRevertMetrics.FunctionRevertMetrics[functionName]; otherFunctionRevertMetrics != nil {
+					functionRevertMetrics.PrevPct = otherFunctionRevertMetrics.Pct
+				}
+			}
+			for revertReason, revertReasonMetrics := range functionRevertMetrics.RevertReasonMetrics {
+				// Update the percentage
+				revertReasonMetrics.Pct = float64(revertReasonMetrics.Count) / float64(functionRevertMetrics.TotalCalls)
+
+				// Update the previous percentage if the revert reason exists in the other revert metrics artifact
+				if otherFunctionRevertMetrics == nil {
+					continue
+				}
+				if otherRevertReasonMetrics := otherFunctionRevertMetrics.RevertReasonMetrics[revertReason]; otherRevertReasonMetrics != nil {
+					revertReasonMetrics.PrevPct = otherRevertReasonMetrics.Pct
+				}
+			}
+		}
+	}
 }
