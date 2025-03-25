@@ -2,9 +2,7 @@ package config
 
 import (
 	"math/big"
-
 	"github.com/crytic/medusa/compilation/types"
-
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/rs/zerolog"
@@ -49,7 +47,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
-			TargetContractsBalances: []*big.Int{},
+			TargetContractsBalances: []*ContractBalance{},
 			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
@@ -72,7 +70,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnNoTests:                true,
 				TestViewMethods:              true,
 				TestAllContracts:             false,
-				TraceAll:                     false,
+				Verbosity:                    1,
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{

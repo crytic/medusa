@@ -38,7 +38,6 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: Integer
 - **Description**: The number of iterations that shrinking will run for before returning the shrunken call sequence.
 - **Default**: 5000 iterations
--
 
 ### `callSequenceLength`
 
@@ -93,15 +92,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > 🚩 Predeployed contracts do not accept constructor arguments. This may be added in the future.
 - **Default**: `{}`
 
-### `targetContractBalances`
+### `targetContractsBalances`
 
-- **Type**: [Base-16 Strings] (e.g. `[0x123, 0x456, 0x789]`)
+- **Type**: [Base-10 Strings, Hexadecimal Strings, Scientific notation for base-10 values] (e.g. `["1234", "0x1234", "1.2e18"]`)
 - **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract
   is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
-  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is
-  `["0", "0xff", "0"]`, then `B` will have a starting balance of 255 wei and `A` and `C` will have zero wei. Note that the wei-value
-  has to be hex-encoded and _cannot_ have leading zeros. For an improved user-experience, the balances may be encoded as base-10
-  format strings in the future.
+  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is `["1234", "0x1234", "1.2e18"]`,
+  then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
 ### `constructorArgs`

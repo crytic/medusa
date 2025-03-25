@@ -20,6 +20,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/logging"
@@ -30,7 +31,6 @@ import (
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -105,7 +105,15 @@ type Fuzzer struct {
 
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
+
+	// lastPCsLogMsg records the last time we logged total PCs hit.
+	// It takes a decent amount of time to calculate, so we only log once a minute,
+	// and only when debug logging is enabled.
+	lastPCsLogMsg time.Time
 }
+
+// Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
+const timeBetweenPCsLogMsgs = time.Minute
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
@@ -472,11 +480,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
-	balances := make([]*big.Int, 0)
+	balances := make([]*config.ContractBalance, 0)
+
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
 		// Preserve index of target contract balances
-		balances = append(balances, big.NewInt(0))
+		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
 	}
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
@@ -489,6 +498,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
+				testChain.CompiledContracts[contractName] = contract.CompiledContract()
 				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
@@ -518,7 +528,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
 				if len(balances) > i {
-					contractBalance = new(big.Int).Set(balances[i])
+					contractBalance = new(big.Int).Set(&balances[i].Int)
 				}
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
@@ -560,7 +570,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					if err != nil {
 						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 					} else {
-						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, true)
+						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, config.VeryVeryVerbose)
 						if err != nil {
 							return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
 						}
@@ -897,7 +907,8 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
-		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps())
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.logger)
+
 		if err != nil {
 			f.logger.Error("Failed to analyze source coverage", err)
 		} else {
@@ -991,7 +1002,7 @@ func (f *Fuzzer) printMetricsLoop() {
 		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
 		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
 		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", coverage: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().UniquePCs()), colors.Reset)
+		logBuffer.Append(", branches hit: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
 		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
 		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
@@ -999,6 +1010,18 @@ func (f *Fuzzer) printMetricsLoop() {
 			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
 			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
 			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+
+			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
+				start := time.Now()
+				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
+				// This is just for a log message. This shouldn't error but if it does we don't need to exit out
+				if err == nil {
+					end := time.Now()
+					f.lastPCsLogMsg = end
+					logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
+					logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
+				}
+			}
 		}
 		f.logger.Info(logBuffer.Elements()...)
 
