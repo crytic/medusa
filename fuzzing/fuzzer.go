@@ -17,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -28,7 +29,6 @@ import (
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -485,6 +485,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
+				testChain.CompiledContracts[contractName] = contract.CompiledContract()
 				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
