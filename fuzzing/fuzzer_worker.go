@@ -684,7 +684,6 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		fw.shrinkCallSequenceRequests = append(fw.shrinkCallSequenceRequests, shrinkRequests...)
 
 		// Emit an event indicating the worker finished testing a new call sequence.
-		// Emit an event indicating the worker has completed testing a call sequence.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
 			Worker: fw,
 		})

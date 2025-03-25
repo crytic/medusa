@@ -879,6 +879,7 @@ func (f *Fuzzer) Start() error {
 	if err != nil {
 		f.logger.Error("Encountered an error in the main fuzzing loop", err)
 	}
+
 	// NOTE: After this point, we capture errors but do not return immediately, as we want to exit gracefully.
 
 	// If we have coverage enabled and a corpus directory set, write the corpus. We do this even if we had a
@@ -897,6 +898,7 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
+	
 	// Print our results on exit.
 	f.printExitingResults()
 

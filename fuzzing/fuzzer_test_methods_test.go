@@ -63,7 +63,6 @@ func getFuzzerTestingProjectConfig(t *testing.T, compilationConfig *compilation.
 	projectConfig.Fuzzing.CallSequenceLength = 100
 	projectConfig.Fuzzing.Testing.StopOnFailedContractMatching = true
 	projectConfig.Fuzzing.Testing.TestAllContracts = false
-	projectConfig.Slither.UseSlither = true
 	return projectConfig
 }
 
