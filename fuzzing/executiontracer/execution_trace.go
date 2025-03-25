@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/config"
 	"regexp"
 	"strings"
 
@@ -34,14 +35,18 @@ type ExecutionTrace struct {
 
 	// labels is a mapping that maps an address to its string representation for cleaner execution traces
 	labels map[common.Address]string
+
+	// verbosity describes the verbosity levels of the execution trace
+	verbosity config.VerbosityLevel
 }
 
 // newExecutionTrace creates and returns a new ExecutionTrace, to be used by the ExecutionTracer.
-func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string) *ExecutionTrace {
+func newExecutionTrace(contracts contracts.Contracts, labels map[common.Address]string, verbosity config.VerbosityLevel) *ExecutionTrace {
 	return &ExecutionTrace{
 		TopLevelCallFrame:   nil,
 		contractDefinitions: contracts,
 		labels:              labels,
+		verbosity:           verbosity,
 	}
 }
 
@@ -327,6 +332,11 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 	elements := make([]any, 0)
 	consoleLogs := make([]any, 0)
 
+	// If verbosity is 0 and this is not a top-level call frame, skip processing this frame
+	if t.verbosity == config.Verbose && currentDepth > 0 {
+		return elements, consoleLogs
+	}
+
 	// Create our current call line prefix (indented by call depth)
 	prefix := strings.Repeat("\t", currentDepth) + " => "
 
@@ -357,6 +367,7 @@ func (t *ExecutionTrace) generateElementsAndLogsForCallFrame(currentDepth int, c
 		for _, operation := range callFrame.Operations {
 			if childCallFrame, ok := operation.(*CallFrame); ok {
 				// If this is a call frame being entered, generate information recursively.
+				// For verbosity level 0, child frames will handle their own filtering based on depth
 				childOutputLines, childConsoleLogStrings := t.generateElementsAndLogsForCallFrame(currentDepth+1, childCallFrame)
 				elements = append(elements, childOutputLines...)
 				consoleLogs = append(consoleLogs, childConsoleLogStrings...)

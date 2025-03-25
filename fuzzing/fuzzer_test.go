@@ -1074,3 +1074,90 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 			}
 		}})
 }
+
+// TestVerbosityLevels tests that the verbosity configuration is properly applied
+// and affects the execution traces appropriately
+func TestVerbosityLevels(t *testing.T) {
+	// Map to store trace messages for each verbosity level
+	executedTraceMessages := map[int][]string{
+		0: { // Verbose level - should only contain top-level calls
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+		},
+		1: { // VeryVerbose level - should contain nested calls
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
+		},
+		2: { // VeryVeryVerbose level - should contain all calls with full detail
+			"[call] TestContract.setXValue(uint256)",
+			"[call] HelperContract.setX(uint256)",
+			"[event] setUpX",
+			"[return (true)]",
+			"[return ()]",
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
+		},
+	}
+	verbosityTests := []config.VerbosityLevel{config.Verbose, config.VeryVerbose, config.VeryVeryVerbose}
+	// Test each verbosity level
+	for verbosityLevel := range verbosityTests {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/execution_tracing/verbosity_levels.sol",
+			configUpdates: func(projectConfig *config.ProjectConfig) {
+				projectConfig.Fuzzing.TargetContracts = []string{"TestContract", "HelperContract"}
+				projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+				projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+				projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				projectConfig.Slither.UseSlither = false
+				// Start with a default verbosity
+				projectConfig.Fuzzing.Testing.Verbosity = config.VerbosityLevel(verbosityLevel)
+			},
+			method: func(f *fuzzerTestContext) {
+
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Test for verbosity levels Verbose and VeryVerbose
+				if verbosityLevel <= int(config.VeryVerbose) {
+					for _, call := range failingSequence[:len(failingSequence)-1] {
+						assert.Empty(t, call.ExecutionTrace)
+					}
+					// Obtain the last call
+					lastCall := failingSequence[len(failingSequence)-1]
+					assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+					// Get the execution trace message
+					executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				} else { // Test for Verbosity Level VeryVeryVerbose
+					executionTraceMsg := ""
+					for _, sequence := range failingSequence {
+						executionTraceMsg = executionTraceMsg + sequence.ExecutionTrace.Log().String()
+					}
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				}
+			},
+		})
+	}
+}

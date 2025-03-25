@@ -56,10 +56,6 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().String("deployer", "",
 		"account address used to deploy contracts")
 
-	// Trace all
-	fuzzCmd.Flags().Bool("trace-all", false,
-		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
-
 	// Logging color
 	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
@@ -80,6 +76,9 @@ func addFuzzFlags() error {
 
 	// RPC block
 	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
+
+	// Verbosity levels (-v, -vv, -vvv)
+	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
 	return nil
 }
 
@@ -164,14 +163,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update trace all enablement
-	if cmd.Flags().Changed("trace-all") {
-		projectConfig.Fuzzing.Testing.TraceAll, err = cmd.Flags().GetBool("trace-all")
-		if err != nil {
-			return err
-		}
-	}
-
 	// Update logging color mode
 	if cmd.Flags().Changed("no-color") {
 		projectConfig.Logging.NoColor, err = cmd.Flags().GetBool("no-color")
@@ -240,6 +231,27 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcBlock, err = cmd.Flags().GetUint64("rpc-block")
 		if err != nil {
 			return err
+		}
+	}
+
+	// Update the verbosity levels
+	if cmd.Flags().Changed("verbosity") || cmd.Flags().Changed("v") {
+		verbosityCount, err := cmd.Flags().GetCount("verbosity")
+		if err != nil {
+			return err
+		}
+
+		// Map verbosity count to VerbosityLevel enum
+		// -v = Verbose (0)
+		// -vv = VeryVerbose (1)
+		// -vvv = VeryVeryVerbose (2)
+		switch {
+		case verbosityCount == 1:
+			projectConfig.Fuzzing.Testing.Verbosity = config.Verbose
+		case verbosityCount == 2:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVerbose
+		case verbosityCount >= 3:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVeryVerbose
 		}
 	}
 
