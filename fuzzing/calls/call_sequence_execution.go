@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/utils"
@@ -170,9 +171,9 @@ func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (Cal
 }
 
 // ExecuteCallSequenceWithExecutionTracer attaches an executiontracer.ExecutionTracer to ExecuteCallSequenceIteratively and attaches execution traces to the call sequence elements.
-func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verboseTracing bool) (CallSequence, error) {
+func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contractDefinitions contracts.Contracts, callSequence CallSequence, verbosity config.VerbosityLevel) (CallSequence, error) {
 	// Create a new execution tracer
-	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain)
+	executionTracer := executiontracer.NewExecutionTracer(contractDefinitions, testChain, verbosity)
 	defer executionTracer.Close()
 
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
@@ -186,12 +187,15 @@ func ExecuteCallSequenceWithExecutionTracer(testChain *chain.TestChain, contract
 	// Execute the call sequence and attach the execution tracer
 	executedCallSeq, err := ExecuteCallSequenceIteratively(testChain, fetchElementFunc, nil, executionTracer.NativeTracer())
 
-	// By default, we only trace the last element in the call sequence.
-	traceFrom := len(callSequence) - 1
-	// If verbose tracing is enabled, we want to trace all elements in the call sequence.
-	if verboseTracing {
+	// Determine which elements of the call sequence to trace based on verbosity level
+	traceFrom := len(callSequence) - 1 // Default: only trace the last element
+
+	// VeryVeryVerbose (level 2): Trace all elements in the call sequence
+	if verbosity == config.VeryVeryVerbose {
 		traceFrom = 0
 	}
+	// Note: For Verbose (level 0), only top-level call frames are shown, handled in execution_trace.go
+	// For VeryVerbose (level 1), full detail for the last element is shown (default behavior)
 
 	// Attach the execution trace for each requested call sequence element
 	for ; traceFrom < len(callSequence); traceFrom++ {

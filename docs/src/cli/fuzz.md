@@ -16,7 +16,7 @@ current working directory.
 
 ```shell
 # Set config file path
-medusa fuzz --out myConfig.json
+medusa fuzz --config myConfig.json
 ```
 
 ### `--compilation-target`
@@ -26,7 +26,7 @@ warning [here](../project_configuration/compilation_config.md#target) about chan
 
 ```shell
 # Set compilation target
-medusa fuzz --target TestMyContract.sol
+medusa fuzz --compilation-target TestMyContract.sol
 ```
 
 ### `--workers`
@@ -141,15 +141,23 @@ The `--fail-fast` flag enables fast failure (equivalent to
 medusa fuzz --fail-fast
 ```
 
-### `--trace-all`
+### `-v`, `-vv`, `-vvv`
 
-The `--trace-all` flag allows you to retrieve an execution trace for each element of a call sequence that triggered a test
-failure (equivalent to
-[`testing.traceAll`](../project_configuration/testing_config.md#traceall)
+The verbosity flags control the level of detail shown in execution traces (equivalent to [`testing.verbosity`](../project_configuration/testing_config.md#verbosity)):
+
+- `-v`: Shows only top-level transactions in the execution trace. Only events in the top-level call frame and return data are included (Verbose level).
+- `-vv`: Shows nested calls with standard detail - this is the default behavior (VeryVerbose level).
+- `-vvv`: Shows all call sequence elements with maximum detail, attaching traces to every call in the sequence (VeryVeryVerbose level).
 
 ```shell
-# Trace each call
-medusa fuzz --trace-all
+# Set verbosity to top-level only
+medusa fuzz -v
+
+# Set verbosity to nested calls (default)
+medusa fuzz -vv
+
+# Set verbosity to maximum detail
+medusa fuzz -vvv
 ```
 
 ### `--no-color`

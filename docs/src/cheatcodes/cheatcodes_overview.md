@@ -59,6 +59,9 @@ interface StdCheats {
     // Computes address for a given private key
     function addr(uint256 privateKey) external returns (address);
 
+    // Gets the creation bytecode of a contract
+    function getCode(string calldata) external returns (bytes memory);
+
     // Gets the nonce of an account
     function getNonce(address account) external returns (uint64);
 

@@ -276,10 +276,13 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/vm/prank.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
 		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/start_prank.sol",
+		//"testdata/contracts/cheat_codes/vm/start_prank_delegate.sol", // TODO: Enable when startPrank `delegateCall` flag supported.
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
 		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/prevrandao.sol",
+		"testdata/contracts/cheat_codes/vm/get_code.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
@@ -461,14 +464,14 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 func TestDeploymentsWithPredeploy(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(1)}
-			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
-			config.Slither.UseSlither = false
+		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.Fuzzing.TargetContracts = []string{"TestContract"}
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{{Int: *big.NewInt(1)}}
+			pkgConfig.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
+			pkgConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			pkgConfig.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+			pkgConfig.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -482,17 +485,21 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 	})
 }
 
-// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+// TestDeploymentsWithPayableConstructors runs a test to ensure that we can send ether to payable constructors
 func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
-			config.Fuzzing.TestLimit = 1 // this should happen immediately
-			config.Fuzzing.Testing.AssertionTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract", "ThirdContract"}
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{
+				{Int: *big.NewInt(0)},
+				{Int: *big.NewInt(1e18)},
+				{Int: *big.NewInt(0x1234)},
+			}
+			pkgConfig.Fuzzing.TestLimit = 1 // this should happen immediately
+			pkgConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			pkgConfig.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -962,14 +969,12 @@ func TestCorpusReplayability(t *testing.T) {
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same (disregarding hit count)
-			successCovIncreased, revertCovIncreased, err := originalCoverage.Update(newCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err := originalCoverage.Update(newCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
-			successCovIncreased, revertCovIncreased, err = newCoverage.Update(originalCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err = newCoverage.Update(originalCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
@@ -1068,4 +1073,91 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
 			}
 		}})
+}
+
+// TestVerbosityLevels tests that the verbosity configuration is properly applied
+// and affects the execution traces appropriately
+func TestVerbosityLevels(t *testing.T) {
+	// Map to store trace messages for each verbosity level
+	executedTraceMessages := map[int][]string{
+		0: { // Verbose level - should only contain top-level calls
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+		},
+		1: { // VeryVerbose level - should contain nested calls
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
+		},
+		2: { // VeryVeryVerbose level - should contain all calls with full detail
+			"[call] TestContract.setXValue(uint256)",
+			"[call] HelperContract.setX(uint256)",
+			"[event] setUpX",
+			"[return (true)]",
+			"[return ()]",
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
+		},
+	}
+	verbosityTests := []config.VerbosityLevel{config.Verbose, config.VeryVerbose, config.VeryVeryVerbose}
+	// Test each verbosity level
+	for verbosityLevel := range verbosityTests {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/execution_tracing/verbosity_levels.sol",
+			configUpdates: func(projectConfig *config.ProjectConfig) {
+				projectConfig.Fuzzing.TargetContracts = []string{"TestContract", "HelperContract"}
+				projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+				projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+				projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				projectConfig.Slither.UseSlither = false
+				// Start with a default verbosity
+				projectConfig.Fuzzing.Testing.Verbosity = config.VerbosityLevel(verbosityLevel)
+			},
+			method: func(f *fuzzerTestContext) {
+
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Test for verbosity levels Verbose and VeryVerbose
+				if verbosityLevel <= int(config.VeryVerbose) {
+					for _, call := range failingSequence[:len(failingSequence)-1] {
+						assert.Empty(t, call.ExecutionTrace)
+					}
+					// Obtain the last call
+					lastCall := failingSequence[len(failingSequence)-1]
+					assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+					// Get the execution trace message
+					executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				} else { // Test for Verbosity Level VeryVeryVerbose
+					executionTraceMsg := ""
+					for _, sequence := range failingSequence {
+						executionTraceMsg = executionTraceMsg + sequence.ExecutionTrace.Log().String()
+					}
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				}
+			},
+		})
+	}
 }

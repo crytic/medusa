@@ -328,6 +328,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
+		fw.workerMetrics().updateRevertMetrics(lastCallSequenceElement)
 
 		// If our fuzzer context or the emergency context is cancelled, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
@@ -547,7 +548,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
 	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
 	// test providers choose to attach themselves.
-	err = shrinkRequest.FinishedCallback(fw, optimizedSequence, fw.fuzzer.config.Fuzzing.Testing.TraceAll)
+	err = shrinkRequest.FinishedCallback(fw, optimizedSequence, fw.fuzzer.config.Fuzzing.Testing.Verbosity)
 	if err != nil {
 		return nil, err
 	}

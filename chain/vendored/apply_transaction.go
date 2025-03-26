@@ -100,5 +100,5 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, result, err
+	return receipt, result, nil
 }

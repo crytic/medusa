@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -387,6 +388,158 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// Define our prank context and key mapping key to store it with.
+	const extraDataKeyStartPrank = "cheatCodeStartPrankData"
+	// StartPrankData holds the data for a startPrank operation.
+	type StartPrankData struct {
+		// enabled describes if this prank is currently active.
+		enabled bool
+		// msgSender describes the msg.sender to spoof for this prank.
+		msgSender common.Address
+		// txOrigin describes the tx.origin to spoof for this prank.
+		// TODO: This is currently not used since we don't support spoofing of tx.origin.
+		txOrigin *common.Address
+		// delegateCall is an optional flag to handle delegatecalls.
+		// TODO: This is currently not used since we don't support delegatecalls yet.
+		delegateCall bool
+		// setAtCallDepth describes the call depth at which this prank was set.
+		setAtCallDepth uint64
+	}
+
+	// stopPrankFn holds the core functionality to stop an ongoing startPrank operation.
+	stopPrankFn := func() {
+		// Mark any `startPrank` data as disabled and delete it
+		topLevelCallFrame := tracer.TopLevelCallFrame()
+		phd := utils.MapFetchCasted[string, *StartPrankData](topLevelCallFrame.extraData, extraDataKeyStartPrank)
+		if phd != nil {
+			(*phd).enabled = false
+			delete(topLevelCallFrame.extraData, extraDataKeyStartPrank)
+		}
+	}
+
+	// startPrankFn holds the core functionality to prank the msg.sender for subsequent calls until stopPrank is called.
+	startPrankFn := func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+		// Support all function prototypes by checking arg types and fetching appropriately.
+		prankData := StartPrankData{
+			enabled:        true,
+			setAtCallDepth: tracer.callDepth - 1,
+		}
+
+		// Since the startPrank function has multiple overloads, we need to check the argument count and fetch appropriately.
+		if len(inputs) == 1 {
+			// 1 arg: argument is always the msg.sender prank address
+			prankData.msgSender = inputs[0].(common.Address)
+		} else if len(inputs) == 2 {
+			// 2 args: the second is delegate call flag or tx.origin address.
+			prankData.msgSender = inputs[0].(common.Address)
+			if prankTxOrigin, ok := inputs[1].(common.Address); ok {
+				prankData.txOrigin = &prankTxOrigin
+			} else {
+				prankData.delegateCall = inputs[1].(bool)
+			}
+		} else if len(inputs) == 3 {
+			// 3 args: all of the above
+			prankData.msgSender = inputs[0].(common.Address)
+			prankTxOrigin := inputs[1].(common.Address)
+			prankData.txOrigin = &prankTxOrigin
+			prankData.delegateCall = inputs[2].(bool)
+		} else {
+			return nil, cheatCodeRevertData([]byte("startPrank: no overload supports this argument count"))
+		}
+
+		// Stop any existing prank as we'll be overwriting it.
+		stopPrankFn()
+
+		// Since startPrank/stopPrank don't act as a stack, we will simply set the prank data
+		// across the whole transaction. So we'll store it within the top level call frame for easy access.
+		topLevelCallFrame := tracer.TopLevelCallFrame()
+		topLevelCallFrame.extraData[extraDataKeyStartPrank] = &prankData
+
+		// Obtain the caller frame. This is a pre-compile, so we want to add an event to the frame which called us,
+		// so when it enters the next frame in its scope, we trigger the prank.
+		var hookFn func() = nil
+		hookFn = func() {
+			// If this prank was disabled but the hooks remain, do nothing until they clear out.
+			if !prankData.enabled {
+				return
+			}
+
+			// Obtain the call frame to prank
+			prankCallFrame := tracer.CurrentCallFrame()
+
+			// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
+			scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
+
+			// Determine if this is a delegatecall.
+			isPrankedDelegateCall := false
+			if prankData.delegateCall {
+				if scopeContext.Contract.CodeAddr != nil && *scopeContext.Contract.CodeAddr != prankCallFrame.vmScope.Address() {
+					isPrankedDelegateCall = true
+				}
+			}
+
+			// Store the original value and spoof our prank address.
+			originalMsgSender := scopeContext.Caller()
+			scopeContext.Contract.CallerAddress = prankData.msgSender
+
+			// Spoof the CodeAddress if we're pranking a delegatecall now.
+			originalCodeAddress := scopeContext.Contract.Address()
+			if isPrankedDelegateCall {
+				// TODO: Prank CodeAddress.
+				_ = originalCodeAddress // remove me (temp to avoid linter warnings)
+				//  This is an addr field in `scopeContext.Contract.self`, which is unexposed in medusa-geth for now.
+			}
+			// TODO: Spoof tx.origin
+
+			// Propogate the prank into next call in the same scope.
+			if tracer.callDepth > prankData.setAtCallDepth {
+				tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
+			}
+
+			// Restore on exit (though pranking will continue for other frames)
+			prankCallFrame.onFrameExitRestoreHooks.Push(func() {
+				// If this prank was disabled but the hooks remain, do nothing until they clear out.
+				if !prankData.enabled {
+					return
+				}
+
+				// Restore msg.sender and, if delegatecall flag enabled, code address
+				scopeContext.Contract.CallerAddress = originalMsgSender
+				if isPrankedDelegateCall {
+					// TODO: Restore CodeAddress
+					_ = originalCodeAddress
+				}
+
+				// TODO: Restore tx.origin
+
+				// If we exit the depth we started pranking at, remove the prank.
+				if tracer.callDepth == prankData.setAtCallDepth {
+					stopPrankFn()
+				}
+			})
+		}
+		tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
+		return nil, nil
+	}
+
+	// startPrank: Sets the msg.sender within all subsequent calls until stopPrank is called.
+	contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}}, abi.Arguments{}, startPrankFn)
+	// TODO: Implement `delegateCall` for startPrank
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
+	// TODO: Implement tx.origin for startPrank
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{}, startPrankFn)
+	//contract.addMethod("startPrank", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}, {Type: typeBool}}, abi.Arguments{}, startPrankFn)
+
+	// stopPrank: Stops a startPrank operation.
+	contract.addMethod(
+		"stopPrank", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Call the core stopPrankFn to disable any active prank.
+			stopPrankFn()
+			return nil, nil
+		},
+	)
+
 	// snapshot: Takes a snapshot of the current state of the evm and returns the id associated with the snapshot
 	contract.addMethod(
 		"snapshot", abi.Arguments{}, abi.Arguments{{Type: typeUint256}},
@@ -632,7 +785,72 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			return []any{b}, nil
 		},
 	)
+	// getCode: Retrieves the creation bytecode for a contract
+	contract.addMethod("getCode", abi.Arguments{{Type: typeString}}, abi.Arguments{{Type: typeBytes}},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			contractPath := inputs[0].(string)
+
+			_, contractName, err := parseContractPath(contractPath)
+			if err != nil {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: invalid path format: %v", err)))
+			}
+
+			compiledContract, exists := tracer.chain.CompiledContracts[contractName]
+			if !exists {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractName)))
+			}
+
+			bytecode := compiledContract.InitBytecode
+			if len(bytecode) == 0 {
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract bytecode is empty: %s", contractName)))
+			}
+
+			// Return the bytecode
+			return []any{bytecode}, nil
+		},
+	)
 
 	// Return our precompile contract information.
 	return contract, nil
+}
+
+// parseContractPath parses a contract path in the following formats:
+// - "MyContract.sol:MyContract"
+// - "MyContract"
+// Returns file name and contract name
+
+func parseContractPath(path string) (string, string, error) {
+	// Handle empty path
+	if path == "" {
+		return "", "", fmt.Errorf("empty path provided")
+	}
+
+	// Split by colon separator
+	parts := strings.Split(path, ":")
+
+	if len(parts) > 2 {
+		return "", "", fmt.Errorf("too many path segments")
+	}
+
+	// When given "MyContract"
+	if len(parts) == 1 && !strings.HasSuffix(parts[0], ".sol") {
+		contractName := parts[0]
+		fileName := contractName + ".sol"
+		return fileName, contractName, nil
+	}
+
+	// When file specified: "MyContract.sol:MyContract" or "MyContract.sol"
+	file := parts[0]
+	if !strings.HasSuffix(file, ".sol") {
+		file = file + ".sol"
+	}
+
+	// If contract name is explicitly provided after colon
+	if len(parts) == 2 {
+		return file, parts[1], nil
+	}
+
+	// Otherwise derive contract name from file name
+	contractName := strings.TrimSuffix(filepath.Base(file), ".sol")
+	return file, contractName, nil
 }

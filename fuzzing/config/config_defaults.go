@@ -1,11 +1,9 @@
 package config
 
 import (
-	"github.com/crytic/medusa/compilation/types"
-	"math/big"
-
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/compilation/types"
 	"github.com/rs/zerolog"
 )
 
@@ -48,7 +46,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
 			TargetContracts:         []string{},
-			TargetContractsBalances: []*big.Int{},
+			TargetContractsBalances: []*ContractBalance{},
 			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
@@ -64,13 +62,14 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			MaxBlockTimestampDelay: 604800,
 			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
+			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
 				TestViewMethods:              true,
 				TestAllContracts:             false,
-				TraceAll:                     false,
+				Verbosity:                    1,
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{

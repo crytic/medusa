@@ -69,6 +69,17 @@ type cheatCodeTracerCallFrame struct {
 	vmReturnData []byte
 	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
 	vmErr error
+
+	// extraData describes additional data to be stored for this call frame.
+	extraData map[string]any
+}
+
+// newCheatCodeTracerCallFrame creates a cheatCodeTracerCallFrame and returns it.
+func newCheatCodeTracerCallFrame() *cheatCodeTracerCallFrame {
+	result := &cheatCodeTracerCallFrame{
+		extraData: make(map[string]any),
+	}
+	return result
 }
 
 // cheatCodeTracerResults holds the hooks that need to be executed when the chain reverts.
@@ -122,6 +133,14 @@ func (t *cheatCodeTracer) CurrentCallFrame() *cheatCodeTracerCallFrame {
 	return t.callFrames[t.callDepth]
 }
 
+// TopLevelCallFrame returns the top level call frame of the EVM execution, or nil if there is none.
+func (t *cheatCodeTracer) TopLevelCallFrame() *cheatCodeTracerCallFrame {
+	if len(t.callFrames) == 0 {
+		return nil
+	}
+	return t.callFrames[0]
+}
+
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
@@ -141,21 +160,15 @@ func (t *cheatCodeTracer) OnTxEnd(*coretypes.Receipt, error) {
 
 // OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Check to see if this is the top level call frame
+	// Create our call frame struct to track data for this initial entry call frame.
 	isTopLevelFrame := depth == 0
-	var callFrameData *cheatCodeTracerCallFrame
-	if isTopLevelFrame {
-		// Create our call frame struct to track data for this initial entry call frame.
-		callFrameData = &cheatCodeTracerCallFrame{}
-	} else {
+	callFrameData := newCheatCodeTracerCallFrame()
+	if !isTopLevelFrame {
 		// We haven't updated our call depth yet, so obtain the "previous" call frame (current for now)
 		previousCallFrame := t.CurrentCallFrame()
 
-		// Create our call frame struct to track data for this initial entry call frame.
 		// We forward our "next frame hooks" to this frame, then clear them from the previous frame.
-		callFrameData = &cheatCodeTracerCallFrame{
-			onFrameExitRestoreHooks: previousCallFrame.onNextFrameExitRestoreHooks,
-		}
+		callFrameData.onFrameExitRestoreHooks = previousCallFrame.onNextFrameExitRestoreHooks
 		previousCallFrame.onNextFrameExitRestoreHooks = nil
 
 		// Increase our call depth now that we're entering a new call frame.
