@@ -38,7 +38,7 @@ Run the following command to install the latest version of `medusa`:
 go install github.com/crytic/medusa@latest
 ```
 
-For more information on building from source, using package managers, or obtaining binaries for Windows and Linux, 
+For more information on building from source, using package managers, or obtaining binaries for Windows and Linux,
 please refer to the [installation guide](./docs/src/getting_started/installation.md).
 
 ## Contributing

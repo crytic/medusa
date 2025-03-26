@@ -1,6 +1,7 @@
 # Installation
 
 There are six main ways to install `medusa`:
+
 1. [Using Go Install](#installing-with-go-install)
 2. [Using Homebrew](#installing-with-homebrew)
 3. [Using Nix](#installing-with-nix)
