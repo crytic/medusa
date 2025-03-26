@@ -1,10 +1,9 @@
 package config
 
 import (
-	"math/big"
-	"github.com/crytic/medusa/compilation/types"
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/compilation/types"
 	"github.com/rs/zerolog"
 )
 

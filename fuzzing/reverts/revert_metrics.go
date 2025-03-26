@@ -82,7 +82,7 @@ func NewRevertMetricsFromPath(path string) (*RevertMetrics, error) {
 	}
 
 	// Get the file path
-	filePath := filepath.Join(path, "revert_metrics.json")
+	filePath := filepath.Join(path, "revert_report.json")
 
 	// Read the file
 	b, err := os.ReadFile(filePath)
