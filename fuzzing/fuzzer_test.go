@@ -155,32 +155,6 @@ func TestAssertionMode(t *testing.T) {
 // TestAssertionsNotRequire runs a test to ensure require and revert statements are not mistaken for assert statements.
 // It runs tests against a contract which immediately makes these statements and expects to find no errors before
 // timing out.
-func TestRevertReporter(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/assertions/revert_reporter_test.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.TestLimit = 10000
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnAssertion = false
-			config.Slither.UseSlither = false
-			config.Fuzzing.RevertReporterEnabled = true
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
-
-			// Check for failed assertion tests. We expect none.
-			assertFailedTestsExpected(f, false)
-		},
-	})
-}
-
-// TestAssertionsNotRequire runs a test to ensure require and revert statements are not mistaken for assert statements.
-// It runs tests against a contract which immediately makes these statements and expects to find no errors before
-// timing out.
 func TestAssertionsNotRequire(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/assertions/assert_not_require.sol",

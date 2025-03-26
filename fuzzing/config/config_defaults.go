@@ -62,7 +62,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			MaxBlockTimestampDelay: 604800,
 			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
-			RevertReporterEnabled:  true,
+			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
