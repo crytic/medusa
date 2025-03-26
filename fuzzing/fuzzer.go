@@ -898,7 +898,7 @@ func (f *Fuzzer) Start() error {
 		err = fuzzerStoppingErr
 		f.logger.Error("FuzzerStopping event subscriber returned an error", err)
 	}
-	
+
 	// Print our results on exit.
 	f.printExitingResults()
 
