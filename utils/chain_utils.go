@@ -2,7 +2,8 @@ package utils
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/params"
+
+	"github.com/crytic/medusa-geth/params"
 )
 
 // CopyChainConfig takes a chain configuration and creates a copy.

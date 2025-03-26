@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/coverage"
@@ -16,7 +17,6 @@ import (
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 
 	"github.com/crytic/medusa/fuzzing/contracts"

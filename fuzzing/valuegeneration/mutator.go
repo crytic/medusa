@@ -1,8 +1,9 @@
 package valuegeneration
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+
+	"github.com/crytic/medusa-geth/common"
 )
 
 // ValueMutator represents an interface for a provider used to mutate function inputs and call arguments for use

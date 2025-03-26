@@ -1,8 +1,9 @@
 package cache
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"sync"
+
+	"github.com/crytic/medusa-geth/common"
 )
 
 // nonPersistentStateCache provides a thread-safe cache for storing state objects and slots without persisting to disk.

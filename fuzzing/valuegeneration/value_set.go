@@ -2,12 +2,13 @@ package valuegeneration
 
 import (
 	"encoding/hex"
-	"github.com/crytic/medusa/utils/reflectionutils"
 	"hash"
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa/utils/reflectionutils"
+
+	"github.com/crytic/medusa-geth/common"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/maps"
 )

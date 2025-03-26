@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/exp/maps"
 )
 

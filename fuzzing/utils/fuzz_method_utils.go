@@ -3,8 +3,8 @@ package utils
 import (
 	"strings"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // IsOptimizationTest checks whether the method is an optimization test given potential naming prefixes it must conform to

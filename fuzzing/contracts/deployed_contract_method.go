@@ -1,8 +1,8 @@
 package contracts
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // DeployedContractMethod describes a method which is accessible through a contract actively deployed on-chain.

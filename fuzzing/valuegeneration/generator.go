@@ -1,8 +1,9 @@
 package valuegeneration
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+
+	"github.com/crytic/medusa-geth/common"
 )
 
 // ValueGenerator represents an interface for a provider used to generate function inputs and call arguments for use

@@ -2,12 +2,13 @@ package cache
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestNonPersistentStateObjectCacheRace tests for race conditions
