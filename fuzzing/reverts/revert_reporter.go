@@ -51,7 +51,7 @@ type RevertReporter struct {
 
 // NewRevertReporter creates a new RevertsReporter. If there is any issue loading the previous artifact (if it exists),
 // an error is returned.
-func NewRevertReporter(enabled bool, corpusDirectory string, contractDefinitions contracts.Contracts) (*RevertReporter, error) {
+func NewRevertReporter(enabled bool, corpusDirectory string) (*RevertReporter, error) {
 	if !enabled {
 		return &RevertReporter{}, nil
 	}
@@ -73,7 +73,6 @@ func NewRevertReporter(enabled bool, corpusDirectory string, contractDefinitions
 		Enabled:           enabled,
 		Path:              path,
 		RevertMetrics:     NewRevertMetrics(),
-		CustomErrors:      getCustomErrors(contractDefinitions),
 		PrevRevertMetrics: prevRevertMetrics,
 		// We are going to make a buffered channel here to avoid blocking the worker.
 		// Praying that 1000 is enough to avoid any issues.
@@ -81,10 +80,19 @@ func NewRevertReporter(enabled bool, corpusDirectory string, contractDefinitions
 	}, nil
 }
 
-// getCustomErrors returns a map of different error IDs to their corresponding error names.
-func getCustomErrors(contractDefinitions contracts.Contracts) map[string]abi.Error {
-	// Create a map to store the error IDs
-	customErrors := make(map[string]abi.Error)
+// AddCustomErrors allows users to provide a list of contract definitions that will be parsed to identify any custom,
+// user-defined errors in each contract's ABI. We _need_ to decouple this from the creation of the actual RevertReporter
+// object because of some edge case behavior with using crytic-export as the output folder for revert reports.
+// Since the crytic-export folder is deleted by crytic-compile, we need to create the revert reporter, compile,
+// and then attach the compiled artifacts to perform comparative analysis to the previous fuzzing campaign.
+func (r *RevertReporter) AddCustomErrors(contractDefinitions contracts.Contracts) {
+	// Guard clause
+	if !r.Enabled {
+		return
+	}
+
+	// Create the custom errors mapping
+	r.CustomErrors = make(map[string]abi.Error)
 
 	// Iterate over the contract definitions and get the error IDs
 	for _, contract := range contractDefinitions {
@@ -92,11 +100,9 @@ func getCustomErrors(contractDefinitions contracts.Contracts) map[string]abi.Err
 		for _, err := range contract.CompiledContract().Abi.Errors {
 			// Add the error ID to the map (first four bytes)
 			errID := strings.TrimPrefix(err.ID.Hex(), "0x")
-			customErrors[errID[:8]] = err
+			r.CustomErrors[errID[:8]] = err
 		}
 	}
-
-	return customErrors
 }
 
 // Start starts the revert reporter goroutine. It will continue to run until the context is cancelled.

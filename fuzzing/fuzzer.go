@@ -168,6 +168,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
+	// Create the revert reporter
+	revertReporter, err := reverts.NewRevertReporter(config.Fuzzing.RevertReporterEnabled, config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		logger.Error("Failed to create revert reporter", err)
+		return nil, err
+	}
+
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config:              config,
@@ -177,6 +184,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		contractDefinitions: make(fuzzerTypes.Contracts, 0),
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
+		revertReporter:      revertReporter,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -209,13 +217,8 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		fuzzer.AddCompilationTargets(compilations)
 	}
 
-	// Create the revert reporter
-	revertReporter, err := reverts.NewRevertReporter(config.Fuzzing.RevertReporterEnabled, config.Fuzzing.CorpusDirectory, fuzzer.contractDefinitions)
-	if err != nil {
-		logger.Error("Failed to create revert reporter", err)
-		return nil, err
-	}
-	fuzzer.revertReporter = revertReporter
+	// Provide any custom errors in the compiled artifacts' ABIs to the revert reporter now
+	fuzzer.revertReporter.AddCustomErrors(fuzzer.contractDefinitions)
 
 	// Register any default providers if specified.
 	if fuzzer.config.Fuzzing.Testing.PropertyTesting.Enabled {
