@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Medusa Revert Report</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap">
+    <style>
+        :root {
+            /* Colors */
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: rgba(99,102,241,0.1);
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --surface: #fff;
+            --text: var(--gray-800);
+            --text-light: var(--gray-500);
+            --radius: 0.375rem;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            /* RGB values for opacity variants */
+            --success-rgb: 34,197,94;
+            --warning-rgb: 234,179,8;
+            --danger-rgb: 239,68,68;
+        }
+
+        /* Reset */
+        * {box-sizing:border-box;margin:0;padding:0}
+        
+        body {
+            font-family:'Inter',-apple-system,sans-serif;
+            font-size:0.875rem;
+            line-height:1.5;
+            color:var(--text);
+            background:var(--gray-50);
+            min-height:100vh;
+            display:flex;
+            flex-direction:column;
+        }
+        
+        a {color:var(--primary);text-decoration:none}
+        a:hover {color:var(--primary-hover);text-decoration:underline}
+        
+        /* Layout */
+        .app-container {
+            display:flex;
+            flex-direction:column;
+            min-height:100vh;
+        }
+        
+        header {
+            background:var(--surface);
+            border-bottom:1px solid var(--gray-200);
+            padding:1rem 1.5rem;
+            z-index:10;
+            box-shadow:var(--shadow-sm);
+        }
+        
+        .header-content {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            max-width:1400px;
+            margin:0 auto;
+            width:100%;
+        }
+        
+        .logo-text {
+            font-size:1.5rem;
+            font-weight:600;
+            color:var(--gray-800);
+        }
+        
+        .btn {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            height:2.25rem;
+            padding:0 1rem;
+            font-size:0.875rem;
+            font-weight:500;
+            border-radius:var(--radius);
+            transition:all 0.2s;
+            border:1px solid transparent;
+        }
+        
+        .btn-secondary {
+            background:#B92B3D;
+            border-color:#B92B3D;
+            color:white;
+        }
+        
+        .btn-secondary:hover {
+            background:#9e2434;
+            border-color:#9e2434;
+        }
+        
+        .btn-sm {
+            height:2rem;
+            padding:0 1rem;
+            font-size:0.75rem;
+        }
+        
+        /* Main content */
+        .main-content {
+            flex:1;
+            max-width:1400px;
+            margin:0 auto;
+            width:100%;
+            padding:1.5rem;
+        }
+        
+        /* Stats cards */
+        .stats-container {
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+            gap:1rem;
+            margin-bottom:1.5rem;
+        }
+        
+        .stat-card {
+            background:var(--surface);
+            border-radius:var(--radius);
+            padding:1.25rem;
+            box-shadow:var(--shadow);
+            display:flex;
+            flex-direction:column;
+        }
+        
+        .stat-title {
+            font-size:0.875rem;
+            color:var(--text-light);
+            margin-bottom:0.5rem;
+        }
+        
+        .stat-value {
+            font-size:1.5rem;
+            font-weight:600;
+            margin-bottom:0.5rem;
+        }
+        
+        /* Contract card */
+        .contract-card {
+            background:var(--surface);
+            border-radius:var(--radius);
+            margin-bottom:1.5rem;
+            overflow:hidden;
+            box-shadow:var(--shadow);
+        }
+        
+        .contract-header {
+            background:#12181E;
+            color:white;
+            padding:1rem 1.25rem;
+            font-weight:600;
+            font-size:1.5rem;
+        }
+        
+        .contract-content {
+            padding:1.25rem;
+        }
+        
+        /* Revert tables */
+        .revert-table {
+            width:100%;
+            border-collapse:collapse;
+            margin-bottom:1.5rem;
+            background:var(--surface);
+        }
+        
+        .revert-table th, .revert-table td {
+            padding:0.75rem;
+            border:1px solid var(--gray-200);
+            text-align:left;
+        }
+        
+        .revert-table th {
+            background:var(--gray-100);
+            font-weight:500;
+            color:var(--gray-700);
+        }
+        
+        .revert-table tr:nth-child(even) {
+            background:var(--gray-50);
+        }
+        
+        .revert-table tr:hover {
+            background:var(--gray-100);
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            width:100%;
+            height:0.5rem;
+            background:var(--gray-200);
+            border-radius:9999px;
+            overflow:hidden;
+            margin-top:0.75rem;
+        }
+        
+        .progress-bar {
+            height:100%;
+            transition:width 0.3s;
+            border-radius:9999px;
+        }
+        
+        /* Badges and labels */
+        .revert-percentage {
+            text-align:center;
+            white-space:nowrap;
+        }
+        
+        .revert-reason {
+            display:inline-block;
+            padding:0.375rem 0.625rem;
+            border-radius:var(--radius);
+            background:var(--gray-100);
+            border-left:3px solid var(--warning);
+            font-family:'JetBrains Mono',monospace;
+            font-size:0.8125rem;
+            line-height:1.4;
+        }
+        
+        /* Color indicators */
+        .change-positive {
+            color:var(--danger);
+        }
+        
+        .change-negative {
+            color:var(--success);
+        }
+        
+        .change-neutral {
+            color:var(--gray-500);
+        }
+        
+        /* Section headings */
+        h2 {
+            font-size:1.25rem;
+            font-weight:600;
+            margin:1.5rem 0 1rem;
+            color:var(--gray-800);
+        }
+        
+        h3 {
+            font-size:1.125rem;
+            font-weight:500;
+            margin:1.25rem 0 0.75rem;
+            color:var(--gray-700);
+        }
+        
+        h4 {
+            font-size:1rem;
+            font-weight:500;
+            margin:1rem 0 0.5rem;
+            color:var(--gray-700);
+        }
+        
+        /* Footer */
+        footer {
+            background:var(--surface);
+            border-top:1px solid var(--gray-200);
+            padding:1rem;
+            text-align:center;
+            font-size:0.875rem;
+            color:var(--gray-500);
+            margin-top:auto;
+        }
+        
+        /* Scroll to top button */
+        .scroll-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary);
+            color: white;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(1rem);
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 100;
+        }
+        
+        .scroll-top.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .scroll-top:hover {
+            background: var(--primary-hover);
+        }
+        
+        /* Jump to section links */
+        .jump-links {
+            display: none;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .jump-links summary {
+            cursor: pointer;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .jump-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        
+        .contract-card:target {
+            animation: highlight 2s ease-out;
+        }
+        
+        h4:target {
+            animation: highlight 2s ease-out;
+        }
+        
+        @keyframes highlight {
+            0% { background-color: var(--primary-light); }
+            100% { background-color: transparent; }
+        }
+        
+        /* Responsive */
+        @media (max-width:768px) {
+            .stats-container {grid-template-columns:1fr}
+            .jump-links-grid {grid-template-columns:1fr}
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <span class="logo-text">Medusa Revert Report</span>
+                <a href="https://github.com/crytic/medusa" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <div class="main-content">
+            <!-- Description -->
+            <div class="stat-card" style="margin-bottom: 1.5rem;">
+                <p>This report shows how often contract functions revert during fuzzing and the reasons for those reverts.</p>
+            </div>
+            
+            <!-- Jump links for large reports -->
+            <details class="jump-links" id="contract-jump-links">
+                <summary>Jump to Contract</summary>
+                <div class="jump-links-grid" id="contract-links">
+                    <!-- Dynamically filled by JavaScript -->
+                </div>
+            </details>
+            
+            <!-- Contract revert metrics -->
+            {{range $contractName, $contractMetrics := .ContractRevertMetrics}}
+                <div class="contract-card" id="contract-{{$contractMetrics.Name}}">
+                    <div class="contract-header">
+                        {{$contractMetrics.Name}}
+                    </div>
+                    <div class="contract-content">
+                        <h3>Function Revert Summary</h3>
+                        <table class="revert-table">
+                            <tr>
+                                <th>Function</th>
+                                <th>Total Calls</th>
+                                <th>Total Reverts</th>
+                                <th>Revert Rate</th>
+                                <th>Previous Rate</th>
+                                <th>Change</th>
+                            </tr>
+                            {{range $functionName, $functionMetrics := $contractMetrics.FunctionRevertMetrics}}
+                            <tr>
+                                <td>
+                                    {{if gt (len $functionMetrics.RevertReasonMetrics) 0}}
+                                        <a href="#{{$contractMetrics.Name}}-{{$functionMetrics.Name}}">{{$functionMetrics.Name}}</a>
+                                    {{else}}
+                                        {{$functionMetrics.Name}}
+                                    {{end}}
+                                </td>
+                                <td>{{$functionMetrics.TotalCalls}}</td>
+                                <td>{{$functionMetrics.TotalReverts}}</td>
+                                <td class="revert-percentage">
+                                    {{percentageFmt $functionMetrics.Pct}}
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: {{percentageFmt $functionMetrics.Pct}}; background-color: {{ if gt $functionMetrics.Pct 0.5 }}var(--danger){{ else if gt $functionMetrics.Pct 0.25 }}var(--warning){{ else }}var(--success){{ end }};"></div>
+                                    </div>
+                                </td>
+                                <td class="revert-percentage">
+                                    {{percentageFmt $functionMetrics.PrevPct}}
+                                </td>
+                                <td>
+                                    {{if eq $functionMetrics.PrevPct 0.0}}
+                                        N/A
+                                    {{else}}
+                                        {{$change := percentageChangeOpt (floatPtr $functionMetrics.PrevPct) $functionMetrics.Pct}}
+                                        <span class="{{ if contains $change "Increased" }}change-positive{{ else if contains $change "Decreased" }}change-negative{{ else }}change-neutral{{ end }}">
+                                            {{$change}}
+                                        </span>
+                                    {{end}}
+                                </td>
+                            </tr>
+                            {{end}}
+                        </table>
+
+                        <h3>Revert Reasons by Function</h3>
+                        {{range $functionName, $functionMetrics := $contractMetrics.FunctionRevertMetrics}}
+                            {{if gt (len $functionMetrics.RevertReasonMetrics) 0}}
+                            <h4 id="{{$contractMetrics.Name}}-{{$functionMetrics.Name}}">{{$functionMetrics.Name}}</h4>
+                            <table class="revert-table">
+                                <tr>
+                                    <th>Revert Reason</th>
+                                    <th>Count</th>
+                                    <th>Percentage of Calls</th>
+                                    <th>Previous Rate</th>
+                                    <th>Change</th>
+                                </tr>
+                                {{range $reason, $reasonMetrics := $functionMetrics.RevertReasonMetrics}}
+                                <tr>
+                                    <td>
+                                        <div class="revert-reason">{{$reasonMetrics.Reason}}</div>
+                                    </td>
+                                    <td>{{$reasonMetrics.Count}}</td>
+                                    <td class="revert-percentage">
+                                        {{percentageFmt $reasonMetrics.Pct}}
+                                        <div class="progress-container">
+                                            <div class="progress-bar" style="width: {{percentageFmt $reasonMetrics.Pct}}; background-color: {{ if gt $reasonMetrics.Pct 0.5 }}var(--danger){{ else if gt $reasonMetrics.Pct 0.25 }}var(--warning){{ else }}var(--success){{ end }};"></div>
+                                        </div>
+                                    </td>
+                                    <td class="revert-percentage">
+                                        {{if eq $reasonMetrics.PrevPct 0.0}}
+                                            No prev. data
+                                        {{else}}
+                                            {{percentageFmt $reasonMetrics.PrevPct}}
+                                        {{end}}
+                                    </td>
+                                    <td>
+                                        {{if eq $reasonMetrics.PrevPct 0.0}}
+                                            N/A
+                                        {{else}}
+                                            {{$change := percentageChangeOpt (floatPtr $reasonMetrics.PrevPct) $reasonMetrics.Pct}}
+                                            <span class="{{ if contains $change "Increased" }}change-positive{{ else if contains $change "Decreased" }}change-negative{{ else }}change-neutral{{ end }}">
+                                                {{$change}}
+                                            </span>
+                                        {{end}}
+                                    </td>
+                                </tr>
+                                {{end}}
+                            </table>
+                            {{end}}
+                        {{end}}
+                    </div>
+                </div>
+            {{end}}
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <div>Report generated by Medusa on {{timeNow.UTC.Format "January 02, 2006 at 15:04:05 UTC"}}</div>
+            <div style="margin-top: 0.5rem">
+                <a href="https://github.com/crytic/medusa" target="_blank">github.com/crytic/medusa</a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scroll to top button -->
+    <button class="scroll-top" id="scroll-top" title="Scroll to top">↑</button>
+
+    <script>
+        // Helper function to check if a string contains a substring
+        function contains(str, substr) {
+            return str.indexOf(substr) !== -1;
+        }
+        
+        // Build jump links for contracts when there are multiple contracts
+        function buildJumpLinks() {
+            const contractCards = document.querySelectorAll('.contract-card');
+            const contractLinks = document.getElementById('contract-links');
+            const jumpLinksContainer = document.getElementById('contract-jump-links');
+            
+            // Only show jump links if there are multiple contracts
+            if (contractCards.length <= 1) {
+                jumpLinksContainer.style.display = 'none';
+                return;
+            }
+            
+            // Show the jump links container
+            jumpLinksContainer.style.display = 'block';
+            
+            // Clear existing links
+            contractLinks.innerHTML = '';
+            
+            // Create links for each contract
+            contractCards.forEach(card => {
+                const contractName = card.querySelector('.contract-header').textContent.trim();
+                const contractId = card.id;
+                
+                const link = document.createElement('a');
+                link.href = `#${contractId}`;
+                link.textContent = contractName;
+                link.style.display = 'block';
+                link.style.padding = '0.375rem 0.5rem';
+                link.style.borderRadius = 'var(--radius)';
+                
+                link.addEventListener('mouseover', () => {
+                    link.style.backgroundColor = 'var(--gray-100)';
+                });
+                
+                link.addEventListener('mouseout', () => {
+                    link.style.backgroundColor = 'transparent';
+                });
+                
+                contractLinks.appendChild(link);
+            });
+        }
+        
+        // Scroll to top functionality
+        function setupScrollToTop() {
+            const scrollTopButton = document.getElementById('scroll-top');
+            
+            // Show button when page is scrolled down
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 300) {
+                    scrollTopButton.classList.add('visible');
+                } else {
+                    scrollTopButton.classList.remove('visible');
+                }
+            });
+            
+            // Scroll to top when button is clicked
+            scrollTopButton.addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+        }
+        
+        // Initialize page functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            buildJumpLinks();
+            setupScrollToTop();
+        });
+    </script>
+</body>
+</html>

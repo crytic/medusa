@@ -328,6 +328,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
+		fw.workerMetrics().updateRevertMetrics(lastCallSequenceElement)
 
 		// If our fuzzer context or the emergency context is cancelled, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {

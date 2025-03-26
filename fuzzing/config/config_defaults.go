@@ -1,10 +1,9 @@
 package config
 
 import (
-	"github.com/crytic/medusa/compilation/types"
-
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/compilation/types"
 	"github.com/rs/zerolog"
 )
 
@@ -63,6 +62,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			MaxBlockTimestampDelay: 604800,
 			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
+			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
