@@ -1,14 +1,11 @@
 package coverage
 
 import (
-	"golang.org/x/exp/slices"
-
 	"sync"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/crypto"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/utils"
 )
 
 // CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts

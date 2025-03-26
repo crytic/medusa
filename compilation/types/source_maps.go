@@ -1,11 +1,8 @@
 package types
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/crytic/medusa-geth/core/vm"
 )
 
 // Reference: Source mapping is performed according to the rules specified in solidity documentation:

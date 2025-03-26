@@ -18,6 +18,7 @@ import (
 	"github.com/crytic/medusa-geth/crypto"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/fuzzing/reverts"
 
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"

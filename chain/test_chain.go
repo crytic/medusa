@@ -3,6 +3,7 @@ package chain
 import (
 	"errors"
 	"fmt"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"math/big"
 
 	"github.com/crytic/medusa/chain/state"
