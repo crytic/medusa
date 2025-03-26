@@ -35,6 +35,7 @@ Enable coverage reporting by setting the `corpusDirectory` and `coverageReports`
 ```
 
 If a `corpusDirectory` is not provided, the report(s) will be saved at `crytic-export/coverage`.
+
 ### Viewing HTML Coverage Reports
 
 The HTML report is automatically generated at `corpus/coverage/coverage_report.html`. Open this file in any web browser to view your coverage.
@@ -48,16 +49,19 @@ LCOV files can be used with various tools:
 First, install the LCOV tools:
 
 Linux:
+
 ```bash
 apt-get install lcov
 ```
 
 MacOS:
+
 ```bash
 brew install lcov
 ```
 
 Then generate HTML from the LCOV data:
+
 ```bash
 genhtml corpus/coverage/lcov.info --output-dir corpus --rc derive_function_end_line=0
 ```
@@ -104,6 +108,7 @@ Two report files are generated:
 2. `corpus/coverage/revert_report.json` - Machine-readable JSON format
 
 The HTML report provides detailed statistics on:
+
 - Which functions revert most frequently
 - Common revert reasons for each function
 - Comparison with previous fuzzing runs (when available)

@@ -65,7 +65,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 ### `coverageFormats`
 
 - **Type**: [String] (e.g. `["lcov"]`)
-- **Description**: The [coverage reports](./../testing/reporting.md) to generate after the fuzzing campaign has 
+- **Description**: The [coverage reports](./../testing/reporting.md) to generate after the fuzzing campaign has
   completed. The coverage reports are saved in the `coverage` directory within `crytic-export/` (by default) or
   `corpusDirectory` if configured.
 - **Default**: `["lcov", "html"]`
@@ -73,7 +73,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 ### `revertReporterEnabled`
 
 - **Type**: Boolean
-- **Description**: Enables or disables [revert reports](./../testing/reporting.md). Revert reports are saved in the 
+- **Description**: Enables or disables [revert reports](./../testing/reporting.md). Revert reports are saved in the
   `coverage` directory within `crytic-export/` (by default) or `corpusDirectory` if configured.
 - **Default**: `false`
 
