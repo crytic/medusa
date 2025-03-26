@@ -42,6 +42,12 @@ interface StdCheats {
     // Sets the *next* call's msg.sender to be the input address
     function prank(address) external;
 
+    // Sets all subsequent call's msg.sender (until stopPrank is called) to be the input address
+    function startPrank(address) external;
+
+    // Stops a previously called startPrank
+    function stopPrank() external;
+
     // Set msg.sender to the input address until the current call exits
     function prankHere(address) external;
 

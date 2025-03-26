@@ -55,6 +55,8 @@
   - [setNonce](./cheatcodes/set_nonce.md)
   - [coinbase](./cheatcodes/coinbase.md)
   - [prank](./cheatcodes/prank.md)
+  - [startPrank](./cheatcodes/start_prank.md)
+  - [stopPrank](./cheatcodes/stop_prank.md)
   - [prankHere](./cheatcodes/prank_here.md)
   - [ffi](./cheatcodes/ffi.md)
   - [addr](./cheatcodes/addr.md)
