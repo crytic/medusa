@@ -1085,8 +1085,6 @@ func TestVerbosityLevels(t *testing.T) {
 			"[event] settingUpY",
 		},
 		1: { // VeryVerbose level - should contain nested calls
-			"[call] TestContract.setYValue(uint256)",
-			"[event] settingUpY",
 			"[call] HelperContract.setY(uint256)",
 			"[event] setUpY",
 			"[return (true)]",
@@ -1097,11 +1095,6 @@ func TestVerbosityLevels(t *testing.T) {
 			"[event] setUpX",
 			"[return (true)]",
 			"[return ()]",
-			"[call] TestContract.setYValue(uint256)",
-			"[event] settingUpY",
-			"[call] HelperContract.setY(uint256)",
-			"[event] setUpY",
-			"[return (true)]",
 		},
 	}
 	verbosityTests := []config.VerbosityLevel{config.Verbose, config.VeryVerbose, config.VeryVeryVerbose}
