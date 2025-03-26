@@ -31,20 +31,15 @@ mdbook serve
 
 ## Install
 
-MacOS users can install the latest release of `medusa` using Homebrew:
+Run the following command to install the latest version of `medusa`:
 
 ```shell
 
-brew install medusa
+go install github.com/crytic/medusa@latest
 ```
 
-The master branch can be installed using the following command:
-
-```shell
-brew install --HEAD medusa
-```
-
-For more information on building from source, using nix, or obtaining binaries for Windows and Linux, please refer to the [installation guide](./docs/src/getting_started/installation.md).
+For more information on building from source, using package managers, or obtaining binaries for Windows and Linux, 
+please refer to the [installation guide](./docs/src/getting_started/installation.md).
 
 ## Contributing
 
