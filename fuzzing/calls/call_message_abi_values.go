@@ -3,10 +3,11 @@ package calls
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/crypto"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // CallMessageDataAbiValues describes a CallMessage Data field which is represented by ABI input argument values.

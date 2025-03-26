@@ -2,8 +2,9 @@ package state
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	gethState "github.com/ethereum/go-ethereum/core/state"
+
+	"github.com/crytic/medusa-geth/common"
+	gethState "github.com/crytic/medusa-geth/core/state"
 	"github.com/holiman/uint256"
 )
 

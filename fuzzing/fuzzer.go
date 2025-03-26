@@ -15,22 +15,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crytic/medusa/fuzzing/coverage"
+	"github.com/crytic/medusa-geth/crypto"
+
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/reverts"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/crytic/medusa/chain"
-	"github.com/crytic/medusa/fuzzing/executiontracer"
-
+	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
 
+	"github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
-	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -38,8 +39,6 @@ import (
 	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/slices"
 )
 

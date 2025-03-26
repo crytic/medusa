@@ -3,13 +3,13 @@ package chain
 import (
 	"math/big"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/tracing"
+	coretypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/eth/tracers"
+	"github.com/crytic/medusa-geth/params/forks"
 	"github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	coretypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 // testChainDeploymentsTracer implements TestChainTracer, capturing information regarding contract deployments and
@@ -153,7 +153,7 @@ func (t *testChainDeploymentsTracer) OnOpcode(pc uint64, op byte, gas, cost uint
 			DynamicCreation: false,
 			SelfDestructed:  true,
 			// Check if this is a new contract (not previously deployed and self destructed).
-			// https://github.com/ethereum/go-ethereum/blob/8d42e115b1cae4f09fd02b71c06ec9c85f22ad4f/core/state/statedb.go#L504-L506
+			// https://github.com/crytic/medusa-geth/blob/8d42e115b1cae4f09fd02b71c06ec9c85f22ad4f/core/state/statedb.go#L504-L506
 			Destroyed: t.evmContext.ChainConfig.LatestFork(t.evmContext.Time) < forks.Cancun || !t.evmContext.StateDB.Exist(addr),
 		})
 	}

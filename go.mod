@@ -6,7 +6,7 @@ toolchain go1.23.3
 
 require (
 	github.com/Masterminds/semver v1.5.0
-	github.com/ethereum/go-ethereum v1.15.6
+	github.com/crytic/medusa-geth v0.0.0-20250220164529-4bb0d2a5508f
 	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.2

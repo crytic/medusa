@@ -3,12 +3,12 @@ package calls
 import (
 	"math/big"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/common/hexutil"
+	"github.com/crytic/medusa-geth/core"
+	coreTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 )
 

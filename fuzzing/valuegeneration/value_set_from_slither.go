@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/crytic/medusa-geth/common"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // SeedFromSlither allows a ValueSet to be seeded from the output of slither.

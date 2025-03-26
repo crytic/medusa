@@ -14,9 +14,9 @@ import (
 
 	_ "embed"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 var (
