@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // RevertMetrics is used to track the number of times calls to various contracts and functions revert and why.
