@@ -67,7 +67,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
-				TestViewMethods:              true,
+				TestViewMethods:              false,
 				TestAllContracts:             false,
 				Verbosity:                    1,
 				TargetFunctionSignatures:     []string{},
