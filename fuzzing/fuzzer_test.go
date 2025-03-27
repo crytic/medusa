@@ -138,6 +138,7 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.TestViewMethods = true
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Slither.UseSlither = false
 			},

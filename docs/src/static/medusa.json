@@ -9,6 +9,7 @@
     "corpusDirectory": "",
     "coverageEnabled": true,
     "coverageFormats": ["html", "lcov"],
+    "revertReporterEnabled": false,
     "targetContracts": [],
     "predeployedContracts": {},
     "targetContractsBalances": [],
@@ -24,10 +25,10 @@
       "stopOnFailedContractMatching": false,
       "stopOnNoTests": true,
       "testAllContracts": false,
-      "traceAll": false,
+      "testViewMethods": false,
+      "verbosity": 1,
       "assertionTesting": {
         "enabled": true,
-        "testViewMethods": false,
         "panicCodeConfig": {
           "failOnCompilerInsertedPanic": false,
           "failOnAssertion": true,
