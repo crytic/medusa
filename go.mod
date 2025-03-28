@@ -90,5 +90,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-replace github.com/ethereum/go-ethereum => github.com/crytic/medusa-geth v0.0.0-20250202002730-6e6ee9a60299
