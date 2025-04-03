@@ -2,15 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/crytic/medusa-geth/core"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"golang.org/x/exp/slices"
 )
 
 // MIN_INT is the minimum value for an int256 in hexadecimal
