@@ -3,6 +3,7 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"hash"
+	"maps"
 	"math/big"
 	"reflect"
 
@@ -10,7 +11,6 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/maps"
 )
 
 // ValueSet represents potential values of significance within the source code to be used in fuzz tests.
