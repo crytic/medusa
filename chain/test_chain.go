@@ -3,31 +3,29 @@ package chain
 import (
 	"errors"
 	"fmt"
-	compilationTypes "github.com/crytic/medusa/compilation/types"
+	"maps"
 	"math/big"
-
-	"github.com/crytic/medusa/chain/state"
-	"golang.org/x/net/context"
-
-	"github.com/crytic/medusa-geth/core/rawdb"
-	"github.com/crytic/medusa-geth/core/tracing"
-	"github.com/crytic/medusa-geth/triedb"
-	"github.com/crytic/medusa-geth/triedb/hashdb"
-	"github.com/crytic/medusa/chain/config"
-	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/common/math"
 	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/rawdb"
 	gethState "github.com/crytic/medusa-geth/core/state"
+	"github.com/crytic/medusa-geth/core/tracing"
 	gethTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/ethdb"
 	"github.com/crytic/medusa-geth/params"
+	"github.com/crytic/medusa-geth/triedb"
+	"github.com/crytic/medusa-geth/triedb/hashdb"
+	"github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/chain/state"
 	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/chain/vendored"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
+	"github.com/holiman/uint256"
+	"golang.org/x/net/context"
 )
 
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
