@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
@@ -32,6 +33,11 @@ type CompiledContract struct {
 
 	// Kind describes the kind of contract, i.e. contract, library, interface.
 	Kind ContractKind
+
+	// LibraryPlaceholders maps placeholder strings to library names (if known)
+	// Format is map[placeholder]libraryName
+	// When a contract has placeholders, these need to be resolved before deployment
+	LibraryPlaceholders map[string]any
 }
 
 // IsMatch returns a boolean indicating whether provided contract bytecode is a match to this compiled contract
@@ -129,4 +135,30 @@ func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) 
 		initBytecodeWithArgs = append(initBytecodeWithArgs, data...)
 	}
 	return initBytecodeWithArgs, nil
+}
+
+func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
+	// Identify all library placeholder substrings
+	exp := regexp.MustCompile(`__(\$[0-9a-zA-Z]*\$|\w*)__`)
+	substrings := exp.FindAllString(bytecode, -1)
+
+	substringSet := make(map[string]any, 0)
+
+	// If we have no matches, then no linking is required, so return an empty set
+	if substrings == nil {
+		return substringSet
+	}
+
+	// Identify all unique library substrings
+	for _, substring := range substrings {
+		// Strip all `_` and `$` from the substring
+		substring = strings.ReplaceAll(strings.ReplaceAll(substring, "_", ""), "$", "")
+
+		// Only add it to the set if it is not already in it
+		if _, exists := substringSet[substring]; !exists {
+			substringSet[substring] = nil
+		}
+	}
+
+	return substringSet
 }

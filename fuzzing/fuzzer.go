@@ -109,6 +109,7 @@ type Fuzzer struct {
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
 	lastPCsLogMsg time.Time
+	libraryMap    map[string]string
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -210,6 +211,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
+
+		allLibraries, _ := compilationTypes.GetAvailableLibraries(compilations)
+		fuzzer.libraryMap = allLibraries
 		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
 
 		// Add our compilation targets
@@ -366,6 +370,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 					continue
 				}
 
+				compilationTypes.MapPlaceholdersToLibraries(contract.LibraryPlaceholders, f.libraryMap)
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
