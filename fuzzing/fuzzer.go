@@ -506,6 +506,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
 				testChain.CompiledContracts[contractName] = contract.CompiledContract()
+
 				// Concatenate constructor arguments, if necessary
 				args := make([]any, 0)
 				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
@@ -526,70 +527,23 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					args = decoded
 				}
 
-				// Construct our deployment message/tx data field
-				msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
-				if err != nil {
-					return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
-				}
-
 				// If our project config has a non-zero balance for this target contract, retrieve it
 				contractBalance := big.NewInt(0)
 				if len(balances) > i {
 					contractBalance = new(big.Int).Set(&balances[i].Int)
 				}
-
-				// Create a message to represent our contract deployment (we let deployments consume the whole block
-				// gas limit rather than use tx gas limit)
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, contractBalance, fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
-				msg.FillFromTestChainProperties(testChain)
-
-				// Create a new pending block we'll commit to chain
-				block, err := testChain.PendingBlockCreate()
+				// Deploy the contract with resolved library dependencies
+				result, err := fuzzer.deployContract(testChain, contract, args, contractBalance)
 				if err != nil {
-					return nil, err
-				}
-
-				// Add our transaction to the block
-				err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
-				if err != nil {
-					return nil, err
-				}
-
-				// Commit the pending block to the chain, so it becomes the new head.
-				err = testChain.PendingBlockCommit()
-				if err != nil {
-					return nil, err
-				}
-
-				// Ensure our transaction succeeded and, if it did not, attach an execution trace to it and re-run it.
-				// The execution trace will be returned so that it can be provided to the user for debugging
-				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					// Create a call sequence element to represent the failed contract deployment tx
-					cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
-					cse.ChainReference = &calls.CallSequenceElementChainReference{
-						Block:            block,
-						TransactionIndex: len(block.Messages) - 1,
+					// If the result is an execution trace, return it
+					if trace, ok := result.(*executiontracer.ExecutionTrace); ok {
+						return trace, err
 					}
-					// Revert to one block before and re-run the failed contract deployment tx.
-					// This should be one index before the current head block index.
-					// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
-					err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1))
-					if err != nil {
-						return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
-					} else {
-						_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions, []*calls.CallSequenceElement{cse}, config.VeryVeryVerbose)
-						if err != nil {
-							return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
-						}
-					}
-
-					// Return the execution error and the execution trace, if possible.
-					return cse.ExecutionTrace, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
+					return nil, err
 				}
-
 				// Record our deployed contract so the next config-specified constructor args can reference this
 				// contract by name.
-				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
+				deployedContractAddr[contractName] = result.(common.Address)
 
 				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
 				// inner loop to process the next contract to deploy in the outer loop.
@@ -604,6 +558,69 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		}
 	}
 	return nil, nil
+}
+
+func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int) (any | common., error) {
+	contractName := contract.Name()
+	// Construct our deployment message/tx data field
+	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
+	if err != nil {
+		return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+	}
+
+	// Create a message to represent our contract deployment (we let deployments consume the whole block
+	// gas limit rather than use tx gas limit)
+	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, f.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+	msg.FillFromTestChainProperties(testChain)
+
+	// Create a new pending block we'll commit to chain
+	block, err := testChain.PendingBlockCreate()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add our transaction to the block
+	err = testChain.PendingBlockAddTx(msg.ToCoreMessage())
+	if err != nil {
+		return nil, err
+	}
+
+	// Commit the pending block to the chain, so it becomes the new head.
+	err = testChain.PendingBlockCommit()
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure our transaction succeeded and, if it did not, attach an execution trace to it and re-run it.
+	// The execution trace will be returned so that it can be provided to the user for debugging
+	if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+		// Create a call sequence element to represent the failed contract deployment tx
+		cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
+		cse.ChainReference = &calls.CallSequenceElementChainReference{
+			Block:            block,
+			TransactionIndex: len(block.Messages) - 1,
+		}
+		// Revert to one block before and re-run the failed contract deployment tx.
+		// This should be one index before the current head block index.
+		// We should be able to attach an execution trace; however, if it fails, we provide the ExecutionResult at a minimum.
+		err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1))
+		if err != nil {
+			return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
+		} else {
+			_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, f.contractDefinitions, []*calls.CallSequenceElement{cse}, config.VeryVeryVerbose)
+			if err != nil {
+				return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
+			}
+		}
+
+		// Return the execution error and the execution trace, if possible.
+		return cse.ExecutionTrace, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
+	}
+
+	// Record our deployed contract so the next config-specified constructor args can reference this
+	// contract by name.
+	deployedAddr := block.MessageResults[0].Receipt.ContractAddress
+	return deployedAddr, nil
 }
 
 // defaultCallSequenceGeneratorConfigFunc is a NewCallSequenceGeneratorConfigFunc which creates a
