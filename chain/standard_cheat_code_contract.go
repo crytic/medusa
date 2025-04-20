@@ -491,7 +491,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			}
 			// TODO: Spoof tx.origin
 
-			// Propogate the prank into next call in the same scope.
+			// Propagate the prank into next call in the same scope.
 			if tracer.callDepth > prankData.setAtCallDepth {
 				tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
 			}

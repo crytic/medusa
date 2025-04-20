@@ -22,7 +22,7 @@ A rudimentary description of the objects/providers and their roles are explained
 
 ### Providers
 
-- `ValueGenerator`: This is an object that provides methods to generate values of different kinds for transactions. Examples include the `RandomValueGenerator` and superceding `MutationalValueGenerator`. They are provided a `ValueSet` by their worker, which they may use in generation operations.
+- `ValueGenerator`: This is an object that provides methods to generate values of different kinds for transactions. Examples include the `RandomValueGenerator` and superseding `MutationalValueGenerator`. They are provided a `ValueSet` by their worker, which they may use in generation operations.
 
 - `TestChain`: This is a fake chain that operates on fake block structures created for the purpose of testing. Rather than operating on `types.Transaction` (which requires signing), it operates on `core.Message`s, which are derived from transactions and simply allow you to set the `sender` field. It is responsible for:
 
@@ -133,7 +133,7 @@ The `TestChain` maintains event emitters for the following events under `TestCha
 
 - `PendingBlockCreatedEvent`: This indicates a new block is being created but has not yet been committed to the chain. The block is empty at this point but will likely be populated. It provides a reference to the `Block` and `TestChain`.
 
-- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been commited to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
+- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been committed to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
 
 - `PendingBlockCommittedEvent`: This indicates a pending block was committed to chain as the new head. It provides a reference to the `Block` and `TestChain`.
 
