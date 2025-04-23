@@ -340,7 +340,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
 			account := inputs[0].(common.Address)
 			nonce := inputs[1].(uint64)
-			tracer.chain.State().SetNonce(account, nonce)
+			tracer.chain.State().SetNonce(account, nonce, tracing.NonceChangeUnspecified)
 			return nil, nil
 		},
 	)
@@ -359,9 +359,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 				scopeContext := prankCallFrame.vmScope.(*vm.ScopeContext)
 				original := scopeContext.Caller()
-				scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
+				scopeContext.Contract.SetCaller(inputs[0].(common.Address))
 				prankCallFrame.onFrameExitRestoreHooks.Push(func() {
-					scopeContext.Contract.CallerAddress = original
+					scopeContext.Contract.SetCaller(original)
 				})
 			})
 			return nil, nil
@@ -380,9 +380,9 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
 			scopeContext := cheatCodeCallerFrame.vmScope.(*vm.ScopeContext)
 			original := scopeContext.Caller()
-			scopeContext.Contract.CallerAddress = inputs[0].(common.Address)
+			scopeContext.Contract.SetCaller(inputs[0].(common.Address))
 			cheatCodeCallerFrame.onFrameExitRestoreHooks.Push(func() {
-				scopeContext.Contract.CallerAddress = original
+				scopeContext.Contract.SetCaller(original)
 			})
 			return nil, nil
 		},
@@ -473,14 +473,14 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			// Determine if this is a delegatecall.
 			isPrankedDelegateCall := false
 			if prankData.delegateCall {
-				if scopeContext.Contract.CodeAddr != nil && *scopeContext.Contract.CodeAddr != prankCallFrame.vmScope.Address() {
+				if scopeContext.Contract.Address() != prankCallFrame.vmScope.Address() {
 					isPrankedDelegateCall = true
 				}
 			}
 
 			// Store the original value and spoof our prank address.
 			originalMsgSender := scopeContext.Caller()
-			scopeContext.Contract.CallerAddress = prankData.msgSender
+			scopeContext.Contract.SetCaller(prankData.msgSender)
 
 			// Spoof the CodeAddress if we're pranking a delegatecall now.
 			originalCodeAddress := scopeContext.Contract.Address()
@@ -504,7 +504,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 				}
 
 				// Restore msg.sender and, if delegatecall flag enabled, code address
-				scopeContext.Contract.CallerAddress = originalMsgSender
+				scopeContext.Contract.SetCaller(originalMsgSender)
 				if isPrankedDelegateCall {
 					// TODO: Restore CodeAddress
 					_ = originalCodeAddress
