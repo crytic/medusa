@@ -349,6 +349,7 @@ func TestConsoleLog(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TargetContractsInitFunctions = []string{""}
 				config.Fuzzing.TestLimit = 10000
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -468,6 +469,7 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 		configUpdates: func(pkgConfig *config.ProjectConfig) {
 			pkgConfig.Fuzzing.TargetContracts = []string{"TestContract"}
 			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{{Int: *big.NewInt(1)}}
+			pkgConfig.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
 			pkgConfig.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
 			pkgConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
 			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -497,7 +499,8 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 				{Int: *big.NewInt(1e18)},
 				{Int: *big.NewInt(0x1234)},
 			}
-			pkgConfig.Fuzzing.TestLimit = 1 // this should happen immediately
+			pkgConfig.Fuzzing.TestLimit = 1                                       // this should happen immediately
+			pkgConfig.Fuzzing.TargetContractsInitFunctions = []string{"", "", ""} // this should execute the setUp functions in the respective contracts
 			pkgConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
 			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			pkgConfig.Slither.UseSlither = false
