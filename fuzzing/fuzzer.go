@@ -657,12 +657,14 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						}
 
 						if err = testChain.PendingBlockAddTx(msg.ToCoreMessage()); err != nil {
-							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockAddTx %s: %v", initFunction, err))
+							fuzzer.logger.Error(fmt.Errorf("failed to add initialization transaction for function %s on contract %s to pending block: %v",
+								initFunction, contractName, err))
 							continue
 						}
 
 						if err = testChain.PendingBlockCommit(); err != nil {
-							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockCommit %s: %v", initFunction, err))
+							fuzzer.logger.Error(fmt.Errorf("failed to commit block containing initialization call to function %s on contract %s: %v",
+								initFunction, contractName, err))
 							continue
 						}
 
