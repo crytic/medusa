@@ -489,16 +489,20 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		contractsToDeploy = append(contractsToDeploy, contractName)
 		// Preserve index of target contract balances
 		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+		// Set default empty init function for predeployed contracts
+		initFunctions = append(initFunctions, "")
 	}
 
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
 
+	// Process target contracts init functions
 	targetContractsCount := len(fuzzer.config.Fuzzing.TargetContracts)
 	initConfigCount := len(fuzzer.config.Fuzzing.TargetContractsInitFunctions)
 
-	for i := range targetContractsCount {
-		initFunction := "setUp" // Default
+	// Add initialization functions for target contracts
+	for i := 0; i < targetContractsCount; i++ {
+		initFunction := "" // No default initialization
 
 		// Use custom init function if available
 		if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
@@ -604,7 +608,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				contractAddr := deployedContractAddr[contractName]
 
 				// Get the initialization function name if exists
-				if i < len(initFunctions) {
+				if i < len(initFunctions) && initFunctions[i] != "" {
 					initFunction := initFunctions[i]
 					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
 
@@ -614,10 +618,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						fuzzer.logger.Info(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
 					} else {
 						// Initialization function exists, proceed with calling it
+						fuzzer.logger.Info(fmt.Sprintf("Found init function %s with %d inputs", initFunction, len(method.Inputs)))
 
 						// Check if the init function accepts parameters and process them if needed
 						var args []any
 						if len(method.Inputs) > 0 {
+							// Verify InitializationArgs map exists
+							if fuzzer.config.Fuzzing.InitializationArgs == nil {
+								fuzzer.logger.Error(fmt.Errorf("initialization args map is nil but function requires args"))
+								continue
+							}
+
 							// Look for initialization arguments in the config
 							jsonArgs, ok := fuzzer.config.Fuzzing.InitializationArgs[contractName]
 							if !ok {
@@ -625,16 +636,26 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 								continue
 							}
 
+							// Debug what args we found
+							fuzzer.logger.Info(fmt.Sprintf("Found args for %s: %+v", contractName, jsonArgs))
+
 							// Decode the arguments
 							decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(method.Inputs,
 								jsonArgs, deployedContractAddr)
 							if err != nil {
-								fuzzer.logger.Error(fmt.Errorf("decoding failed for initialization arguments for contract %s", contractName))
+								fuzzer.logger.Error(fmt.Errorf("decoding failed for initialization arguments for contract %s: %v",
+									contractName, err))
 								continue
-
 							}
+
 							args = decoded
+							fuzzer.logger.Info(fmt.Sprintf("Decoded %d args for %s function %s",
+								len(args), contractName, initFunction))
 						}
+
+						// Log before packing
+						fuzzer.logger.Info(fmt.Sprintf("About to call initialization function %s on contract %s with %d args",
+							initFunction, contractName, len(args)))
 
 						// Pack the function call data with arguments
 						callData, err := contractABI.Pack(initFunction, args...)
@@ -649,10 +670,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 							fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
 						msg.FillFromTestChainProperties(testChain)
 
+						// Debug log after creating the message
+						fuzzer.logger.Info(fmt.Sprintf("Created message for init function call to %s", initFunction))
+
 						// Create and commit a block with the transaction
 						block, err = testChain.PendingBlockCreate()
 						if err != nil {
-							fuzzer.logger.Error(fmt.Errorf("failed to create and commit a block with the transaction %s: %v", initFunction, err))
+							fuzzer.logger.Error(fmt.Errorf("failed to create pending block for init call: %v", err))
 							continue
 						}
 
@@ -677,11 +701,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 								TransactionIndex: len(block.Messages) - 1,
 							}
 
-							fuzzer.logger.Info(fmt.Errorf("init function %s on %s failed: %v",
+							fuzzer.logger.Error(fmt.Errorf("init function %s call failed on %s: %v",
 								initFunction, contractName,
 								block.MessageResults[0].ExecutionResult.Err))
+						} else {
+							fuzzer.logger.Info(fmt.Sprintf("Successfully called %s on %s with %d args",
+								initFunction, contractName, len(args)))
 						}
-						fuzzer.logger.Info(fmt.Sprintf("Successfully called %s on %s", initFunction, contractName))
 					}
 				}
 
