@@ -603,8 +603,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
 				contractAddr := deployedContractAddr[contractName]
 
-				// Get the initialization function name
-				// initFunction := "setUp" // Default
+				// Get the initialization function name if exists
 				if i < len(initFunctions) {
 					initFunction := initFunctions[i]
 					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
