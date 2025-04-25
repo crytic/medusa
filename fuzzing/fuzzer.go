@@ -489,8 +489,6 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		contractsToDeploy = append(contractsToDeploy, contractName)
 		// Preserve index of target contract balances
 		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
-		// Determine which initialization function to call
-		initFunctions = append(initFunctions, "setUp") // Default init function
 	}
 
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
@@ -606,67 +604,62 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				contractAddr := deployedContractAddr[contractName]
 
 				// Get the initialization function name
-				initFunction := "setUp" // Default
+				// initFunction := "setUp" // Default
 				if i < len(initFunctions) {
-					initFunction = initFunctions[i]
-				}
+					initFunction := initFunctions[i]
+					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
 
-				// Check if the initialization function exists
-				contractABI := contract.CompiledContract().Abi
-				if _, exists := contractABI.Methods[initFunction]; !exists {
-					fuzzer.logger.Debug(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
-					continue
-				}
+					// Check if the initialization function exists
+					contractABI := contract.CompiledContract().Abi
 
-				// Pack the function call data
-				callData, err := contractABI.Pack(initFunction)
-				if err != nil {
-					return nil, fmt.Errorf("failed to encode init call to %s: %v", initFunction, err)
-				}
+					if _, exists := contractABI.Methods[initFunction]; !exists {
+						fuzzer.logger.Info(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
+					} else {
 
-				// Create and send the transaction
-				msg = calls.NewCallMessage(fuzzer.deployer, &contractAddr, 0, big.NewInt(0),
-					fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
-				msg.FillFromTestChainProperties(testChain)
+						// Pack the function call data
+						callData, err := contractABI.Pack(initFunction)
+						if err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to encode init call to %s: %v", initFunction, err))
+						}
 
-				// Create and commit a block with the transaction
-				block, err = testChain.PendingBlockCreate()
-				if err != nil {
-					return nil, fmt.Errorf("failed to create and commit a block with the transaction %s: %v", initFunction, err)
-				}
+						// Create and send the transaction
+						msg = calls.NewCallMessage(fuzzer.deployer, &contractAddr, 0, big.NewInt(0),
+							fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
+						msg.FillFromTestChainProperties(testChain)
 
-				if err = testChain.PendingBlockAddTx(msg.ToCoreMessage()); err != nil {
-					return nil, fmt.Errorf("failed in PendingBlockAddTx %s: %v", initFunction, err)
-				}
+						// Create and commit a block with the transaction
+						block, err = testChain.PendingBlockCreate()
+						if err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to create and commit a block with the transaction %s: %v", initFunction, err))
+						}
 
-				if err = testChain.PendingBlockCommit(); err != nil {
-					return nil, fmt.Errorf("failed in PendingBlockCommit %s: %v", initFunction, err)
-				}
+						if err = testChain.PendingBlockAddTx(msg.ToCoreMessage()); err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockAddTx %s: %v", initFunction, err))
+						}
 
-				// Check if the call succeeded
-				if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
-					// Create a call sequence element for the trace
-					cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
-					cse.ChainReference = &calls.CallSequenceElementChainReference{
-						Block:            block,
-						TransactionIndex: len(block.Messages) - 1,
+						if err = testChain.PendingBlockCommit(); err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockCommit %s: %v", initFunction, err))
+						}
+
+						// Check if the call succeeded
+						if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+							// Create a call sequence element for the trace
+							cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
+							cse.ChainReference = &calls.CallSequenceElementChainReference{
+								Block:            block,
+								TransactionIndex: len(block.Messages) - 1,
+							}
+
+							fuzzer.logger.Info(fmt.Errorf("init function %s on %s failed: %v",
+								initFunction, contractName,
+								block.MessageResults[0].ExecutionResult.Err))
+						}
+						fuzzer.logger.Info(fmt.Sprintf("Successfully called %s on %s", initFunction, contractName))
 					}
-
-					// Get execution trace
-					if err = testChain.RevertToBlockIndex(uint64(len(testChain.CommittedBlocks()) - 1)); err == nil {
-						calls.ExecuteCallSequenceWithExecutionTracer(testChain, fuzzer.contractDefinitions,
-							[]*calls.CallSequenceElement{cse},
-							config.VeryVeryVerbose)
-					}
-
-					return cse.ExecutionTrace, fmt.Errorf("init function %s on %s failed: %v",
-						initFunction, contractName,
-						block.MessageResults[0].ExecutionResult.Err)
 				}
 
-				fuzzer.logger.Debug(fmt.Sprintf("Successfully called %s on %s", initFunction, contractName))
 				// Flag that we found a matching compiled contract definition, deployed it and called available init functions if any,
-				//  then exit out of this inner loop to process the next contract to deploy in the outer loop.
+				// then exit out of this inner loop to process the next contract to deploy in the outer loop.
 				found = true
 				break
 			}

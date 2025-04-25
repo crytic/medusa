@@ -79,6 +79,9 @@ type FuzzingConfig struct {
 	// TargetContracts
 	TargetContractsBalances []*ContractBalance `json:"targetContractsBalances"`
 
+	// TargetContractsInitFunctions is the list of functions to users to specify an "init function" (with setUp() as the default)
+	TargetContractsInitFunctions []string `json:"targetContractsInitFunctions"`
+
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
 	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
