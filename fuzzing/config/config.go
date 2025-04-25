@@ -86,6 +86,10 @@ type FuzzingConfig struct {
 	// configuration
 	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
 
+	// InitializationArgs holds the arguments for TargetContractsInitFunctions deployments. It is available via the project
+	// configuration
+	InitializationArgs map[string]map[string]any `json:"initializationArgs"`
+
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
 

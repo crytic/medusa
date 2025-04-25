@@ -611,19 +611,42 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 					// Check if the initialization function exists
 					contractABI := contract.CompiledContract().Abi
-
-					if _, exists := contractABI.Methods[initFunction]; !exists {
+					if method, exists := contractABI.Methods[initFunction]; !exists {
 						fuzzer.logger.Info(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
 					} else {
+						// Initialization function exists, proceed with calling it
 
-						// Pack the function call data
-						callData, err := contractABI.Pack(initFunction)
+						// Check if the init function accepts parameters and process them if needed
+						var args []any
+						if len(method.Inputs) > 0 {
+							// Look for initialization arguments in the config
+							jsonArgs, ok := fuzzer.config.Fuzzing.InitializationArgs[contractName]
+							if !ok {
+								fuzzer.logger.Error(fmt.Errorf("initialization arguments for contract %s not provided", contractName))
+								continue
+							}
+
+							// Decode the arguments
+							decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(method.Inputs,
+								jsonArgs, deployedContractAddr)
+							if err != nil {
+								fuzzer.logger.Error(fmt.Errorf("decoding failed for initialization arguments for contract %s", contractName))
+								continue
+
+							}
+							args = decoded
+						}
+
+						// Pack the function call data with arguments
+						callData, err := contractABI.Pack(initFunction, args...)
 						if err != nil {
 							fuzzer.logger.Error(fmt.Errorf("failed to encode init call to %s: %v", initFunction, err))
+							continue
 						}
 
 						// Create and send the transaction
-						msg = calls.NewCallMessage(fuzzer.deployer, &contractAddr, 0, big.NewInt(0),
+						destAddr := contractAddr
+						msg := calls.NewCallMessage(fuzzer.deployer, &destAddr, 0, big.NewInt(0),
 							fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
 						msg.FillFromTestChainProperties(testChain)
 
@@ -631,14 +654,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						block, err = testChain.PendingBlockCreate()
 						if err != nil {
 							fuzzer.logger.Error(fmt.Errorf("failed to create and commit a block with the transaction %s: %v", initFunction, err))
+							continue
 						}
 
 						if err = testChain.PendingBlockAddTx(msg.ToCoreMessage()); err != nil {
 							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockAddTx %s: %v", initFunction, err))
+							continue
 						}
 
 						if err = testChain.PendingBlockCommit(); err != nil {
 							fuzzer.logger.Error(fmt.Errorf("failed in PendingBlockCommit %s: %v", initFunction, err))
+							continue
 						}
 
 						// Check if the call succeeded

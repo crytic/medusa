@@ -50,6 +50,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TargetContractsInitFunctions: []string{},
 			PredeployedContracts:         map[string]string{},
 			ConstructorArgs:              map[string]map[string]any{},
+			InitializationArgs:           map[string]map[string]any{},
 			CorpusDirectory:              "",
 			CoverageEnabled:              true,
 			CoverageFormats:              []string{"html", "lcov"},
