@@ -103,12 +103,31 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
+### `targetContractsInitFunctions`
+- **Type**: [String] (e.g. `["setUp", "initialize", ""]`)
+- **Description**: Specifies post-deployment initialization functions to call for each contract in `targetContracts`. This array has a one-to-one mapping with `targetContracts`, where each element corresponds to the initialization function for the contract at the same index. Empty strings indicate no initialization for that contract.
+- **Default**: `[]`
+
+
 ### `constructorArgs`
 
 - **Type**: `{"contractName": {"variableName": _value}}`
 - **Description**: If a contract in the `targetContracts` has a `constructor` that takes in variables, these can be specified here.
   An example can be found [here](#using-constructorargs).
 - **Default**: `{}`
+
+### `initializationArgs`
+
+- **Type**: `{"contractName": {"parameterName": _value}}`
+- **Description**: Specifies arguments to pass to initialization functions defined in `targetContractsInitFunctions`. The keys in this map must match the contract names exactly, and the parameter names must match the parameter names in the function signature. 
+  For example, if contract `MyContract` has an initialization function `initialize(uint256 _value, address _owner)`, then you would configure:
+  ```json
+  {
+    "MyContract": {
+      "_value": "100",
+      "_owner": "0x1234..."
+    }
+  }
 
 ### `deployerAddress`
 

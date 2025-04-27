@@ -9,7 +9,7 @@
     "coverageEnabled": true,
     "targetContracts": ["TestDepositContract"],
     "targetContractsBalances": ["21267647932558653966460912964485513215"],
-    "TargetContractsInitFunctions": ["setUp"],
+    "TargetContractsInitFunctions": [],
     "constructorArgs": {},
     "initializationArgs": {},
     "deployerAddress": "0x30000",
