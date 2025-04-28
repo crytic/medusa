@@ -104,10 +104,10 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Default**: `[]`
 
 ### `targetContractsInitFunctions`
+
 - **Type**: [String] (e.g. `["setUp", "initialize", ""]`)
 - **Description**: Specifies post-deployment initialization functions to call for each contract in `targetContracts`. This array has a one-to-one mapping with `targetContracts`, where each element corresponds to the initialization function for the contract at the same index. Empty strings indicate no initialization for that contract.
 - **Default**: `[]`
-
 
 ### `constructorArgs`
 
@@ -119,7 +119,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 ### `initializationArgs`
 
 - **Type**: `{"contractName": {"parameterName": _value}}`
-- **Description**: Specifies arguments to pass to initialization functions defined in `targetContractsInitFunctions`. The keys in this map must match the contract names exactly, and the parameter names must match the parameter names in the function signature. 
+- **Description**: Specifies arguments to pass to initialization functions defined in `targetContractsInitFunctions`. The keys in this map must match the contract names exactly, and the parameter names must match the parameter names in the function signature.
   For example, if contract `MyContract` has an initialization function `initialize(uint256 _value, address _owner)`, then you would configure:
   ```json
   {
@@ -128,6 +128,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
       "_owner": "0x1234..."
     }
   }
+  ```
 
 ### `deployerAddress`
 
