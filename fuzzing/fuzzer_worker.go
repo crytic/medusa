@@ -1,6 +1,8 @@
 package fuzzing
 
 import (
+	"time"
+
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -257,6 +259,10 @@ func (fw *FuzzerWorker) updateMethods() {
 			}
 		}
 	}
+}
+
+func (fw *FuzzerWorker) pruneSequences() (int, error) {
+	return fw.fuzzer.corpus.PruneSequences(fw.chain)
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
@@ -560,6 +566,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 	return optimizedSequence, err
 }
 
+var lastShrink time.Time // TODO
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
 // and asserting properties are upheld. This runs until Fuzzer.ctx or Fuzzer.emergencyCtx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
@@ -630,6 +637,16 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// Immediately exit if the emergency context is triggered
 		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 			return true, nil
+		}
+
+		if fw.workerIndex == 0 && time.Since(lastShrink) > time.Second*60 {
+			start := time.Now()
+			n, err := fw.pruneSequences()
+			if err != nil {
+				return true, err
+			} // TODO whats true/false
+			fmt.Printf("PRUNED %d VALUES IN %v\n", n, time.Since(start))
+			lastShrink = time.Now()
 		}
 
 		// If our main context signaled to close the operation, we will emit an event notifying any subscribers that

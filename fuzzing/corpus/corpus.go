@@ -1,6 +1,8 @@
 package corpus
 
 import (
+	"math/rand"
+
 	"bytes"
 	"fmt"
 	"math/big"
@@ -542,4 +544,61 @@ func (c *Corpus) Flush() error {
 	}
 
 	return nil
+}
+
+func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+	seqs := c.mutationTargetSequenceChooser.Choices // TODO do we need to lock this too?
+	scramble := rand.Perm(len(seqs))
+	toRemove := make([]bool, len(seqs))
+	nRemoved := 0
+	tmpMap := coverage.NewCoverageMaps()
+	for i := 0; i < len(seqs); i++ {
+		j := scramble[i]
+		seq, err := seqs[j].Data.Clone()
+		if err != nil {
+			return 0, err
+		}
+
+		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+			if currentIndex >= len(seq) {
+				return nil, nil
+			}
+			return seq[currentIndex], nil // TODO copy it?
+		}
+		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) { return false, nil }
+		seq, err = calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc) // TODO now we dont need to assign sequence
+		if err != nil {
+			return 0, err
+		}
+
+		// TODO copypasted:
+		// Obtain our coverage maps for our last call.
+		lastCall := seq[len(seq)-1]
+		lastCallChainReference := lastCall.ChainReference
+		lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
+		lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
+
+		// If we have none, because a coverage tracer wasn't attached when processing this call, we can stop.
+		if lastMessageCoverageMaps == nil {
+			return 0, nil // TODO
+		}
+
+		// Memory optimization: Remove them from the results now that we obtained them, to free memory later. // TODO
+		coverage.RemoveCoverageTracerResults(lastMessageResult)
+
+		// Merge the coverage maps into our total coverage maps and check if we had an update.
+		coverageUpdated, err := tmpMap.Update(lastMessageCoverageMaps)
+		if err != nil {
+			return 0, err
+		}
+
+		if !coverageUpdated {
+			nRemoved++
+			toRemove[j] = true
+		}
+	}
+	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)
+	return nRemoved, nil
 }
