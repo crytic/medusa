@@ -567,6 +567,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 }
 
 var lastShrink time.Time // TODO
+var totalShrink int
+
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
 // and asserting properties are upheld. This runs until Fuzzer.ctx or Fuzzer.emergencyCtx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
@@ -645,7 +647,8 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			if err != nil {
 				return true, err
 			} // TODO whats true/false
-			fmt.Printf("PRUNED %d VALUES IN %v\n", n, time.Since(start))
+			totalShrink += n
+			fmt.Printf("PRUNED %d VALUES IN %v. TOTAL %d\n", n, time.Since(start), totalShrink)
 			lastShrink = time.Now()
 		}
 
