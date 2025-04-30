@@ -449,6 +449,9 @@ func (c *Corpus) AddTestResultCallSequence(callSequence calls.CallSequence, muta
 	return c.addCallSequence(c.testResultSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
 }
 
+// checkSequenceCoverageAndUpdate checks if the most recent call executed in the provided call sequence achieved
+// coverage the not already included in coverageMaps. If it did, coverageMaps is updated accordingly.
+// Returns a boolean indicating whether any change happened, and an error if one occurs.
 func checkSequenceCoverageAndUpdate(callSequence calls.CallSequence, coverageMaps *coverage.CoverageMaps) (bool, error) {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
@@ -550,17 +553,30 @@ func (c *Corpus) Flush() error {
 	return nil
 }
 
+// PruneSequences removes unnecessary entries from the corpus. It does this by:
+//   - Initialize a blank coverage map tmpMap
+//   - Grab all sequences in the corpus
+//   - Randomize the order
+//   - For each transaction, see whether it adds anything new to tmpMap.
+//     If it does, add the new coverage and continue.
+//     If it doesn't, remove it from the corpus.
+//
+// By doing this, we hope to find a smaller set of txn sequences that still preserves our current coverage.
+// PruneSequences takes a chain.TestChain parameter used to run transactions.
+// It returns an int indicating the number of sequences removed from the corpus, and an error if any occurred.
 func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
+
+	tmpMap := coverage.NewCoverageMaps()
 	seqs := c.mutationTargetSequenceChooser.Choices
-	scramble := rand.Perm(len(seqs))
+
 	toRemove := make([]bool, len(seqs))
 	nRemoved := 0
-	tmpMap := coverage.NewCoverageMaps()
-	for i := 0; i < len(seqs); i++ {
-		j := scramble[i]
-		seq, err := seqs[j].Data.Clone()
+
+	// Iterate seqs in a random order
+	for _, i := range rand.Perm(len(seqs)) {
+		seq, err := seqs[i].Data.Clone()
 		if err != nil {
 			return 0, err
 		}
@@ -571,7 +587,10 @@ func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 			}
 			return seq[currentIndex], nil
 		}
+
+		// Never quit early
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) { return false, nil }
+
 		seq, err = calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc)
 		if err != nil {
 			return 0, err
@@ -583,10 +602,12 @@ func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 		}
 
 		if !coverageUpdated {
-			toRemove[j] = true
+			// No new coverage was added. We can remove this from the corpus.
+			toRemove[i] = true
 			nRemoved++
 		}
 	}
+
 	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)
 	return nRemoved, nil
 }

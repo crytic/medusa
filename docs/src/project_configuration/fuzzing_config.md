@@ -55,7 +55,11 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 
 ### `pruneFrequency`
 
-TODO
+- **Type**: Integer
+- **Description**: Determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+  Setting `pruneFrequency` to 0 disables pruning.
+  `pruneFrequency` only matters if `coverageEnabled` is set to true; otherwise, no pruning will occur.
+- **Default**: `5`
 
 ### `corpusDirectory`
 

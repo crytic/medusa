@@ -55,7 +55,9 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
-	// TODO, also validation
+	// PruneFrequncy determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+	// Setting PruneFrequency to 0 disables pruning.
+	// PruneFrequency only matters if CoverageEnabled is set to true; otherwise, no pruning will occur.
 	PruneFrequency uint64 `json:"pruneFrequency"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
