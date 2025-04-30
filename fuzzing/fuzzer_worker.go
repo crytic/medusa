@@ -641,7 +641,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			return true, nil
 		}
 
-		if fw.workerIndex == 0 && time.Since(lastShrink) > time.Second*60 {
+		if fw.workerIndex == 0 && time.Since(lastShrink) > time.Second*60*3 {
 			start := time.Now()
 			n, err := fw.pruneSequences()
 			if err != nil {
