@@ -53,6 +53,10 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   Enabling coverage allows for improved code exploration.
 - **Default**: `true`
 
+### `pruneFrequency`
+
+TODO
+
 ### `corpusDirectory`
 
 - **Type**: String

@@ -55,6 +55,9 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
+	// TODO, also validation
+	PruneFrequency uint64 `json:"pruneFrequency"`
+
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
 	// the in-memory corpus will be used, but not flush to disk.
 	CorpusDirectory string `json:"corpusDirectory"`

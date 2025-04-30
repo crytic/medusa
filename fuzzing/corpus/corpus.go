@@ -449,14 +449,10 @@ func (c *Corpus) AddTestResultCallSequence(callSequence calls.CallSequence, muta
 	return c.addCallSequence(c.testResultSequenceFiles, callSequence, false, mutationChooserWeight, flushImmediately)
 }
 
-// CheckSequenceCoverageAndUpdate checks if the most recent call executed in the provided call sequence achieved
-// coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
-// and the Corpus coverage maps are updated accordingly.
-// Returns an error if one occurs.
-func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) error {
+func checkSequenceCoverageAndUpdate(callSequence calls.CallSequence, coverageMaps *coverage.CoverageMaps) (bool, error) {
 	// If we have coverage-guided fuzzing disabled or no calls in our sequence, there is nothing to do.
 	if len(callSequence) == 0 {
-		return nil
+		return false, nil
 	}
 
 	// Obtain our coverage maps for our last call.
@@ -467,14 +463,22 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 
 	// If we have none, because a coverage tracer wasn't attached when processing this call, we can stop.
 	if lastMessageCoverageMaps == nil {
-		return nil
+		return false, nil
 	}
 
 	// Memory optimization: Remove them from the results now that we obtained them, to free memory later.
 	coverage.RemoveCoverageTracerResults(lastMessageResult)
 
 	// Merge the coverage maps into our total coverage maps and check if we had an update.
-	coverageUpdated, err := c.coverageMaps.Update(lastMessageCoverageMaps)
+	return coverageMaps.Update(lastMessageCoverageMaps)
+}
+
+// CheckSequenceCoverageAndUpdate checks if the most recent call executed in the provided call sequence achieved
+// coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
+// and the Corpus coverage maps are updated accordingly.
+// Returns an error if one occurs.
+func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) error {
+	coverageUpdated, err := checkSequenceCoverageAndUpdate(callSequence, c.coverageMaps)
 	if err != nil {
 		return err
 	}
@@ -549,7 +553,7 @@ func (c *Corpus) Flush() error {
 func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
-	seqs := c.mutationTargetSequenceChooser.Choices // TODO do we need to lock this too?
+	seqs := c.mutationTargetSequenceChooser.Choices
 	scramble := rand.Perm(len(seqs))
 	toRemove := make([]bool, len(seqs))
 	nRemoved := 0
@@ -565,38 +569,22 @@ func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 			if currentIndex >= len(seq) {
 				return nil, nil
 			}
-			return seq[currentIndex], nil // TODO copy it?
+			return seq[currentIndex], nil
 		}
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) { return false, nil }
-		seq, err = calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc) // TODO now we dont need to assign sequence
+		seq, err = calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc)
 		if err != nil {
 			return 0, err
 		}
 
-		// TODO copypasted:
-		// Obtain our coverage maps for our last call.
-		lastCall := seq[len(seq)-1]
-		lastCallChainReference := lastCall.ChainReference
-		lastMessageResult := lastCallChainReference.Block.MessageResults[lastCallChainReference.TransactionIndex]
-		lastMessageCoverageMaps := coverage.GetCoverageTracerResults(lastMessageResult)
-
-		// If we have none, because a coverage tracer wasn't attached when processing this call, we can stop.
-		if lastMessageCoverageMaps == nil {
-			return 0, nil // TODO
-		}
-
-		// Memory optimization: Remove them from the results now that we obtained them, to free memory later. // TODO
-		coverage.RemoveCoverageTracerResults(lastMessageResult)
-
-		// Merge the coverage maps into our total coverage maps and check if we had an update.
-		coverageUpdated, err := tmpMap.Update(lastMessageCoverageMaps)
+		coverageUpdated, err := checkSequenceCoverageAndUpdate(seq, tmpMap)
 		if err != nil {
 			return 0, err
 		}
 
 		if !coverageUpdated {
-			nRemoved++
 			toRemove[j] = true
+			nRemoved++
 		}
 	}
 	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)

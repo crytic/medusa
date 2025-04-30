@@ -68,6 +68,10 @@ type FuzzerWorker struct {
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
+
+	// TODO
+	lastPrunedCorpus  time.Time
+	totalCorpusPruned int
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -259,10 +263,6 @@ func (fw *FuzzerWorker) updateMethods() {
 			}
 		}
 	}
-}
-
-func (fw *FuzzerWorker) pruneSequences() (int, error) {
-	return fw.fuzzer.corpus.PruneSequences(fw.chain)
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
@@ -566,9 +566,6 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 	return optimizedSequence, err
 }
 
-var lastShrink time.Time // TODO
-var totalShrink int
-
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
 // and asserting properties are upheld. This runs until Fuzzer.ctx or Fuzzer.emergencyCtx cancels the operation.
 // Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
@@ -641,15 +638,20 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			return true, nil
 		}
 
-		if fw.workerIndex == 0 && time.Since(lastShrink) > time.Second*60*3 {
-			start := time.Now()
-			n, err := fw.pruneSequences()
-			if err != nil {
-				return true, err
-			} // TODO whats true/false
-			totalShrink += n
-			fmt.Printf("PRUNED %d VALUES IN %v. TOTAL %d\n", n, time.Since(start), totalShrink)
-			lastShrink = time.Now()
+		if fw.workerIndex == 0 && fw.fuzzer.config.Fuzzing.CoverageEnabled && fw.fuzzer.config.Fuzzing.PruneFrequency > 0 && time.Since(fw.lastPrunedCorpus) > time.Minute*time.Duration(fw.fuzzer.config.Fuzzing.PruneFrequency) {
+			if fw.lastPrunedCorpus.IsZero() {
+				fw.lastPrunedCorpus = time.Now()
+			} else {
+				start := time.Now()
+				n, err := fw.fuzzer.corpus.PruneSequences(fw.chain)
+				if err != nil {
+					return false, err
+				}
+				fw.totalCorpusPruned += n
+				fw.fuzzer.logger.Info("Pruned %d values in %v. Total pruned this run: %d\n", n, time.Since(start), fw.totalCorpusPruned)
+				fw.lastPrunedCorpus = time.Now()
+				continue
+			}
 		}
 
 		// If our main context signaled to close the operation, we will emit an event notifying any subscribers that
