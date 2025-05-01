@@ -595,6 +595,12 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		return nil
 	})
 
+	initialContractsSet := make(map[common.Address]struct{}, len(fw.deployedContracts))
+	for addr := range fw.deployedContracts {
+		initialContractsSet[addr] = struct{}{}
+	}
+	fw.coverageTracer.SetInitialContractsSet(&initialContractsSet)
+
 	// If we encountered an error during cloning, return it.
 	if err != nil {
 		return false, err

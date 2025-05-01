@@ -345,6 +345,12 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return 0, 0, fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 
+	initialContractsSet := make(map[common.Address]struct{}, len(deployedContracts))
+	for addr := range deployedContracts {
+		initialContractsSet[addr] = struct{}{}
+	}
+	coverageTracer.SetInitialContractsSet(&initialContractsSet)
+
 	// Set our coverage maps to those collected when replaying all blocks when cloning.
 	c.coverageMaps = coverage.NewCoverageMaps()
 	for _, block := range testChain.CommittedBlocks() {

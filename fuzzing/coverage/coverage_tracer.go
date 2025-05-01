@@ -60,6 +60,8 @@ type CoverageTracer struct {
 	// since init vs runtime produces different results from getContractCoverageMapHash.
 	// The Hash key is a contract's codehash, which uniquely identifies it.
 	codeHashCache [2]map[common.Hash]common.Hash
+
+	initialContractsSet *map[common.Address]struct{}
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -113,6 +115,22 @@ func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
 	return t.nativeTracer
 }
 
+func (t *CoverageTracer) SetInitialContractsSet(initialContractsSet *map[common.Address]struct{}) {
+	t.initialContractsSet = initialContractsSet
+}
+
+var BLANK_ADDRESS = common.BytesToAddress([]byte{})
+
+func (t *CoverageTracer) addressForCoverage(address common.Address) common.Address {
+	if t.initialContractsSet == nil {
+		return address
+	} else if _, ok := (*t.initialContractsSet)[address]; ok {
+		return address
+	} else {
+		return BLANK_ADDRESS
+	}
+}
+
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our call frame states
@@ -154,7 +172,7 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 			markerXor = RETURN_MARKER_XOR
 		}
 		marker := bits.RotateLeft64(currentCallFrameState.lastPC, 32) ^ markerXor
-		_, coverageUpdateErr := currentCoverageMap.UpdateAt(currentCallFrameState.address, *currentCallFrameState.lookupHash, marker)
+		_, coverageUpdateErr := currentCoverageMap.UpdateAt(t.addressForCoverage(currentCallFrameState.address), *currentCallFrameState.lookupHash, marker)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
@@ -238,7 +256,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 
 	// Record coverage for this location in our map.
-	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker)
+	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(t.addressForCoverage(callFrameState.address), *callFrameState.lookupHash, marker)
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 	}
