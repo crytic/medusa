@@ -61,6 +61,9 @@ type CoverageTracer struct {
 	// The Hash key is a contract's codehash, which uniquely identifies it.
 	codeHashCache [2]map[common.Hash]common.Hash
 
+	// initialContractsSet records the set of contract addresses present in the base chain,
+	// before any contracts are added by test sequences. Only these addresses will be recorded
+	// in coverage; others will be replaced with the zero address to prevent infinitely growing corpus.
 	initialContractsSet *map[common.Address]struct{}
 }
 
@@ -115,12 +118,19 @@ func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
 	return t.nativeTracer
 }
 
+// SetInitialContractsSet sets the initialContractsSet value (see above).
 func (t *CoverageTracer) SetInitialContractsSet(initialContractsSet *map[common.Address]struct{}) {
 	t.initialContractsSet = initialContractsSet
 }
 
+// BLANK_ADDRESS is an all-zero address; it's a global var so that we don't have to recalculate (and reallocate) it every time.
 var BLANK_ADDRESS = common.BytesToAddress([]byte{})
 
+// addressForCoverage modifies an address based on the initialContractsSet value.
+// This is applied to all addresses before they are recorded in the coverage map.
+// If t.initialContractsSet is nil, we preserve all addresses.
+// If t.initialContractsSet is defined, we only preserve addresses present in this set.
+// Addresses not present in this set are zeroed to prevent issues with infinitely growing corpus.
 func (t *CoverageTracer) addressForCoverage(address common.Address) common.Address {
 	if t.initialContractsSet == nil {
 		return address

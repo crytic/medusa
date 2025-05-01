@@ -345,6 +345,8 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return 0, 0, fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 
+	// Freeze a set of deployedContracts's keys so that we have a set of addresses present in baseTestChain.
+	// Feed this set to the coverage tracer.
 	initialContractsSet := make(map[common.Address]struct{}, len(deployedContracts))
 	for addr := range deployedContracts {
 		initialContractsSet[addr] = struct{}{}
