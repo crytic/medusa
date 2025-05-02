@@ -580,6 +580,8 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 		seqs[i] = seqCloned
 	}
 	c.callSequencesLock.Unlock()
+	// We don't need to lock during the next part as long as the ordering of Choices doesn't change.
+	// New items could get added in the meantime, but older items won't be touched.
 
 	toRemove := map[int]bool{}
 

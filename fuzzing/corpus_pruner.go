@@ -9,13 +9,23 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
+// CorpusPruner is a job that runs every `PruneFrequency` minutes.
+// It removes unnecessary items from the corpus by calling `Corpus.PruneSequences`.
 type CorpusPruner struct {
-	enabled           bool
-	fuzzer            *Fuzzer
+	// enabled determines if the pruner is enabled
+	enabled bool
+
+	// fuzzer describes the Fuzzer instance which this pruner belongs to
+	fuzzer *Fuzzer
+
+	// totalCorpusPruned counts the total number of sequences pruned so far
 	totalCorpusPruned int
-	chain             *chain.TestChain
+
+	// chain is the test chain used during pruning
+	chain *chain.TestChain
 }
 
+// NewCorpusPruner creates a new CorpusPruner.
 func NewCorpusPruner(enabled bool, fuzzer *Fuzzer) *CorpusPruner {
 	if !enabled {
 		return &CorpusPruner{}
@@ -26,9 +36,13 @@ func NewCorpusPruner(enabled bool, fuzzer *Fuzzer) *CorpusPruner {
 	}
 }
 
+// pruneCorpus is a wrapper around Corpus.PruneSequences that adds timing, logging, and updating totalCorpusPruned.
+// It is used by mainLoop.
 func (cp *CorpusPruner) pruneCorpus() error {
 	start := time.Now() // We'll track how long pruning takes
 	n, err := cp.fuzzer.corpus.PruneSequences(cp.fuzzer.ctx, cp.chain)
+	// PruneSequences takes a while, so ctx could've finished in the meantime.
+	// If it did, we skip the log message.
 	if err != nil || utils.CheckContextDone(cp.fuzzer.ctx) {
 		return err
 	}
@@ -37,6 +51,8 @@ func (cp *CorpusPruner) pruneCorpus() error {
 	return nil
 }
 
+// mainLoop calls pruneCorpus every `PruneFrequency` minutes.
+// It runs infinitely until fuzzer.ctx.Done is triggered.
 func (cp *CorpusPruner) mainLoop() {
 	defer cp.chain.Close()
 	ticker := time.NewTicker(time.Duration(cp.fuzzer.Config().Fuzzing.PruneFrequency) * time.Minute)
@@ -49,36 +65,33 @@ func (cp *CorpusPruner) mainLoop() {
 			err := cp.pruneCorpus()
 			if err != nil {
 				cp.fuzzer.logger.Error("Corpus pruner encountered an error", err)
-				cp.fuzzer.Terminate()
+				cp.fuzzer.Terminate() // We kill the whole thing if the pruner errors
 				return
 			}
 		}
 	}
 }
 
-// run takes a base Chain in a setup state ready for testing, clones it, and TODO
+// Start takes a base Chain in a setup state ready for testing, clones it, and prunes the corpus every `PruneFrequency` minutes.
 // This runs until Fuzzer.ctx cancels the operation.
-// Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
-// error if one occurred.
+// Returns an error if one occurred.
 func (cp *CorpusPruner) Start(baseTestChain *chain.TestChain) error {
 	if !cp.enabled {
 		return nil
 	}
 
 	var err error
-	// Clone our chain, attaching our necessary components for fuzzing post-genesis, prior to all blocks being copied.
-	// This means any tracers added or events subscribed to within this inner function are done so prior to chain
-	// setup (initial contract deployments), so data regarding that can be tracked as well.
+
+	// Clone our chain, attaching a tracer.
 	cp.chain, err = baseTestChain.Clone(func(initializedChain *chain.TestChain) error {
 		initializedChain.AddTracer(coverage.NewCoverageTracer().NativeTracer(), true, false)
 		return nil
 	})
-
-	// If we encountered an error during cloning, return it.
 	if err != nil {
 		return err
 	}
 
+	// Start up the main loop in a goroutine.
 	go cp.mainLoop()
 
 	return nil

@@ -195,6 +195,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		logger: logger,
 	}
 
+	// Create the corpus pruner.
+	// We need to do this after creating the Fuzzer, since it needs the fuzzer as an argument.
+	// It won't grab any fields from the Fuzzer until we call Start on it later.
 	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
 	fuzzer.corpusPruner = NewCorpusPruner(pruneEnabled, fuzzer)
 
@@ -858,6 +861,7 @@ func (f *Fuzzer) Start() error {
 		)
 	}
 
+	// Start the corpus pruner.
 	err = f.corpusPruner.Start(baseTestChain)
 	if err != nil {
 		f.logger.Error("Error starting corpus pruner", err)
