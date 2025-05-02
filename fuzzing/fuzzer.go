@@ -85,6 +85,8 @@ type Fuzzer struct {
 	// revertReporter tracks per-function reversion metrics, if enabled
 	revertReporter *reverts.RevertReporter
 
+	corpusPruner *CorpusPruner
+
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
 	randomProvider *rand.Rand
@@ -192,6 +194,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		},
 		logger: logger,
 	}
+
+	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
+	fuzzer.corpusPruner = NewCorpusPruner(pruneEnabled, fuzzer)
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
 	// address arguments in fuzzing campaigns.
@@ -851,6 +856,12 @@ func (f *Fuzzer) Start() error {
 			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
 			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
 		)
+	}
+
+	err = f.corpusPruner.Start(baseTestChain)
+	if err != nil {
+		f.logger.Error("Error starting corpus pruner", err)
+		return err
 	}
 
 	// Log the start of our fuzzing campaign.

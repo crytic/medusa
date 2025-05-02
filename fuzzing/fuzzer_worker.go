@@ -1,8 +1,6 @@
 package fuzzing
 
 import (
-	"time"
-
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -68,12 +66,6 @@ type FuzzerWorker struct {
 
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
-
-	// lastPrunedCorpus tracks the last time the corpus was pruned.
-	lastPrunedCorpus time.Time
-
-	// totalCorpusPruned tracks the total number of corpus items pruned.
-	totalCorpusPruned int
 }
 
 // newFuzzerWorker creates a new FuzzerWorker, assigning it the provided worker index/id and associating it to the
@@ -638,24 +630,6 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		// Immediately exit if the emergency context is triggered
 		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 			return true, nil
-		}
-
-		// Prune the corpus, if it's enabled and we haven't pruned for the past `PruneFrequency` minutes
-		if fw.workerIndex == 0 && fw.fuzzer.config.Fuzzing.CoverageEnabled && fw.fuzzer.config.Fuzzing.PruneFrequency > 0 && time.Since(fw.lastPrunedCorpus) > time.Minute*time.Duration(fw.fuzzer.config.Fuzzing.PruneFrequency) {
-			if fw.lastPrunedCorpus.IsZero() {
-				// If we just started, we don't need to prune yet
-				fw.lastPrunedCorpus = time.Now()
-			} else {
-				start := time.Now() // We'll track how long pruning takes
-				n, err := fw.fuzzer.corpus.PruneSequences(fw.chain)
-				if err != nil {
-					return false, err
-				}
-				fw.totalCorpusPruned += n
-				fw.fuzzer.logger.Info("Pruned %d values in %v. Total pruned this run: %d\n", n, time.Since(start), fw.totalCorpusPruned)
-				fw.lastPrunedCorpus = time.Now()
-				continue // Loop around to do the utils.CheckContextDone check again
-			}
 		}
 
 		// If our main context signaled to close the operation, we will emit an event notifying any subscribers that

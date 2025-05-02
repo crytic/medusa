@@ -4,6 +4,7 @@ import (
 	"math/rand"
 
 	"bytes"
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -564,22 +565,31 @@ func (c *Corpus) Flush() error {
 // By doing this, we hope to find a smaller set of txn sequences that still preserves our current coverage.
 // PruneSequences takes a chain.TestChain parameter used to run transactions.
 // It returns an int indicating the number of sequences removed from the corpus, and an error if any occurred.
-func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
-	c.callSequencesLock.Lock()
-	defer c.callSequencesLock.Unlock()
-
+func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (int, error) {
+	chainOriginalIndex := uint64(len(chain.CommittedBlocks()))
 	tmpMap := coverage.NewCoverageMaps()
-	seqs := c.mutationTargetSequenceChooser.Choices
 
-	toRemove := make([]bool, len(seqs))
-	nRemoved := 0
-
-	// Iterate seqs in a random order
-	for _, i := range rand.Perm(len(seqs)) {
-		seq, err := seqs[i].Data.Clone()
+	c.callSequencesLock.Lock()
+	seqs := make([]calls.CallSequence, len(c.mutationTargetSequenceChooser.Choices))
+	for i, seq := range c.mutationTargetSequenceChooser.Choices {
+		seqCloned, err := seq.Data.Clone()
 		if err != nil {
+			c.callSequencesLock.Unlock()
 			return 0, err
 		}
+		seqs[i] = seqCloned
+	}
+	c.callSequencesLock.Unlock()
+
+	toRemove := map[int]bool{}
+
+	// Iterate seqs in a random order
+	for _, i := range rand.Perm(len(seqs)) { // TODO should we use a "random provider"?
+		if utils.CheckContextDone(ctx) {
+			return 0, nil
+		}
+
+		seq := seqs[i]
 
 		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
 			if currentIndex >= len(seq) {
@@ -591,7 +601,7 @@ func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 		// Never quit early
 		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) { return false, nil }
 
-		seq, err = calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc)
+		seq, err := calls.ExecuteCallSequenceIteratively(chain, fetchElementFunc, executionCheckFunc)
 		if err != nil {
 			return 0, err
 		}
@@ -604,10 +614,14 @@ func (c *Corpus) PruneSequences(chain *chain.TestChain) (int, error) {
 		if !coverageUpdated {
 			// No new coverage was added. We can remove this from the corpus.
 			toRemove[i] = true
-			nRemoved++
+		}
+
+		err = chain.RevertToBlockIndex(chainOriginalIndex)
+		if err != nil {
+			return 0, err
 		}
 	}
 
 	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)
-	return nRemoved, nil
+	return len(toRemove), nil
 }

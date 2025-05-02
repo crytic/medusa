@@ -82,7 +82,7 @@ func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T
 // RemoveChoices removes weighted choices from the WeightedRandomChooser.
 // Choices to remove are indicated by the `indices` parameter.
 // `indices` should be the same length as c.Choices; a true value represents that we want to remove this choice.
-func (c *WeightedRandomChooser[T]) RemoveChoices(indices []bool) {
+func (c *WeightedRandomChooser[T]) RemoveChoices(indices map[int]bool) {
 	c.randomProviderLock.Lock()
 	defer c.randomProviderLock.Unlock()
 
