@@ -3,8 +3,9 @@ package chain
 import (
 	"errors"
 	"fmt"
-	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"math/big"
+
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa/chain/state"
 	"golang.org/x/net/context"

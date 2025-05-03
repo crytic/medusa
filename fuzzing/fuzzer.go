@@ -483,14 +483,34 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
 	balances := make([]*config.ContractBalance, 0)
+	initFunctions := make([]string, 0)
 
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
 		contractsToDeploy = append(contractsToDeploy, contractName)
 		// Preserve index of target contract balances
 		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+		// Set default empty init function for predeployed contracts
+		initFunctions = append(initFunctions, "")
 	}
+
 	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
+
+	// Process target contracts init functions
+	targetContractsCount := len(fuzzer.config.Fuzzing.TargetContracts)
+	initConfigCount := len(fuzzer.config.Fuzzing.TargetContractsInitFunctions)
+
+	// Add initialization functions for target contracts
+	for i := 0; i < targetContractsCount; i++ {
+		initFunction := "" // No default initialization
+
+		// Use custom init function if available
+		if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
+			initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+		}
+
+		initFunctions = append(initFunctions, initFunction)
+	}
 
 	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
@@ -585,9 +605,114 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// Record our deployed contract so the next config-specified constructor args can reference this
 				// contract by name.
 				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
+				contractAddr := deployedContractAddr[contractName]
 
-				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
-				// inner loop to process the next contract to deploy in the outer loop.
+				// Get the initialization function name if exists
+				if i < len(initFunctions) && initFunctions[i] != "" {
+					initFunction := initFunctions[i]
+					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
+
+					// Check if the initialization function exists
+					contractABI := contract.CompiledContract().Abi
+					if method, exists := contractABI.Methods[initFunction]; !exists {
+						fuzzer.logger.Info(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
+					} else {
+						// Initialization function exists, proceed with calling it
+						fuzzer.logger.Info(fmt.Sprintf("Found init function %s with %d inputs", initFunction, len(method.Inputs)))
+
+						// Check if the init function accepts parameters and process them if needed
+						var args []any
+						if len(method.Inputs) > 0 {
+							// Verify InitializationArgs map exists
+							if fuzzer.config.Fuzzing.InitializationArgs == nil {
+								fuzzer.logger.Error(fmt.Errorf("initialization args map is nil but function requires args"))
+								continue
+							}
+
+							// Look for initialization arguments in the config
+							jsonArgs, ok := fuzzer.config.Fuzzing.InitializationArgs[contractName]
+							if !ok {
+								fuzzer.logger.Error(fmt.Errorf("initialization arguments for contract %s not provided", contractName))
+								continue
+							}
+
+							// Debug what args we found
+							fuzzer.logger.Info(fmt.Sprintf("Found args for %s: %+v", contractName, jsonArgs))
+
+							// Decode the arguments
+							decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(method.Inputs,
+								jsonArgs, deployedContractAddr)
+							if err != nil {
+								fuzzer.logger.Error(fmt.Errorf("decoding failed for initialization arguments for contract %s: %v",
+									contractName, err))
+								continue
+							}
+
+							args = decoded
+							fuzzer.logger.Info(fmt.Sprintf("Decoded %d args for %s function %s",
+								len(args), contractName, initFunction))
+						}
+
+						// Log before packing
+						fuzzer.logger.Info(fmt.Sprintf("About to call initialization function %s on contract %s with %d args",
+							initFunction, contractName, len(args)))
+
+						// Pack the function call data with arguments
+						callData, err := contractABI.Pack(initFunction, args...)
+						if err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to encode init call to %s: %v", initFunction, err))
+							continue
+						}
+
+						// Create and send the transaction
+						destAddr := contractAddr
+						msg := calls.NewCallMessage(fuzzer.deployer, &destAddr, 0, big.NewInt(0),
+							fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
+						msg.FillFromTestChainProperties(testChain)
+
+						// Debug log after creating the message
+						fuzzer.logger.Info(fmt.Sprintf("Created message for init function call to %s", initFunction))
+
+						// Create and commit a block with the transaction
+						block, err = testChain.PendingBlockCreate()
+						if err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to create pending block for init call: %v", err))
+							continue
+						}
+
+						if err = testChain.PendingBlockAddTx(msg.ToCoreMessage()); err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to add initialization transaction for function %s on contract %s to pending block: %v",
+								initFunction, contractName, err))
+							continue
+						}
+
+						if err = testChain.PendingBlockCommit(); err != nil {
+							fuzzer.logger.Error(fmt.Errorf("failed to commit block containing initialization call to function %s on contract %s: %v",
+								initFunction, contractName, err))
+							continue
+						}
+
+						// Check if the call succeeded
+						if block.MessageResults[0].Receipt.Status != types.ReceiptStatusSuccessful {
+							// Create a call sequence element for the trace
+							cse := calls.NewCallSequenceElement(nil, msg, 0, 0)
+							cse.ChainReference = &calls.CallSequenceElementChainReference{
+								Block:            block,
+								TransactionIndex: len(block.Messages) - 1,
+							}
+
+							fuzzer.logger.Error(fmt.Errorf("init function %s call failed on %s: %v",
+								initFunction, contractName,
+								block.MessageResults[0].ExecutionResult.Err))
+						} else {
+							fuzzer.logger.Info(fmt.Sprintf("Successfully called %s on %s with %d args",
+								initFunction, contractName, len(args)))
+						}
+					}
+				}
+
+				// Flag that we found a matching compiled contract definition, deployed it and called available init functions if any,
+				// then exit out of this inner loop to process the next contract to deploy in the outer loop.
 				found = true
 				break
 			}
@@ -598,6 +723,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
+
 	return nil, nil
 }
 
