@@ -121,7 +121,7 @@ contract TestContract {
 }
 ```
 
-`medusa` deploys your contract containing optimization tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your otpimization tests to identify whether the return value of those tests are greater than the currently stored values.
+`medusa` deploys your contract containing optimization tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your optimization tests to identify whether the return value of those tests are greater than the currently stored values.
 
 ### Testing in optimization-mode
 

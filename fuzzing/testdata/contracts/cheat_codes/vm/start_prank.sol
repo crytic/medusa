@@ -30,7 +30,7 @@ contract TestContract {
         assert(msg.sender == address(1)); // from main entry point
 
         // stopPrank does not act like a stack allowing you to do multiple start/stop pranks
-        // encapsulated within eachother. Although the current call scope still had its
+        // encapsulated within each other. Although the current call scope still had its
         // msg.sender set, a subsequent call should not. Lets test this.
         thisExternal.checkStartPrankInner(originalMsgSender, false);
     }
