@@ -146,12 +146,12 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 	}
 
 	// Commit the last pending block.
-	if chain.PendingBlock() != nil {
-		err := chain.PendingBlockCommit()
-		if err != nil {
-			return callSequenceExecuted, err
-		}
-	}
+	// if chain.PendingBlock() != nil {
+	// 	err := chain.PendingBlockCommit()
+	// 	if err != nil {
+	// 		return callSequenceExecuted, err
+	// 	}
+	// }
 	return callSequenceExecuted, nil
 }
 
