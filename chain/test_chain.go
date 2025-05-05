@@ -98,6 +98,24 @@ type TestChain struct {
 	CompiledContracts map[string]*compilationTypes.CompiledContract
 }
 
+func (c *TestChain) GetBlockNumber() *big.Int {
+	return c.pendingBlockContext.BlockNumber
+}
+
+func (c *TestChain) SetBlockNumber(num *big.Int) {
+	c.pendingBlockContext.BlockNumber.Set(num)
+	c.pendingBlock.Header.Number.Set(num)
+}
+
+func (c *TestChain) GetBlockTimestamp() uint64 {
+	return c.pendingBlockContext.Time
+}
+
+func (c *TestChain) SetBlockTimestamp(num uint64) {
+	c.pendingBlockContext.Time = num
+	c.pendingBlock.Header.Time = num
+}
+
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
 // This creates a test chain with a test chain configuration and the provided genesis allocation and config.
 // If a nil config is provided, a default one is used.

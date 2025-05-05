@@ -2,6 +2,7 @@ package calls
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -28,9 +29,26 @@ type ExecuteCallSequenceExecutionCheckFunc func(currentExecutedSequence CallSequ
 // executed.
 // Returns the call sequence which was executed and an error if one occurs.
 func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, additionalTracers ...*chain.TestChainTracer) (CallSequence, error) {
+	testingBaseBlockIndex := uint64(len(chain.CommittedBlocks()))
+	repeat, seq, err := executeCallSequenceIteratively(false, chain, fetchElementFunc, executionCheckFunc, additionalTracers...)
+	if repeat {
+		err = chain.RevertToBlockIndex(testingBaseBlockIndex)
+		if err != nil {
+			return seq, err
+		}
+		seq, err = seq.Clone()
+		if err != nil {
+			return seq, err
+		}
+		_, seq, err = executeCallSequenceIteratively(true, chain, fetchElementFunc, executionCheckFunc, additionalTracers...)
+	}
+	return seq, err
+}
+
+func executeCallSequenceIteratively(commitBlockState bool, chain *chain.TestChain, fetchElementFunc ExecuteCallSequenceFetchElementFunc, executionCheckFunc ExecuteCallSequenceExecutionCheckFunc, additionalTracers ...*chain.TestChainTracer) (bool, CallSequence, error) {
 	// If there is no fetch element function provided, throw an error
 	if fetchElementFunc == nil {
-		return nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
+		return false, nil, fmt.Errorf("could not execute call sequence on chain as the 'fetch element function' provided was nil")
 	}
 
 	// Create a call sequence to track all elements executed throughout this operation.
@@ -44,7 +62,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		// Call our "fetch next call" function and obtain our next call sequence element.
 		callSequenceElement, err := fetchElementFunc(i)
 		if err != nil {
-			return callSequenceExecuted, err
+			return false, callSequenceExecuted, err
 		}
 
 		// If we are at the end of our sequence, break out of our execution loop.
@@ -59,9 +77,14 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		for {
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
 			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
-				err := chain.PendingBlockCommit()
-				if err != nil {
-					return callSequenceExecuted, err
+				if commitBlockState {
+					err := chain.PendingBlockCommit()
+					if err != nil {
+						return false, callSequenceExecuted, err
+					}
+				} else {
+					chain.SetBlockNumber(big.NewInt(0).Add(chain.GetBlockNumber(), big.NewInt(int64(callSequenceElement.BlockNumberDelay))))
+					chain.SetBlockTimestamp(chain.GetBlockTimestamp() + callSequenceElement.BlockTimestampDelay)
 				}
 			}
 
@@ -84,7 +107,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 				}
 				_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
 				if err != nil {
-					return callSequenceExecuted, err
+					return false, callSequenceExecuted, err
 				}
 			}
 
@@ -92,23 +115,27 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
 
 			if err != nil {
-				// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
-				// If there are other transactions in the block, this makes sense. The block is "full".
-				// In that case, we commit the pending block without this tx, and create a new pending block to add
-				// our tx to, and iterate to try and add it again.
-				// TODO: This should also check the condition that this is a block gas error specifically. For now, we
-				//  simply assume it is and try processing in an empty block (if that fails, that error will be
-				//  returned).
-				if len(chain.PendingBlock().Messages) > 0 {
-					err := chain.PendingBlockCommit()
-					if err != nil {
-						return callSequenceExecuted, err
+				if commitBlockState {
+					// If we encountered a block gas limit error, this tx is too expensive to fit in this block.
+					// If there are other transactions in the block, this makes sense. The block is "full".
+					// In that case, we commit the pending block without this tx, and create a new pending block to add
+					// our tx to, and iterate to try and add it again.
+					// TODO: This should also check the condition that this is a block gas error specifically. For now, we
+					//  simply assume it is and try processing in an empty block (if that fails, that error will be
+					//  returned).
+					if len(chain.PendingBlock().Messages) > 0 {
+						err := chain.PendingBlockCommit()
+						if err != nil {
+							return false, callSequenceExecuted, err
+						}
+						continue
 					}
-					continue
-				}
 
-				// If there are no transactions in our block, and we failed to add this one, return the error
-				return callSequenceExecuted, err
+					// If there are no transactions in our block, and we failed to add this one, return the error
+					return false, callSequenceExecuted, err
+				} else {
+					return true, callSequenceExecuted, err
+				}
 			}
 
 			// Update our chain reference for this element.
@@ -125,7 +152,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			if executionCheckFunc != nil {
 				execCheckFuncRequestedBreak, err = executionCheckFunc(callSequenceExecuted)
 				if err != nil {
-					return callSequenceExecuted, err
+					return false, callSequenceExecuted, err
 				}
 
 				// If post-execution check requested we break execution, break out of our "retry loop"
@@ -152,7 +179,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 	// 		return callSequenceExecuted, err
 	// 	}
 	// }
-	return callSequenceExecuted, nil
+	return false, callSequenceExecuted, nil
 }
 
 // ExecuteCallSequence executes a provided CallSequence on the provided chain.
