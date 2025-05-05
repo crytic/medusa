@@ -108,8 +108,9 @@ type Fuzzer struct {
 	// lastPCsLogMsg records the last time we logged total PCs hit.
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
-	lastPCsLogMsg time.Time
-	libraryMap    map[string]string
+	lastPCsLogMsg   time.Time
+	libraryMap      map[string]string
+	deploymentOrder []string
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -263,6 +264,16 @@ func (f *Fuzzer) DeployerAddress() common.Address {
 	return f.deployer
 }
 
+// isLibrary checks if a contract with the given name is a library
+func (f *Fuzzer) isLibrary(name string) bool {
+	for _, contract := range f.contractDefinitions {
+		if contract.Name() == name && contract.CompiledContract().Kind == compilationTypes.ContractKindLibrary {
+			return true
+		}
+	}
+	return false
+}
+
 // TestCases exposes the underlying tests run during the fuzzing campaign.
 func (f *Fuzzer) TestCases() []TestCase {
 	return f.testCases
@@ -347,6 +358,9 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		f.baseValueSet.SeedFromSlither(slitherResults)
 	}
 
+	// Initialize a map to track library dependencies.
+	libraryDependencies := make(map[string][]any)
+
 	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
 		// Add our compilation to the list and get a reference to it.
@@ -369,8 +383,12 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				if contract.Kind == compilationTypes.ContractKindInterface {
 					continue
 				}
-
 				compilationTypes.MapPlaceholdersToLibraries(contract.LibraryPlaceholders, f.libraryMap)
+				libraryDependencies[contractName] = []any{}
+				// Put the library names of the library placeholder into libraryDependencies
+				for _, shortname := range contract.LibraryPlaceholders {
+					libraryDependencies[contractName] = append(libraryDependencies[contractName], shortname)
+				}
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
@@ -395,7 +413,10 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
-
+		f.deploymentOrder, err = compilationTypes.GetDeploymentOrder(libraryDependencies)
+		if err != nil {
+			f.logger.Warn("Could not get a deployment order", err)
+		}
 		// Cache all of our source code if it hasn't been already.
 		err := compilation.CacheSourceCode()
 		if err != nil {
@@ -494,8 +515,38 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		// Preserve index of target contract balances
 		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
 	}
-	contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
-	balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
+
+	if len(fuzzer.deploymentOrder) > 0 {
+		// Skip already included predeployed contracts
+		predeployed := make(map[string]bool)
+		for name := range fuzzer.config.Fuzzing.PredeployedContracts {
+			predeployed[name] = true
+		}
+		// Create a set of target contracts for easy lookup
+		targetContracts := make(map[string]bool)
+		targetContractBalances := make(map[string]*config.ContractBalance)
+		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
+			targetContracts[name] = true
+			if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
+				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
+			}
+		}
+		// Add contracts from the deployment order
+		for _, name := range fuzzer.deploymentOrder {
+			if !predeployed[name] && (targetContracts[name] || fuzzer.isLibrary(name)) {
+				contractsToDeploy = append(contractsToDeploy, name)
+				// Add balance for target contracts, zero for libraries
+				if balance, ok := targetContractBalances[name]; ok {
+					balances = append(balances, balance)
+				} else {
+					balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+				}
+			}
+		}
+	} else {
+		contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
+		balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
+	}
 
 	deployedContractAddr := make(map[string]common.Address)
 	// Loop for all contracts to deploy
@@ -533,7 +584,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 					contractBalance = new(big.Int).Set(&balances[i].Int)
 				}
 				// Deploy the contract with resolved library dependencies
-				result, err := fuzzer.deployContract(testChain, contract, args, contractBalance)
+				result, err := fuzzer.deployContract(testChain, contract, args, contractBalance, deployedContractAddr)
 				if err != nil {
 					// If the result is an execution trace, return it
 					if trace, ok := result.(*executiontracer.ExecutionTrace); ok {
@@ -560,12 +611,19 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	return nil, nil
 }
 
-func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int) (any | common., error) {
+func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int, deployedContracts map[string]common.Address) (any, error) {
 	contractName := contract.Name()
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 	if err != nil {
 		return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
+	}
+
+	// If this contract has library dependencies, replace placeholders in the bytecode
+	if len(contract.CompiledContract().LibraryPlaceholders) > 0 {
+		// Replace library placeholders with deployed library addresses
+		replacedMsgData := compilationTypes.ReplacePlaceholdersInBytecode(msgData, contract.CompiledContract().LibraryPlaceholders, deployedContracts)
+		msgData = replacedMsgData
 	}
 
 	// Create a message to represent our contract deployment (we let deployments consume the whole block
