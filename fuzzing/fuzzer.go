@@ -399,6 +399,8 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	}
 }
 
+const GAS_LIMIT = 0xFFFFFFFFFFFF
+
 // createTestChain creates a test chain with the account balance allocations specified by the config.
 func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// Create our genesis allocations.
@@ -451,7 +453,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
-	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
+	testChain.BlockGasLimit = GAS_LIMIT
 	return testChain, err
 }
 
@@ -535,7 +537,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 				// Create a message to represent our contract deployment (we let deployments consume the whole block
 				// gas limit rather than use tx gas limit)
-				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, contractBalance, fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+				msg := calls.NewCallMessage(fuzzer.deployer, nil, 0, contractBalance, GAS_LIMIT, nil, nil, nil, msgData)
 				msg.FillFromTestChainProperties(testChain)
 
 				// Create a new pending block we'll commit to chain
