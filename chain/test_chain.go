@@ -98,6 +98,23 @@ type TestChain struct {
 	CompiledContracts map[string]*compilationTypes.CompiledContract
 }
 
+// HasPendingSelfDestructs checks if the pending block contains any self-destruct or contract creation operations
+func (t *TestChain) HasPendingStateChanges() bool {
+	if t.pendingBlock == nil {
+		return false
+	}
+
+	for _, messageResult := range t.pendingBlock.MessageResults {
+		for _, change := range messageResult.ContractDeploymentChanges {
+			if change.SelfDestructed || change.Creation {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (c *TestChain) GetBlockNumber() *big.Int {
 	return c.pendingBlockContext.BlockNumber
 }
@@ -531,7 +548,12 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 
 	// Create our transaction and block contexts for the vm
 	txContext := core.NewEVMTxContext(msg)
-	blockContext := newTestChainBlockContext(t, t.Head().Header)
+	var blockContext vm.BlockContext
+	if t.pendingBlock != nil {
+		blockContext = newTestChainBlockContext(t, t.pendingBlock.Header)
+	} else {
+		blockContext = newTestChainBlockContext(t, t.Head().Header)
+	}
 
 	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
 	// still calling our internal tracers.

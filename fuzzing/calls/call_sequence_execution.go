@@ -77,7 +77,7 @@ func executeCallSequenceIteratively(commitBlockState bool, chain *chain.TestChai
 		for {
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
 			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
-				if commitBlockState {
+				if commitBlockState || chain.HasPendingStateChanges() {
 					err := chain.PendingBlockCommit()
 					if err != nil {
 						return false, callSequenceExecuted, err
