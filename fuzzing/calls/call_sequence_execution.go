@@ -53,6 +53,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			break
 		}
 
+		// TODO need to edit all the comments here
 		// We try to add the transaction with our call more than once. If the pending block is too full, we may hit a
 		// block gas limit, which we handle by committing the pending block without this tx, and creating a new pending
 		// block that is empty to try adding this tx there instead.
@@ -60,14 +61,19 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		for {
 			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
 			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
-				if chain.HasPendingStateChanges() {
+				if !chain.HasPendingStateChanges() && chain.PendingBlockContext() != nil {
+					newBlockNum := big.NewInt(0).Add(chain.PendingBlockContext().BlockNumber, big.NewInt(int64(callSequenceElement.BlockNumberDelay)))
+					chain.PendingBlockContext().BlockNumber.Set(newBlockNum)
+					chain.PendingBlock().Header.Number.Set(newBlockNum)
+
+					newTimestamp := chain.PendingBlockContext().Time + callSequenceElement.BlockTimestampDelay
+					chain.PendingBlockContext().Time = newTimestamp
+					chain.PendingBlock().Header.Time = newTimestamp
+				} else {
 					err := chain.PendingBlockCommit()
 					if err != nil {
 						return callSequenceExecuted, err
 					}
-				} else {
-					chain.SetBlockNumber(big.NewInt(0).Add(chain.GetBlockNumber(), big.NewInt(int64(callSequenceElement.BlockNumberDelay))))
-					chain.SetBlockTimestamp(chain.GetBlockTimestamp() + callSequenceElement.BlockTimestampDelay)
 				}
 			}
 

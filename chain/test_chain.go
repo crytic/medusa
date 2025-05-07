@@ -41,8 +41,8 @@ type TestChain struct {
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
 	pendingBlock *types.Block
 
-	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used by cheatcodes to override the EVM
-	// interpreter's behavior. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
+	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used to override the EVM
+	// interpreter's behavior, e.g. for cheatcodes. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
 	pendingBlockContext *vm.BlockContext
 
 	// pendingBlockChainConfig is params.ChainConfig for the current pending block. This is used by cheatcodes to override
@@ -96,41 +96,6 @@ type TestChain struct {
 	// fork mode.
 	stateFactory      state.MedusaStateFactory
 	CompiledContracts map[string]*compilationTypes.CompiledContract
-}
-
-// HasPendingSelfDestructs checks if the pending block contains any self-destruct or contract creation operations
-func (t *TestChain) HasPendingStateChanges() bool {
-	if t.pendingBlock == nil {
-		return false
-	}
-
-	for _, messageResult := range t.pendingBlock.MessageResults {
-		for _, change := range messageResult.ContractDeploymentChanges {
-			if change.SelfDestructed || change.Creation {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func (c *TestChain) GetBlockNumber() *big.Int {
-	return c.pendingBlockContext.BlockNumber
-}
-
-func (c *TestChain) SetBlockNumber(num *big.Int) {
-	c.pendingBlockContext.BlockNumber.Set(num)
-	c.pendingBlock.Header.Number.Set(num)
-}
-
-func (c *TestChain) GetBlockTimestamp() uint64 {
-	return c.pendingBlockContext.Time
-}
-
-func (c *TestChain) SetBlockTimestamp(num uint64) {
-	c.pendingBlockContext.Time = num
-	c.pendingBlock.Header.Time = num
 }
 
 // NewTestChain creates a simulated Ethereum backend used for testing, or returns an error if one occurred.
@@ -606,10 +571,33 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	return msgResult, err
 }
 
+// PendingBlockContext is the vm.BlockContext for the current pending block.
+// This is used to override the EVM interpreter's behavior, e.g. for cheatcodes.
+func (t *TestChain) PendingBlockContext() *vm.BlockContext {
+	return t.pendingBlockContext
+}
+
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
 // This may be nil if no pending block was created.
 func (t *TestChain) PendingBlock() *types.Block {
 	return t.pendingBlock
+}
+
+// HasPendingSelfDestructs checks if the pending block contains any self-destruct or contract creation operations
+func (t *TestChain) HasPendingStateChanges() bool {
+	if t.pendingBlock == nil {
+		return false
+	}
+
+	for _, messageResult := range t.pendingBlock.MessageResults {
+		for _, change := range messageResult.ContractDeploymentChanges {
+			if change.SelfDestructed || change.Creation {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // PendingBlockCreate constructs an empty block which is pending addition to the chain. The block produces by this
