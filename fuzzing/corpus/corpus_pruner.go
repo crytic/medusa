@@ -59,7 +59,7 @@ func (cp *CorpusPruner) pruneCorpus() error {
 		return err
 	}
 	cp.totalCorpusPruned += n
-	cp.logger.Info(fmt.Sprintf("Pruned %d values in %v. Total pruned this run: %d", n, time.Since(start), cp.totalCorpusPruned))
+	cp.logger.Info(fmt.Sprintf("Pruned %d corpus items in %v. Total pruned this run: %d", n, time.Since(start), cp.totalCorpusPruned))
 	return nil
 }
 
