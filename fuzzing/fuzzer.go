@@ -613,17 +613,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int, deployedContracts map[string]common.Address) (any, error) {
 	contractName := contract.Name()
+	contract.CompiledContract().ReplacePlaceholdersInBytecode(deployedContracts)
+
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 	if err != nil {
 		return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
-	}
-
-	// If this contract has library dependencies, replace placeholders in the bytecode
-	if len(contract.CompiledContract().LibraryPlaceholders) > 0 {
-		// Replace library placeholders with deployed library addresses
-		replacedMsgData := compilationTypes.ReplacePlaceholdersInBytecode(msgData, contract.CompiledContract().LibraryPlaceholders, deployedContracts)
-		msgData = replacedMsgData
 	}
 
 	// Create a message to represent our contract deployment (we let deployments consume the whole block

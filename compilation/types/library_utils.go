@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/crypto"
 	"path/filepath"
 )
@@ -64,58 +63,6 @@ func GetAvailableLibraries(compilations []Compilation) (map[string]string, strin
 		}
 	}
 	return libraryMap, ""
-}
-
-// ReplacePlaceholdersInBytecode replaces library placeholders in bytecode with actual library addresses
-func ReplacePlaceholdersInBytecode(bytecode []byte, libraryPlaceholders map[string]any, deployedLibraries map[string]common.Address) []byte {
-	// Clone the bytecode to avoid modifying the original
-	result := make([]byte, len(bytecode))
-	copy(result, bytecode)
-
-	// For each library placeholder
-	for placeholder, libNameAny := range libraryPlaceholders {
-		libName, ok := libNameAny.(string)
-		if !ok || libName == "" {
-			continue
-		}
-
-		// Get the deployed library address
-		libraryAddr, exists := deployedLibraries[libName]
-		if !exists {
-			continue
-		}
-
-		// Find the placeholder pattern in the bytecode
-		// The full pattern in bytecode is: __$<placeholder>$__
-		fullPattern := fmt.Sprintf("__%s__", placeholder)
-
-		// Replace all occurrences in the bytecode
-		// Since we're working with bytes, we need to do this manually
-		for i := 0; i <= len(result)-len(fullPattern); i++ {
-			match := true
-			for j := 0; j < len(fullPattern); j++ {
-				if i+j >= len(result) || result[i+j] != fullPattern[j] {
-					match = false
-					break
-				}
-			}
-
-			if match {
-				// Replace the placeholder with the address (padded)
-				// The address needs to be exactly the same length as the placeholder
-				addrBytes := libraryAddr.Bytes()
-				for j := 0; j < len(addrBytes) && j < len(fullPattern); j++ {
-					result[i+j] = addrBytes[j]
-				}
-				// Pad remaining bytes with zeros if needed
-				for j := len(addrBytes); j < len(fullPattern); j++ {
-					result[i+j] = 0
-				}
-			}
-		}
-	}
-
-	return result
 }
 
 // GetDeploymentOrder returns a topologically sorted list of libraries/contracts

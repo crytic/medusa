@@ -2,8 +2,10 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/crytic/medusa-geth/common"
 	"regexp"
 	"strings"
 
@@ -121,12 +123,24 @@ func ParseABIFromInterface(i any) (*abi.ABI, error) {
 	return &result, nil
 }
 
+func (c *CompiledContract) InitBytecodeBytes() ([]byte, error) {
+	return hex.DecodeString(strings.TrimPrefix(string(c.InitBytecode), "0x"))
+}
+
+func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
+	return hex.DecodeString(strings.TrimPrefix(string(c.RuntimeBytecode), "0x"))
+}
+
 // GetDeploymentMessageData is a helper method used create contract deployment message data for the given contract.
 // This data can be set in transaction/message structs "data" field to indicate the packed init bytecode and constructor
 // argument data to use.
 func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) {
 	// ABI encode constructor arguments and append them to the end of the bytecode
-	initBytecodeWithArgs := slices.Clone(c.InitBytecode)
+	initBytecode, err := c.InitBytecodeBytes()
+	if err != nil {
+		return nil, fmt.Errorf("could not decode InitBytecode due to error: %v", err)
+	}
+	initBytecodeWithArgs := slices.Clone(initBytecode)
 	if len(c.Abi.Constructor.Inputs) > 0 {
 		data, err := c.Abi.Pack("", args...)
 		if err != nil {
@@ -161,4 +175,46 @@ func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
 	}
 
 	return substringSet
+}
+
+// ReplacePlaceholdersInBytecode replaces library placeholders in bytecode with actual library addresses
+func (c *CompiledContract) ReplacePlaceholdersInBytecode(deployedLibraries map[string]common.Address) {
+	if len(c.LibraryPlaceholders) == 0 || len(c.InitBytecode) == 0 {
+		return
+	}
+
+	// Get the bytecode as a hex string
+	bytecodeHex := string(c.InitBytecode)
+	// If it starts with 0x, remove it
+	bytecodeHex = strings.TrimPrefix(bytecodeHex, "0x")
+
+	// For each library placeholder
+	for placeholder, libNameAny := range c.LibraryPlaceholders {
+		libName, ok := libNameAny.(string)
+		if !ok || libName == "" {
+			continue
+		}
+
+		// Get the deployed library address
+		libraryAddr, exists := deployedLibraries[libName]
+		if !exists {
+			continue
+		}
+
+		// The pattern in bytecode is "__$<placeholder>$__"
+		placeholderPattern := fmt.Sprintf("__$%s$__", placeholder)
+
+		// Get the address hex without "0x" prefix
+		addrHex := libraryAddr.Hex()[2:]
+		// Pad to 40 characters (20 bytes)
+		for len(addrHex) < 40 {
+			addrHex = "0" + addrHex
+		}
+
+		// Replace the placeholder with the address
+		bytecodeHex = strings.ReplaceAll(bytecodeHex, placeholderPattern, addrHex)
+	}
+
+	// Update the bytecode
+	c.InitBytecode = []byte(bytecodeHex)
 }
