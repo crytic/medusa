@@ -60,6 +60,11 @@ type CoverageTracer struct {
 	// since init vs runtime produces different results from getContractCoverageMapHash.
 	// The Hash key is a contract's codehash, which uniquely identifies it.
 	codeHashCache [2]map[common.Hash]common.Hash
+
+	// initialContractsSet records the set of contract addresses present in the base chain,
+	// before any contracts are added by test sequences. Only these addresses will be recorded
+	// in coverage; others will be replaced with the zero address to prevent infinitely growing corpus.
+	initialContractsSet *map[common.Address]struct{}
 }
 
 // coverageTracerCallFrameState tracks state across call frames in the tracer.
@@ -113,6 +118,29 @@ func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
 	return t.nativeTracer
 }
 
+// SetInitialContractsSet sets the initialContractsSet value (see above).
+func (t *CoverageTracer) SetInitialContractsSet(initialContractsSet *map[common.Address]struct{}) {
+	t.initialContractsSet = initialContractsSet
+}
+
+// BLANK_ADDRESS is an all-zero address; it's a global var so that we don't have to recalculate (and reallocate) it every time.
+var BLANK_ADDRESS = common.BytesToAddress([]byte{})
+
+// addressForCoverage modifies an address based on the initialContractsSet value.
+// This is applied to all addresses before they are recorded in the coverage map.
+// If t.initialContractsSet is nil, we preserve all addresses.
+// If t.initialContractsSet is defined, we only preserve addresses present in this set.
+// Addresses not present in this set are zeroed to prevent issues with infinitely growing corpus.
+func (t *CoverageTracer) addressForCoverage(address common.Address) common.Address {
+	if t.initialContractsSet == nil {
+		return address
+	} else if _, ok := (*t.initialContractsSet)[address]; ok {
+		return address
+	} else {
+		return BLANK_ADDRESS
+	}
+}
+
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our call frame states
@@ -154,7 +182,7 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 			markerXor = RETURN_MARKER_XOR
 		}
 		marker := bits.RotateLeft64(currentCallFrameState.lastPC, 32) ^ markerXor
-		_, coverageUpdateErr := currentCoverageMap.UpdateAt(currentCallFrameState.address, *currentCallFrameState.lookupHash, marker)
+		_, coverageUpdateErr := currentCoverageMap.UpdateAt(t.addressForCoverage(currentCallFrameState.address), *currentCallFrameState.lookupHash, marker)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
@@ -238,7 +266,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 
 	// Record coverage for this location in our map.
-	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(callFrameState.address, *callFrameState.lookupHash, marker)
+	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(t.addressForCoverage(callFrameState.address), *callFrameState.lookupHash, marker)
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 	}
