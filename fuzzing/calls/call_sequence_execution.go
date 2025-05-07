@@ -53,89 +53,87 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 			break
 		}
 
-		// TODO need to edit all the comments here
-		// We try to add the transaction with our call more than once. If the pending block is too full, we may hit a
-		// block gas limit, which we handle by committing the pending block without this tx, and creating a new pending
-		// block that is empty to try adding this tx there instead.
-		// If we encounter an error on an empty block, we throw the error as there is nothing more we can do.
-		for {
-			// If we have a pending block, but we intend to delay this call from the last, we commit that block.
-			if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
-				if !chain.HasPendingStateChanges() && chain.PendingBlockContext() != nil {
-					newBlockNum := big.NewInt(0).Add(chain.PendingBlockContext().BlockNumber, big.NewInt(int64(callSequenceElement.BlockNumberDelay)))
-					chain.PendingBlockContext().BlockNumber.Set(newBlockNum)
-					chain.PendingBlock().Header.Number.Set(newBlockNum)
-
-					newTimestamp := chain.PendingBlockContext().Time + callSequenceElement.BlockTimestampDelay
-					chain.PendingBlockContext().Time = newTimestamp
-					chain.PendingBlock().Header.Time = newTimestamp
-				} else {
-					err := chain.PendingBlockCommit()
-					if err != nil {
-						return callSequenceExecuted, err
-					}
-				}
-			}
-
-			// If we have no pending block to add a tx containing our call to, we must create one.
-			if chain.PendingBlock() == nil {
+		// If we have a pending block, but we intend to delay this call from the last:
+		//   if possible, we edit the block number and timestamp directly, same as the cheatcodes do it;
+		//   otherwise, we commit the pending block and start a new one.
+		// If we have a pending contract creation or deletion, we need to commit the pending block to finalize the creation/deletion.
+		if chain.PendingBlock() != nil && callSequenceElement.BlockNumberDelay > 0 {
+			if !chain.HasPendingStateChanges() && chain.PendingBlockContext() != nil {
 				// The minimum step between blocks must be 1 in block number and timestamp, so we ensure this is the
 				// case.
 				numberDelay := callSequenceElement.BlockNumberDelay
 				timeDelay := callSequenceElement.BlockTimestampDelay
-				if numberDelay == 0 {
-					numberDelay = 1
-				}
 				if timeDelay == 0 {
 					timeDelay = 1
 				}
-
 				// Each timestamp/block number must be unique as well, so we cannot jump more block numbers than time.
 				if numberDelay > timeDelay {
 					numberDelay = timeDelay
 				}
-				_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
+
+				newBlockNum := big.NewInt(0).Add(chain.PendingBlockContext().BlockNumber, big.NewInt(int64(numberDelay)))
+				chain.PendingBlockContext().BlockNumber.Set(newBlockNum)
+				chain.PendingBlock().Header.Number.Set(newBlockNum)
+
+				newTimestamp := chain.PendingBlockContext().Time + timeDelay
+				chain.PendingBlockContext().Time = newTimestamp
+				chain.PendingBlock().Header.Time = newTimestamp
+			} else {
+				err := chain.PendingBlockCommit()
 				if err != nil {
 					return callSequenceExecuted, err
 				}
 			}
+		}
 
-			// Try to add our transaction to this block.
-			err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
+		// If we have no pending block to add a tx containing our call to, we must create one.
+		if chain.PendingBlock() == nil {
+			// The minimum step between blocks must be 1 in block number and timestamp, so we ensure this is the
+			// case.
+			numberDelay := callSequenceElement.BlockNumberDelay
+			timeDelay := callSequenceElement.BlockTimestampDelay
+			if numberDelay == 0 {
+				numberDelay = 1
+			}
+			if timeDelay == 0 {
+				timeDelay = 1
+			}
 
+			// Each timestamp/block number must be unique as well, so we cannot jump more block numbers than time.
+			if numberDelay > timeDelay {
+				numberDelay = timeDelay
+			}
+			_, err := chain.PendingBlockCreateWithParameters(chain.Head().Header.Number.Uint64()+numberDelay, chain.Head().Header.Time+timeDelay, nil)
 			if err != nil {
 				return callSequenceExecuted, err
 			}
-
-			// Update our chain reference for this element.
-			callSequenceElement.ChainReference = &CallSequenceElementChainReference{
-				Block:            chain.PendingBlock(),
-				TransactionIndex: len(chain.PendingBlock().Messages) - 1,
-			}
-
-			// Add to our executed call sequence
-			callSequenceExecuted = append(callSequenceExecuted, callSequenceElement)
-
-			// We added our call to the block as a transaction. Call our step function with the update and check
-			// if it returned an error.
-			if executionCheckFunc != nil {
-				execCheckFuncRequestedBreak, err = executionCheckFunc(callSequenceExecuted)
-				if err != nil {
-					return callSequenceExecuted, err
-				}
-
-				// If post-execution check requested we break execution, break out of our "retry loop"
-				if execCheckFuncRequestedBreak {
-					break
-				}
-			}
-
-			// We didn't encounter an error, so we were successful in adding this transaction. Break out of this
-			// inner "retry loop" and move onto processing the next element in the outer loop.
-			break
 		}
 
-		// If post-execution check requested we break execution, break out of our "execute next call sequence loop"
+		// Add our transaction to this block.
+		err = chain.PendingBlockAddTx(callSequenceElement.Call.ToCoreMessage(), additionalTracers...)
+		if err != nil {
+			return callSequenceExecuted, err
+		}
+
+		// Update our chain reference for this element.
+		callSequenceElement.ChainReference = &CallSequenceElementChainReference{
+			Block:            chain.PendingBlock(),
+			TransactionIndex: len(chain.PendingBlock().Messages) - 1,
+		}
+
+		// Add to our executed call sequence
+		callSequenceExecuted = append(callSequenceExecuted, callSequenceElement)
+
+		// We added our call to the block as a transaction. Call our step function with the update and check
+		// if it returned an error.
+		if executionCheckFunc != nil {
+			execCheckFuncRequestedBreak, err = executionCheckFunc(callSequenceExecuted)
+			if err != nil {
+				return callSequenceExecuted, err
+			}
+		}
+
+		// If post-execution check requested we break execution, break out of our loop
 		if execCheckFuncRequestedBreak {
 			break
 		}
