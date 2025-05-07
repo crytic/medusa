@@ -85,6 +85,7 @@ type Fuzzer struct {
 	// revertReporter tracks per-function reversion metrics, if enabled
 	revertReporter *reverts.RevertReporter
 
+        // corpusPruner is a service that will prune the corpus at a given frequency to reduce corpus size and memory overhead. 
 	corpusPruner *CorpusPruner
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
