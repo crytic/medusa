@@ -86,7 +86,7 @@ type Fuzzer struct {
 	revertReporter *reverts.RevertReporter
 
 	// corpusPruner is a service that will prune the corpus at a given frequency to reduce corpus size and memory overhead.
-	corpusPruner *CorpusPruner
+	corpusPruner *corpus.CorpusPruner
 
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
@@ -177,6 +177,10 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
+	// Create the corpus pruner.
+	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
+	corpusPruner := corpus.NewCorpusPruner(pruneEnabled, config.Fuzzing.PruneFrequency, logger)
+
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config:              config,
@@ -187,6 +191,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		revertReporter:      revertReporter,
+		corpusPruner:        corpusPruner,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -195,12 +200,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		},
 		logger: logger,
 	}
-
-	// Create the corpus pruner.
-	// We need to do this after creating the Fuzzer, since it needs the fuzzer as an argument.
-	// It won't grab any fields from the Fuzzer until we call Start on it later.
-	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
-	fuzzer.corpusPruner = NewCorpusPruner(pruneEnabled, fuzzer)
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
 	// address arguments in fuzzing campaigns.
@@ -863,7 +862,7 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Start the corpus pruner.
-	err = f.corpusPruner.Start(baseTestChain)
+	err = f.corpusPruner.Start(f.ctx, f.corpus, baseTestChain)
 	if err != nil {
 		f.logger.Error("Error starting corpus pruner", err)
 		return err
