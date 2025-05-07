@@ -45,6 +45,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestLimit:               0,
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
+			PruneFrequency:          5,
 			TargetContracts:         []string{},
 			TargetContractsBalances: []*ContractBalance{},
 			PredeployedContracts:    map[string]string{},
