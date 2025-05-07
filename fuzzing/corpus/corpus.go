@@ -586,7 +586,7 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 	toRemove := map[int]bool{}
 
 	// Iterate seqs in a random order
-	for _, i := range rand.Perm(len(seqs)) { // TODO should we use a "random provider"?
+	for _, i := range rand.Perm(len(seqs)) {
 		if utils.CheckContextDone(ctx) {
 			return 0, nil
 		}

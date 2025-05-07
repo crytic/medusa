@@ -65,7 +65,6 @@ func (cp *CorpusPruner) mainLoop() {
 			err := cp.pruneCorpus()
 			if err != nil {
 				cp.fuzzer.logger.Error("Corpus pruner encountered an error", err)
-				cp.fuzzer.Terminate() // We kill the whole thing if the pruner errors
 				return
 			}
 		}
