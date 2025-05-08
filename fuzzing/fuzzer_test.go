@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
