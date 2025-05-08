@@ -48,4 +48,3 @@ For information about how to contribute to this project, check out the [CONTRIBU
 ## License
 
 `medusa` is licensed and distributed under the [AGPLv3](./LICENSE).
-
