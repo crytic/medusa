@@ -213,7 +213,7 @@ jobs:
           solc-select use 0.8.28 --always-install
 
       - name: Test
-        run: go go clean -testcache && go test ./...
+        run: go clean -testcache && go test ./...
 
   all-checks:
     if: always()
