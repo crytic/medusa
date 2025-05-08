@@ -136,11 +136,7 @@ func (c *CompiledContract) RuntimeBytecodeBytes() ([]byte, error) {
 // argument data to use.
 func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) {
 	// ABI encode constructor arguments and append them to the end of the bytecode
-	initBytecode, err := c.InitBytecodeBytes()
-	if err != nil {
-		return nil, fmt.Errorf("could not decode InitBytecode due to error: %v", err)
-	}
-	initBytecodeWithArgs := slices.Clone(initBytecode)
+	initBytecodeWithArgs := slices.Clone(c.InitBytecode)
 	if len(c.Abi.Constructor.Inputs) > 0 {
 		data, err := c.Abi.Pack("", args...)
 		if err != nil {
@@ -180,6 +176,11 @@ func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
 // ReplacePlaceholdersInBytecode replaces library placeholders in bytecode with actual library addresses
 func (c *CompiledContract) ReplacePlaceholdersInBytecode(deployedLibraries map[string]common.Address) {
 	if len(c.LibraryPlaceholders) == 0 || len(c.InitBytecode) == 0 {
+		initBytecode, err := c.InitBytecodeBytes()
+		if err != nil {
+			panic(fmt.Errorf("unable to parse init bytecode for contract \n"))
+		}
+		c.InitBytecode = initBytecode
 		return
 	}
 
@@ -217,4 +218,10 @@ func (c *CompiledContract) ReplacePlaceholdersInBytecode(deployedLibraries map[s
 
 	// Update the bytecode
 	c.InitBytecode = []byte(bytecodeHex)
+	initBytecode, err := c.InitBytecodeBytes()
+	if err != nil {
+		panic(fmt.Errorf("unable to parse init bytecode for contract \n"))
+	}
+	c.InitBytecode = initBytecode
+
 }
