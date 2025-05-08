@@ -1,7 +1,6 @@
 package platforms
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -178,23 +177,25 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		}
 
 		// Decode our init and runtime bytecode
-		initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-		}
-		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
-		}
+		/*
+			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+			}
+			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			}*/
 
 		// Construct our compiled contract
 		compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
-			Abi:             *contractAbi,
-			InitBytecode:    initBytecode,
-			RuntimeBytecode: runtimeBytecode,
-			SrcMapsInit:     contract.Info.SrcMap.(string),
-			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
-			Kind:            contractKinds[contractName],
+			Abi:                 *contractAbi,
+			InitBytecode:        []byte(contract.Code),
+			RuntimeBytecode:     []byte(contract.RuntimeCode),
+			SrcMapsInit:         contract.Info.SrcMap.(string),
+			SrcMapsRuntime:      contract.Info.SrcMapRuntime,
+			Kind:                contractKinds[contractName],
+			LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.RuntimeCode),
 		}
 	}
 

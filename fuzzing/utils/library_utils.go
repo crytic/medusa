@@ -1,9 +1,10 @@
-package types
+package utils
 
 import (
 	"encoding/hex"
 	"fmt"
 	"github.com/crytic/medusa-geth/crypto"
+	"github.com/crytic/medusa/compilation/types"
 	"path/filepath"
 )
 
@@ -21,9 +22,9 @@ func GenerateLibraryPlaceholder(fullyQualifiedName string) string {
 	return placeholderHash
 }
 
-// MapPlaceholdersToLibraries generates a mapping of placeholders to library names
-// by computing the keccak256 hash of each library's fully qualified name
-func MapPlaceholdersToLibraries(placeholderToLibrary map[string]any, availableLibraries map[string]string) {
+// ResolvePlaceholderLibraryReferences resolves library placeholder references to their actual library names
+// by identifying placeholders and mapping them to the corresponding library using the fully qualified library name's hash
+func ResolvePlaceholderLibraryReferences(placeholderToLibrary map[string]any, availableLibraries map[string]string) {
 
 	// For each library, calculate its expected placeholder and check if it's in the bytecode
 	for fullName, shortName := range availableLibraries {
@@ -39,9 +40,12 @@ func MapPlaceholdersToLibraries(placeholderToLibrary map[string]any, availableLi
 	}
 }
 
-// GetAvailableLibraries builds a map of full library names to short names
-// from the compilation results
-func GetAvailableLibraries(compilations []Compilation) (map[string]string, string) {
+// BuildLibraryNameMapping builds a map of fully qualified library names to short names
+// by scanning the compilation artifacts for contracts of type "library".
+//
+// Fully qualified names (like "path/to/File.sol:LibraryName") are used for placeholder generation,
+// while short names ("LibraryName") are used for linking references in contract bytecode.
+func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string {
 	libraryMap := make(map[string]string)
 
 	// Process each compilation unit
@@ -51,7 +55,7 @@ func GetAvailableLibraries(compilations []Compilation) (map[string]string, strin
 			// Check each contract in the source
 			for contractName, contract := range sourceArtifact.Contracts {
 				// Check if this is a library
-				if contract.Kind == ContractKindLibrary {
+				if contract.Kind == types.ContractKindLibrary {
 					// Full name is "sourcePath:contractName"
 					libPath := filepath.Join(filepath.Base(filepath.Dir(sourcePath)), filepath.Base(sourcePath))
 					fullName := libPath + ":" + contractName
@@ -62,7 +66,7 @@ func GetAvailableLibraries(compilations []Compilation) (map[string]string, strin
 			}
 		}
 	}
-	return libraryMap, ""
+	return libraryMap
 }
 
 // GetDeploymentOrder returns a topologically sorted list of libraries/contracts

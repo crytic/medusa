@@ -109,7 +109,6 @@ type Fuzzer struct {
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
 	lastPCsLogMsg   time.Time
-	libraryMap      map[string]string
 	deploymentOrder []string
 }
 
@@ -212,9 +211,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			fuzzer.logger.Error("Failed to compile target", err)
 			return nil, err
 		}
-
-		allLibraries, _ := compilationTypes.GetAvailableLibraries(compilations)
-		fuzzer.libraryMap = allLibraries
 		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
 
 		// Add our compilation targets
@@ -358,6 +354,8 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		f.baseValueSet.SeedFromSlither(slitherResults)
 	}
 
+	// Build a mapping of fully qualified library names to short names
+	libraryNameMapping := fuzzingutils.BuildLibraryNameMapping(compilations)
 	// Initialize a map to track library dependencies.
 	libraryDependencies := make(map[string][]any)
 
@@ -383,11 +381,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				if contract.Kind == compilationTypes.ContractKindInterface {
 					continue
 				}
-				compilationTypes.MapPlaceholdersToLibraries(contract.LibraryPlaceholders, f.libraryMap)
+
+				// Link library placeholders with their deployed addresses
+				// Resolves placeholder identifiers in the bytecode to their corresponding library names
+				fuzzingutils.ResolvePlaceholderLibraryReferences(contract.LibraryPlaceholders, libraryNameMapping)
+
+				// Initialize an empty dependency list for this contract
 				libraryDependencies[contractName] = []any{}
-				// Put the library names of the library placeholder into libraryDependencies
-				for _, shortname := range contract.LibraryPlaceholders {
-					libraryDependencies[contractName] = append(libraryDependencies[contractName], shortname)
+
+				// Build the dependency graph by adding each library this contract depends on
+				// This information will be used later to determine the correct deployment order
+				for _, libraryName := range contract.LibraryPlaceholders {
+					libraryDependencies[contractName] = append(libraryDependencies[contractName], libraryName)
 				}
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
@@ -413,7 +418,9 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
-		f.deploymentOrder, err = compilationTypes.GetDeploymentOrder(libraryDependencies)
+		// Generate a topologically sorted deployment order based on library dependencies
+		// This ensures that libraries are deployed before contracts that depend on them
+		f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies)
 		if err != nil {
 			f.logger.Warn("Could not get a deployment order", err)
 		}
@@ -613,7 +620,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int, deployedContracts map[string]common.Address) (any, error) {
 	contractName := contract.Name()
-	contract.CompiledContract().ReplacePlaceholdersInBytecode(deployedContracts)
+	contract.CompiledContract().LinkBytecodes(contractName, deployedContracts)
 
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)

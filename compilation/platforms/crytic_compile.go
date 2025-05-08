@@ -239,18 +239,6 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
 			}
 
-			// Decode our init and runtime bytecode
-
-			/*
-				initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
-				if err != nil {
-					return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-				}
-				runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
-				if err != nil {
-					return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
-				}*/
-
 			// Add contract details
 			compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
 				Abi:                 *contractAbi,
