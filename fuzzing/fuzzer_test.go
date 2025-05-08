@@ -1139,7 +1139,7 @@ func TestVerbosityLevels(t *testing.T) {
 					executionTraceMsg := lastCall.ExecutionTrace.Log().String()
 					// Verify it contains all expected strings
 					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
-						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+						assert.Contains(t, fmt.Sprintf("%d %s", len(failingSequence), executionTraceMsg), expectedTraceMessage)
 					}
 				} else { // Test for Verbosity Level VeryVeryVerbose
 					executionTraceMsg := ""
