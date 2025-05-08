@@ -776,6 +776,7 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.TestLimit *= 10 // It wasn't able to solve match_ints_xy.sol sometimes
 				config.Slither.UseSlither = true
 			},
 			method: func(f *fuzzerTestContext) {
