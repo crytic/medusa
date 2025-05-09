@@ -223,7 +223,6 @@ func TestChainDynamicDeployments(t *testing.T) {
 						})
 
 						// Deploy the currently indexed contract next
-
 						// Create a message to represent our contract deployment.
 						msg := core.Message{
 							To:                nil,
