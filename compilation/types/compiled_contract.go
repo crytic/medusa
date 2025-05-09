@@ -148,7 +148,7 @@ func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) 
 }
 
 // LinkBytecodes replaces library placeholders in contract bytecode with actual deployed library addresses.
-// This function is essential for contracts that depend on libraries, as it ensures the contract's bytecode 
+// This function is essential for contracts that depend on libraries, as it ensures the contract's bytecode
 // correctly references the deployed library instances.
 //
 // The function performs the following steps:
@@ -162,6 +162,9 @@ func (c *CompiledContract) GetDeploymentMessageData(args []any) ([]byte, error) 
 //
 // If bytecode decoding fails, the function will panic with an appropriate error message.
 func (c *CompiledContract) LinkBytecodes(contractName string, deployedLibraries map[string]common.Address) {
+	if len(c.LibraryPlaceholders) == 0 {
+		return
+	}
 	c.InitBytecode, c.RuntimeBytecode = getLinkedBytecodes(c.LibraryPlaceholders, c.InitBytecode, c.RuntimeBytecode, deployedLibraries)
 
 	// Decode into hex string
@@ -182,7 +185,7 @@ func (c *CompiledContract) LinkBytecodes(contractName string, deployedLibraries 
 // ParseBytecodeForPlaceholders analyzes the given bytecode string to identify and extract
 // all library placeholder patterns embedded within it.
 //
-// When a Solidity contract uses libraries, the compiler places placeholder patterns in the bytecode 
+// When a Solidity contract uses libraries, the compiler places placeholder patterns in the bytecode
 // that later need to be replaced with actual library addresses. These placeholders follow the format
 // "__$<placeholder>$__" or "__<identifier>__".
 //
@@ -195,8 +198,8 @@ func (c *CompiledContract) LinkBytecodes(contractName string, deployedLibraries 
 // - bytecode: A string containing the contract bytecode to analyze
 //
 // Returns:
-// - A map where keys are the extracted placeholder identifiers and values are nil
-//   (values will be populated later with library names when linking is performed)
+//   - A map where keys are the extracted placeholder identifiers and values are nil
+//     (values will be populated later with library names when linking is performed)
 //
 // Note: If no library placeholders are found in the bytecode, returns an empty map.
 func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
@@ -225,11 +228,11 @@ func ParseBytecodeForPlaceholders(bytecode string) map[string]any {
 	return substringSet
 }
 
-// getLinkedBytecodes is a helper function that performs the actual replacement of library placeholders 
+// getLinkedBytecodes is a helper function that performs the actual replacement of library placeholders
 // in contract bytecode with the addresses of deployed library instances.
 //
-// The Solidity compiler places special placeholder patterns in a contract's bytecode when it references 
-// external libraries. These patterns follow the format "__$<placeholder>$__" where <placeholder> is a 
+// The Solidity compiler places special placeholder patterns in a contract's bytecode when it references
+// external libraries. These patterns follow the format "__$<placeholder>$__" where <placeholder> is a
 // unique identifier for each library dependency.
 //
 // Parameters:
@@ -255,34 +258,32 @@ func getLinkedBytecodes(libraryPlaceholders map[string]any, initBytecode []byte,
 	runtimeBytecodeHex = strings.TrimPrefix(runtimeBytecodeHex, "0x")
 
 	// Replace the placeholders with the deployed library addresses
-	if len(libraryPlaceholders) != 0 {
-		// For each library placeholder
-		for placeholder, libNameAny := range libraryPlaceholders {
-			libName, ok := libNameAny.(string)
-			if !ok || libName == "" {
-				continue
-			}
-
-			// Get the deployed library address
-			libraryAddr, exists := deployedLibraries[libName]
-			if !exists {
-				continue
-			}
-
-			// The pattern in bytecode is "__$<placeholder>$__"
-			placeholderPattern := fmt.Sprintf("__$%s$__", placeholder)
-
-			// Get the address hex without "0x" prefix
-			addrHex := libraryAddr.Hex()[2:]
-			// Pad to 40 characters (20 bytes)
-			for len(addrHex) < 40 {
-				addrHex = "0" + addrHex
-			}
-
-			// Replace the placeholder with the address
-			initBytecodeHex = strings.ReplaceAll(initBytecodeHex, placeholderPattern, addrHex)
-			runtimeBytecodeHex = strings.ReplaceAll(runtimeBytecodeHex, placeholderPattern, addrHex)
+	// For each library placeholder
+	for placeholder, libNameAny := range libraryPlaceholders {
+		libName, ok := libNameAny.(string)
+		if !ok || libName == "" {
+			continue
 		}
+
+		// Get the deployed library address
+		libraryAddr, exists := deployedLibraries[libName]
+		if !exists {
+			continue
+		}
+
+		// The pattern in bytecode is "__$<placeholder>$__"
+		placeholderPattern := fmt.Sprintf("__$%s$__", placeholder)
+
+		// Get the address hex without "0x" prefix
+		addrHex := libraryAddr.Hex()[2:]
+		// Pad to 40 characters (20 bytes)
+		for len(addrHex) < 40 {
+			addrHex = "0" + addrHex
+		}
+
+		// Replace the placeholder with the address
+		initBytecodeHex = strings.ReplaceAll(initBytecodeHex, placeholderPattern, addrHex)
+		runtimeBytecodeHex = strings.ReplaceAll(runtimeBytecodeHex, placeholderPattern, addrHex)
 	}
 	// return the linked bytecode
 	return []byte(initBytecodeHex), []byte(runtimeBytecodeHex)

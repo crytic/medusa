@@ -81,7 +81,7 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 
 // GetDeploymentOrder returns a topologically sorted list of libraries/contracts
 // based on their dependencies (libraries that other libraries depend on come first)
-func GetDeploymentOrder(contractDependencies map[string][]any) ([]string, error) {
+func GetDeploymentOrder(contractDependencies map[string][]any, targetContracts []string) ([]string, error) {
 	// Convert to a map of string -> []string for easier processing
 	dependencies := make(map[string][]string)
 	for contract, deps := range contractDependencies {

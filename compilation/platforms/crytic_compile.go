@@ -1,6 +1,7 @@
 package platforms
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -239,11 +240,26 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
 			}
 
+			initBytecode := []byte(contract.Bin)
+			runtimeBytecode := []byte(contract.BinRuntime)
+			libraryPlaceholders := types.ParseBytecodeForPlaceholders(contract.Bin)
+			if len(libraryPlaceholders) == 0 {
+				initBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
+				if err != nil {
+					return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+				}
+
+				runtimeBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
+				if err != nil {
+					return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+				}
+			}
+
 			// Add contract details
 			compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
 				Abi:                 *contractAbi,
-				InitBytecode:        []byte(contract.Bin),
-				RuntimeBytecode:     []byte(contract.BinRuntime),
+				InitBytecode:        initBytecode,
+				RuntimeBytecode:     runtimeBytecode,
 				SrcMapsInit:         contract.SrcMap,
 				SrcMapsRuntime:      contract.SrcMapRuntime,
 				Kind:                contractKinds[contractName],

@@ -420,7 +420,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		}
 		// Generate a topologically sorted deployment order based on library dependencies
 		// This ensures that libraries are deployed before contracts that depend on them
-		f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies)
+		f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, f.config.Fuzzing.TargetContracts)
 		if err != nil {
 			f.logger.Warn("Could not get a deployment order", err)
 		}
@@ -532,8 +532,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
 		targetContractBalances := make(map[string]*config.ContractBalance)
+
 		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
-			targetContracts[name] = true
 			if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
 				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
 			}
