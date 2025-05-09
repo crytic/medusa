@@ -195,7 +195,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 			SrcMapsInit:         contract.Info.SrcMap.(string),
 			SrcMapsRuntime:      contract.Info.SrcMapRuntime,
 			Kind:                contractKinds[contractName],
-			LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.RuntimeCode),
+			LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.Code),
 		}
 	}
 

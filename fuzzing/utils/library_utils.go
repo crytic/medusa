@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/crytic/medusa-geth/crypto"
 	"github.com/crytic/medusa/compilation/types"
-	"path/filepath"
 )
 
 // GenerateLibraryPlaceholder creates a library placeholder based on the keccak256 hash
@@ -51,13 +50,24 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 	// Process each compilation unit
 	for _, compilation := range compilations {
 		// Go through each source file
-		for sourcePath, sourceArtifact := range compilation.SourcePathToArtifact {
+		for _, sourceArtifact := range compilation.SourcePathToArtifact {
+			// Get absolute path
+			libPath := ""
+			if astMap, ok := sourceArtifact.Ast.(map[string]any); ok {
+				for astKey := range astMap {
+					if astKey == "absolutePath" {
+						libPath, _ = astMap[astKey].(string)
+					}
+				}
+			}
+			// Throw error if for any reason libPath becomes empty
+			if libPath == "" {
+				panic("libPath is empty, could not determine the library path")
+			}
 			// Check each contract in the source
 			for contractName, contract := range sourceArtifact.Contracts {
 				// Check if this is a library
 				if contract.Kind == types.ContractKindLibrary {
-					// Full name is "sourcePath:contractName"
-					libPath := filepath.Join(filepath.Base(filepath.Dir(sourcePath)), filepath.Base(sourcePath))
 					fullName := libPath + ":" + contractName
 					// Short name is just the contract name
 					shortName := contractName

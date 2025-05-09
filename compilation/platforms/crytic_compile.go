@@ -247,7 +247,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				SrcMapsInit:         contract.SrcMap,
 				SrcMapsRuntime:      contract.SrcMapRuntime,
 				Kind:                contractKinds[contractName],
-				LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.BinRuntime),
+				LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.Bin),
 			}
 		}
 
