@@ -357,7 +357,7 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	// Build a mapping of fully qualified library names to short names
 	libraryNameMapping := fuzzingutils.BuildLibraryNameMapping(compilations)
 	// Initialize a map to track library dependencies.
-	libraryDependencies := make(map[string][]any)
+	libraryDependencies := make(map[string][]string)
 
 	// Capture all the contract definitions, functions, and cache the source code
 	for i := 0; i < len(compilations); i++ {
@@ -387,12 +387,12 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				fuzzingutils.ResolvePlaceholderLibraryReferences(contract.LibraryPlaceholders, libraryNameMapping)
 
 				// Initialize an empty dependency list for this contract
-				libraryDependencies[contractName] = []any{}
+				libraryDependencies[contractName] = []string{}
 
 				// Build the dependency graph by adding each library this contract depends on
 				// This information will be used later to determine the correct deployment order
 				for _, libraryName := range contract.LibraryPlaceholders {
-					libraryDependencies[contractName] = append(libraryDependencies[contractName], libraryName)
+					libraryDependencies[contractName] = append(libraryDependencies[contractName], libraryName.(string))
 				}
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
@@ -534,6 +534,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		targetContractBalances := make(map[string]*config.ContractBalance)
 
 		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
+			targetContracts[name] = true
 			if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
 				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
 			}

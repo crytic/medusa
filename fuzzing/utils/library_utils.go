@@ -80,27 +80,25 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 }
 
 // GetDeploymentOrder returns a topologically sorted list of libraries/contracts
-// based on their dependencies (libraries that other libraries depend on come first)
-func GetDeploymentOrder(contractDependencies map[string][]any, targetContracts []string) ([]string, error) {
-	// Convert to a map of string -> []string for easier processing
-	dependencies := make(map[string][]string)
-	for contract, deps := range contractDependencies {
-		dependencies[contract] = make([]string, 0)
-		for _, depAny := range deps {
-			if depStr, ok := depAny.(string); ok && depStr != "" {
-				dependencies[contract] = append(dependencies[contract], depStr)
-			}
-		}
-	}
-
+// based on their dependencies. This ensures libraries are deployed before contracts
+// that depend on them.
+//
+// The function uses a modified Kahn's algorithm for topological sorting, with
+// special handling for target contracts:
+//  1. Nodes with no dependencies (in-degree = 0) from targetContracts are prioritized
+//     in their original order
+//  2. When multiple nodes become available for processing at the same time, nodes in
+//     targetContracts are ordered according to their position in that list
+//
+// This way the deployment order respects both dependency constraints (libraries first)
+// and preserves the desired order of target contracts when possible.
+func GetDeploymentOrder(dependencies map[string][]string, targetContracts []string) ([]string, error) {
 	// Calculate in-degree for each node (number of dependencies)
 	inDegree := make(map[string]int)
-
 	// Count incoming edges (dependencies)
 	for node, deps := range dependencies {
 		// Each node's in-degree is initially the number of its dependencies
 		inDegree[node] = len(deps)
-
 		// Make sure all dependencies exist in the inDegree map
 		for _, dep := range deps {
 			if _, exists := inDegree[dep]; !exists {
@@ -111,9 +109,23 @@ func GetDeploymentOrder(contractDependencies map[string][]any, targetContracts [
 
 	// Find nodes with no dependencies (in-degree = 0)
 	var queue []string
+	// Create a map to track if a contract is in targetContracts for fast lookup
+	targetContractsMap := make(map[string]int)
+	for i, contract := range targetContracts {
+		targetContractsMap[contract] = i
+	}
+	// First, add zero-degree nodes from targetContracts list in their original order
+	for _, contract := range targetContracts {
+		if degree, exists := inDegree[contract]; exists && degree == 0 {
+			queue = append(queue, contract)
+		}
+	}
+	// Then add remaining zero-degree nodes that aren't in targetContracts
 	for node, degree := range inDegree {
 		if degree == 0 {
-			queue = append(queue, node)
+			if _, inTargets := targetContractsMap[node]; !inTargets {
+				queue = append(queue, node)
+			}
 		}
 	}
 
@@ -124,14 +136,35 @@ func GetDeploymentOrder(contractDependencies map[string][]any, targetContracts [
 		current := queue[0]
 		queue = queue[1:]
 		result = append(result, current)
-
+		delete(inDegree, current)
 		// For each node that depends on this one, decrease its in-degree
 		for node, deps := range dependencies {
 			for _, dep := range deps {
 				if dep == current {
 					inDegree[node]--
 					if inDegree[node] == 0 {
-						queue = append(queue, node)
+						// When a node's degree becomes zero, check if it's in targetContracts
+						// If it is, prioritize it based on its position in targetContracts
+						if idx, inTargets := targetContractsMap[node]; inTargets {
+							// Insert at the appropriate position based on target order
+							inserted := false
+							for i, queuedNode := range queue {
+								if queuedIdx, queuedInTargets := targetContractsMap[queuedNode]; queuedInTargets && idx < queuedIdx {
+									// Insert before this node (proper slice insertion)
+									queue = append(queue, "")    // Add empty space
+									copy(queue[i+1:], queue[i:]) // Shift elements right
+									queue[i] = node              // Insert new element
+									inserted = true
+									break
+								}
+							}
+							if !inserted {
+								queue = append(queue, node)
+							}
+						} else {
+							// For non-targeted contracts, just append them
+							queue = append(queue, node)
+						}
 					}
 				}
 			}
