@@ -8,7 +8,6 @@ import (
 	coretypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
-	"github.com/crytic/medusa-geth/params/forks"
 	"github.com/crytic/medusa/chain/types"
 )
 
@@ -153,8 +152,10 @@ func (t *testChainDeploymentsTracer) OnOpcode(pc uint64, op byte, gas, cost uint
 			DynamicCreation: false,
 			SelfDestructed:  true,
 			// Check if this is a new contract (not previously deployed and self destructed).
-			// https://github.com/crytic/medusa-geth/blob/8d42e115b1cae4f09fd02b71c06ec9c85f22ad4f/core/state/statedb.go#L504-L506
-			Destroyed: t.evmContext.ChainConfig.LatestFork(t.evmContext.Time) < forks.Cancun || !t.evmContext.StateDB.Exist(addr),
+			// TODO: Note that if we allow users to eventually choose which fork they want to use, we will have to check
+			//  if we are before Cancun or not. For the sake of simplicity we will just check for the existence of the
+			//  address
+			Destroyed: !t.evmContext.StateDB.Exist(addr),
 		})
 	}
 }

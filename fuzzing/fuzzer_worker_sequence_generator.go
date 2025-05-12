@@ -321,8 +321,10 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		InputValues: args,
 	})
 
+	// Disable nonce and EOA checks if requested by config
 	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {
-		msg.SkipAccountChecks = true
+		msg.SkipFromEOACheck = true
+		msg.SkipNonceChecks = true
 	}
 
 	// Determine our delay values for this element
