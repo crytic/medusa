@@ -179,3 +179,12 @@ fields to `false` and turns off assertion, property, and optimization testing.
 # Enable exploration mode
 medusa fuzz --explore
 ```
+
+### `--log-level`
+
+The `--log-level` flag sets which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info).
+
+```shell
+# Enable debug log messages
+medusa fuzz --log-level debug
+```

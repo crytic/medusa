@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -30,8 +31,8 @@ func NewWeightedRandomChoice[T any](data T, weight *big.Int) *WeightedRandomChoi
 // WeightedRandomChooser takes a series of WeightedRandomChoice objects which wrap underlying data, and returns one
 // of the weighted options randomly.
 type WeightedRandomChooser[T any] struct {
-	// choices describes the weighted choices from which the chooser will randomly select.
-	choices []*WeightedRandomChoice[T]
+	// Choices describes the weighted choices from which the chooser will randomly select.
+	Choices []*WeightedRandomChoice[T]
 
 	// totalWeight describes the sum of all weights in choices. This is stored here so it does not need to be
 	// recomputed.
@@ -51,7 +52,7 @@ func NewWeightedRandomChooser[T any]() *WeightedRandomChooser[T] {
 // NewWeightedRandomChooserWithRand creates a WeightedRandomChooser with the provided random provider and mutex lock to be acquired when using it.
 func NewWeightedRandomChooserWithRand[T any](randomProvider *rand.Rand, randomProviderLock *sync.Mutex) *WeightedRandomChooser[T] {
 	return &WeightedRandomChooser[T]{
-		choices:            make([]*WeightedRandomChoice[T], 0),
+		Choices:            make([]*WeightedRandomChoice[T], 0),
 		randomProvider:     randomProvider,
 		randomProviderLock: randomProviderLock,
 		totalWeight:        big.NewInt(0),
@@ -60,7 +61,7 @@ func NewWeightedRandomChooserWithRand[T any](randomProvider *rand.Rand, randomPr
 
 // ChoiceCount returns the count of choices added to this provider.
 func (c *WeightedRandomChooser[T]) ChoiceCount() int {
-	return len(c.choices)
+	return len(c.Choices)
 }
 
 // AddChoices adds weighted choices to the WeightedRandomChooser, allowing for future random selection.
@@ -75,13 +76,29 @@ func (c *WeightedRandomChooser[T]) AddChoices(choices ...*WeightedRandomChoice[T
 	}
 
 	// Add to choices to our array
-	c.choices = append(c.choices, choices...)
+	c.Choices = append(c.Choices, choices...)
+}
+
+// RemoveChoices removes weighted choices from the WeightedRandomChooser.
+// Choices to remove are indicated by the `indices` parameter.
+// `indices` should be the same length as c.Choices; a true value represents that we want to remove this choice.
+func (c *WeightedRandomChooser[T]) RemoveChoices(indices map[int]bool) {
+	c.randomProviderLock.Lock()
+	defer c.randomProviderLock.Unlock()
+
+	// Work backwards so we don't mess up later indices when we remove one
+	for i := len(c.Choices) - 1; i >= 0; i-- {
+		if indices[i] {
+			c.totalWeight = new(big.Int).Sub(c.totalWeight, c.Choices[i].weight)
+			c.Choices = slices.Delete(c.Choices, i, i+1)
+		}
+	}
 }
 
 // Choose selects a random weighted item from the WeightedRandomChooser, or returns an error if one occurs.
 func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	// If we have no choices or 0 total weight, return nil.
-	if len(c.choices) == 0 || c.totalWeight.Cmp(big.NewInt(0)) == 0 {
+	if len(c.Choices) == 0 || c.totalWeight.Cmp(big.NewInt(0)) == 0 {
 		return nil, fmt.Errorf("could not return a weighted random choice because no choices exist with non-zero weights")
 	}
 
@@ -122,7 +139,7 @@ func (c *WeightedRandomChooser[T]) Choose() (*T, error) {
 	}
 
 	// Loop for each item
-	for _, choice := range c.choices {
+	for _, choice := range c.Choices {
 		// If our selected weight position is in range for this item, return it
 		if selectedWeightPosition.Cmp(choice.weight) < 0 {
 			return &choice.Data, nil
