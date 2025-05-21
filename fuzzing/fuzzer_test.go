@@ -1155,3 +1155,53 @@ func TestVerbosityLevels(t *testing.T) {
 		})
 	}
 }
+
+func TestExternalLibraryDependency(t *testing.T) {
+	// These are the expected messages in the execution trace
+	expectedTraceMessages := []string{
+		"TestExternalLibrary.fuzz_me()()",
+		"[proxy call] TestExternalLibrary -> Library3.getLibrary()()",
+		"[proxy call] TestExternalLibrary -> Library2.getLibrary()()",
+		"[proxy call] TestExternalLibrary -> Library1.getLibrary()()",
+		"[return (\"Library\")]",
+		"[return (\"Library\")]",
+		"[proxy call] TestExternalLibrary -> Library1.getLibrary()()",
+		"[return (\"Library\")]",
+	}
+
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/external_library/external_library.sol",
+		configUpdates: func(projectConfig *config.ProjectConfig) {
+			projectConfig.Fuzzing.TargetContracts = []string{"TestExternalLibrary"}
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			projectConfig.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+			// Verify it contains all expected strings
+			for _, expectedTraceMessage := range expectedTraceMessages {
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+			}
+		},
+	})
+}
