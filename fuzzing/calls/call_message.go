@@ -2,6 +2,7 @@ package calls
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/common/hexutil"
@@ -9,7 +10,6 @@ import (
 	coreTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
-	"golang.org/x/exp/slices"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from

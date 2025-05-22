@@ -2,6 +2,7 @@ package chain
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core/tracing"
@@ -9,7 +10,6 @@ import (
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
-	"golang.org/x/exp/slices"
 )
 
 // TestChainTracer is an extended tracers.Tracer which can be used with a TestChain to store any captured
