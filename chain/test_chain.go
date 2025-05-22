@@ -583,7 +583,7 @@ func (t *TestChain) PendingBlock() *types.Block {
 	return t.pendingBlock
 }
 
-// HasPendingSelfDestructs checks if the pending block contains any self-destruct or contract creation operations
+// HasPendingStateChanges checks if the pending block contains any self-destruct or contract creation operations
 func (t *TestChain) HasPendingStateChanges() bool {
 	if t.pendingBlock == nil {
 		return false
