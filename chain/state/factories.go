@@ -50,7 +50,7 @@ type VanillaStateDbFactory struct {
 }
 
 func (v VanillaStateDbFactory) New(root common.Hash, db state.Database) (types.MedusaStateDB, error) {
-	return state.New(root, db, nil)
+	return state.New(root, db)
 }
 
 func NewVanillaStateFactory() *VanillaStateDbFactory {

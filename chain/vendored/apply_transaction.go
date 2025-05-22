@@ -47,9 +47,6 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 			}()
 		}
 	}
-	// Create a new context to be used in the EVM environment.
-	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
 	result, err = ApplyMessage(evm, msg, gp)
@@ -66,6 +63,8 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 	}
 	*usedGas += result.UsedGas
 
+	// TODO: Explore using the MakeReceipt function in `core`. The core risk is an interface conversion which will have
+	//  a potential perf hit
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
 	receipt = &gethtypes.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
@@ -96,7 +95,7 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
-	receipt.Bloom = gethtypes.CreateBloom(gethtypes.Receipts{receipt})
+	receipt.Bloom = gethtypes.CreateBloom(receipt)
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())

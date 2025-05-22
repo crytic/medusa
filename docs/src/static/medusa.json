@@ -6,6 +6,7 @@
     "testLimit": 0,
     "shrinkLimit": 5000,
     "callSequenceLength": 100,
+    "pruneFrequency": 5,
     "corpusDirectory": "",
     "coverageEnabled": true,
     "coverageFormats": ["html", "lcov"],

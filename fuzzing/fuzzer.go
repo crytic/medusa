@@ -85,6 +85,9 @@ type Fuzzer struct {
 	// revertReporter tracks per-function reversion metrics, if enabled
 	revertReporter *reverts.RevertReporter
 
+	// corpusPruner is a service that will prune the corpus at a given frequency to reduce corpus size and memory overhead.
+	corpusPruner *corpus.CorpusPruner
+
 	// randomProvider describes the provider used to generate random values in the Fuzzer. All other random providers
 	// used by the Fuzzer's subcomponents are derived from this one.
 	randomProvider *rand.Rand
@@ -177,6 +180,10 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
+	// Create the corpus pruner.
+	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
+	corpusPruner := corpus.NewCorpusPruner(pruneEnabled, config.Fuzzing.PruneFrequency, logger)
+
 	// Create and return our fuzzing instance.
 	fuzzer := &Fuzzer{
 		config:              config,
@@ -187,6 +194,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		testCases:           make([]TestCase, 0),
 		testCasesFinished:   make(map[string]TestCase),
 		revertReporter:      revertReporter,
+		corpusPruner:        corpusPruner,
 		Hooks: FuzzerHooks{
 			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
 			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
@@ -854,6 +862,13 @@ func (f *Fuzzer) Start() error {
 			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
 			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
 		)
+	}
+
+	// Start the corpus pruner.
+	err = f.corpusPruner.Start(f.ctx, f.corpus, baseTestChain)
+	if err != nil {
+		f.logger.Error("Error starting corpus pruner", err)
+		return err
 	}
 
 	// Log the start of our fuzzing campaign.
