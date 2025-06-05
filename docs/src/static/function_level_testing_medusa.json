@@ -5,6 +5,7 @@
     "timeout": 0,
     "testLimit": 1000,
     "callSequenceLength": 1,
+    "pruneFrequency": 5,
     "corpusDirectory": "",
     "coverageEnabled": true,
     "targetContracts": ["TestDepositContract"],
