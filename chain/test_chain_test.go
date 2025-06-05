@@ -225,17 +225,18 @@ func TestChainDynamicDeployments(t *testing.T) {
 						// Deploy the currently indexed contract next
 						// Create a message to represent our contract deployment.
 						msg := core.Message{
-							To:                nil,
-							From:              senders[0],
-							Nonce:             chain.State().GetNonce(senders[0]),
-							Value:             big.NewInt(0),
-							GasLimit:          chain.BlockGasLimit,
-							GasPrice:          big.NewInt(1),
-							GasFeeCap:         big.NewInt(0),
-							GasTipCap:         big.NewInt(0),
-							Data:              contract.InitBytecode,
-							AccessList:        nil,
-							SkipAccountChecks: false,
+							To:               nil,
+							From:             senders[0],
+							Nonce:            chain.State().GetNonce(senders[0]),
+							Value:            big.NewInt(0),
+							GasLimit:         chain.BlockGasLimit,
+							GasPrice:         big.NewInt(1),
+							GasFeeCap:        big.NewInt(0),
+							GasTipCap:        big.NewInt(0),
+							Data:             contract.InitBytecode,
+							AccessList:       nil,
+							SkipNonceChecks:  false,
+							SkipFromEOACheck: false,
 						}
 
 						// Create a new pending block we'll commit to chain
@@ -350,17 +351,18 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 
 					// Create a message to represent our contract deployment.
 					msg := core.Message{
-						To:                nil,
-						From:              senders[0],
-						Nonce:             chain.State().GetNonce(senders[0]),
-						Value:             big.NewInt(0),
-						GasLimit:          chain.BlockGasLimit,
-						GasPrice:          big.NewInt(1),
-						GasFeeCap:         big.NewInt(0),
-						GasTipCap:         big.NewInt(0),
-						Data:              msgData,
-						AccessList:        nil,
-						SkipAccountChecks: false,
+						To:               nil,
+						From:             senders[0],
+						Nonce:            chain.State().GetNonce(senders[0]),
+						Value:            big.NewInt(0),
+						GasLimit:         chain.BlockGasLimit,
+						GasPrice:         big.NewInt(1),
+						GasFeeCap:        big.NewInt(0),
+						GasTipCap:        big.NewInt(0),
+						Data:             msgData,
+						AccessList:       nil,
+						SkipNonceChecks:  false,
+						SkipFromEOACheck: false,
 					}
 
 					// Create a new pending block we'll commit to chain
@@ -459,17 +461,18 @@ func TestChainCloning(t *testing.T) {
 
 							// Create a message to represent our contract deployment.
 							msg := core.Message{
-								To:                nil,
-								From:              senders[0],
-								Nonce:             chain.State().GetNonce(senders[0]),
-								Value:             big.NewInt(0),
-								GasLimit:          chain.BlockGasLimit,
-								GasPrice:          big.NewInt(1),
-								GasFeeCap:         big.NewInt(0),
-								GasTipCap:         big.NewInt(0),
-								Data:              contract.InitBytecode,
-								AccessList:        nil,
-								SkipAccountChecks: false,
+								To:               nil,
+								From:             senders[0],
+								Nonce:            chain.State().GetNonce(senders[0]),
+								Value:            big.NewInt(0),
+								GasLimit:         chain.BlockGasLimit,
+								GasPrice:         big.NewInt(1),
+								GasFeeCap:        big.NewInt(0),
+								GasTipCap:        big.NewInt(0),
+								Data:             contract.InitBytecode,
+								AccessList:       nil,
+								SkipNonceChecks:  false,
+								SkipFromEOACheck: false,
 							}
 
 							// Create a new pending block we'll commit to chain
@@ -553,17 +556,18 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 						for i := 0; i < 10; i++ {
 							// Create a message to represent our contract deployment.
 							msg := core.Message{
-								To:                nil,
-								From:              senders[0],
-								Nonce:             chain.State().GetNonce(senders[0]),
-								Value:             big.NewInt(0),
-								GasLimit:          chain.BlockGasLimit,
-								GasPrice:          big.NewInt(1),
-								GasFeeCap:         big.NewInt(0),
-								GasTipCap:         big.NewInt(0),
-								Data:              contract.InitBytecode,
-								AccessList:        nil,
-								SkipAccountChecks: false,
+								To:               nil,
+								From:             senders[0],
+								Nonce:            chain.State().GetNonce(senders[0]),
+								Value:            big.NewInt(0),
+								GasLimit:         chain.BlockGasLimit,
+								GasPrice:         big.NewInt(1),
+								GasFeeCap:        big.NewInt(0),
+								GasTipCap:        big.NewInt(0),
+								Data:             contract.InitBytecode,
+								AccessList:       nil,
+								SkipNonceChecks:  false,
+								SkipFromEOACheck: false,
 							}
 
 							// Create a new pending block we'll commit to chain
