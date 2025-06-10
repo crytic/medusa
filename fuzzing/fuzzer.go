@@ -642,7 +642,7 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 
 	// Create a message to represent our contract deployment (we let deployments consume the whole block
 	// gas limit rather than use tx gas limit)
-	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, f.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, blockGasLimit, nil, nil, nil, msgData)
 	msg.FillFromTestChainProperties(testChain)
 
 	// Create a new pending block we'll commit to chain

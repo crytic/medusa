@@ -515,7 +515,6 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	state.SetBalance(msg.From, uint256.MustFromBig(math.MaxBig256), tracing.BalanceChangeUnspecified)
 
 	// Create our transaction and block contexts for the vm
-	txContext := core.NewEVMTxContext(msg)
 	var blockContext vm.BlockContext
 	if t.pendingBlock != nil {
 		blockContext = newTestChainBlockContext(t, t.pendingBlock.Header)
