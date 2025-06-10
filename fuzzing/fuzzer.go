@@ -118,6 +118,9 @@ type Fuzzer struct {
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
 const timeBetweenPCsLogMsgs = time.Minute
 
+// Large number used for block gas limit that should never get hit.
+const blockGasLimit = 0x0FFFFFFFFFFFFFFF
+
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
 func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
@@ -492,7 +495,7 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
 
 	// Set our block gas limit
-	testChain.BlockGasLimit = f.config.Fuzzing.BlockGasLimit
+	testChain.BlockGasLimit = blockGasLimit
 	return testChain, err
 }
 
@@ -639,7 +642,7 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 
 	// Create a message to represent our contract deployment (we let deployments consume the whole block
 	// gas limit rather than use tx gas limit)
-	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, f.config.Fuzzing.BlockGasLimit, nil, nil, nil, msgData)
+	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, blockGasLimit, nil, nil, nil, msgData)
 	msg.FillFromTestChainProperties(testChain)
 
 	// Create a new pending block we'll commit to chain
