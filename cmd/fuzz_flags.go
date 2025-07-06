@@ -11,7 +11,7 @@ import (
 
 // addFuzzFlags adds the various flags for the fuzz command
 func addFuzzFlags() error {
-	// Get the default project config and throw an error if we cant
+	// Get the default project config and throw an error if we can't
 	defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
 		return err

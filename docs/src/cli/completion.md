@@ -1,7 +1,7 @@
 # `completion`
 
 `medusa` provides the ability to generate autocompletion scripts for a given shell.
-Once the autocompletion script is ran for a given shell, `medusa`'s commands and flags can be tab-autocompleted.
+Once the autocompletion script is run for a given shell, `medusa`'s commands and flags can be tab-autocompleted.
 The following shells are supported:
 
 1. `bash`

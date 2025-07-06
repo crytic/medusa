@@ -103,7 +103,7 @@ func (t *ExecutionTracer) NativeTracer() *chain.TestChainTracer {
 
 }
 
-// Close sets the traceMap to nil and should be called after the execution tracer is finish being used.
+// Close sets the traceMap to nil and should be called after the execution tracer is finished being used.
 func (t *ExecutionTracer) Close() {
 	t.traceMap = nil
 }

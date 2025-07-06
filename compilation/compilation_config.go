@@ -50,7 +50,7 @@ func NewCompilationConfigFromPlatformConfig(platformConfig platforms.PlatformCon
 
 // Compile takes a generic CompilationConfig and deserializes the inner platforms.PlatformConfig, which
 // is then used to compile the underlying targets. Returns a list of compilations returned by the platform provider or
-// an error. Command-line input may also be returned in either case.,
+// an error if one occurs. Command-line input may also be returned in either case.
 func (c *CompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Get the platform config
 	platformConfig, err := c.GetPlatformConfig()

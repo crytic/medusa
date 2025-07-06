@@ -59,7 +59,7 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 
 // validateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
 // or the `--export-dir` arguments. This is because `--export-format` has to be `solc` for the `crytic-compile`
-// integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
+// integration to work and CryticCompilationConfig.ExportDirectory option is equivalent to `--export-dir`
 func (c *CryticCompilationConfig) validateArgs() error {
 	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {

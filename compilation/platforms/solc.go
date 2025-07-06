@@ -67,14 +67,14 @@ func (s *SolcCompilationConfig) SetSolcOutputOptions(v *semver.Version) string {
 		(v.Major() == 0 && v.Minor() == 7 && v.Patch() <= 6) ||
 		(v.Major() == 0 && v.Minor() == 8 && v.Patch() <= 9)
 
-	// if version is 0.3.0-0.3.6 or 0.4.0-0.4.11 no 'hashes' outputOption
+	// if version is 0.3.0-0.3.6 or 0.4.0-0.4.11, no 'hashes' outputOption
 	if (v.Major() == 0 && v.Minor() == 4 && v.Patch() <= 11) || (v.Major() == 0 && v.Minor() == 3 && v.Patch() <= 6) {
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc"
 	} else if useCompactFormat {
 		// Both 'hashes' and 'compact-format' are allowed as outputOptions
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes,compact-format"
 	} else {
-		// Can't use 'compact-format' but 'hashes' is allowed as outputOption
+		// Can't use 'compact-format', but 'hashes' is allowed as outputOption
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes"
 	}
 }

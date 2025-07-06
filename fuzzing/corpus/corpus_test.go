@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// getMockSimpleCorpus creates a mock corpus with numEntries callSequencesByFilePath for testing
+// getMockSimpleCorpus creates a mock corpus with numEntries callSequenceFiles for testing
 func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlocks int) (*Corpus, error) {
 	// Create a new corpus
 	corpus, err := NewCorpus("corpus")

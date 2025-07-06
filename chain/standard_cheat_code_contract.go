@@ -162,7 +162,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
-	// Fee: Update the base bee. Note that this _permanently_ updates the base fee for the remainder of the
+	// Fee: Update the base fee. Note that this _permanently_ updates the base fee for the remainder of the
 	// chain's lifecycle
 	contract.addMethod(
 		"fee", abi.Arguments{{Type: typeUint256}}, abi.Arguments{},
@@ -491,7 +491,7 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 			}
 			// TODO: Spoof tx.origin
 
-			// Propogate the prank into next call in the same scope.
+			// Propagate the prank into next call in the same scope.
 			if tracer.callDepth > prankData.setAtCallDepth {
 				tracer.PreviousCallFrame().onNextFrameEnterHooks.Push(hookFn)
 			}

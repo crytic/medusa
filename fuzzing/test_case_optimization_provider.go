@@ -31,7 +31,7 @@ type OptimizationTestCaseProvider struct {
 	// shrinkingRequestedLock is used for thread-synchronization with reading and updating shrinkingRequested
 	shrinkingRequestedLock sync.Mutex
 
-	// testCases is a map of contract-method IDs to optimization test cases.GetContractMethodID
+	// testCases is a map of contract-method IDs to optimization test cases.
 	testCases map[contracts.ContractMethodID]*OptimizationTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases

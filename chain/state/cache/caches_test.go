@@ -128,7 +128,7 @@ func TestPersistentCache(t *testing.T) {
 	stateObjectData := &StateObject{
 		Nonce: rand.Uint64(),
 	}
-	// try reading from a state cache that doesnt exist
+	// try reading from a state cache that doesn't exist
 	_, err = pc.GetStateObject(stateObjectAddr)
 	assert.Error(t, err)
 	assert.Equal(t, err, ErrCacheMiss)
@@ -145,7 +145,7 @@ func TestPersistentCache(t *testing.T) {
 	stateSlotAddress := common.Hash{0x66, 0x01}
 	stateSlotData := common.Hash{0x81}
 
-	// try reading from a slot that doesnt exist
+	// try reading from a slot that doesn't exist
 	_, err = pc.GetSlotData(stateObjectAddr, stateSlotAddress)
 	assert.Error(t, err)
 	assert.Equal(t, err, ErrCacheMiss)

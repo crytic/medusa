@@ -29,7 +29,7 @@ tells `medusa` to execute `10_000` transactions before stopping the fuzzing camp
 > Note: The target contracts and the test limit can also be configured via the project configuration file, which is the
 > **recommended** route. The `--target-contracts` flag is equivalent to the
 > [`fuzzing.targetContracts`](../project_configuration/fuzzing_config.md#targetcontracts) configuration option and the
-> `-test-limit` flag is equivalent to the [`fuzzing.testLimit`](../project_configuration/fuzzing_config.md#testlimit)
+> `--test-limit` flag is equivalent to the [`fuzzing.testLimit`](../project_configuration/fuzzing_config.md#testlimit)
 > configuration option.
 
 It is recommended to review the [Configuration Overview](../project_configuration/overview.md) next and learn more about

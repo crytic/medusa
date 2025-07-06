@@ -13,7 +13,7 @@ The logging configuration defines the parameters for logging to console and/or f
 ### `logDirectory`
 
 - **Type**: String
-- **Description**: Describes what directory log files should be outputted. Have a non-empty `logDirectory` value will
+- **Description**: Describes what directory log files should be output to. Having a non-empty `logDirectory` value will
   enable "file logging" which will result in logs to be output to both console and file. Note that the directory path is
   _relative_ to the directory containing the project configuration file.
 - **Default**: ""

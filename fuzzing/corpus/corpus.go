@@ -29,7 +29,7 @@ import (
 // reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
 // may create incompatibilities with corpus items.
 type Corpus struct {
-	// storageDirectory describes the directory to save corpus callSequencesByFilePath within.
+	// storageDirectory describes the directory to save corpus callSequenceFiles within.
 	storageDirectory string
 
 	// coverageMaps describes the total code coverage known to be achieved across all corpus call sequences.

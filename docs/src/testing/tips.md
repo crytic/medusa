@@ -16,7 +16,7 @@
 
 - **Use assertions judiciously:** Assertions can be useful for catching errors, but they can also slow down testing. Use them only when necessary.
 - **Test for both valid and invalid inputs:** Ensure your assertions check for both valid and invalid inputs to thoroughly test your contract's behavior.
-- **Use pre-conditions and post-conditions to verify the state of the contract before and after a function call.:** Pre-conditions and post-conditions are assertions that can be used to verify the state of the contract before and after a function call. This can help to ensure that the function is called with the correct inputs, that it produces the expected outputs, and that the state of the contract is valid.
+- **Use pre-conditions and post-conditions to verify the state of the contract before and after a function call:** Pre-conditions and post-conditions are assertions that can be used to verify the state of the contract before and after a function call. This can help to ensure that the function is called with the correct inputs, that it produces the expected outputs, and that the state of the contract is valid.
 
 ### Optimization Testing
 

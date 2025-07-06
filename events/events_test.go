@@ -18,7 +18,7 @@ func TestEventPublishingAndSubscribing(t *testing.T) {
 	eventBEmitter1 := EventEmitter[TestEventB]{}
 	eventBEmitter2 := EventEmitter[TestEventB]{}
 
-	// Create a dictionary to track event callback
+	// Create a dictionary to track event callbacks
 	var eventAEmitter1PublishCount,
 		eventAEmitter2PublishCount,
 		eventBEmitter1PublishCount,
