@@ -13,7 +13,7 @@ func HexStringToAddress(addressHexString string) (common.Address, error) {
 	// Remove the 0x prefix and decode the hex string into a byte array
 	trimmedString := strings.TrimPrefix(addressHexString, "0x")
 
-	// Pad the hex string with a 0 if its odd-length.
+	// Pad the hex string with a 0 if it's odd-length.
 	if len(trimmedString)%2 != 0 {
 		trimmedString = "0" + trimmedString
 	}

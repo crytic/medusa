@@ -10,7 +10,7 @@ For more advanced information and documentation on how the various modes work an
 
 ## Writing property tests
 
-Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
+Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`property_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 
 ```solidity
 contract TestXY {
@@ -121,7 +121,7 @@ contract TestContract {
 }
 ```
 
-`medusa` deploys your contract containing optimization tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your otpimization tests to identify whether the return value of those tests are greater than the currently stored values.
+`medusa` deploys your contract containing optimization tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your optimization tests to identify whether the return value of those tests are greater than the currently stored values.
 
 ### Testing in optimization-mode
 

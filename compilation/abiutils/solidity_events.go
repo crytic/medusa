@@ -52,7 +52,7 @@ func UnpackEventAndValues(contractAbi *abi.ABI, eventLog *coreTypes.Log) (*abi.E
 		indexedInputData = append(indexedInputData, eventLog.Topics[i+1].Bytes()...)
 	}
 
-	// Unpacked our un-indexed values.
+	// Unpack our un-indexed values.
 	unindexedInputValues, err := unindexedInputArguments.Unpack(eventLog.Data)
 	if err != nil {
 		return nil, nil

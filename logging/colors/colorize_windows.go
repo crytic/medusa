@@ -65,6 +65,6 @@ func Colorize(s any, c Color) string {
 		return fmt.Sprintf("%v", s)
 	}
 
-	// Otherwise, returned an ANSI-wrapped string
+	// Otherwise, return an ANSI-wrapped string
 	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", c, s)
 }

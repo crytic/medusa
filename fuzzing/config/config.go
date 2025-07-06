@@ -55,13 +55,13 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
-	// PruneFrequncy determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+	// PruneFrequency determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
 	// Setting PruneFrequency to 0 disables pruning.
 	// PruneFrequency only matters if CoverageEnabled is set to true; otherwise, no pruning will occur.
 	PruneFrequency uint64 `json:"pruneFrequency"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
-	// the in-memory corpus will be used, but not flush to disk.
+	// the in-memory corpus will be used, but will not be flushed to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
@@ -222,7 +222,7 @@ type TestingConfig struct {
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 
-	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
+	// TargetFunctionSignatures is a list of function signatures the fuzzer should exclusively target by omitting calls to other signatures.
 	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
 
