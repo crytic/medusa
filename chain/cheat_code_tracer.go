@@ -241,21 +241,21 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 		// expectRevert does not affect the calls to the cheatcode VM (ex: prank)
 		// So if the next call is another call to the VM
 		// We forward the extraData to the next Frame
-		if scope.Address() == StandardCheatcodeContractAddress { 
+		if scope.Address() == StandardCheatcodeContractAddress {
 			// TODO refactor the following to be an internal function used in both here and standard_cheat_code_contrat
 			delete(currentCallFrame.extraData, "expectRevert")
-			
+
 			cheatCodeCallerFrame := t.PreviousCallFrame()
 			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
 				revertFrame := t.PreviousCallFrame()
 				// TODO : support dynamic value for expectRevert instead of a bool
 				revertFrame.extraData["expectRevert"] = true
 			})
-		} else{
+		} else {
 			delete(currentCallFrame.extraData, "expectRevert")
 
 			stack := scope.StackData()
-			index := len(stack)-1
+			index := len(stack) - 1
 			return_value := stack[index]
 			if return_value.Eq(uint256.NewInt(0)) {
 				stack[index] = *uint256.NewInt(1)
