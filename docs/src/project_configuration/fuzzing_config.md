@@ -103,6 +103,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
+
 ### `targetContractsInitFunctions`
 
 - **Type**: [String] (e.g. `["setUp", "initialize", ""]`)

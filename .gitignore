@@ -29,3 +29,5 @@ docs/book
 
 # Build results
 result
+
+.vscode/*

@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/crytic/medusa-geth/common"
@@ -9,6 +10,7 @@ import (
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
+	"github.com/holiman/uint256"
 )
 
 // cheatCodeTracer represents an EVM.Logger which tracks and patches EVM execution state to enable extended
@@ -231,6 +233,43 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	// We execute our entered next frame hooks here (from our previous call frame), as we now have scope information.
 	if t.callDepth > 0 {
 		t.callFrames[t.callDepth-1].onNextFrameEnterHooks.Execute(true, true)
+	}
+
+	// Support for expectRevert cheatcode (see standard_cheat_code_contrat.go)
+	// TODO : support dynamic value for expectRevert
+	if _, ok := currentCallFrame.extraData["expectRevert"]; ok {
+		// expectRevert does not affect the calls to the cheatcode VM (ex: prank)
+		// So if the next call is another call to the VM
+		// We forward the extraData to the next Frame
+		if scope.Address() == StandardCheatcodeContractAddress { 
+			// TODO refactor the following to be an internal function used in both here and standard_cheat_code_contrat
+			delete(currentCallFrame.extraData, "expectRevert")
+			
+			cheatCodeCallerFrame := t.PreviousCallFrame()
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				revertFrame := t.PreviousCallFrame()
+				// TODO : support dynamic value for expectRevert instead of a bool
+				revertFrame.extraData["expectRevert"] = true
+			})
+		} else{
+			delete(currentCallFrame.extraData, "expectRevert")
+
+			stack := scope.StackData()
+			index := len(stack)-1
+			return_value := stack[index]
+			if return_value.Eq(uint256.NewInt(0)) {
+				stack[index] = *uint256.NewInt(1)
+			} else {
+
+				if !return_value.Eq(uint256.NewInt(1)) {
+					// TODO: find a better error handling
+					panic(fmt.Sprintf("expected revert but got return value %v", return_value))
+				}
+
+				stack[index] = *uint256.NewInt(0)
+			}
+
+		}
 	}
 }
 

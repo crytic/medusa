@@ -10,13 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crytic/medusa/chain/types"
-
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core/tracing"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/crypto"
+	"github.com/crytic/medusa/chain/types"
 	"github.com/crytic/medusa/utils"
 	"github.com/holiman/uint256"
 )
@@ -56,6 +55,10 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 	typeBytes, err := abi.NewType("bytes", "", nil)
+	if err != nil {
+		return nil, err
+	}
+	typeBytes4, err := abi.NewType("bytes4", "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -810,8 +813,232 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		},
 	)
 
+	// getCode: Retrieves the runtime bytecode for a contract
+	contract.addMethod("getDeployedCode", abi.Arguments{{Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+
+			contractPath := inputs[0].(string)
+
+			_, contractName, err := parseContractPath(contractPath)
+			if err != nil {
+				fmt.Println("getDeployedCode error: invalid path format: %v", err)
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: invalid path format: %v", err)))
+			}
+
+			compiledContract, exists := tracer.chain.CompiledContracts[contractName]
+			if !exists {
+				// TODO: this is probably not the best to print given it will be printed in loop
+				// But it should be shown once to the user to avoid mistakes
+				// Same is true for getCode
+				fmt.Println("getDeployedCode error: contract not found: %s (did you forget to deploy the contract with predeployedContracts?)", contractName)
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractName)))
+			}
+
+			bytecode := compiledContract.RuntimeBytecode
+			if len(bytecode) == 0 {
+				fmt.Println("getDeployedCode error: contract bytecode is empty: %s", contractName)
+				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract bytecode is empty: %s", contractName)))
+			}
+
+			fmt.Println("getDeployedCode found")	
+			// Return the bytecode
+			return []any{bytecode}, nil
+		},
+	)
+
+	// assertTrue
+	contract.addMethod("assertTrue", abi.Arguments{{Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			bool_result := inputs[0].(bool)
+
+			if !bool_result {
+				return nil, cheatCodeRevertData([]byte("assertFalse failed"))
+			}
+
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// assertTrue with reason
+	contract.addMethod("assertTrue", abi.Arguments{{Type: typeBool}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			bool_result := inputs[0].(bool)
+
+			if !bool_result {
+				return nil, cheatCodeRevertData([]byte(inputs[1].(string)))
+			}
+
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// assertFalse
+	contract.addMethod("assertFalse", abi.Arguments{{Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			bool_result := inputs[0].(bool)
+
+			if bool_result {
+				return nil, cheatCodeRevertData([]byte("assertFalse failed"))
+			}
+
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// assertFalse with reason
+	contract.addMethod("assertFalse", abi.Arguments{{Type: typeBool}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			bool_result := inputs[0].(bool)
+
+			if bool_result {
+				return nil, cheatCodeRevertData([]byte(inputs[1].(string)))
+			}
+
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// assume: Revert if the condition if false
+	contract.addMethod("assume", abi.Arguments{{Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			bool_result := inputs[0].(bool)
+
+			if !bool_result {
+				return nil, cheatCodeRevertData([]byte("assume failed"))
+			}
+
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// expectEmit: NOOP for now (TODO)
+	contract.addMethod("expectEmit", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			// Return nothing
+			return nil, nil
+		},
+	)
+
+	// expectRevert: Follow the expect revert logic
+	// TODO: merge the different expectRevert to reduce the code dupplicate and handle properly the reason check
+	contract.addMethod("expectRevert", abi.Arguments{}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+
+			// To implement expectRevert we follow this logic:
+			// We add a hook on the next call that happen after the call to the cheatcode's VM
+			// Which is the "next" frame of the "previous frame"
+			// The previous frame being the caller of the cheatcode, and its next frame the next call
+			// The hook just set expectRevert to true
+			// The actual update is done in the OnOpcode hook (cheat_code_tracer.go)
+
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				revertFrame := tracer.PreviousCallFrame()
+				// TODO : support dynamic value for expectRevert instead of a bool
+				revertFrame.extraData["expectRevert"] = true
+			})
+			return nil, nil
+		},
+	)
+
+	// expectRevert: Follow the expect revert logic
+	contract.addMethod("expectRevert", abi.Arguments{{Type: typeBytes4}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+
+			// To implement expectRevert we follow this logic:
+			// We add a hook on the next call that happen after the call to the cheatcode's VM
+			// Which is the "next" frame of the "previous frame"
+			// The previous frame being the caller of the cheatcode, and its next frame the next call
+			// The hook just set expectRevert to true
+			// The actual update is done in the OnOpcode hook (cheat_code_tracer.go)
+
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				revertFrame := tracer.PreviousCallFrame()
+				// TODO : support dynamic value for expectRevert instead of a bool
+				revertFrame.extraData["expectRevert"] = true
+			})
+			return nil, nil
+		},
+	)
+
+	// expectRevert: Follow the expect revert logic
+	contract.addMethod("expectRevert", abi.Arguments{{Type: typeBytes}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+
+			// To implement expectRevert we follow this logic:
+			// We add a hook on the next call that happen after the call to the cheatcode's VM
+			// Which is the "next" frame of the "previous frame"
+			// The previous frame being the caller of the cheatcode, and its next frame the next call
+			// The hook just set expectRevert to true
+			// The actual update is done in the OnOpcode hook (cheat_code_tracer.go)
+
+			cheatCodeCallerFrame := tracer.PreviousCallFrame()
+			cheatCodeCallerFrame.onNextFrameEnterHooks.Push(func() {
+				revertFrame := tracer.PreviousCallFrame()
+				// TODO : support dynamic value for expectRevert instead of a bool
+				revertFrame.extraData["expectRevert"] = true
+			})
+			return nil, nil
+		},
+	)
+
+	// assertEq: Register assertEq for all supported types
+	assertEqTypes := []abi.Type{typeAddress, typeBytes, typeBytes4, typeBytes32, typeUint8, typeUint64, typeUint256, typeInt256, typeString, typeBool}
+	for _, t := range assertEqTypes {
+		currentType := t // capture range variable
+		contract.addMethod("assertEq", abi.Arguments{{Type: currentType}, {Type: currentType}}, abi.Arguments{},
+			func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+				if !assertEqGenerator(inputs, currentType) {
+					return nil, cheatCodeRevertData([]byte("assertEq failed"))
+				}
+				return nil, nil
+			},
+		)
+
+		contract.addMethod("assertEq", abi.Arguments{{Type: currentType}, {Type: currentType}, {Type: typeString}}, abi.Arguments{},
+			func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+				if !assertEqGenerator(inputs, currentType) {
+					reason := inputs[2].(string)
+					return nil, cheatCodeRevertData([]byte(reason))
+				}
+				return nil, nil
+			},
+		)
+	}
+
 	// Return our precompile contract information.
 	return contract, nil
+}
+
+func assertEqGenerator(inputs []any, t abi.Type) bool {
+	l := inputs[0]
+	r := inputs[1]
+
+	// Use type-specific comparisons based on the ABI type
+	switch t.T {
+	case abi.AddressTy:
+		return l.(common.Address) == r.(common.Address)
+	case abi.BoolTy:
+		return l.(bool) == r.(bool)
+	case abi.IntTy, abi.UintTy:
+		return l.(*big.Int).Cmp(r.(*big.Int)) == 0
+	case abi.StringTy:
+		return l.(string) == r.(string)
+	case abi.BytesTy:
+		return string(l.([]byte)) == string(r.([]byte))
+	case abi.FixedBytesTy:
+		lBytes := l.([32]byte)
+		rBytes := r.([32]byte)
+		return string(lBytes[:]) == string(rBytes[:])
+	default:
+		return l == r
+	}
 }
 
 // parseContractPath parses a contract path in the following formats:
