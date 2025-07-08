@@ -44,6 +44,9 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().StringSlice("target-contracts", []string{},
 		fmt.Sprintf("target contracts for fuzz testing (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.TargetContracts))
 
+	// Will call post-deployment initialization function defined by `targetContractsInitFunctions` to be called on all contracts that have the implementation
+	fuzzCmd.Flags().Bool("use-init-fns", false, "runs init functions (`setUp`, `initialize`) on all contracts that have the implementation")
+
 	// Corpus directory
 	fuzzCmd.Flags().String("corpus-dir", "",
 		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
@@ -79,7 +82,9 @@ func addFuzzFlags() error {
 
 	// Verbosity levels (-v, -vv, -vvv)
 	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
+
 	return nil
+
 }
 
 // updateProjectConfigWithFuzzFlags will update the given projectConfig with any CLI arguments that were provided to the fuzz command
@@ -252,6 +257,21 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVerbose
 		case verbosityCount >= 3:
 			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVeryVerbose
+		}
+	}
+
+	// Update configuration to run init functions
+	if cmd.Flags().Changed("use-init-fns") {
+		useInitFns, err := cmd.Flags().GetBool("use-init-fns")
+		if err != nil {
+			return err
+		}
+		if useInitFns {
+			defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
+			if err != nil {
+				return err
+			}
+			projectConfig.Fuzzing.TargetContractsInitFunctions = defaultConfig.Fuzzing.TargetContractsInitFunctions
 		}
 	}
 
