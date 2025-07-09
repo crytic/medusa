@@ -79,16 +79,19 @@ type FuzzingConfig struct {
 	// TargetContracts
 	TargetContractsBalances []*ContractBalance `json:"targetContractsBalances"`
 
+	// Holds the logic whether to run initialization functions supplied by `enable-foundry-setup` or `use-init-fns`
+	UseInitFunctions bool `json:"useInitFunctions"`
+
 	// TargetContractsInitFunctions is the list of functions to users to specify an "init function" (with setUp() as the default)
 	TargetContractsInitFunctions []string `json:"targetContractsInitFunctions"`
-
-	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
-	// configuration
-	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
 
 	// InitializationArgs holds the arguments for TargetContractsInitFunctions deployments. It is available via the project
 	// configuration
 	InitializationArgs map[string]map[string]any `json:"initializationArgs"`
+
+	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
+	// configuration
+	ConstructorArgs map[string]map[string]any `json:"constructorArgs"`
 
 	// DeployerAddress describe the account address to be used to deploy contracts.
 	DeployerAddress string `json:"deployerAddress"`
@@ -486,4 +489,22 @@ func (p *ProjectConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// Helper function to enable init functions with specific functions
+func (p *ProjectConfig) EnableInitFunctions(initFunctions []string) {
+	p.Fuzzing.UseInitFunctions = true
+	p.Fuzzing.TargetContractsInitFunctions = initFunctions
+}
+
+// Helper function to enable Foundry setup
+func (p *ProjectConfig) EnableFoundrySetup() {
+	p.Fuzzing.UseInitFunctions = true
+	p.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
+}
+
+// Helper function to disable init functions
+func (p *ProjectConfig) DisableInitFunctions() {
+	p.Fuzzing.UseInitFunctions = false
+	p.Fuzzing.TargetContractsInitFunctions = []string{}
 }

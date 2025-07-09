@@ -47,6 +47,9 @@ func addFuzzFlags() error {
 	// Will call post-deployment initialization function defined by `targetContractsInitFunctions` to be called on all contracts that have the implementation
 	fuzzCmd.Flags().Bool("use-init-fns", false, "runs init functions (`setUp`, `initialize`) on all contracts that have the implementation")
 
+	// Will call setUp() function if implemented
+	fuzzCmd.Flags().Bool("enable-foundry-setup", false, "runs `setUp` function on all contracts that have it implemented")
+
 	// Corpus directory
 	fuzzCmd.Flags().String("corpus-dir", "",
 		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
@@ -267,11 +270,20 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			return err
 		}
 		if useInitFns {
-			defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
-			if err != nil {
-				return err
-			}
-			projectConfig.Fuzzing.TargetContractsInitFunctions = defaultConfig.Fuzzing.TargetContractsInitFunctions
+			// Enable the init functions feature but the actual functions need to be specified in config
+			projectConfig.Fuzzing.UseInitFunctions = true
+		}
+	}
+
+	// Update configuration to run `setUp` function where implemented
+	if cmd.Flags().Changed("enable-foundry-setup") {
+		enableFoundrySetUp, err := cmd.Flags().GetBool("enable-foundry-setup")
+		if err != nil {
+			return err
+		}
+		if enableFoundrySetUp {
+			projectConfig.Fuzzing.UseInitFunctions = true
+			projectConfig.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
 		}
 	}
 

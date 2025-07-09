@@ -48,6 +48,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TargetContracts:              []string{},
 			TargetContractsBalances:      []*ContractBalance{},
 			TargetContractsInitFunctions: []string{},
+			UseInitFunctions:             false,
 			PredeployedContracts:         map[string]string{},
 			ConstructorArgs:              map[string]map[string]any{},
 			InitializationArgs:           map[string]map[string]any{},

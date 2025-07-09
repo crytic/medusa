@@ -504,9 +504,11 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	for i := 0; i < targetContractsCount; i++ {
 		initFunction := "" // No default initialization
 
-		// Use custom init function if available
-		if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
-			initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+		if fuzzer.config.Fuzzing.UseInitFunctions {
+			// Use custom init function if available
+			if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
+				initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+			}
 		}
 
 		initFunctions = append(initFunctions, initFunction)
@@ -607,8 +609,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				deployedContractAddr[contractName] = block.MessageResults[0].Receipt.ContractAddress
 				contractAddr := deployedContractAddr[contractName]
 
-				// Get the initialization function name if exists
-				if i < len(initFunctions) && initFunctions[i] != "" {
+				// Get the initialization function name if exists and feature is enabled
+				if fuzzer.config.Fuzzing.UseInitFunctions && i < len(initFunctions) && initFunctions[i] != "" {
 					initFunction := initFunctions[i]
 					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
 

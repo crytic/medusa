@@ -520,6 +520,7 @@ func TestInitializationWithParam(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deploy_with_init_fns.sol",
 		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.EnableInitFunctions([]string{"initWithParam"})
 			// Just a single contract
 			pkgConfig.Fuzzing.TargetContracts = []string{"SimpleInitParamTest"}
 
