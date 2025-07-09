@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -86,6 +88,8 @@ func addFuzzFlags() error {
 	// Verbosity levels (-v, -vv, -vvv)
 	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
 
+	// Log level
+	fuzzCmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
 	return nil
 
 }
@@ -285,6 +289,19 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			projectConfig.Fuzzing.UseInitFunctions = true
 			projectConfig.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
 		}
+	// Update log level
+	if cmd.Flags().Changed("log-level") {
+		levelStr, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			return err
+		}
+
+		level, err := zerolog.ParseLevel(levelStr)
+		if err != nil || level == zerolog.FatalLevel {
+			return errors.New("invalid log level (expected trace, debug, info, warn, error, or panic)")
+		}
+
+		projectConfig.Logging.Level = level
 	}
 
 	return nil

@@ -31,6 +31,8 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
+var _, MAX_UINT_64 = utils.GetIntegerConstraints(false, 64)
+
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
 // typical consensus/chain objects to allow for more specialized testing closer to the EVM.
 type TestChain struct {
@@ -149,14 +151,17 @@ func newTestChainWithStateFactory(
 		return nil, err
 	}
 
-	// TODO: go-ethereum doesn't set cancun start time for THEIR test `ChainConfig` struct.
+	// TODO: go-ethereum doesn't set prague start time for THEIR test `ChainConfig` struct.
 	//   Note: We have our own `TestChainConfig` definition that is different (second argument in this function).
 	//  We should allow the user to provide a go-ethereum `ChainConfig` to do custom fork selection, inside of our
 	//  `TestChainConfig` definition. Or we should wrap it in our own struct to simplify the options and not pollute
 	//  our overall medusa project config.
-	cancunTime := uint64(0)
-	chainConfig.ShanghaiTime = &cancunTime
-	chainConfig.CancunTime = &cancunTime
+	pragueTime := uint64(0)
+	chainConfig.PragueTime = &pragueTime
+	chainConfig.ShanghaiTime = &pragueTime
+	chainConfig.CancunTime = &pragueTime
+	// Set the default blob schedule
+	chainConfig.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	// Create our genesis definition with our default chain config.
 	genesisDefinition := &core.Genesis{
@@ -216,7 +221,7 @@ func newTestChainWithStateFactory(
 	// Convert our genesis block (go-ethereum type) to a test chain block.
 	testChainGenesisBlock := types.NewBlock(genesisBlock.Header())
 	// Create our state database over-top our database.
-	stateDatabase := gethState.NewDatabaseWithConfig(db, dbConfig)
+	stateDatabase := gethState.NewDatabase(trieDB, nil)
 
 	// Create a tracer forwarder to support the addition of multiple tracers for transaction and call execution.
 	transactionTracerRouter := NewTestChainTracerRouter()
@@ -253,10 +258,8 @@ func newTestChainWithStateFactory(
 	if err != nil {
 		return nil, err
 	}
-
-	// Set our state database logger e.g. to monitor OnCodeChange events.
-	stateDB.SetLogger(transactionTracerRouter.NativeTracer().Tracer.Hooks)
 	chain.state = stateDB
+
 	return chain, nil
 }
 
@@ -512,8 +515,7 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	// Set infinite balance to the fake caller account
 	state.SetBalance(msg.From, uint256.MustFromBig(math.MaxBig256), tracing.BalanceChangeUnspecified)
 
-	// Create our transaction and block contexts for the vm
-	txContext := core.NewEVMTxContext(msg)
+	// Create our block contexts for the vm
 	blockContext := newTestChainBlockContext(t, t.Head().Header)
 
 	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
@@ -523,11 +525,12 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	extendedTracerRouter.AddTracers(additionalTracers...)
 
 	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, txContext, state, t.chainConfig, vm.Config{
+	evm := vm.NewEVM(blockContext, state, t.chainConfig, vm.Config{
 		Tracer:           extendedTracerRouter.NativeTracer().Tracer.Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
+
 	// Set our block context and chain config in order for cheatcodes to override what EVM interpreter sees.
 	t.pendingBlockContext = &evm.Context
 	t.pendingBlockChainConfig = evm.ChainConfig()
@@ -540,7 +543,8 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 	}
 	// Fund the gas pool, so it can execute endlessly (no block gas limit).
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	gasPool := new(core.GasPool).AddGas(MAX_UINT_64.Uint64())
 
 	// Perform our state transition to obtain the result.
 	msgResult, err := core.ApplyMessage(evm, msg, gasPool)
@@ -706,7 +710,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))
 
 	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(message), t.state, t.chainConfig, vmConfig)
+	evm := vm.NewEVM(blockContext, t.state, t.chainConfig, vmConfig)
 
 	// Set our block context and chain config in order for cheatcodes to override what EVM interpreter sees.
 	t.pendingBlockContext = &evm.Context
@@ -766,7 +770,7 @@ func (t *TestChain) PendingBlockCommit() error {
 	}
 
 	// Perform a state commit to obtain the root hash for our block.
-	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true)
+	root, err := t.state.Commit(t.pendingBlock.Header.Number.Uint64(), true, true)
 	t.pendingBlock.Header.Root = root
 
 	if err != nil {
