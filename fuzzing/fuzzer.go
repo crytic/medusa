@@ -573,15 +573,17 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 
 	// Add initialization functions for target contracts
 	for i := 0; i < targetContractsCount; i++ {
-		initFunction := "" // No default initialization
+		initFunction := "" // Default: no initialization
 
 		if fuzzer.config.Fuzzing.UseInitFunctions {
-			// Use custom init function if available
 			if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
+				// Use explicit per-contract config
 				initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+			} else if len(fuzzer.config.Fuzzing.TargetContractsInitFunctions) == 1 {
+				// If only one init function specified (like "setUp") apply it to all contracts
+				initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[0]
 			}
 		}
-
 		initFunctions = append(initFunctions, initFunction)
 	}
 

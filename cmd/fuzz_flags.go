@@ -289,6 +289,8 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 			projectConfig.Fuzzing.UseInitFunctions = true
 			projectConfig.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
 		}
+	}
+
 	// Update log level
 	if cmd.Flags().Changed("log-level") {
 		levelStr, err := cmd.Flags().GetString("log-level")
@@ -302,6 +304,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 
 		projectConfig.Logging.Level = level
+
 	}
 
 	return nil
