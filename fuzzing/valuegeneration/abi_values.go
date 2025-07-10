@@ -681,7 +681,7 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 	for i, input := range inputs {
 		value, ok := values[input.Name]
 		if !ok {
-			err := fmt.Errorf("value not not provided for argument: name: %v", input.Name)
+			err := fmt.Errorf("value not provided for argument: name: %v", input.Name)
 			return nil, err
 		}
 		arg, err := decodeJSONArgument(&input.Type, value, deployedContractAddr)
