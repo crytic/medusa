@@ -25,14 +25,12 @@ A rudimentary description of the objects/providers and their roles are explained
 - `ValueGenerator`: This is an object that provides methods to generate values of different kinds for transactions. Examples include the `RandomValueGenerator` and superceding `MutationalValueGenerator`. They are provided a `ValueSet` by their worker, which they may use in generation operations.
 
 - `TestChain`: This is a fake chain that operates on fake block structures created for the purpose of testing. Rather than operating on `types.Transaction` (which requires signing), it operates on `core.Message`s, which are derived from transactions and simply allow you to set the `sender` field. It is responsible for:
-
   - Maintaining state of the chain (blocks, transactions in them, results/receipts)
   - Providing methods to create blocks, add transactions to them, commit them to chain, revert to previous block numbers.
   - Allowing spoofing of block number and timestamp (committing block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
   - Provides methods to add tracers such as `evm.Logger` (standard go-ethereum tracers) or extend them with an additional interface (`TestChainTracer`) to also store any captured traced information in the execution results. This allows you to trace EVM execution for certain conditions, store results, and query them at a later time for testing.
 
 - `Fuzzer`: This is the main provider for the fuzzing process. It takes a `ProjectConfig` and is responsible for:
-
   - Housing data shared between the `FuzzerWorker`s such as contract definitions, a `ValueSet` derived from compilation to use in value generation, the reference to `Corpus`, the `CoverageMaps` representing all coverage achieved, as well as maintaining `TestCase`s registered to it and printing their results.
   - Compiling the targets defined by the project config and setting up state.
   - Provides methods to start/stop the fuzzing process, add additional compilation targets, access the initial value set prior to fuzzing start, access corpus, config, register new test cases and report them finished.
@@ -152,7 +150,6 @@ The `Fuzzer` maintains hooks for some of its functionality under `Fuzzer.Hooks.*
 - `NewValueGeneratorFunc`: This method is used to create a `ValueGenerator` for each `FuzzerWorker`. By default, this uses a `MutationalValueGenerator` constructed with the provided `ValueSet`. It can be replaced to provide a custom `ValueGenerator`.
 
 - `TestChainSetupFunc`: This method is used to set up a chain's initial state before fuzzing. By default, this method deploys all contracts compiled and marked for deployment in the `ProjectConfig` provided to the `Fuzzer`. It only deploys contracts if they have no constructor arguments. This can be replaced with your own method to do custom deployments.
-
   - **Note**: We do not recommend replacing this for now, as the `Contract` definitions may not be known to the `Fuzzer`. Additionally, `SenderAddresses` and `DeployerAddress` are the only addresses funded at genesis. This will be updated at a later time.
 
 - `CallSequenceTestFuncs`: This is a list of functions which are called after each `FuzzerWorker` executed another call in its current `CallSequence`. It takes the `FuzzerWorker` and `CallSequence` as input, and is expected to return a list of `ShinkRequest`s if some interesting result was found and we wish for the `FuzzerWorker` to shrink the sequence. You can add a function here as part of custom post-call testing methodology to check if some property was violated, then request a shrunken sequence for it with arbitrary criteria to verify the shrunk sequence satisfies your requirements (e.g. violating the same property again).
