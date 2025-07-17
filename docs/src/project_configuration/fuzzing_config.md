@@ -169,13 +169,6 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   than that of the previous block. Jumping `block.timestamp`time allows `medusa` to enter code paths that require a given amount of time to pass.
 - **Default**: `604_800`
 
-### `blockGasLimit`
-
-- **Type**: Integer
-- **Description**: The maximum amount of gas a block's transactions can use in total (thus defining max transactions per block).
-  > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
-- **Default**: `125_000_000`
-
 ### `transactionGasLimit`
 
 - **Type**: Integer

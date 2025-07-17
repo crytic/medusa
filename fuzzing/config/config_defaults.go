@@ -64,7 +64,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			DeployerAddress:        "0x30000",
 			MaxBlockNumberDelay:    60480,
 			MaxBlockTimestampDelay: 604800,
-			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
 			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
