@@ -46,6 +46,12 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().StringSlice("target-contracts", []string{},
 		fmt.Sprintf("target contracts for fuzz testing (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.TargetContracts))
 
+	// Will call post-deployment initialization function defined by `targetContractsInitFunctions` to be called on all contracts that have the implementation
+	fuzzCmd.Flags().Bool("use-init-fns", false, "runs init functions (`setUp`, `initialize`) on all contracts that have the implementation")
+
+	// Will call setUp() function if implemented
+	fuzzCmd.Flags().Bool("enable-foundry-setup", false, "runs `setUp` function on all contracts that have it implemented")
+
 	// Corpus directory
 	fuzzCmd.Flags().String("corpus-dir", "",
 		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
@@ -85,6 +91,7 @@ func addFuzzFlags() error {
 	// Log level
 	fuzzCmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
 	return nil
+
 }
 
 // updateProjectConfigWithFuzzFlags will update the given projectConfig with any CLI arguments that were provided to the fuzz command
@@ -260,6 +267,30 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
+	// Update configuration to run init functions
+	if cmd.Flags().Changed("use-init-fns") {
+		useInitFns, err := cmd.Flags().GetBool("use-init-fns")
+		if err != nil {
+			return err
+		}
+		if useInitFns {
+			// Enable the init functions feature but the actual functions need to be specified in config
+			projectConfig.Fuzzing.UseInitFunctions = true
+		}
+	}
+
+	// Update configuration to run `setUp` function where implemented
+	if cmd.Flags().Changed("enable-foundry-setup") {
+		enableFoundrySetUp, err := cmd.Flags().GetBool("enable-foundry-setup")
+		if err != nil {
+			return err
+		}
+		if enableFoundrySetUp {
+			projectConfig.Fuzzing.UseInitFunctions = true
+			projectConfig.Fuzzing.TargetContractsInitFunctions = []string{"setUp"}
+		}
+	}
+
 	// Update log level
 	if cmd.Flags().Changed("log-level") {
 		levelStr, err := cmd.Flags().GetString("log-level")
@@ -273,6 +304,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 
 		projectConfig.Logging.Level = level
+
 	}
 
 	return nil
