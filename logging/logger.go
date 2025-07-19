@@ -5,6 +5,7 @@ import (
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/rs/zerolog"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -103,11 +104,9 @@ func (l *Logger) NewSubLogger(key string, value string) *Logger {
 func (l *Logger) AddWriter(writer io.Writer, format LogFormat, colored bool) {
 	// First, try to add the writer to the list of channels that want structured logs
 	if format == STRUCTURED {
-		for _, w := range l.structuredWriters {
-			if w == writer {
-				// Writer already exists, return
-				return
-			}
+		if slices.Contains(l.structuredWriters, writer) {
+			// Writer already exists, return
+			return
 		}
 		// Add the writer and recreate the logger
 		l.structuredWriters = append(l.structuredWriters, writer)
