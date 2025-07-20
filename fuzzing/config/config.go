@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -251,10 +252,8 @@ func (testCfg *TestingConfig) Validate() error {
 
 	// Validate that prefixes do not overlap
 	for _, prefix := range testCfg.PropertyTesting.TestPrefixes {
-		for _, prefix2 := range testCfg.OptimizationTesting.TestPrefixes {
-			if prefix == prefix2 {
-				return errors.New("project configuration must specify unique test name prefixes for property and optimization testing")
-			}
+		if slices.Contains(testCfg.OptimizationTesting.TestPrefixes, prefix) {
+			return errors.New("project configuration must specify unique test name prefixes for property and optimization testing")
 		}
 	}
 
