@@ -28,7 +28,7 @@ type TestChainEvents struct {
 	// will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
 	ContractDeploymentAddedEventEmitter events.EventEmitter[ContractDeploymentsAddedEvent]
 
-	// ContractDeploymentAddedEventEmitter emits events indicating a previously deployed contract was removed
+	// ContractDeploymentRemovedEventEmitter emits events indicating a previously deployed contract was removed
 	// from the chain. This is called alongside ContractDeploymentAddedEventEmitter when contract deployment changes
 	// are detected. e.g. If a contract is deployed and immediately destroyed within the same transaction, a
 	// ContractDeploymentsAddedEvent will be fired, followed immediately by a ContractDeploymentsRemovedEvent.
