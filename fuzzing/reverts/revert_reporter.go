@@ -49,7 +49,7 @@ type RevertReporter struct {
 	PrevRevertMetrics *RevertMetrics
 }
 
-// NewRevertReporter creates a new RevertsReporter. If there is any issue loading the previous artifact (if it exists),
+// NewRevertReporter creates a new RevertReporter. If there is any issue loading the previous artifact (if it exists),
 // an error is returned.
 func NewRevertReporter(enabled bool, corpusDirectory string) (*RevertReporter, error) {
 	if !enabled {

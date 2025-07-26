@@ -36,10 +36,10 @@ type TestCase interface {
 	// console or file logging.
 	LogMessage() *logging.LogBuffer
 
-	// Message obtains a text-based printable message which describes the result of the AssertionTestCase.
+	// Message obtains a text-based printable message which describes the result of the TestCase.
 	Message() string
 
 	// ID obtains a unique identifier for a test result. If the same test fails, this ID should match for both
-	// TestResult instances (even if the CallSequence differs or has not been shrunk).
+	// TestCase instances (even if the CallSequence differs or has not been shrunk).
 	ID() string
 }

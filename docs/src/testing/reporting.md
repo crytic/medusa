@@ -66,7 +66,7 @@ Then generate HTML from the LCOV data:
 genhtml corpus/coverage/lcov.info --output-dir corpus --rc derive_function_end_line=0
 ```
 
-> 🚩WARNING
+> 🚩 WARNING
 > The `derive_function_end_line` flag is required to prevent the `genhtml` tool from crashing when processing Solidity source code.
 
 Open the `corpus/index.html` file in your browser to view the report.

@@ -6,7 +6,7 @@ import (
 	"github.com/fxamacker/cbor"
 )
 
-// ContractMetadata is an CBOR-encoded structure describing contract information which is embedded within smart contract
+// ContractMetadata is a CBOR-encoded structure describing contract information which is embedded within smart contract
 // bytecode by the Solidity compiler (unless explicitly directed not to).
 // Reference: https://docs.soliditylang.org/en/v0.8.16/metadata.html
 type ContractMetadata map[string]any

@@ -107,7 +107,7 @@ func (g *ShrinkingValueMutator) MutateBytes(b []byte) []byte {
 // transform the integer with a random input and operation.
 var integerShrinkingMethods = []func(*ShrinkingValueMutator, *big.Int, ...*big.Int) *big.Int{
 	func(g *ShrinkingValueMutator, x *big.Int, inputs ...*big.Int) *big.Int {
-		// If our base value is positive, we subtract from it. If it's positive, we add to it.
+		// If our base value is positive, we subtract from it. If it's negative, we add to it.
 		// If it's zero, we leave it unchanged.
 		r := big.NewInt(0)
 		if x.Cmp(r) > 0 {

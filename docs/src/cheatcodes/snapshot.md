@@ -10,7 +10,7 @@ On the flipside, the `revertTo` cheatcode will revert the EVM state back based o
 ## Example
 
 ```solidity
-interface CheatCodes {
+interface IStdCheats {
     function warp(uint256) external;
 
     function deal(address, uint256) external;
@@ -31,7 +31,7 @@ contract TestContract {
 
     function test() public {
         // Obtain our cheat code contract reference.
-        CheatCodes cheats = CheatCodes(
+        IStdCheats cheats = IStdCheats(
             0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
         );
 

@@ -1,4 +1,4 @@
-# warp
+# `warp`
 
 ## Description
 
@@ -8,7 +8,7 @@ The `warp` cheatcode sets the `block.timestamp`
 
 ```solidity
 // Obtain our cheat code contract reference.
-IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
 // Change value and verify.
 cheats.warp(7);

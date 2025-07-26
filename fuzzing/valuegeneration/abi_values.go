@@ -518,7 +518,7 @@ func encodeABIArgumentToString(inputType *abi.Type, value any, overrides map[com
 				return "", err
 			}
 
-			// Append the key-value pair in the format "key: value" to our tuple dat
+			// Append the key-value pair in the format "key: value" to our tuple data
 			tupleData = append(tupleData, fmt.Sprintf("%v: %v", inputType.TupleRawNames[i], fieldData))
 		}
 
@@ -681,7 +681,7 @@ func DecodeJSONArgumentsFromMap(inputs abi.Arguments, values map[string]any, dep
 	for i, input := range inputs {
 		value, ok := values[input.Name]
 		if !ok {
-			err := fmt.Errorf("value not not provided for argument: name: %v", input.Name)
+			err := fmt.Errorf("value not provided for argument: name: %v", input.Name)
 			return nil, err
 		}
 		arg, err := decodeJSONArgument(&input.Type, value, deployedContractAddr)
@@ -883,7 +883,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 			}
 			eleValue, err := decodeJSONArgument(eleType, fieldValue, deployedContractAddr)
 			if !ok {
-				return nil, fmt.Errorf("can not parse struct field %s, error: %s", fieldName, err)
+				return nil, fmt.Errorf("cannot parse struct field %s, error: %s", fieldName, err)
 			}
 			reflectionutils.SetField(field, eleValue)
 		}

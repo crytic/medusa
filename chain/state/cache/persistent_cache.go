@@ -42,7 +42,7 @@ func newPersistentCache(ctx context.Context, workingDir string, rpcAddr string, 
 		return nil, fmt.Errorf("could not open db: %v", err)
 	}
 
-	// create default bucket if it doesnt exist
+	// create default bucket if it doesn't exist
 	err = db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("cache"))
 		return err

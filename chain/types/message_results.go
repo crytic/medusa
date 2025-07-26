@@ -23,10 +23,10 @@ type MessageResults struct {
 	ContractDeploymentChanges []DeployedContractBytecodeChange
 
 	// AdditionalResults represents results of arbitrary types which can be stored by any part of the application,
-	// such as a tracers.
+	// such as tracers.
 	AdditionalResults map[string]any
 
-	// OnRevertHookFuncs refers hook functions that should be executed when this transaction is reverted.
+	// OnRevertHookFuncs refers to hook functions that should be executed when this transaction is reverted.
 	// This is to be used when a non-vm safe operation occurs, such as patching chain ID mid-execution, to ensure
 	// that when the transaction is reverted, the value is also restored.
 	// The hooks are executed as a stack (to support revert operations).

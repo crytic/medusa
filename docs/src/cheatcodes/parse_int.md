@@ -2,7 +2,7 @@
 
 ## Description
 
-The `parseInt` cheatcode will parse the input string into a int256
+The `parseInt` cheatcode will parse the input string into an int256
 
 ## Example
 
@@ -11,14 +11,14 @@ contract TestContract {
     uint x = 123;
     function test() public {
         // Obtain our cheat code contract reference.
-        IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-        address expectedAddress = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
-        string memory test = "0x7109709ECfa91a80626fF3989D68f67F5b1DD12D";
+        int256 expectedInt = -12345;
+        string memory test = "-12345";
 
-        // Call cheats.parseAddress
-        address result = cheats.parseAddress(test);
-        assert(expectedAddress == result);
+        // Call cheats.parseInt
+        int256 result = cheats.parseInt(test);
+        assert(expectedInt == result);
     }
 }
 ```

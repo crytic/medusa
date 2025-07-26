@@ -22,7 +22,7 @@ type PropertyTestCaseProvider struct {
 	// fuzzer describes the Fuzzer which this provider is attached to.
 	fuzzer *Fuzzer
 
-	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
+	// testCases is a map of contract-method IDs to property test cases.
 	testCases map[contracts.ContractMethodID]*PropertyTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
@@ -262,7 +262,7 @@ func (t *PropertyTestCaseProvider) onWorkerDeployedContractDeleted(event FuzzerW
 	return nil
 }
 
-// callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
+// callSequencePostCallTest is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether property
 // test invariants are upheld after each call the Fuzzer makes when testing a call sequence.
 func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {

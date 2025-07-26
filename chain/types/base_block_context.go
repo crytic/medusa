@@ -10,7 +10,7 @@ import (
 // created. We need to store these values because cheatcodes like warp or roll will directly modify the block header.
 // We use these values during the cloning process to ensure that execution semantics are maintained while still
 // allowing the cheatcodes to function as expected. We could expand this struct to hold additional values
-// (e.g. difficulty) but we will ere to add values only as necessary.
+// (e.g. difficulty) but we will err to add values only as necessary.
 type BaseBlockContext struct {
 	// Number represents the block number of the block when it was first created.
 	Number *big.Int

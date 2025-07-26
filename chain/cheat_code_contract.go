@@ -51,7 +51,8 @@ type cheatCodeRawReturnData struct {
 	// solidity, but it may be any data in practice.
 	ReturnData []byte
 
-	// Err represents an optional error which is to be returned to the caller. This may be vm.
+	// Err represents an optional error which is to be returned to the caller. This may be vm.ErrExecutionReverted
+	// or any other error that should be returned to the caller.
 	Err error
 }
 

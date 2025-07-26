@@ -72,7 +72,7 @@ type CallSequenceGeneratorConfig struct {
 	RandomMutatedCorpusHeadWeight uint64
 
 	// RandomMutatedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the tao; of a corpus sequence (with mutations) and prepend newly generated calls
+	// generation strategy of taking the tail of a corpus sequence (with mutations) and prepend newly generated calls
 	// to the start of it.
 	RandomMutatedCorpusTailWeight uint64
 

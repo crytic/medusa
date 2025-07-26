@@ -15,7 +15,7 @@ type CoverageMaps struct {
 	maps map[common.Hash]map[common.Address]*ContractCoverageMap
 
 	// cachedCodeAddress represents the last code address which coverage was updated for. This is used to prevent an
-	// expensive lookup in maps. If cachedCodeHash does not match the current code address for which we are updating
+	// expensive lookup in maps. If cachedCodeAddress does not match the current code address for which we are updating
 	// coverage for, it, along with other cache variables are updated.
 	cachedCodeAddress common.Address
 
