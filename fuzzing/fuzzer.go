@@ -525,13 +525,13 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Concatenate the predeployed contracts and target contracts
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
-	contractsToDeploy := make([]string, 0)
-	balances := make([]*config.ContractBalance, 0)
+	contractNamesToDeploy := make([]string, 0)
+	balances := make(map[string]*config.ContractBalance)
 
 	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
-		contractsToDeploy = append(contractsToDeploy, contractName)
+		contractNamesToDeploy = append(contractNamesToDeploy, contractName)
 		// Preserve index of target contract balances
-		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+		balances[contractName] = &config.ContractBalance{Int: *big.NewInt(0)}
 	}
 
 	if len(fuzzer.deploymentOrder) > 0 {
@@ -553,72 +553,31 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		// Add contracts from the deployment order
 		for _, name := range fuzzer.deploymentOrder {
 			if !predeployed[name] && (targetContracts[name] || fuzzer.isLibrary(name)) {
-				contractsToDeploy = append(contractsToDeploy, name)
+				contractNamesToDeploy = append(contractNamesToDeploy, name)
 				// Add balance for target contracts, zero for libraries
 				if balance, ok := targetContractBalances[name]; ok {
-					balances = append(balances, balance)
+					balances[name] = balance
 				} else {
-					balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+					balances[name] = &config.ContractBalance{Int: *big.NewInt(0)}
 				}
 			}
 		}
 	} else {
-		contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
-		balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
+		contractNamesToDeploy = append(contractNamesToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
+		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
+			balances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
+		}
 	}
 
-	deployedContractAddr := make(map[string]common.Address)
-	// Loop for all contracts to deploy
-	for i, contractName := range contractsToDeploy {
+	contractsToDeploy := make([]*fuzzerTypes.Contract, len(contractNamesToDeploy))
+	for i, contractName := range contractNamesToDeploy {
 		// Look for a contract in our compiled contract definitions that matches this one
 		found := false
 		for _, contract := range fuzzer.contractDefinitions {
 			// If we found a contract definition that matches this definition by name, try to deploy it
 			if contract.Name() == contractName {
-				testChain.CompiledContracts[contractName] = contract.CompiledContract()
-
-				// Concatenate constructor arguments, if necessary
-				args := make([]any, 0)
-				if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
-					// If the contract is a predeployed contract, throw an error because they do not accept constructor
-					// args.
-					if _, ok := fuzzer.config.Fuzzing.PredeployedContracts[contractName]; ok {
-						return nil, fmt.Errorf("predeployed contracts cannot accept constructor arguments")
-					}
-					jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
-					if !ok {
-						return nil, fmt.Errorf("constructor arguments for contract %s not provided", contractName)
-					}
-					decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
-						jsonArgs, deployedContractAddr)
-					if err != nil {
-						return nil, err
-					}
-					args = decoded
-				}
-
-				// If our project config has a non-zero balance for this target contract, retrieve it
-				contractBalance := big.NewInt(0)
-				if len(balances) > i {
-					contractBalance = new(big.Int).Set(&balances[i].Int)
-				}
-				// Deploy the contract with resolved library dependencies
-				result, err := fuzzer.deployContract(testChain, contract, args, contractBalance, deployedContractAddr)
-				if err != nil {
-					// If the result is an execution trace, return it
-					if trace, ok := result.(*executiontracer.ExecutionTrace); ok {
-						return trace, err
-					}
-					return nil, err
-				}
-				// Record our deployed contract so the next config-specified constructor args can reference this
-				// contract by name.
-				deployedContractAddr[contractName] = result.(common.Address)
-
-				// Flag that we found a matching compiled contract definition and deployed it, then exit out of this
-				// inner loop to process the next contract to deploy in the outer loop.
+				contractsToDeploy[i] = contract
 				found = true
-				break
 			}
 		}
 
@@ -627,7 +586,105 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
+
+	contractsToDeploy, err := reodrderContractsForLinking(contractsToDeploy)
+	if err != nil {
+		return nil, err
+	}
+
+	deployedContractAddr := make(map[string]common.Address)
+	// Loop for all contracts to deploy
+	for i, contract := range contractsToDeploy {
+		contractName := contract.Name()
+
+		testChain.CompiledContracts[contractName] = contract.CompiledContract()
+
+		// Concatenate constructor arguments, if necessary
+		args := make([]any, 0)
+		if len(contract.CompiledContract().Abi.Constructor.Inputs) > 0 {
+			// If the contract is a predeployed contract, throw an error because they do not accept constructor
+			// args.
+			if _, ok := fuzzer.config.Fuzzing.PredeployedContracts[contractName]; ok {
+				return nil, fmt.Errorf("predeployed contracts cannot accept constructor arguments")
+			}
+			jsonArgs, ok := fuzzer.config.Fuzzing.ConstructorArgs[contractName]
+			if !ok {
+				return nil, fmt.Errorf("constructor arguments for contract %s not provided", contractName)
+			}
+			decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(contract.CompiledContract().Abi.Constructor.Inputs,
+				jsonArgs, deployedContractAddr)
+			if err != nil {
+				return nil, err
+			}
+			args = decoded
+		}
+
+		// If our project config has a non-zero balance for this target contract, retrieve it
+		contractBalance := big.NewInt(0)
+		if len(balances) > i {
+			contractBalance = new(big.Int).Set(&balances[contractName].Int)
+		}
+		// Deploy the contract with resolved library dependencies
+		result, err := fuzzer.deployContract(testChain, contract, args, contractBalance, deployedContractAddr)
+		if err != nil {
+			// If the result is an execution trace, return it
+			if trace, ok := result.(*executiontracer.ExecutionTrace); ok {
+				return trace, err
+			}
+			return nil, err
+		}
+		// Record our deployed contract so the next config-specified constructor args can reference this
+		// contract by name.
+		deployedContractAddr[contractName] = result.(common.Address)
+	}
 	return nil, nil
+}
+
+func reodrderContractsForLinking(contracts []*fuzzerTypes.Contract) ([]*fuzzerTypes.Contract, error) {
+	// Implementation of Kahn's algorithm, see https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
+	nameToContract := make(map[string]*fuzzerTypes.Contract)
+	depsFrom := make(map[string]map[string]struct{}, len(contracts))
+	depsTo := make(map[string]map[string]struct{}, len(contracts))
+	noDeps := make([]*fuzzerTypes.Contract, 0, len(contracts))
+	result := make([]*fuzzerTypes.Contract, 0, len(contracts))
+	for _, c := range contracts {
+		nameToContract[c.Name()] = c
+		depsFrom[c.Name()] = make(map[string]struct{})
+	}
+	for _, c := range contracts {
+		cc := c.CompiledContract()
+		cDepsTo := make(map[string]struct{})
+		for _, libNameAny := range cc.LibraryPlaceholders {
+			libName, ok := libNameAny.(string)
+			if !ok || libName == "" {
+				continue
+			}
+			if _, ok := depsFrom[libName]; !ok {
+				continue
+			}
+			cDepsTo[libName] = struct{}{}
+			depsFrom[libName][c.Name()] = struct{}{}
+		}
+		depsTo[c.Name()] = cDepsTo
+		if len(cDepsTo) == 0 {
+			noDeps = append(noDeps, c)
+		}
+	}
+	for len(noDeps) > 0 {
+		c := noDeps[len(noDeps)-1]
+		noDeps = noDeps[:len(noDeps)-1]
+		result = append(result, c)
+		for n := range depsFrom[c.Name()] {
+			delete(depsTo[n], c.Name())
+			if len(depsTo[n]) == 0 {
+				noDeps = append(noDeps, nameToContract[n])
+			}
+		}
+	}
+	if len(result) != len(contracts) {
+		return nil, fmt.Errorf("TODO error msg")
+	}
+	return result, nil
 }
 
 func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerTypes.Contract, args []any, contractBalance *big.Int, deployedContracts map[string]common.Address) (any, error) {
