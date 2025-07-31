@@ -493,10 +493,13 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = blockGasLimit
-	return testChain, err
+	return testChain, nil
 }
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
