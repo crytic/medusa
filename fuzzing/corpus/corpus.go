@@ -25,6 +25,11 @@ import (
 	"github.com/crytic/medusa/fuzzing/contracts"
 )
 
+type labeledCallSequence struct {
+	calls.CallSequence
+	fileName string
+}
+
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
 // reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
 // may create incompatibilities with corpus items.
@@ -49,7 +54,7 @@ type Corpus struct {
 
 	// mutationTargetSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
-	mutationTargetSequenceChooser *randomutils.WeightedRandomChooser[calls.CallSequence]
+	mutationTargetSequenceChooser *randomutils.WeightedRandomChooser[labeledCallSequence]
 
 	// callSequencesLock provides thread synchronization to prevent concurrent access errors into
 	// callSequences.
@@ -224,6 +229,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 	for _, sequenceFileData := range sequenceFiles.files {
 		// Unwrap the underlying sequence.
 		sequence := sequenceFileData.data
+		fileName := sequenceFileData.fileName
 
 		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
 		// way).
@@ -289,7 +295,7 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
 		if sequenceInvalidError == nil {
 			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[labeledCallSequence](labeledCallSequence{ CallSequence: sequence, fileName: fileName }, big.NewInt(1)))
 			}
 			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
 		} else {
@@ -314,7 +320,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	defer c.callSequencesLock.Unlock()
 
 	// Initialize our call sequence structures.
-	c.mutationTargetSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
+	c.mutationTargetSequenceChooser = randomutils.NewWeightedRandomChooser[labeledCallSequence]()
 	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
 
 	// Create a coverage tracer to track coverage across all blocks.
@@ -437,7 +443,7 @@ func (c *Corpus) addCallSequence(sequenceFiles *corpusDirectory[calls.CallSequen
 		if mutationChooserWeight == nil {
 			mutationChooserWeight = big.NewInt(1)
 		}
-		c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, mutationChooserWeight))
+		c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[labeledCallSequence](labeledCallSequence{ CallSequence: sequence, fileName: fileName }, mutationChooserWeight))
 	}
 
 	// Unlock now, as flushing will lock on its own.
@@ -578,20 +584,20 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 	tmpMap := coverage.NewCoverageMaps()
 
 	c.callSequencesLock.Lock()
-	seqs := make([]calls.CallSequence, len(c.mutationTargetSequenceChooser.Choices))
+	seqs := make([]labeledCallSequence, len(c.mutationTargetSequenceChooser.Choices))
 	for i, seq := range c.mutationTargetSequenceChooser.Choices {
 		seqCloned, err := seq.Data.Clone()
 		if err != nil {
 			c.callSequencesLock.Unlock()
 			return 0, err
 		}
-		seqs[i] = seqCloned
+		seqs[i] = labeledCallSequence{ CallSequence: seqCloned, fileName: seq.Data.fileName }
 	}
 	c.callSequencesLock.Unlock()
 	// We don't need to lock during the next part as long as the ordering of Choices doesn't change.
 	// New items could get added in the meantime, but older items won't be touched.
 
-	toRemove := map[int]bool{}
+	toRemove := map[int]struct{}{}
 
 	// Iterate seqs in a random order
 	for _, i := range rand.Perm(len(seqs)) {
@@ -599,7 +605,7 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 			return 0, nil
 		}
 
-		seq := seqs[i]
+		seq := seqs[i].CallSequence
 
 		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
 			if currentIndex >= len(seq) {
@@ -623,7 +629,7 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 
 		if !coverageUpdated {
 			// No new coverage was added. We can remove this from the corpus.
-			toRemove[i] = true
+			toRemove[i] = struct{}{}
 		}
 
 		err = chain.RevertToBlockIndex(chainOriginalIndex)
@@ -631,6 +637,23 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 			return 0, err
 		}
 	}
+
+	filenamesToMove := make([]string, 0, len(toRemove))
+	for removeIdx := range toRemove {
+		filenamesToMove = append(filenamesToMove, seqs[removeIdx].fileName)
+	}
+	defer func() {
+		for _, fileName := range filenamesToMove {
+			err := c.callSequenceFiles.moveFile(fileName, fmt.Sprintf("%s.pruned", fileName))
+			if err != nil {
+				c.logger.Error(err)
+			}
+		}
+		err := c.Flush() // TODO only do this when a flush immediately setting is turned on
+		if err != nil {
+			c.logger.Error(err)
+		}
+	}()
 
 	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)
 	return len(toRemove), nil

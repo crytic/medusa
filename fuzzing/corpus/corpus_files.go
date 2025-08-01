@@ -23,6 +23,11 @@ type corpusFile[T any] struct {
 	writtenToDisk bool
 }
 
+type move[T any] struct {
+	from *corpusFile[T]
+	to string
+}
+
 // corpusDirectory is a provider for corpusFile items in a given directory, offering read/write operations to
 // automatically JSON serialize/deserialize items of a given type to a directory.
 type corpusDirectory[T any] struct {
@@ -32,6 +37,9 @@ type corpusDirectory[T any] struct {
 
 	// files represents the corpusFile items stored/to be stored in the specified directory.
 	files []*corpusFile[T]
+
+	// files represents the corpusFile items stored/to be stored in the specified directory.
+	pendingMoves []*move[T]
 
 	// filesLock represents a thread lock used when editing files.
 	filesLock sync.Mutex
@@ -55,8 +63,14 @@ func (cd *corpusDirectory[T]) addFile(fileName string, data T) error {
 	cd.filesLock.Lock()
 	defer cd.filesLock.Unlock()
 
-	// First we make sure this file doesn't already exist, if it does, we overwrite its data and mark it unwritten.
 	lowerFileName := strings.ToLower(fileName)
+	for i := 0; i < len(cd.pendingMoves); i++ {
+		if lowerFileName == strings.ToLower(cd.pendingMoves[i].from.fileName) || lowerFileName == strings.ToLower(cd.pendingMoves[i].to) {
+			return fmt.Errorf("Cannot add file %s - would clobber existing move", fileName)
+		}
+	}
+
+	// First we make sure this file doesn't already exist, if it does, we overwrite its data and mark it unwritten.
 	for i := 0; i < len(cd.files); i++ {
 		if lowerFileName == strings.ToLower(cd.files[i].fileName) {
 			cd.files[i].data = data
@@ -74,22 +88,40 @@ func (cd *corpusDirectory[T]) addFile(fileName string, data T) error {
 	return nil
 }
 
-// removeFile removes a given file from the file list. This does not delete it from disk.
-// Returns a boolean indicating if a corpusFile with the provided file name was found and removed.
-func (cd *corpusDirectory[T]) removeFile(fileName string) bool {
+func (cd *corpusDirectory[T]) moveFile(oldFileName, newFileName string) error {
 	// Lock to avoid concurrency issues when accessing the files list
 	cd.filesLock.Lock()
 	defer cd.filesLock.Unlock()
 
-	// If we find the filename, remove it from our list of files.
-	lowerFileName := strings.ToLower(fileName)
-	for i := 0; i < len(cd.files); i++ {
-		if lowerFileName == strings.ToLower(cd.files[i].fileName) {
-			cd.files = append(cd.files[:i], cd.files[i+1:]...)
-			return true
+	// TODO make sure we dont clobber any moves or files
+	lowerOldFileName := strings.ToLower(oldFileName)
+	lowerNewFileName := strings.ToLower(newFileName)
+
+	for i := 0; i < len(cd.pendingMoves); i++ {
+		if lowerOldFileName == strings.ToLower(cd.pendingMoves[i].from.fileName) || lowerOldFileName == strings.ToLower(cd.pendingMoves[i].to) ||
+		   lowerNewFileName == strings.ToLower(cd.pendingMoves[i].from.fileName) || lowerOldFileName == strings.ToLower(cd.pendingMoves[i].to) {
+			return fmt.Errorf("Cannot move file %s to %s - would clobber existing move", oldFileName, newFileName)
 		}
 	}
-	return false
+
+	for i := 0; i < len(cd.files); i++ {
+		if lowerNewFileName == strings.ToLower(cd.files[i].fileName) {
+			return fmt.Errorf("Cannot move file %s to %s - %s already exists", oldFileName, newFileName, newFileName)
+		}
+	}
+
+	for i := 0; i < len(cd.files); i++ {
+		if lowerOldFileName == strings.ToLower(cd.files[i].fileName) {
+			if cd.files[i].writtenToDisk {
+				cd.pendingMoves = append(cd.pendingMoves, &move[T] { from: cd.files[i], to: newFileName })
+			} else {
+				cd.files[i].fileName = newFileName
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Cannot move file %s to %s - file not found", oldFileName, newFileName)
 }
 
 // readFiles takes a provided glob pattern representing files to parse within the corpusDirectory.path.
@@ -183,5 +215,16 @@ func (cd *corpusDirectory[T]) writeFiles() error {
 			file.writtenToDisk = true
 		}
 	}
+
+	for _, move := range cd.pendingMoves {
+		fromPath := filepath.Join(cd.path, move.from.fileName)
+		toPath := filepath.Join(cd.path, move.to)
+		err = os.Rename(fromPath, toPath)
+		if err != nil {
+			return err
+		}
+	}
+	cd.pendingMoves = nil
+
 	return nil
 }
