@@ -182,7 +182,7 @@ contract MyContract {
 
 - **Type**: [Bool]
 - **Description**: If the property returns a boolean or not
-  > **Note**: If you using invariants developped for foundry's invariant testing, set this to false.
+  > **Note**: If you are using invariants developed for Foundry's invariant testing, set this to false.
 - **Default**: `true`
 
 
