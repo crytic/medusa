@@ -41,7 +41,7 @@
       "propertyTesting": {
         "enabled": true,
         "testPrefixes": ["property_"],
-        "testReturnBool": true
+        "returnBool": true
       },
       "optimizationTesting": {
         "enabled": true,
