@@ -102,7 +102,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 		return true, executionTrace, nil
 	}
 
-	// If the property don't have a return value
+	// If the properties don't have a return value
 	if !worker.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestReturnBool {
 		return false, executionTrace, nil
 	}
