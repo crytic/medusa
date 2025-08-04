@@ -12,6 +12,7 @@ For more advanced information and documentation on how the various modes work an
 
 Property tests are represented as functions within a Solidity contract whose names are prefixed with a prefix specified by the `testPrefixes` configuration option (`fuzz_` is the default test prefix). Additionally, they must take no arguments and return a `bool` indicating if the test succeeded.
 
+
 ```solidity
 contract TestXY {
     uint x;
@@ -33,6 +34,8 @@ contract TestXY {
 ```
 
 `medusa` deploys your contract containing property tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your property tests to ensure they return a `true` (success) status.
+
+If you are using [foundry's invariant testing](https://getfoundry.sh/forge/advanced-testing/invariant-testing/#conditional-invariants), you can define the properties to not return a boolean by setting `returnBool` to false.
 
 ### Testing in property-mode
 

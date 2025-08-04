@@ -177,6 +177,15 @@ contract MyContract {
   > **Note**: If you are moving over from Echidna, you can add `echidna_` as a test prefix to quickly port over the property tests from it.
 - **Default**: `[property_]`
 
+
+### `returnBool`
+
+- **Type**: [Bool]
+- **Description**: If the property returns a boolean or not
+  > **Note**: If you using invariants developped for foundry's invariant testing, set this to false.
+- **Default**: `true`
+
+
 ## Optimization Testing Configuration
 
 ### `enabled`

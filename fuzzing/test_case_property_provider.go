@@ -102,6 +102,11 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 		return true, executionTrace, nil
 	}
 
+	// If the property don't have a return value
+	if !worker.fuzzer.config.Fuzzing.Testing.PropertyTesting.TestReturnBool {
+		return false, executionTrace, nil
+	}
+
 	// Decode our ABI outputs
 	retVals, err := propertyTestMethod.Method.Outputs.Unpack(executionResult.Return())
 	if err != nil {
