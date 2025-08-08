@@ -9,8 +9,8 @@ With medusa, we are exploring a different EVM implementation and language for ou
 
 **Should I switch to medusa right away?**
 
-We do not recommend switching to medusa until it is extensively tested. However we encourage you to try it, and [let us know your experience](https://github.com/trailofbits/medusa/issues). In that sense, Echidna is our robust and well tested fuzzer, while medusa is our new exploratory fuzzer. [Follow us](https://twitter.com/trailofbits/) to hear updates about medusa as it grows in maturity.
+We do not recommend switching to medusa until it is extensively tested. However, we encourage you to try it, and [let us know your experience](https://github.com/crytic/medusa/issues). In that sense, Echidna is our robust and well tested fuzzer, while medusa is our new exploratory fuzzer. [Follow us](https://twitter.com/trailofbits/) to hear updates about medusa as it grows in maturity.
 
-**Will all the previous available documentation from [secure-contracts.com](https://secure-contracts.com/) will apply to medusa?**
+**Will all the previous available documentation from [secure-contracts.com](https://secure-contracts.com/) apply to medusa?**
 
 In general, yes. All the information on testing approaches and techniques will apply for medusa. There are, however, different configuration options names and a few missing or different features in medusa from Echidna that we will be updating over time.

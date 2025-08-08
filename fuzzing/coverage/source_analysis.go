@@ -95,7 +95,7 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 			// We are treating any line hit in the definition as a hit for the function.
 			hit := 0
 			for i := startLine; i < endLine; i++ {
-				// index iz zero based, line numbers are 1 based
+				// index is zero based, line numbers are 1 based
 				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
 					hit = 1
 				}
@@ -396,7 +396,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				return sourceFile.CumulativeOffsetByLine[i] > start
 			})
 
-			// index iz zero based, line numbers are 1 based
+			// index is zero based, line numbers are 1 based
 			sourceLine := sourceFile.Lines[startLine-1]
 
 			// Check if the line is within range

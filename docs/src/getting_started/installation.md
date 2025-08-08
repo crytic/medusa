@@ -115,7 +115,7 @@ Before building `medusa` from source, you will need:
 - Go (version 1.20 or later) - [Installation instructions](https://go.dev/doc/install)
 - `crytic-compile` - [Installation instructions](https://github.com/crytic/crytic-compile#installation)
   - Note that `crytic-compile` requires a Python environment - [Python installation instructions](https://www.python.org/downloads/)
-- `slither` (Optional) - For improved valuegeneration we recommend also [installing Slither](https://github.com/crytic/slither?tab=readme-ov-file#how-to-install)
+- `slither` (Optional) - For improved value generation we recommend also [installing Slither](https://github.com/crytic/slither?tab=readme-ov-file#how-to-install)
 
 ### Build `medusa`
 
