@@ -57,8 +57,7 @@ func (t *TestChainTracerRouter) NativeTracer() *TestChainTracer {
 	return t.nativeTracer
 }
 
-// AddTracer adds a TestChainTracer to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded.
-// are forwarded to it.
+// AddTracer adds a TestChainTracer to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded to it.
 func (t *TestChainTracerRouter) AddTracer(tracer *TestChainTracer) {
 	t.AddTracers(tracer)
 }

@@ -429,17 +429,24 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
-		// Generate a topologically sorted deployment order based on library dependencies
-		// This ensures that libraries are deployed before contracts that depend on them
-		f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, f.config.Fuzzing.TargetContracts)
-		if err != nil {
-			f.logger.Warn("Could not get a deployment order", err)
-		}
 		// Cache all of our source code if it hasn't been already.
-		err := compilation.CacheSourceCode()
+		err = compilation.CacheSourceCode()
 		if err != nil {
 			f.logger.Warn("Failed to cache compilation source file data", err)
 		}
+	}
+
+	// We need a list of predeploys to feed to GetDeploymentOrder. PredeployedContracts is a map, we just need a list of keys.
+	predeploys := make([]string, 0, len(f.config.Fuzzing.PredeployedContracts))
+	for p := range f.config.Fuzzing.PredeployedContracts {
+		predeploys = append(predeploys, p)
+	}
+
+	// Generate a topologically sorted deployment order based on library dependencies
+	// This ensures that libraries are deployed before contracts that depend on them
+	f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, predeploys, f.config.Fuzzing.TargetContracts)
+	if err != nil {
+		f.logger.Warn("Could not get a deployment order", err)
 	}
 }
 
@@ -493,10 +500,13 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = blockGasLimit
-	return testChain, err
+	return testChain, nil
 }
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
@@ -528,18 +538,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	contractsToDeploy := make([]string, 0)
 	balances := make([]*config.ContractBalance, 0)
 
-	for contractName := range fuzzer.config.Fuzzing.PredeployedContracts {
-		contractsToDeploy = append(contractsToDeploy, contractName)
-		// Preserve index of target contract balances
-		balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
-	}
-
 	if len(fuzzer.deploymentOrder) > 0 {
-		// Skip already included predeployed contracts
-		predeployed := make(map[string]bool)
-		for name := range fuzzer.config.Fuzzing.PredeployedContracts {
-			predeployed[name] = true
-		}
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
 		targetContractBalances := make(map[string]*config.ContractBalance)
@@ -552,7 +551,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		}
 		// Add contracts from the deployment order
 		for _, name := range fuzzer.deploymentOrder {
-			if !predeployed[name] && (targetContracts[name] || fuzzer.isLibrary(name)) {
+			_, isPredeploy := fuzzer.config.Fuzzing.PredeployedContracts[name]
+			if isPredeploy || targetContracts[name] || fuzzer.isLibrary(name) {
 				contractsToDeploy = append(contractsToDeploy, name)
 				// Add balance for target contracts, zero for libraries
 				if balance, ok := targetContractBalances[name]; ok {

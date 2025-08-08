@@ -6,7 +6,7 @@ import (
 )
 
 /*
-PendingResult defines an object that can be returned when calling the RPC asynchronously. It's kinda like a promise as
+PendingResult defines an object that can be returned when calling the RPC asynchronously. It's kind of like a promise as
 seen in other languages.
 */
 type PendingResult struct {

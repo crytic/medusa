@@ -35,7 +35,7 @@ func NewDefaultSlitherConfig() (*SlitherConfig, error) {
 	}, nil
 }
 
-// SlitherResults describes a data structures that holds the interesting constants returned from slither
+// SlitherResults describes a data structure that holds the interesting constants returned from slither
 type SlitherResults struct {
 	// Constants holds the constants extracted by slither
 	Constants []Constant `json:"constantsUsed"`
@@ -159,7 +159,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	return &slitherResults, nil
 }
 
-// UnmarshalJSON unmarshals the slither output into a Slither type
+// UnmarshalJSON unmarshals the slither output into a SlitherResults type
 func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 	// Extract the top-level JSON object
 	var obj map[string]json.RawMessage
