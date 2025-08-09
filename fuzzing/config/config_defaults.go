@@ -83,6 +83,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					TestPrefixes: []string{
 						"property_",
 					},
+					TestReturnBool: true,
 				},
 				OptimizationTesting: OptimizationTestingConfig{
 					Enabled: true,
