@@ -70,6 +70,10 @@ type FuzzingConfig struct {
 	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
 	CoverageFormats []string `json:"coverageFormats"`
 
+	// CoverageExclusions defines file/directory patterns to exclude from coverage reports.
+	// Supports glob patterns like "lib/**", "test/helpers/**", "*.generated.sol"
+	CoverageExclusions []string `json:"coverageExclusions"`
+
 	// RevertReporterEnabled determines whether revert metrics should be collected and reported.
 	RevertReporterEnabled bool `json:"revertReporterEnabled"`
 
