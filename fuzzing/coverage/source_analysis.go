@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/logging"
@@ -56,6 +59,52 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 		count += file.CoveredLineCount()
 	}
 	return count
+}
+
+// shouldExcludeFile checks if a file path matches any of the exclusion patterns
+func shouldExcludeFile(filePath string, exclusionPatterns []string) bool {
+	for _, pattern := range exclusionPatterns {
+		if matched, err := doublestar.Match(pattern, filePath); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// filterExcludedFiles removes files matching exclusion patterns from the source analysis.
+// Pattern matching is performed on relative paths (relative to current working directory)
+// to match the behavior of the coverage report display.
+func (s *SourceAnalysis) filterExcludedFiles(exclusionPatterns []string) {
+	if len(exclusionPatterns) == 0 {
+		return
+	}
+
+	// Get current working directory to convert absolute paths to relative paths
+	// This ensures pattern matching works on the same relative paths shown in reports
+	cwd, err := os.Getwd()
+	if err != nil {
+		// If we can't get the working directory, skip filtering to avoid issues
+		return
+	}
+
+	// Create a new map without excluded files
+	filteredFiles := make(map[string]*SourceFileAnalysis)
+
+	for filePath, fileAnalysis := range s.Files {
+		// Convert to relative path for pattern matching (same logic as in report template)
+		relativePath := filePath
+		if relPath, err := filepath.Rel(cwd, filePath); err == nil {
+			relativePath = relPath
+		}
+
+		// Keep the file if it doesn't match any exclusion pattern
+		if !shouldExcludeFile(relativePath, exclusionPatterns) {
+			filteredFiles[filePath] = fileAnalysis
+		}
+	}
+
+	// Replace the original files map with filtered results
+	s.Files = filteredFiles
 }
 
 // GenerateLCOVReport generates an LCOV report from the source analysis.
@@ -214,10 +263,10 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 	return uniquePCs, nil
 }
 
-// AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
-// to determine source coverage information.
+// AnalyzeSourceCoverage takes a list of compilations, coverage maps, and exclusion patterns, then performs source analysis
+// to determine source coverage information. Files matching the exclusion patterns will be filtered out from the results.
 // Returns a SourceAnalysis object, or an error if one occurs.
-func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, logger *logging.Logger) (*SourceAnalysis, error) {
+func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, exclusionPatterns []string, logger *logging.Logger) (*SourceAnalysis, error) {
 	// Create a new source analysis object
 	sourceAnalysis := &SourceAnalysis{
 		Files: make(map[string]*SourceFileAnalysis),
@@ -323,6 +372,10 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 			}
 		}
 	}
+
+	// Apply exclusion filtering if patterns are provided
+	sourceAnalysis.filterExcludedFiles(exclusionPatterns)
+
 	return sourceAnalysis, nil
 }
 
