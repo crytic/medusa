@@ -792,17 +792,17 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			_, contractName, err := parseContractPath(contractPath)
 			if err != nil {
-				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: invalid path format: %v", err)))
+				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: invalid path format: %v", err))
 			}
 
 			compiledContract, exists := tracer.chain.CompiledContracts[contractName]
 			if !exists {
-				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract not found: %s", contractName)))
+				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: contract not found: %s", contractName))
 			}
 
 			bytecode := compiledContract.InitBytecode
 			if len(bytecode) == 0 {
-				return nil, cheatCodeRevertData([]byte(fmt.Sprintf("getCode error: contract bytecode is empty: %s", contractName)))
+				return nil, cheatCodeRevertData(fmt.Appendf(nil, "getCode error: contract bytecode is empty: %s", contractName))
 			}
 
 			// Return the bytecode
