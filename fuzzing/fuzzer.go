@@ -634,6 +634,16 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 	contractName := contract.Name()
 	contract.CompiledContract().LinkBytecodes(contractName, deployedContracts)
 
+	// Ensure the linked bytecodes are reflected back into the compilation artifacts used later
+	// for coverage analysis and reporting. Without this, the analysis may use unlinked/hex-string
+	// bytecode for contracts that required library linking, causing coverage lookups to fail.
+	if comp := contract.Compilation(); comp != nil {
+		if srcArtifact, ok := comp.SourcePathToArtifact[contract.SourcePath()]; ok {
+			srcArtifact.Contracts[contractName] = *contract.CompiledContract()
+			comp.SourcePathToArtifact[contract.SourcePath()] = srcArtifact
+		}
+	}
+
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 	if err != nil {
