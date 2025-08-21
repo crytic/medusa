@@ -90,6 +90,7 @@ func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chai
 			OnTxEnd:   tracer.OnTxEnd,
 			OnExit:    tracer.OnExit,
 			OnOpcode:  tracer.OnOpcode,
+			OnLog:     tracer.OnLog,
 		},
 	}
 	tracer.nativeTracer = &chain.TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: nil}
@@ -279,6 +280,14 @@ func (t *ExecutionTracer) OnExit(depth int, output []byte, gasUsed uint64, err e
 	t.captureExitedCallFrame(output, err)
 }
 
+// OnLog captures event logs as they are emitted, as defined by tracers.Tracer.
+func (t *ExecutionTracer) OnLog(log *coretypes.Log) {
+	// Add the log directly to the current call frame's operations
+	if t.currentCallFrame != nil {
+		t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, log)
+	}
+}
+
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Execute all "on next capture state" events and clear them.
@@ -305,14 +314,4 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 		t.currentCallFrame.SelfDestructed = true
 	}
 
-	// If a log operation occurred, add a deferred operation to capture it.
-	// TODO: Move this to OnLog
-	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
-		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evmContext.StateDB.(types.MedusaStateDB).Logs()
-			if len(logs) > 0 {
-				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
-			}
-		})
-	}
 }
