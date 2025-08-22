@@ -107,6 +107,10 @@ type FuzzingConfig struct {
 	// compared to the previous.
 	MaxBlockTimestampDelay uint64 `json:"blockTimestampDelayMax"`
 
+	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
+	// limits for how many transactions can be included per block.
+	BlockGasLimit uint64 `json:"blockGasLimit"`
+
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
@@ -430,9 +434,12 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the timeout")
 	}
 
-	// Verify gas limit is appropriate
-	if p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a transaction gas limit which is non-zero")
+	// Verify gas limits are appropriate
+	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
+		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
+	}
+	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
+		return errors.New("project configuration must specify a block and transaction gas limit which are non-zero")
 	}
 
 	// Log warning if max block delay is zero
