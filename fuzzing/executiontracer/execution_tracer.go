@@ -73,6 +73,9 @@ type ExecutionTracer struct {
 
 	// verbosity describes the verbosity level that will be used for the execution trace
 	verbosity config.VerbosityLevel
+
+	// currentTxHash stores the hash of the current transaction being traced
+	currentTxHash common.Hash
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
@@ -136,6 +139,9 @@ func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 
 	// Store our evm reference
 	t.evmContext = vm
+
+	// Store the current transaction hash
+	t.currentTxHash = tx.Hash()
 }
 
 // resolveCallFrameConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
@@ -309,7 +315,9 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	// TODO: Move this to OnLog
 	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evmContext.StateDB.(types.MedusaStateDB).Logs()
+			blockNumber := t.evmContext.BlockNumber.Uint64()
+			blockHash, _ := t.testChain.BlockHashFromNumber(blockNumber)
+			logs := t.evmContext.StateDB.(types.MedusaStateDB).GetLogs(t.currentTxHash, blockNumber, blockHash)
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
 			}
