@@ -411,7 +411,8 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
-					f.config.Fuzzing.Testing.TestViewMethods)
+					f.config.Fuzzing.Testing.TestViewMethods,
+					f.config.Fuzzing.Testing.PropertyTesting.TestReturnBool)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
