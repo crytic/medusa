@@ -634,6 +634,16 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 	contractName := contract.Name()
 	contract.CompiledContract().LinkBytecodes(contractName, deployedContracts)
 
+	// Ensure the linked bytecodes are reflected back into the compilation artifacts used later
+	// for coverage analysis and reporting. Without this, the analysis may use unlinked/hex-string
+	// bytecode for contracts that required library linking, causing coverage lookups to fail.
+	if comp := contract.Compilation(); comp != nil {
+		if srcArtifact, ok := comp.SourcePathToArtifact[contract.SourcePath()]; ok {
+			srcArtifact.Contracts[contractName] = *contract.CompiledContract()
+			comp.SourcePathToArtifact[contract.SourcePath()] = srcArtifact
+		}
+	}
+
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 	if err != nil {
@@ -1012,7 +1022,7 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
-		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.logger)
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.config.Fuzzing.CoverageExclusions, f.logger)
 
 		if err != nil {
 			f.logger.Error("Failed to analyze source coverage", err)

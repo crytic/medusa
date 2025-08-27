@@ -65,8 +65,16 @@ func TrimLeadingZeroesFromAddress(address common.Address) string {
 	hexString := address.String()
 	if strings.HasPrefix(hexString, "0x") {
 		// Retain "0x" and trim leading zeroes from the rest of the string
-		return "0x" + strings.TrimLeft(hexString[2:], "0")
+		trimmed := strings.TrimLeft(hexString[2:], "0")
+		if trimmed == "" {
+			return "0x0"
+		}
+		return "0x" + trimmed
 	}
 	// Trim leading zeroes if there's no "0x" prefix
-	return strings.TrimLeft(hexString, "0")
+	trimmed := strings.TrimLeft(hexString, "0")
+	if trimmed == "" {
+		return "0"
+	}
+	return trimmed
 }
