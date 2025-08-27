@@ -6,7 +6,7 @@ import (
 
 // FuzzerEvents defines event emitters for a Fuzzer.
 type FuzzerEvents struct {
-	// FuzzerStarting emits events when the Fuzzer initialized state and is ready to about to begin the main
+	// FuzzerStarting emits events when the Fuzzer has initialized state and is about to begin the main
 	// execution loop for the fuzzing campaign.
 	FuzzerStarting events.EventEmitter[FuzzerStartingEvent]
 

@@ -21,7 +21,7 @@ var globalEventHandlers map[string][]any
 // helps in avoiding concurrent access panics.
 var globalEventHandlersLock sync.Mutex
 
-// SubscribeAny adds an EventHandler to the list of global EventHandler objects for this a given event data type.
+// SubscribeAny adds an EventHandler to the list of global EventHandler objects for a given event data type.
 // When an event is published, the callback will be triggered with the event data.
 // Note: An EventHandler subscribed here will remain throughout program execution. Objects which should be freed from
 // memory should not use this method to avoid memory leaks.

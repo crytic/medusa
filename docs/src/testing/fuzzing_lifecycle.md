@@ -112,7 +112,7 @@ for i < len(sequence) {
     increasedCoverage = coverageTracker.updateCoverage()
 
     # If coverage increased, add sequence[:i+1] to the corpus
-    if increasedCoveraged {
+    if increasedCoverage {
         corpus.addCallSequence(tx[:i+1])
     }
 

@@ -43,7 +43,7 @@ type LogFormat string
 const (
 	// STRUCTURED describes that logging should be done in structured JSON format
 	STRUCTURED LogFormat = "structured"
-	// UNSTRUCTRED describes that logging should be done in an unstructured format
+	// UNSTRUCTURED describes that logging should be done in an unstructured format
 	UNSTRUCTURED LogFormat = "unstructured"
 )
 

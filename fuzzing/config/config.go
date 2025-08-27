@@ -55,13 +55,13 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
-	// PruneFrequncy determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+	// PruneFrequency determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
 	// Setting PruneFrequency to 0 disables pruning.
 	// PruneFrequency only matters if CoverageEnabled is set to true; otherwise, no pruning will occur.
 	PruneFrequency uint64 `json:"pruneFrequency"`
 
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
-	// the in-memory corpus will be used, but not flush to disk.
+	// the in-memory corpus will be used, but will not be flushed to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
@@ -69,6 +69,10 @@ type FuzzingConfig struct {
 
 	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
 	CoverageFormats []string `json:"coverageFormats"`
+
+	// CoverageExclusions defines file/directory patterns to exclude from coverage reports.
+	// Supports glob patterns like "lib/**", "test/helpers/**", "*.generated.sol"
+	CoverageExclusions []string `json:"coverageExclusions"`
 
 	// RevertReporterEnabled determines whether revert metrics should be collected and reported.
 	RevertReporterEnabled bool `json:"revertReporterEnabled"`
@@ -102,10 +106,6 @@ type FuzzingConfig struct {
 	// MaxBlockTimestampDelay describes the maximum distance in timestamps the fuzzer will use when generating blocks
 	// compared to the previous.
 	MaxBlockTimestampDelay uint64 `json:"blockTimestampDelayMax"`
-
-	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
-	// limits for how many transactions can be included per block.
-	BlockGasLimit uint64 `json:"blockGasLimit"`
 
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
@@ -222,7 +222,7 @@ type TestingConfig struct {
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 
-	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
+	// TargetFunctionSignatures is a list of function signatures the fuzzer should exclusively target by omitting calls to other signatures.
 	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
 
@@ -430,12 +430,9 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the timeout")
 	}
 
-	// Verify gas limits are appropriate
-	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
-		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
-	}
-	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a block and transaction gas limit which are non-zero")
+	// Verify gas limit is appropriate
+	if p.Fuzzing.TransactionGasLimit == 0 {
+		return errors.New("project configuration must specify a transaction gas limit which is non-zero")
 	}
 
 	// Log warning if max block delay is zero
