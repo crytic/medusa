@@ -34,6 +34,14 @@ type CallSequenceGenerator struct {
 	// to its fetching by PopSequenceElement.
 	prefetchModifyCallFunc PrefetchModifyCallFunc
 
+	// isCorpusReplay indicates whether we're currently replaying a corpus sequence (requiring validation)
+	// vs. doing normal fuzzing with generated sequences.
+	isCorpusReplay bool
+
+	// corpusSequenceUseInMutations indicates whether the current corpus sequence should be used in mutations
+	// (false for test result sequences, true for regular corpus sequences)
+	corpusSequenceUseInMutations bool
+
 	// mutationStrategyChooser is a weighted random selector of functions that prepare the CallSequenceGenerator with
 	// a baseSequence derived from corpus entries.
 	mutationStrategyChooser *randomutils.WeightedRandomChooser[CallSequenceGeneratorMutationStrategy]
@@ -194,13 +202,19 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
 
-	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
-	// those first.
-	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
-	if unexecutedSequence != nil {
-		g.baseSequence = *unexecutedSequence
+	// Check if there are any corpus sequences to replay for parallel corpus replay with test providers.
+	// This replaces the old UnexecutedCallSequence mechanism.
+	unreplayedSequence, hasMore, useInMutations := g.worker.fuzzer.corpus.NextUnreplayedSequence()
+	if hasMore && unreplayedSequence != nil {
+		g.baseSequence = *unreplayedSequence
+		// Mark this as corpus replay for validation logic
+		g.isCorpusReplay = true
+		g.corpusSequenceUseInMutations = useInMutations
 		return false, nil
 	}
+	// Clear corpus replay flag for normal fuzzing
+	g.isCorpusReplay = false
+	g.corpusSequenceUseInMutations = false
 
 	// We'll decide whether to create a new call sequence or mutating existing corpus call sequences. Any entries we
 	// leave as nil will be populated by a newly generated call prior to being fetched from this provider.
@@ -258,6 +272,32 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 			err = g.prefetchModifyCallFunc(g, element)
 			if err != nil {
 				return nil, err
+			}
+		}
+	}
+
+	// If we're replaying a corpus sequence, perform validation (contract resolution, ABI resolution)
+	if g.isCorpusReplay && element != nil {
+		// Validate contract resolution for corpus sequences (similar to original initializeSequences logic)
+		if element.Call.To != nil {
+			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
+			resolvedContract, resolvedContractExists := g.worker.deployedContracts[*element.Call.To]
+			if !resolvedContractExists {
+				// Mark this corpus sequence as invalid and skip to next sequence
+				g.worker.fuzzer.corpus.logger.Debug("Corpus sequence disabled due to unresolvable contract at address: ", element.Call.To.String())
+				return nil, nil // Return nil to indicate end of this sequence, worker will get next sequence
+			}
+			element.Contract = resolvedContract
+
+			// Validate ABI values resolution
+			callAbiValues := element.Call.DataAbiValues
+			if callAbiValues != nil {
+				err := callAbiValues.Resolve(element.Contract.CompiledContract().Abi)
+				if err != nil {
+					// Mark this corpus sequence as invalid and skip to next sequence
+					g.worker.fuzzer.corpus.logger.Debug("Corpus sequence disabled due to ABI resolution error in contract '", element.Contract.Name(), "': ", err)
+					return nil, nil // Return nil to indicate end of this sequence, worker will get next sequence
+				}
 			}
 		}
 	}
