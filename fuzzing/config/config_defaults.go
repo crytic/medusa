@@ -53,6 +53,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
 			CoverageFormats:         []string{"html", "lcov"},
+			CoverageExclusions:      []string{},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
