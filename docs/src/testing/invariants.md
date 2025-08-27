@@ -41,7 +41,7 @@ The `deposit` function has the following function-level invariants:
 3. `balances[msg.sender]` should increase by `amount`.
 4. The `totalDeposited` value should increase by `amount`.
 
-Note that there other properties that can also be tested for but the above should highlight what a function-level
+Note that there are other properties that can also be tested for but the above should highlight what a function-level
 invariant is. In general, function-level invariants can be identified by assessing what must be true _before_ the execution
 of a function and what must be true _after_ the execution of that same function. In the next chapter, we will write a
 fuzz test to test the `deposit` function and how to use medusa to run that test.
@@ -55,7 +55,7 @@ A system-level invariant can be defined as follows:
 > **Definition**: A system-level invariant is a property that holds true across the _entire_ execution of a system
 
 Thus, a system-level invariant is a lot more generalized than a function-level invariant. Here are two common examples
-of a function-level invariant:
+of a system-level invariant:
 
 1. The `xy=k` constant product formula should always hold for Uniswap pools
 2. No user's balance should ever exceed the total supply for an ERC20 token.

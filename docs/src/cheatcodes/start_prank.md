@@ -23,13 +23,13 @@ contract TestContract {
     function deployAnotherImportantContract() public {
         require(msg.sender == owner);
 
-        // Deploy important contract
-        ic = new AnotherImportantContract(msg.sender);
+        // Deploy another important contract
+        aic = new AnotherImportantContract(msg.sender);
     }
 
     function test() public {
         // Obtain our cheat code contract reference.
-        IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Prank and deploy important contracts
         cheats.startPrank(owner);
@@ -39,7 +39,6 @@ contract TestContract {
 
         assert(ic.owner() == owner);
         assert(aic.owner() == owner);
-    }
     }
 ```
 

@@ -131,7 +131,7 @@ func GetPanicReason(panicCode uint64) string {
 	case PanicCodeOutOfBoundsArrayAccess:
 		return "panic: out of bounds array access"
 	case PanicCodeAllocateTooMuchMemory:
-		return "panic; overallocation of memory"
+		return "panic: overallocation of memory"
 	case PanicCodeCallUninitializedVariable:
 		return "panic: call on uninitialized variable"
 	default:

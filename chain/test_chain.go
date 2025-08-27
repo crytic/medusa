@@ -43,8 +43,8 @@ type TestChain struct {
 	// pendingBlock is a block currently under construction by the chain which has not yet been committed.
 	pendingBlock *types.Block
 
-	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used by cheatcodes to override the EVM
-	// interpreter's behavior. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
+	// pendingBlockContext is the vm.BlockContext for the current pending block. This is used to override the EVM
+	// interpreter's behavior, e.g. for cheatcodes. This should be set when a new EVM is created by the test chain e.g. using vm.NewEVM.
 	pendingBlockContext *vm.BlockContext
 
 	// pendingBlockChainConfig is params.ChainConfig for the current pending block. This is used by cheatcodes to override
@@ -498,7 +498,7 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions, as it
-// executed a transaction without committing any changes, instead discarding them.
+// executes a transaction without committing any changes, instead discarding them.
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
@@ -514,8 +514,13 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	// Set infinite balance to the fake caller account
 	state.SetBalance(msg.From, uint256.MustFromBig(math.MaxBig256), tracing.BalanceChangeUnspecified)
 
-	// Create our block contexts for the vm
-	blockContext := newTestChainBlockContext(t, t.Head().Header)
+	// Create our transaction and block contexts for the vm
+	var blockContext vm.BlockContext
+	if t.pendingBlock != nil {
+		blockContext = newTestChainBlockContext(t, t.pendingBlock.Header)
+	} else {
+		blockContext = newTestChainBlockContext(t, t.Head().Header)
+	}
 
 	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
 	// still calling our internal tracers.
@@ -570,10 +575,33 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	return msgResult, err
 }
 
+// PendingBlockContext is the vm.BlockContext for the current pending block.
+// This is used to override the EVM interpreter's behavior, e.g. for cheatcodes.
+func (t *TestChain) PendingBlockContext() *vm.BlockContext {
+	return t.pendingBlockContext
+}
+
 // PendingBlock describes the current pending block which is being constructed and awaiting commitment to the chain.
 // This may be nil if no pending block was created.
 func (t *TestChain) PendingBlock() *types.Block {
 	return t.pendingBlock
+}
+
+// HasPendingStateChanges checks if the pending block contains any self-destruct or contract creation operations
+func (t *TestChain) HasPendingStateChanges() bool {
+	if t.pendingBlock == nil {
+		return false
+	}
+
+	for _, messageResult := range t.pendingBlock.MessageResults {
+		for _, change := range messageResult.ContractDeploymentChanges {
+			if change.SelfDestructed || change.Creation {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // PendingBlockCreate constructs an empty block which is pending addition to the chain. The block produces by this

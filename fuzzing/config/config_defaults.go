@@ -53,6 +53,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
 			CoverageFormats:         []string{"html", "lcov"},
+			CoverageExclusions:      []string{},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -61,7 +62,6 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			DeployerAddress:        "0x30000",
 			MaxBlockNumberDelay:    60480,
 			MaxBlockTimestampDelay: 604800,
-			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
 			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
