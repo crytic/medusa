@@ -1,0 +1,5 @@
+self-hosted-runner:
+  # Workaround for https://github.com/rhysd/actionlint/issues/571
+  # TODO: remove this config once actionlint gets updated
+  labels:
+    - macos-15-intel
