@@ -514,21 +514,21 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 // definitions, as well as those added by Fuzzer.AddCompilationTargets. The contract deployment order is defined by
 // the Fuzzer.config.
 func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*executiontracer.ExecutionTrace, error) {
+	// load contracts to be specify
+	var contractsToSpecify map[string]any = make(map[string]any)
+	var contractsToSpecifyList []string
+	for _, contract := range fuzzer.contractDefinitions {
+		contractsToSpecify[contract.Name()] = nil
+		contractsToSpecifyList = append(contractsToSpecifyList, contract.Name())
+	}
+
 	// Verify that target contracts is not empty. If it's empty, but we only have one contract definition,
 	// we can infer the target contracts. Otherwise, we report an error.
 	if len(fuzzer.config.Fuzzing.TargetContracts) == 0 {
-		var found bool
-		for _, contract := range fuzzer.contractDefinitions {
-			// If only one contract is defined, we can infer the target contract by filtering interfaces/libraries.
-			if contract.CompiledContract().Kind == compilationTypes.ContractKindContract {
-				if !found {
-					fuzzer.config.Fuzzing.TargetContracts = []string{contract.Name()}
-					found = true
-				} else {
-					// TODO list options for the user to choose from
-					return nil, fmt.Errorf("specify target contract(s)")
-				}
-			}
+		if len(contractsToSpecifyList) == 1 {
+			fuzzer.config.Fuzzing.TargetContracts = append(fuzzer.config.Fuzzing.TargetContracts, contractsToSpecifyList[0])
+		} else {
+			return nil, fmt.Errorf("specify target contract(s): [%v]", strings.Join(contractsToSpecifyList, ", "))
 		}
 	}
 
@@ -544,6 +544,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		targetContractBalances := make(map[string]*config.ContractBalance)
 
 		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
+			if _, ok := contractsToSpecify[name]; !ok {
+				return nil, fmt.Errorf("target contract %s was not found in the compilation artifacts, expected contracts: [%v]", name, strings.Join(contractsToSpecifyList, ", "))
+			}
 			targetContracts[name] = true
 			if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
 				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
