@@ -24,7 +24,7 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -157,7 +157,7 @@ jobs:
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
