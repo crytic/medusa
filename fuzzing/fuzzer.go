@@ -933,27 +933,21 @@ func (f *Fuzzer) Start() error {
 	}
 	f.logger.Info("Finished setting up test chain")
 
-	// Initialize our coverage maps by measuring the coverage we get from the corpus.
+	// Prepare corpus warmup so workers can replay persisted sequences while emitting test failures immediately.
 	var corpusActiveSequences, corpusTotalSequences int
 	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
-		f.logger.Info("Running call sequences in the corpus")
+		f.logger.Info("Preparing corpus warmup queue")
 	}
-	startTime := time.Now()
-	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
-	if corpusTotalSequences > 0 {
-		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
-	}
+	corpusActiveSequences, corpusTotalSequences, err = f.corpus.PrepareForWarmup(baseTestChain, f.contractDefinitions)
 	if err != nil {
-		f.logger.Error("Failed to initialize the corpus", err)
+		f.logger.Error("Failed to prepare corpus warmup", err)
 		return err
 	}
-
-	// Log corpus health statistics, if we have any existing sequences.
 	if corpusTotalSequences > 0 {
 		f.logger.Info(
 			colors.Bold, "corpus: ", colors.Reset,
-			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
-			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
+			"warmup pending: ", colors.Bold, corpusActiveSequences, colors.Reset, ", ",
+			"total stored: ", colors.Bold, corpusTotalSequences, colors.Reset,
 		)
 	}
 

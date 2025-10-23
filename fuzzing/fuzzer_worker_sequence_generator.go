@@ -26,6 +26,9 @@ type CallSequenceGenerator struct {
 	// potentially further mutated values with PopSequenceElement iteratively.
 	baseSequence calls.CallSequence
 
+	// lastSequenceFromWarmup indicates whether the most recent sequence originated from the corpus warmup queue.
+	lastSequenceFromWarmup bool
+
 	// fetchIndex describes the current position in the baseSequence which defines the next element to be mutated and
 	// returned when calling PopSequenceElement.
 	fetchIndex int
@@ -193,12 +196,14 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	g.baseSequence = make(calls.CallSequence, g.worker.fuzzer.config.Fuzzing.CallSequenceLength)
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
+	g.lastSequenceFromWarmup = false
 
 	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
 	// those first.
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
 	if unexecutedSequence != nil {
 		g.baseSequence = *unexecutedSequence
+		g.lastSequenceFromWarmup = true
 		return false, nil
 	}
 
@@ -229,7 +234,18 @@ func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 			g.prefetchModifyCallFunc = corpusMutationFunc.PrefetchModifyCallFunc
 		}
 	}
+	g.lastSequenceFromWarmup = false
 	return true, nil
+}
+
+// LastSequenceFromWarmup reports whether the most recently initialized sequence originated from the corpus warmup queue.
+func (g *CallSequenceGenerator) LastSequenceFromWarmup() bool {
+	return g.lastSequenceFromWarmup
+}
+
+// CurrentSequence returns the base sequence currently managed by the generator.
+func (g *CallSequenceGenerator) CurrentSequence() calls.CallSequence {
+	return g.baseSequence
 }
 
 // PopSequenceElement obtains the next element for our call sequence requested by InitializeNextSequence. If there are no elements

@@ -259,6 +259,18 @@ func (fw *FuzzerWorker) updateMethods() {
 	}
 }
 
+// bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker.
+func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) {
+	for _, element := range sequence {
+		if element == nil || element.Call == nil || element.Call.To == nil {
+			continue
+		}
+		if contractDefinition, ok := fw.deployedContracts[*element.Call.To]; ok {
+			element.Contract = contractDefinition
+		}
+	}
+}
+
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
@@ -283,6 +295,10 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
 		return nil, err
+	}
+	isWarmupSequence := fw.sequenceGenerator.LastSequenceFromWarmup()
+	if isWarmupSequence {
+		fw.bindContractsForSequence(fw.sequenceGenerator.CurrentSequence())
 	}
 
 	// Define our shrink requests we'll collect during execution.
@@ -309,9 +325,9 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		err = fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
-		if err != nil {
-			return true, err
+		_, coverageErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		if coverageErr != nil {
+			return true, coverageErr
 		}
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
@@ -340,7 +356,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// Execute our call sequence.
-	_, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+	var executedSequence calls.CallSequence
+	executedSequence, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
@@ -353,6 +370,13 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
+	if isWarmupSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
+		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if !isNewSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
@@ -392,7 +416,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 		// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
 		// If we detect coverage changes, add this sequence.
-		seqErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		_, seqErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if seqErr != nil {
 			return true, seqErr
 		}
