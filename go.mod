@@ -1,8 +1,6 @@
 module github.com/crytic/medusa
 
-go 1.23.0
-
-toolchain go1.23.3
+go 1.24.0
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -18,10 +16,10 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.11.1
 	go.etcd.io/bbolt v1.4.0
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.43.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
-	golang.org/x/net v0.39.0
-	golang.org/x/sys v0.32.0
+	golang.org/x/net v0.46.0
+	golang.org/x/sys v0.37.0
 )
 
 require (
