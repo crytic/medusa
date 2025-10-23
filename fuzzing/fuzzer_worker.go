@@ -259,16 +259,34 @@ func (fw *FuzzerWorker) updateMethods() {
 	}
 }
 
-// bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker.
-func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) {
+// bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker and
+// resolves ABI metadata needed for serialization.
+func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) error {
 	for _, element := range sequence {
-		if element == nil || element.Call == nil || element.Call.To == nil {
+		if element == nil || element.Call == nil {
 			continue
 		}
-		if contractDefinition, ok := fw.deployedContracts[*element.Call.To]; ok {
-			element.Contract = contractDefinition
+		// Deployments have no target address, so there is no contract to resolve.
+		if element.Call.To == nil {
+			continue
+		}
+
+		contractDefinition, ok := fw.deployedContracts[*element.Call.To]
+		if !ok {
+			return fmt.Errorf("contract at address %s is not registered with worker %d", element.Call.To.String(), fw.workerIndex)
+		}
+
+		element.Contract = contractDefinition
+
+		if abiValues := element.Call.DataAbiValues; abiValues != nil {
+			if abiValues.Method == nil {
+				if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
+					return fmt.Errorf("failed to resolve ABI for contract %s: %w", contractDefinition.Name(), err)
+				}
+			}
 		}
 	}
+	return nil
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
@@ -297,8 +315,12 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		return nil, err
 	}
 	isWarmupSequence := fw.sequenceGenerator.LastSequenceFromWarmup()
+	warmupUseInMutations := fw.sequenceGenerator.WarmupSequenceUseInMutations()
 	if isWarmupSequence {
-		fw.bindContractsForSequence(fw.sequenceGenerator.CurrentSequence())
+		if err = fw.bindContractsForSequence(fw.sequenceGenerator.CurrentSequence()); err != nil {
+			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Skipping warmup sequence: ", err)
+			return nil, nil
+		}
 	}
 
 	// Define our shrink requests we'll collect during execution.
@@ -371,7 +393,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
 	if isWarmupSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
-		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight())
+		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight(), warmupUseInMutations)
 		if err != nil {
 			return nil, err
 		}
