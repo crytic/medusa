@@ -47,6 +47,11 @@ type Corpus struct {
 	// are executed to check for test failures.
 	unexecutedCallSequences []calls.CallSequence
 
+	// unreplayedSequenceIndex tracks the next sequence to be replayed from loaded files during parallel corpus replay
+	unreplayedSequenceIndex int
+	// totalSequencesForReplay tracks the total number of sequences available for replay
+	totalSequencesForReplay int
+
 	// mutationTargetSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
 	mutationTargetSequenceChooser *randomutils.WeightedRandomChooser[calls.CallSequence]
@@ -69,6 +74,8 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		callSequenceFiles:       newCorpusDirectory[calls.CallSequence](""),
 		testResultSequenceFiles: newCorpusDirectory[calls.CallSequence](""),
 		unexecutedCallSequences: make([]calls.CallSequence, 0),
+		unreplayedSequenceIndex: 0,
+		totalSequencesForReplay: 0,
 		logger:                  logging.GlobalLogger.NewSubLogger("module", "corpus"),
 	}
 
@@ -95,6 +102,9 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Calculate total sequences available for replay (test results first, then call sequences)
+		corpus.totalSequencesForReplay = len(corpus.testResultSequenceFiles.files) + len(corpus.callSequenceFiles.files)
 	}
 
 	return corpus, nil
@@ -304,8 +314,9 @@ func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSe
 	return nil
 }
 
-// Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
-// (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
+// Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are loaded from disk
+// but not executed - execution is handled by individual workers using NextUnreplayedSequence() for parallel
+// corpus replay with test providers.
 // Returns the active number of corpus items, total number of corpus items, or an error if one occurred. If an error
 // is returned, then the corpus counts returned will always be zero.
 func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) (int, int, error) {
@@ -374,25 +385,17 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 	}
 
-	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. Valid sequences
-	// are added to the corpus for mutations, re-execution, etc.
-	//
-	// The order of initializations here is important, as it determines the order of "unexecuted sequences" to replay
-	// when the fuzzer's worker starts up. We want to replay test results first, so that other corpus items
-	// do not trigger the same test failures instead.
-	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	err = c.initializeSequences(c.callSequenceFiles, testChain, deployedContracts, true)
-	if err != nil {
-		return 0, 0, err
-	}
+	// Note: Corpus replay (sequence execution and validation) is now handled by individual workers
+	// using NextUnreplayedSequence() for parallel execution with test providers.
+	// The old initializeSequences execution logic is replaced by this worker-based approach.
 
 	// Calculate corpus health metrics
 	corpusSequencesTotal := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
 	corpusSequencesActive := len(c.unexecutedCallSequences)
+
+	// Initialize total sequences for replay (used by NextUnreplayedSequence)
+	c.totalSequencesForReplay = corpusSequencesTotal
+	c.unreplayedSequenceIndex = 0
 
 	return corpusSequencesActive, corpusSequencesTotal, nil
 }
@@ -504,6 +507,57 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 		}
 	}
 	return nil
+}
+
+// RegisterReplayedSequence registers a successfully replayed sequence with the corpus for use in mutations.
+// This should be called by workers after successfully executing and validating a corpus sequence.
+// The useInMutations parameter indicates whether the sequence should be available for mutation-based fuzzing.
+func (c *Corpus) RegisterReplayedSequence(sequence calls.CallSequence, useInMutations bool) error {
+	// Acquire our call sequences lock during the duration of this method.
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Add to mutation target chooser if requested and chooser exists
+	if useInMutations && c.mutationTargetSequenceChooser != nil {
+		c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
+	}
+
+	return nil
+}
+
+// NextUnreplayedSequence returns the next call sequence from loaded files for parallel corpus replay.
+// It iterates through test result sequences first, then call sequences, in a thread-safe manner.
+// Returns the next sequence, a boolean indicating if more sequences are available, and a boolean
+// indicating if this sequence should be used in mutations (false for test results, true for regular sequences).
+// This method is intended for parallel corpus replay across multiple workers.
+func (c *Corpus) NextUnreplayedSequence() (*calls.CallSequence, bool, bool) {
+	// Acquire our call sequences lock during the duration of this method.
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Check if we've exhausted all sequences
+	if c.unreplayedSequenceIndex >= c.totalSequencesForReplay {
+		return nil, false, false
+	}
+
+	// First, iterate through test result sequences (useInMutations = false)
+	testResultCount := len(c.testResultSequenceFiles.files)
+	if c.unreplayedSequenceIndex < testResultCount {
+		sequenceFileData := c.testResultSequenceFiles.files[c.unreplayedSequenceIndex]
+		c.unreplayedSequenceIndex++
+		return &sequenceFileData.data, true, false // Test results should NOT be used in mutations
+	}
+
+	// Then iterate through regular call sequence files (useInMutations = true)
+	callSequenceIndex := c.unreplayedSequenceIndex - testResultCount
+	if callSequenceIndex < len(c.callSequenceFiles.files) {
+		sequenceFileData := c.callSequenceFiles.files[callSequenceIndex]
+		c.unreplayedSequenceIndex++
+		return &sequenceFileData.data, true, true // Regular sequences should be used in mutations
+	}
+
+	// This should not be reached given our bounds check above
+	return nil, false, false
 }
 
 // UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.

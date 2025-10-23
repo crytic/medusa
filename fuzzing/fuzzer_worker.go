@@ -340,11 +340,22 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// Execute our call sequence.
-	_, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+	executedSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
 		return nil, err
+	}
+
+	// If this was a corpus replay sequence that executed successfully, register it with the corpus
+	if fw.sequenceGenerator.isCorpusReplay && len(executedSequence) > 0 {
+		// Use the mutation flag determined when the sequence was fetched from corpus
+		useInMutations := fw.sequenceGenerator.corpusSequenceUseInMutations
+		err = fw.fuzzer.corpus.RegisterReplayedSequence(executedSequence, useInMutations)
+		if err != nil {
+			// Log error but don't fail - this is not critical to execution
+			fw.fuzzer.logger.Debug("Failed to register replayed corpus sequence: ", err)
+		}
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
