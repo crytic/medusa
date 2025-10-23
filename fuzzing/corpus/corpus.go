@@ -28,6 +28,12 @@ import (
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
 // reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
 // may create incompatibilities with corpus items.
+// warmupSequence tracks a stored corpus entry and whether it should rejoin the mutation chooser after replay.
+type warmupSequence struct {
+	sequence       calls.CallSequence
+	useInMutations bool
+}
+
 type Corpus struct {
 	// storageDirectory describes the directory to save corpus callSequenceFiles within.
 	storageDirectory string
@@ -45,7 +51,7 @@ type Corpus struct {
 	// unexecutedCallSequences defines the callSequences which have not yet been executed by the fuzzer. As each item
 	// is selected for execution by the fuzzer on startup, it is removed. This way, all call sequences loaded from disk
 	// are executed to check for test failures.
-	unexecutedCallSequences []calls.CallSequence
+	unexecutedCallSequences []warmupSequence
 
 	// mutationTargetSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
@@ -68,7 +74,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		coverageMaps:            coverage.NewCoverageMaps(),
 		callSequenceFiles:       newCorpusDirectory[calls.CallSequence](""),
 		testResultSequenceFiles: newCorpusDirectory[calls.CallSequence](""),
-		unexecutedCallSequences: make([]calls.CallSequence, 0),
+		unexecutedCallSequences: make([]warmupSequence, 0),
 		logger:                  logging.GlobalLogger.NewSubLogger("module", "corpus"),
 	}
 
@@ -332,9 +338,11 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
 		// sequences.
 		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event chain.ContractDeploymentsAddedEvent) error {
-			matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
-			if matchedContract != nil {
-				deployedContracts[event.Contract.Address] = matchedContract
+			if contractDefinitions != nil {
+				matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+				if matchedContract != nil {
+					deployedContracts[event.Contract.Address] = matchedContract
+				}
 			}
 			return nil
 		})
@@ -488,11 +496,11 @@ func checkSequenceCoverageAndUpdate(callSequence calls.CallSequence, coverageMap
 // CheckSequenceCoverageAndUpdate checks if the most recent call executed in the provided call sequence achieved
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
-// Returns an error if one occurs.
-func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) error {
+// Returns a boolean indicating whether coverage increased, and an error if one occurs.
+func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) (bool, error) {
 	coverageUpdated, err := checkSequenceCoverageAndUpdate(callSequence, c.coverageMaps)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// If we had an increase in coverage, we save the sequence.
@@ -500,10 +508,123 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 		// If we achieved new coverage, save this sequence for mutation purposes.
 		err = c.addCallSequence(c.callSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
-			return err
+			return true, err
 		}
 	}
+	return coverageUpdated, nil
+}
+
+// MarkSequenceValidated records that a call sequence loaded from disk has been successfully replayed by a worker.
+// The sequence is cloned, stripped of runtime metadata, and registered with the mutation chooser so it can participate
+// in future mutations.
+func (c *Corpus) MarkSequenceValidated(sequence calls.CallSequence, mutationChooserWeight *big.Int, useInMutations bool) error {
+	if mutationChooserWeight == nil {
+		mutationChooserWeight = big.NewInt(1)
+	}
+
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	if !useInMutations {
+		return nil
+	}
+
+	clonedSequence, err := sequence.Clone()
+	if err != nil {
+		return err
+	}
+
+	for _, element := range clonedSequence {
+		if element == nil {
+			continue
+		}
+		element.ChainReference = nil
+		element.ExecutionTrace = nil
+	}
+
+	if c.mutationTargetSequenceChooser == nil {
+		c.mutationTargetSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
+	}
+	c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](clonedSequence, mutationChooserWeight))
 	return nil
+}
+
+// PrepareForWarmup resets the in-memory corpus state so workers can replay stored sequences in parallel.
+// It seeds coverage information from the post-setup chain while enqueueing all persisted sequences for execution.
+// Returns the number of sequences enqueued for warmup, the total sequence count, or an error if seeding fails.
+func (c *Corpus) PrepareForWarmup(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) (int, int, error) {
+	// Reset structures that will be rebuilt by the warmup process.
+	c.callSequencesLock.Lock()
+	c.unexecutedCallSequences = nil
+	c.mutationTargetSequenceChooser = nil
+	c.callSequencesLock.Unlock()
+
+	// Seed coverage maps from the configured chain so reporting reflects deployment-time coverage.
+	c.coverageMaps = coverage.NewCoverageMaps()
+	coverageTracer := coverage.NewCoverageTracer()
+
+	deployedContracts := make(map[common.Address]*contracts.Contract, 0)
+	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
+		newChain.AddTracer(coverageTracer.NativeTracer(), true, false)
+		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event chain.ContractDeploymentsAddedEvent) error {
+			if contractDefinitions != nil {
+				matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+				if matchedContract != nil {
+					deployedContracts[event.Contract.Address] = matchedContract
+				}
+			}
+			return nil
+		})
+		newChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(func(event chain.ContractDeploymentsRemovedEvent) error {
+			delete(deployedContracts, event.Contract.Address)
+			return nil
+		})
+		return nil
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to seed coverage maps during warmup preparation: %v", err)
+	}
+	defer testChain.Close()
+
+	initialContractsSet := make(map[common.Address]struct{}, len(deployedContracts))
+	for addr := range deployedContracts {
+		initialContractsSet[addr] = struct{}{}
+	}
+	coverageTracer.SetInitialContractsSet(&initialContractsSet)
+
+	c.coverageMaps = coverage.NewCoverageMaps()
+	for _, block := range testChain.CommittedBlocks() {
+		for _, messageResults := range block.MessageResults {
+			covMaps := coverage.GetCoverageTracerResults(messageResults)
+			coverage.RemoveCoverageTracerResults(messageResults)
+
+			_, covErr := c.coverageMaps.Update(covMaps)
+			if covErr != nil {
+				return 0, 0, covErr
+			}
+		}
+	}
+
+	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
+
+	c.callSequencesLock.Lock()
+	c.unexecutedCallSequences = make([]warmupSequence, 0, totalSequences)
+	for _, sequenceFileData := range c.testResultSequenceFiles.files {
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, warmupSequence{
+			sequence:       sequenceFileData.data,
+			useInMutations: false,
+		})
+	}
+	for _, sequenceFileData := range c.callSequenceFiles.files {
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, warmupSequence{
+			sequence:       sequenceFileData.data,
+			useInMutations: true,
+		})
+	}
+	activeSequences := len(c.unexecutedCallSequences)
+	c.callSequencesLock.Unlock()
+
+	return activeSequences, totalSequences, nil
 }
 
 // UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.
@@ -511,11 +632,11 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 // failures. If a call sequence is returned, it will not be returned by this method again.
 // Returns a call sequence loaded from disk which has not yet been executed, to check for test failures. If all
 // sequences in the corpus have been executed, this will return nil.
-func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
+func (c *Corpus) UnexecutedCallSequence() (*calls.CallSequence, bool) {
 	// Prior to thread locking, if we have no un-executed call sequences, quit.
 	// This is a speed optimization, as thread locking on a central component affects performance.
 	if len(c.unexecutedCallSequences) == 0 {
-		return nil
+		return nil, false
 	}
 
 	// Acquire a thread lock for the duration of this method.
@@ -525,7 +646,7 @@ func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	// Check that we have an item now that the thread is locked. This must be performed again as an item could've
 	// been removed between time of check (the prior exit condition) and time of use (thread locked operations).
 	if len(c.unexecutedCallSequences) == 0 {
-		return nil
+		return nil, false
 	}
 
 	// Otherwise obtain the first item and remove it from the slice.
@@ -533,7 +654,7 @@ func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	c.unexecutedCallSequences = c.unexecutedCallSequences[1:]
 
 	// Return the first sequence
-	return &firstSequence
+	return &firstSequence.sequence, firstSequence.useInMutations
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.
@@ -574,6 +695,10 @@ func (c *Corpus) Flush() error {
 // PruneSequences takes a chain.TestChain parameter used to run transactions.
 // It returns an int indicating the number of sequences removed from the corpus, and an error if any occurred.
 func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (int, error) {
+	if c.mutationTargetSequenceChooser == nil {
+		return 0, nil
+	}
+
 	chainOriginalIndex := uint64(len(chain.CommittedBlocks()))
 	tmpMap := coverage.NewCoverageMaps()
 
