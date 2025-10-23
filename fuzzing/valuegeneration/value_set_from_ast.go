@@ -1,10 +1,11 @@
 package valuegeneration
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/shopspring/decimal"
 	"math/big"
 	"strings"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/shopspring/decimal"
 )
 
 // SeedFromAst allows a ValueSet to be seeded from an AST interface.

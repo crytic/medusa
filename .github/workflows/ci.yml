@@ -24,7 +24,7 @@ jobs:
     needs: [lint, test]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Speed up Go (Windows)
         if: runner.os == 'Windows'
@@ -49,7 +49,7 @@ jobs:
           printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "^1.22"
           # disable caching during release (tag) builds
@@ -82,7 +82,7 @@ jobs:
 
       - name: Sign artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        uses: sigstore/gh-action-sigstore-python@v3.0.1
         with:
           inputs: ./medusa-*.tar.gz
 
@@ -105,13 +105,13 @@ jobs:
 
     steps:
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: medusa-*
           merge-multiple: true
 
       - name: Create GitHub release and upload binaries
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
         with:
           draft: true
           name: "${{ github.ref_name }}"
@@ -124,9 +124,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "^1.22"
 
@@ -154,26 +154,18 @@ jobs:
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run --timeout 5m0s
-
-      - name: Gencodec
-        run: |
-          go get github.com/fjl/gencodec 
-          pushd fuzzing/config
-          go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
-          git diff --exit-code -- .
-          popd
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.10"
 
@@ -201,11 +193,11 @@ jobs:
           npm config set cache "$DIR\\npm-cache" --global
           echo "::endgroup::"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "^1.22"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 18.15
 
@@ -214,11 +206,11 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip3 install --no-cache-dir solc-select crytic-compile
+          pip3 install --no-cache-dir solc-select slither-analyzer
 
       - name: Install solc
         run: |
-          solc-select use 0.8.17 --always-install
+          solc-select use 0.8.28 --always-install
 
       - name: Test
         run: go test ./...

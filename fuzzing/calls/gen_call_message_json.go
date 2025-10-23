@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/common/hexutil"
+	"github.com/crytic/medusa-geth/core/types"
 )
 
 var _ = (*callMessageMarshaling)(nil)
@@ -16,18 +16,19 @@ var _ = (*callMessageMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c CallMessage) MarshalJSON() ([]byte, error) {
 	type CallMessage struct {
-		From              common.Address            `json:"from"`
-		To                *common.Address           `json:"to"`
-		Nonce             uint64                    `json:"nonce"`
-		Value             *hexutil.Big              `json:"value"`
-		GasLimit          uint64                    `json:"gasLimit"`
-		GasPrice          *hexutil.Big              `json:"gasPrice"`
-		GasFeeCap         *hexutil.Big              `json:"gasFeeCap"`
-		GasTipCap         *hexutil.Big              `json:"gasTipCap"`
-		Data              hexutil.Bytes             `json:"data,omitempty"`
-		DataAbiValues     *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
-		AccessList        types.AccessList
-		SkipAccountChecks bool
+		From             common.Address            `json:"from"`
+		To               *common.Address           `json:"to"`
+		Nonce            uint64                    `json:"nonce"`
+		Value            *hexutil.Big              `json:"value"`
+		GasLimit         uint64                    `json:"gasLimit"`
+		GasPrice         *hexutil.Big              `json:"gasPrice"`
+		GasFeeCap        *hexutil.Big              `json:"gasFeeCap"`
+		GasTipCap        *hexutil.Big              `json:"gasTipCap"`
+		Data             hexutil.Bytes             `json:"data,omitempty"`
+		DataAbiValues    *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		AccessList       types.AccessList
+		SkipNonceChecks  bool
+		SkipFromEOACheck bool
 	}
 	var enc CallMessage
 	enc.From = c.From
@@ -41,25 +42,27 @@ func (c CallMessage) MarshalJSON() ([]byte, error) {
 	enc.Data = c.Data
 	enc.DataAbiValues = c.DataAbiValues
 	enc.AccessList = c.AccessList
-	enc.SkipAccountChecks = c.SkipAccountChecks
+	enc.SkipNonceChecks = c.SkipNonceChecks
+	enc.SkipFromEOACheck = c.SkipFromEOACheck
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (c *CallMessage) UnmarshalJSON(input []byte) error {
 	type CallMessage struct {
-		From              *common.Address           `json:"from"`
-		To                *common.Address           `json:"to"`
-		Nonce             *uint64                   `json:"nonce"`
-		Value             *hexutil.Big              `json:"value"`
-		GasLimit          *uint64                   `json:"gasLimit"`
-		GasPrice          *hexutil.Big              `json:"gasPrice"`
-		GasFeeCap         *hexutil.Big              `json:"gasFeeCap"`
-		GasTipCap         *hexutil.Big              `json:"gasTipCap"`
-		Data              *hexutil.Bytes            `json:"data,omitempty"`
-		DataAbiValues     *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
-		AccessList        *types.AccessList
-		SkipAccountChecks *bool
+		From             *common.Address           `json:"from"`
+		To               *common.Address           `json:"to"`
+		Nonce            *uint64                   `json:"nonce"`
+		Value            *hexutil.Big              `json:"value"`
+		GasLimit         *uint64                   `json:"gasLimit"`
+		GasPrice         *hexutil.Big              `json:"gasPrice"`
+		GasFeeCap        *hexutil.Big              `json:"gasFeeCap"`
+		GasTipCap        *hexutil.Big              `json:"gasTipCap"`
+		Data             *hexutil.Bytes            `json:"data,omitempty"`
+		DataAbiValues    *CallMessageDataAbiValues `json:"dataAbiValues,omitempty"`
+		AccessList       *types.AccessList
+		SkipNonceChecks  *bool
+		SkipFromEOACheck *bool
 	}
 	var dec CallMessage
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -98,8 +101,11 @@ func (c *CallMessage) UnmarshalJSON(input []byte) error {
 	if dec.AccessList != nil {
 		c.AccessList = *dec.AccessList
 	}
-	if dec.SkipAccountChecks != nil {
-		c.SkipAccountChecks = *dec.SkipAccountChecks
+	if dec.SkipNonceChecks != nil {
+		c.SkipNonceChecks = *dec.SkipNonceChecks
+	}
+	if dec.SkipFromEOACheck != nil {
+		c.SkipFromEOACheck = *dec.SkipFromEOACheck
 	}
 	return nil
 }

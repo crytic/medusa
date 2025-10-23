@@ -2,13 +2,14 @@ package fuzzing
 
 import (
 	"fmt"
+	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
 	"sync"
 
+	"github.com/crytic/medusa-geth/core"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"github.com/ethereum/go-ethereum/core"
 	"golang.org/x/exp/slices"
 )
 
@@ -21,7 +22,7 @@ type PropertyTestCaseProvider struct {
 	// fuzzer describes the Fuzzer which this provider is attached to.
 	fuzzer *Fuzzer
 
-	// testCases is a map of contract-method IDs to property test cases.GetContractMethodID
+	// testCases is a map of contract-method IDs to property test cases.
 	testCases map[contracts.ContractMethodID]*PropertyTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases
@@ -88,7 +89,7 @@ func (t *PropertyTestCaseProvider) checkPropertyTestFailed(worker *FuzzerWorker,
 	var executionResult *core.ExecutionResult
 	var executionTrace *executiontracer.ExecutionTrace
 	if trace {
-		executionResult, executionTrace, err = executiontracer.CallWithExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions, msg.ToCoreMessage(), nil)
+		executionResult, executionTrace, err = executiontracer.CallWithExecutionTrace(worker.chain, worker.fuzzer.contractDefinitions, msg.ToCoreMessage(), nil, worker.fuzzer.config.Fuzzing.Testing.Verbosity)
 	} else {
 		executionResult, err = worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	}
@@ -261,7 +262,7 @@ func (t *PropertyTestCaseProvider) onWorkerDeployedContractDeleted(event FuzzerW
 	return nil
 }
 
-// callSequencePostCallTest provides is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
+// callSequencePostCallTest is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It checks whether property
 // test invariants are upheld after each call the Fuzzer makes when testing a call sequence.
 func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
@@ -296,6 +297,8 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 		if failedPropertyTest {
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
+				TestName:             testCase.Name(),
+				CallSequenceToShrink: callSequence,
 				VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 					// First verify the contract to property test is still deployed to call upon.
 					_, propertyTestContractDeployed := worker.deployedContracts[workerPropertyTestMethod.Address]
@@ -310,10 +313,10 @@ func (t *PropertyTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker
 					shrunkenSequenceFailedTest, _, err := t.checkPropertyTestFailed(worker, &workerPropertyTestMethod, false)
 					return shrunkenSequenceFailedTest, err
 				},
-				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+				FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity config.VerbosityLevel) error {
 					// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 					if len(shrunkenCallSequence) > 0 {
-						_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
+						_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verbosity)
 						if err != nil {
 							return err
 						}

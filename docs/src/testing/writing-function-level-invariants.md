@@ -42,7 +42,7 @@ function testDeposit(uint256 _amount) public {
     uint256 preBalance = depositContract.balances(address(this));
 
     // Call the deposit contract with a variable amount
-    depositContract.deposit{value: _amount}();
+    depositContract.deposit{value: amount}();
 
     // Assert post-conditions
     assert(depositContract.balances(address(this)) == preBalance + amount);
@@ -108,7 +108,7 @@ contract TestDepositContract {
         uint256 preBalance = depositContract.balances(address(this));
 
         // Call the deposit contract with a variable amount
-        depositContract.deposit{value: _amount}();
+        depositContract.deposit{value: amount}();
 
         // Assert post-conditions
         assert(depositContract.balances(address(this)) == preBalance + amount);
@@ -137,9 +137,9 @@ medusa fuzz --config medusa.json
 The following changes were made to the default project configuration file to allow this test to run:
 
 - `fuzzing.targetContracts`: The `fuzzing.targetContracts` value was updated to `["TestDepositContract"]`.
-- `fuzzing.targetContractsBalances`: The `fuzzing.targetContractsBalances` was updated to `["0xfffffffffffffffffffffffffffffff"]`
+- `fuzzing.targetContractsBalances`: The `fuzzing.targetContractsBalances` was updated to `["21267647932558653966460912964485513215"]`
   to allow the `TestDepositContract` contract to have an ETH balance allowing the fuzzer to correctly deposit funds into the
   `DepositContract`.
-- `fuzzing.testLimit`: The `fuzzing.testLimit` was set to `1_000` to shorten the duration of the fuzzing campign.
+- `fuzzing.testLimit`: The `fuzzing.testLimit` was set to `1_000` to shorten the duration of the fuzzing campaign.
 - `fuzzing.callSequenceLength`: The `fuzzing.callSequenceLength` was set to `1` so that the `TestDepositContract` can be
   reset with its full ETH balance after each transaction.

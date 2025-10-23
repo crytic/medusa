@@ -1,11 +1,12 @@
 package chain
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
 )
 
 // newTestChainBlockContext obtains a new vm.BlockContext that is tailored to provide data from a TestChain.

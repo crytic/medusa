@@ -6,33 +6,20 @@ import (
 	"strconv"
 
 	"github.com/crytic/medusa/chain"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/crypto"
 	chainTypes "github.com/crytic/medusa/chain/types"
 	fuzzingTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // CallSequence describes a sequence of calls sent to a chain.
 type CallSequence []*CallSequenceElement
-
-// AttachExecutionTraces takes a given chain which executed the call sequence, and a list of contract definitions,
-// and it replays each call of the sequence with an execution tracer attached to it, it then sets each
-// CallSequenceElement.ExecutionTrace to the resulting trace. Returns an error if one occurred.
-func (cs CallSequence) AttachExecutionTraces(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
-	// For each call sequence element, attach an execution trace.
-	for _, cse := range cs {
-		err := cse.AttachExecutionTrace(chain, contractDefinitions)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // Log returns a logging.LogBuffer that represents this call sequence. This buffer will be passed to the underlying
 // logger which will format it accordingly for console or file.
@@ -219,6 +206,29 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	return method, err
 }
 
+// DecodedReturnValues returns the Go-equivalent decoded return values for the CallSequenceElement's return data
+func (cse *CallSequenceElement) DecodedReturnValues() ([]any, error) {
+	// First, retrieve the method that was called by the call sequence element
+	method, err := cse.Method()
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve the ABI-encoded return data
+	encodedReturnData := cse.ChainReference.Block.MessageResults[cse.ChainReference.TransactionIndex].ExecutionResult.ReturnData
+	if len(encodedReturnData) == 0 {
+		return nil, nil
+	}
+
+	// Decode the return data
+	decodedReturnValues, err := method.Outputs.Unpack(encodedReturnData)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodedReturnValues, nil
+}
+
 // String returns a displayable string representing the CallSequenceElement.
 func (cse *CallSequenceElement) String() string {
 	// Obtain our contract name
@@ -234,11 +244,14 @@ func (cse *CallSequenceElement) String() string {
 		methodName = method.Sig
 	}
 
+	// Get our labels that we can use to make the string look better
+	labels := chain.GetLabels(cse.ChainReference.MessageResults())
+
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
 	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args)
+		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, labels)
 		if err != nil {
 			argsText = "<unresolved args>"
 		}
@@ -252,6 +265,9 @@ func (cse *CallSequenceElement) String() string {
 		blockTimeStr = strconv.FormatUint(cse.ChainReference.Block.Header.Time, 10)
 	}
 
+	// Trim the leading zeros and use the labels
+	fromAddress := utils.AttachLabelToAddress(cse.Call.From, labels[cse.Call.From])
+
 	// Return a formatted string representing this element.
 	return fmt.Sprintf(
 		"%s.%s(%s) (block=%s, time=%s, gas=%d, gasprice=%s, value=%s, sender=%s)",
@@ -263,27 +279,8 @@ func (cse *CallSequenceElement) String() string {
 		cse.Call.GasLimit,
 		cse.Call.GasPrice.String(),
 		cse.Call.Value.String(),
-		cse.Call.From,
+		fromAddress,
 	)
-}
-
-// AttachExecutionTrace takes a given chain which executed the call sequence element, and a list of contract definitions,
-// and it replays the call with an execution tracer attached to it, it then sets CallSequenceElement.ExecutionTrace to
-// the resulting trace.
-// Returns an error if one occurred.
-func (cse *CallSequenceElement) AttachExecutionTrace(chain *chain.TestChain, contractDefinitions fuzzingTypes.Contracts) error {
-	// Verify the element has been executed before.
-	if cse.ChainReference == nil {
-		return fmt.Errorf("failed to resolve execution trace as the chain reference is nil, indicating the call sequence element has never been executed")
-	}
-
-	var err error
-	// Perform our call with the given trace
-	_, cse.ExecutionTrace, err = executiontracer.CallWithExecutionTrace(chain, contractDefinitions, cse.Call.ToCoreMessage(), nil)
-	if err != nil {
-		return fmt.Errorf("failed to resolve execution trace due to error replaying the call: %v", err)
-	}
-	return nil
 }
 
 // CallSequenceElementChainReference references the inclusion of a CallSequenceElement's underlying call being

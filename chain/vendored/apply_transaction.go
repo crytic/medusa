@@ -17,15 +17,16 @@
 package vendored
 
 import (
-	"github.com/crytic/medusa/chain/config"
-	"github.com/ethereum/go-ethereum/common"
-	. "github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+
+	"github.com/crytic/medusa-geth/common"
+	. "github.com/crytic/medusa-geth/core"
+	gethtypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/crypto"
+	"github.com/crytic/medusa-geth/params"
+	"github.com/crytic/medusa/chain/config"
+	"github.com/crytic/medusa/chain/types"
 )
 
 // EVMApplyTransaction is a vendored version of go-ethereum's unexported applyTransaction method (not to be confused
@@ -36,7 +37,7 @@ import (
 // This executes on an underlying EVM and returns a transaction receipt, or an error if one occurs.
 // Additional changes:
 // - Exposed core.ExecutionResult as a return value.
-func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConfig *config.TestChainConfig, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, result *ExecutionResult, err error) {
+func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConfig *config.TestChainConfig, author *common.Address, gp *GasPool, statedb types.MedusaStateDB, blockNumber *big.Int, blockHash common.Hash, tx *gethtypes.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *gethtypes.Receipt, result *ExecutionResult, err error) {
 	// Apply the OnTxStart and OnTxEnd hooks
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
 		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -46,9 +47,6 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 			}()
 		}
 	}
-	// Create a new context to be used in the EVM environment.
-	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
 	result, err = ApplyMessage(evm, msg, gp)
@@ -65,13 +63,15 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 	}
 	*usedGas += result.UsedGas
 
+	// TODO: Explore using the MakeReceipt function in `core`. The core risk is an interface conversion which will have
+	//  a potential perf hit
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt = &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	receipt = &gethtypes.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
 	if result.Failed() {
-		receipt.Status = types.ReceiptStatusFailed
+		receipt.Status = gethtypes.ReceiptStatusFailed
 	} else {
-		receipt.Status = types.ReceiptStatusSuccessful
+		receipt.Status = gethtypes.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
@@ -95,9 +95,9 @@ func EVMApplyTransaction(msg *Message, config *params.ChainConfig, testChainConf
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = gethtypes.CreateBloom(receipt)
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, result, err
+	return receipt, result, nil
 }

@@ -12,7 +12,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
+// AssertionTestCaseProvider is an AssertionTestCase provider which spawns test cases for every contract method and
 // ensures that none of them result in a failed assertion (e.g. use of the solidity `assert(...)` statement, or special
 // events indicating a failed assertion).
 type AssertionTestCaseProvider struct {
@@ -60,7 +60,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an enabled panic code.
-	// Try to unpack our error and return data for a panic code and verify that that panic code should be treated as a failing case.
+	// Try to unpack our error and return data for a panic code and verify that panic code should be treated as a failing case.
 	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.
@@ -191,6 +191,8 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	if testFailed {
 		// Create a request to shrink this call sequence.
 		shrinkRequest := ShrinkCallSequenceRequest{
+			TestName:             testCase.Name(),
+			CallSequenceToShrink: callSequence,
 			VerifierFunction: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence) (bool, error) {
 				// Obtain the method ID for the last call and check if it encountered assertion failures.
 				shrunkSeqMethodId, shrunkSeqTestFailed, err := t.checkAssertionFailures(shrunkenCallSequence)
@@ -201,10 +203,10 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				// If we encountered assertion failures on the same method, this shrunk sequence is satisfactory.
 				return shrunkSeqTestFailed && *methodId == *shrunkSeqMethodId, nil
 			},
-			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verboseTracing bool) error {
+			FinishedCallback: func(worker *FuzzerWorker, shrunkenCallSequence calls.CallSequence, verbosity config.VerbosityLevel) error {
 				// When we're finished shrinking, attach an execution trace to the last call. If verboseTracing is true, attach to all calls.
 				if len(shrunkenCallSequence) > 0 {
-					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verboseTracing)
+					_, err = calls.ExecuteCallSequenceWithExecutionTracer(worker.chain, worker.fuzzer.contractDefinitions, shrunkenCallSequence, verbosity)
 					if err != nil {
 						return err
 					}

@@ -1,10 +1,10 @@
 package fuzzing
 
 import (
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // FuzzerWorkerEvents defines event emitters for a FuzzerWorker.
@@ -31,6 +31,10 @@ type FuzzerWorkerEvents struct {
 	// CallSequenceTested emits events when the FuzzerWorker has finished generating and testing a
 	// new call sequence.
 	CallSequenceTested events.EventEmitter[FuzzerWorkerCallSequenceTestedEvent]
+
+	// TestingComplete emits events when the FuzzerWorker has completed testing of call sequences and is about to exit
+	// the fuzzing loop.
+	TestingComplete events.EventEmitter[FuzzerWorkerTestingCompleteEvent]
 }
 
 // FuzzerWorkerContractAddedEvent describes an event where a fuzzing.FuzzerWorker detects a newly deployed contract in
@@ -61,8 +65,8 @@ type FuzzerWorkerContractDeletedEvent struct {
 	ContractDefinition *contracts.Contract
 }
 
-// FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker is created its underlying chain.
-// This is an opportune to attach tracers to capture chain setup information.
+// FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker creates its underlying chain.
+// This is an opportune time to attach tracers to capture chain setup information.
 type FuzzerWorkerChainCreatedEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker
@@ -91,6 +95,13 @@ type FuzzerWorkerCallSequenceTestingEvent struct {
 // FuzzerWorkerCallSequenceTestedEvent describes an event where a fuzzing.FuzzerWorker has finished generating and testing a new
 // call sequence.
 type FuzzerWorkerCallSequenceTestedEvent struct {
+	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
+	Worker *FuzzerWorker
+}
+
+// FuzzerWorkerTestingCompleteEvent describes an event where a fuzzing.FuzzerWorker has completed testing of call sequences
+// and is about to exit the fuzzing loop.
+type FuzzerWorkerTestingCompleteEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker
 }

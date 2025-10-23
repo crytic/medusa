@@ -7,11 +7,11 @@ The cheatcode contract is deployed at `0x7109709ECfa91a80626fF3989D68f67F5b1DD12
 
 The following interface must be added to your Solidity project if you wish to use cheatcodes. Note that if you use Foundry
 as your compilation platform that the cheatcode interface is already provided [here](https://book.getfoundry.sh/reference/forge-std/#forge-stds-test).
-However, it is important to note that medusa does not support all the cheatcodes provided out-of-box
+However, it is important to note that medusa does not support all the cheatcodes provided out-of-the-box
 by Foundry (see below for supported cheatcodes).
 
 ```solidity
-interface StdCheats {
+interface IStdCheats {
     // Set block.timestamp
     function warp(uint256) external;
 
@@ -21,8 +21,11 @@ interface StdCheats {
     // Set block.basefee
     function fee(uint256) external;
 
-    // Set block.difficulty and block.prevrandao
+    // Set block.difficulty (deprecated in `medusa`)
     function difficulty(uint256) external;
+
+    // Set block.prevrandao
+    function prevrandao(bytes32) external;
 
     // Set block.chainid
     function chainId(uint256) external;
@@ -38,6 +41,12 @@ interface StdCheats {
 
     // Sets the *next* call's msg.sender to be the input address
     function prank(address) external;
+
+    // Sets all subsequent call's msg.sender (until stopPrank is called) to be the input address
+    function startPrank(address) external;
+
+    // Stops a previously called startPrank
+    function stopPrank() external;
 
     // Set msg.sender to the input address until the current call exits
     function prankHere(address) external;
@@ -55,6 +64,9 @@ interface StdCheats {
 
     // Computes address for a given private key
     function addr(uint256 privateKey) external returns (address);
+
+    // Gets the creation bytecode of a contract
+    function getCode(string calldata) external returns (bytes memory);
 
     // Gets the nonce of an account
     function getNonce(address account) external returns (uint64);
@@ -84,7 +96,7 @@ interface StdCheats {
     function parseBytes(string memory) external returns(bytes memory);
     function parseBytes32(string memory) external returns(bytes32);
     function parseAddress(string memory) external returns(address);
-    function parseUint(string memory)external returns(uint256);
+    function parseUint(string memory) external returns(uint256);
     function parseInt(string memory) external returns(int256);
     function parseBool(string memory) external returns(bool);
 }
@@ -104,9 +116,9 @@ contract MyContract {
     IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
     // This is a test function that will set the msg.sender's nonce to the provided input argument
-    function testFunc(uint256 _x) public {
+    function testFunc(uint256 x) public {
         // Ensure that the input argument is greater than msg.sender's current nonce
-        require(_x > cheats.getNonce(msg.sender));
+        require(x > cheats.getNonce(msg.sender));
 
         // Set sender's nonce
         cheats.setNonce(msg.sender, x);

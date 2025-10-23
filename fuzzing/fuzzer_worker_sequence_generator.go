@@ -72,7 +72,7 @@ type CallSequenceGeneratorConfig struct {
 	RandomMutatedCorpusHeadWeight uint64
 
 	// RandomMutatedCorpusTailWeight defines the weight that the CallSequenceGenerator should use the call sequence
-	// generation strategy of taking the tao; of a corpus sequence (with mutations) and prepend newly generated calls
+	// generation strategy of taking the tail of a corpus sequence (with mutations) and prepend newly generated calls
 	// to the start of it.
 	RandomMutatedCorpusTailWeight uint64
 
@@ -287,9 +287,9 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 	}
 
 	// Select a random method
-	// There is a 1/100 chance that a pure method will be invoked or if there are only pure functions that are callable
+	// There is a 1/1000 chance that a pure method will be invoked or if there are only pure functions that are callable
 	var selectedMethod *contracts.DeployedContractMethod
-	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(100) == 0) || callOnlyPureFunctions {
+	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(1000) == 0) || callOnlyPureFunctions {
 		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
 	} else {
 		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
@@ -321,8 +321,10 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		InputValues: args,
 	})
 
+	// Disable nonce and EOA checks if requested by config
 	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {
-		msg.SkipAccountChecks = true
+		msg.SkipFromEOACheck = true
+		msg.SkipNonceChecks = true
 	}
 
 	// Determine our delay values for this element

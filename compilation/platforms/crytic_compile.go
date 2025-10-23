@@ -59,7 +59,7 @@ func NewCryticCompilationConfig(target string) *CryticCompilationConfig {
 
 // validateArgs ensures that the additional arguments provided to `crytic-compile` do not contain the `--export-format`
 // or the `--export-dir` arguments. This is because `--export-format` has to be `solc` for the `crytic-compile`
-// integration to work and CryticCompilationConfig.BuildDirectory option is equivalent to `--export-dir`
+// integration to work and CryticCompilationConfig.ExportDirectory option is equivalent to `--export-dir`
 func (c *CryticCompilationConfig) validateArgs() error {
 	// If --export-format or --export-dir are specified in c.Args, throw an error
 	for _, arg := range c.Args {
@@ -240,24 +240,30 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
 			}
 
-			// Decode our init and runtime bytecode
-			initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
-			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-			}
-			runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
-			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			initBytecode := []byte(contract.Bin)
+			runtimeBytecode := []byte(contract.BinRuntime)
+			libraryPlaceholders := types.ParseBytecodeForPlaceholders(contract.Bin)
+			if len(libraryPlaceholders) == 0 {
+				initBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
+				if err != nil {
+					return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+				}
+
+				runtimeBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
+				if err != nil {
+					return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+				}
 			}
 
 			// Add contract details
 			compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
-				Abi:             *contractAbi,
-				InitBytecode:    initBytecode,
-				RuntimeBytecode: runtimeBytecode,
-				SrcMapsInit:     contract.SrcMap,
-				SrcMapsRuntime:  contract.SrcMapRuntime,
-				Kind:            contractKinds[contractName],
+				Abi:                 *contractAbi,
+				InitBytecode:        initBytecode,
+				RuntimeBytecode:     runtimeBytecode,
+				SrcMapsInit:         contract.SrcMap,
+				SrcMapsRuntime:      contract.SrcMapRuntime,
+				Kind:                contractKinds[contractName],
+				LibraryPlaceholders: types.ParseBytecodeForPlaceholders(contract.Bin),
 			}
 		}
 

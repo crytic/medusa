@@ -3,12 +3,12 @@ package chain
 import (
 	"math/big"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/tracing"
+	coretypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	coretypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // cheatCodeTracer represents an EVM.Logger which tracks and patches EVM execution state to enable extended
@@ -69,6 +69,17 @@ type cheatCodeTracerCallFrame struct {
 	vmReturnData []byte
 	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
 	vmErr error
+
+	// extraData describes additional data to be stored for this call frame.
+	extraData map[string]any
+}
+
+// newCheatCodeTracerCallFrame creates a cheatCodeTracerCallFrame and returns it.
+func newCheatCodeTracerCallFrame() *cheatCodeTracerCallFrame {
+	result := &cheatCodeTracerCallFrame{
+		extraData: make(map[string]any),
+	}
+	return result
 }
 
 // cheatCodeTracerResults holds the hooks that need to be executed when the chain reverts.
@@ -122,6 +133,14 @@ func (t *cheatCodeTracer) CurrentCallFrame() *cheatCodeTracerCallFrame {
 	return t.callFrames[t.callDepth]
 }
 
+// TopLevelCallFrame returns the top level call frame of the EVM execution, or nil if there is none.
+func (t *cheatCodeTracer) TopLevelCallFrame() *cheatCodeTracerCallFrame {
+	if len(t.callFrames) == 0 {
+		return nil
+	}
+	return t.callFrames[0]
+}
+
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
@@ -141,21 +160,15 @@ func (t *cheatCodeTracer) OnTxEnd(*coretypes.Receipt, error) {
 
 // OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
 func (t *cheatCodeTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Check to see if this is the top level call frame
+	// Create our call frame struct to track data for this initial entry call frame.
 	isTopLevelFrame := depth == 0
-	var callFrameData *cheatCodeTracerCallFrame
-	if isTopLevelFrame {
-		// Create our call frame struct to track data for this initial entry call frame.
-		callFrameData = &cheatCodeTracerCallFrame{}
-	} else {
+	callFrameData := newCheatCodeTracerCallFrame()
+	if !isTopLevelFrame {
 		// We haven't updated our call depth yet, so obtain the "previous" call frame (current for now)
 		previousCallFrame := t.CurrentCallFrame()
 
-		// Create our call frame struct to track data for this initial entry call frame.
 		// We forward our "next frame hooks" to this frame, then clear them from the previous frame.
-		callFrameData = &cheatCodeTracerCallFrame{
-			onFrameExitRestoreHooks: previousCallFrame.onNextFrameExitRestoreHooks,
-		}
+		callFrameData.onFrameExitRestoreHooks = previousCallFrame.onNextFrameExitRestoreHooks
 		previousCallFrame.onNextFrameExitRestoreHooks = nil
 
 		// Increase our call depth now that we're entering a new call frame.
@@ -227,4 +240,6 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 func (t *cheatCodeTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
 	// Add our revert operations we collected for this transaction.
 	results.OnRevertHookFuncs = append(results.OnRevertHookFuncs, t.results.onChainRevertHooks...)
+	// Add the labels so that each transaction has access to it.
+	results.AdditionalResults[labelsKey] = t.chain.Labels
 }

@@ -14,6 +14,7 @@
 - [Testing Configuration](project_configuration/testing_config.md)
 - [Chain Configuration](project_configuration/chain_config.md)
 - [Compilation Configuration](project_configuration/compilation_config.md)
+- [Slither Configuration](project_configuration/slither_config.md)
 - [Logging Configuration](project_configuration/logging_config.md)
 
 # Command Line Interface (CLI)
@@ -30,7 +31,7 @@
 - [Types of Invariants](./testing/invariants.md)
 - [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
 - [Writing System-Level Invariants (WIP)](./testing/writing-system-level-invariants.md)
-- [Coverage Reports (WIP)](./testing/coverage_reports.md)
+- [Reporting](./testing/reporting.md)
 
 # API
 
@@ -43,6 +44,7 @@
   - [roll](./cheatcodes/roll.md)
   - [fee](./cheatcodes/fee.md)
   - [difficulty](./cheatcodes/difficulty.md)
+  - [prevrandao](./cheatcodes/prevrandao.md)
   - [chainId](./cheatcodes/chain_id.md)
   - [store](./cheatcodes/store.md)
   - [load](./cheatcodes/load.md)
@@ -53,6 +55,8 @@
   - [setNonce](./cheatcodes/set_nonce.md)
   - [coinbase](./cheatcodes/coinbase.md)
   - [prank](./cheatcodes/prank.md)
+  - [startPrank](./cheatcodes/start_prank.md)
+  - [stopPrank](./cheatcodes/stop_prank.md)
   - [prankHere](./cheatcodes/prank_here.md)
   - [ffi](./cheatcodes/ffi.md)
   - [addr](./cheatcodes/addr.md)

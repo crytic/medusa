@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver"
+	"github.com/crytic/medusa-geth/common/compiler"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common/compiler"
 )
 
 type SolcCompilationConfig struct {
@@ -67,14 +67,14 @@ func (s *SolcCompilationConfig) SetSolcOutputOptions(v *semver.Version) string {
 		(v.Major() == 0 && v.Minor() == 7 && v.Patch() <= 6) ||
 		(v.Major() == 0 && v.Minor() == 8 && v.Patch() <= 9)
 
-	// if version is 0.3.0-0.3.6 or 0.4.0-0.4.11 no 'hashes' outputOption
+	// if version is 0.3.0-0.3.6 or 0.4.0-0.4.11, no 'hashes' outputOption
 	if (v.Major() == 0 && v.Minor() == 4 && v.Patch() <= 11) || (v.Major() == 0 && v.Minor() == 3 && v.Patch() <= 6) {
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc"
 	} else if useCompactFormat {
 		// Both 'hashes' and 'compact-format' are allowed as outputOptions
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes,compact-format"
 	} else {
-		// Can't use 'compact-format' but 'hashes' is allowed as outputOption
+		// Can't use 'compact-format', but 'hashes' is allowed as outputOption
 		return "abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes"
 	}
 }
@@ -178,23 +178,29 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		}
 
 		// Decode our init and runtime bytecode
-		initBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
-		}
-		runtimeBytecode, err := hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+		initBytecode := []byte(contract.Code)
+		runtimeBytecode := []byte(contract.RuntimeCode)
+		libraryPlaceholders := types.ParseBytecodeForPlaceholders(contract.Code)
+		if len(libraryPlaceholders) == 0 {
+			initBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+			}
+			runtimeBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
+			if err != nil {
+				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+			}
 		}
 
 		// Construct our compiled contract
 		compilation.SourcePathToArtifact[sourcePath].Contracts[contractName] = types.CompiledContract{
-			Abi:             *contractAbi,
-			InitBytecode:    initBytecode,
-			RuntimeBytecode: runtimeBytecode,
-			SrcMapsInit:     contract.Info.SrcMap.(string),
-			SrcMapsRuntime:  contract.Info.SrcMapRuntime,
-			Kind:            contractKinds[contractName],
+			Abi:                 *contractAbi,
+			InitBytecode:        initBytecode,
+			RuntimeBytecode:     runtimeBytecode,
+			SrcMapsInit:         contract.Info.SrcMap.(string),
+			SrcMapsRuntime:      contract.Info.SrcMapRuntime,
+			Kind:                contractKinds[contractName],
+			LibraryPlaceholders: libraryPlaceholders,
 		}
 	}
 

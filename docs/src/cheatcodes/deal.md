@@ -8,10 +8,11 @@ The `deal` cheatcode will set the ETH balance of address `who` to `newBalance`
 
 ```solidity
 // Obtain our cheat code contract reference.
-IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
 // Change value and verify.
 address acc = address(777);
+uint256 x = 1000 ether;
 cheats.deal(acc, x);
 assert(acc.balance == x);
 ```

@@ -3,12 +3,12 @@ package calls
 import (
 	"math/big"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/common/hexutil"
+	"github.com/crytic/medusa-geth/core"
+	coreTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 )
 
@@ -62,9 +62,12 @@ type CallMessage struct {
 	// that will be accessed during the execution of this message.
 	AccessList coreTypes.AccessList
 
-	// SkipAccountChecks represents a core.Message's SkipAccountChecks. If it is set to true, then the message nonce
-	// is not checked against the account nonce in state and will not verify if the sender is an EOA.
-	SkipAccountChecks bool
+	// SkipNonceChecks describes whether the message nonce is checked against the
+	// account nonce in state.
+	SkipNonceChecks bool
+
+	// SkipFromEOACheck describes whether the message sender is checked to be an EOA or not.
+	SkipFromEOACheck bool
 }
 
 // callMessageMarshaling is a structure that overrides field types during JSON marshaling. It allows CallMessage to
@@ -82,18 +85,19 @@ type callMessageMarshaling struct {
 func NewCallMessage(from common.Address, to *common.Address, nonce uint64, value *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte) *CallMessage {
 	// Construct and return a new message from our given parameters.
 	return &CallMessage{
-		From:              from,
-		To:                to,
-		Nonce:             nonce,
-		Value:             value,
-		GasLimit:          gasLimit,
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              data,
-		DataAbiValues:     nil,
-		AccessList:        nil,
-		SkipAccountChecks: false,
+		From:             from,
+		To:               to,
+		Nonce:            nonce,
+		Value:            value,
+		GasLimit:         gasLimit,
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             data,
+		DataAbiValues:    nil,
+		AccessList:       nil,
+		SkipNonceChecks:  false,
+		SkipFromEOACheck: false,
 	}
 }
 
@@ -112,18 +116,19 @@ func NewCallMessageWithAbiValueData(from common.Address, to *common.Address, non
 
 	// Construct and return a new message from our given parameters.
 	return &CallMessage{
-		From:              from,
-		To:                to,
-		Nonce:             nonce,
-		Value:             value,
-		GasLimit:          gasLimit,
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              data,
-		DataAbiValues:     abiData,
-		AccessList:        nil,
-		SkipAccountChecks: false,
+		From:             from,
+		To:               to,
+		Nonce:            nonce,
+		Value:            value,
+		GasLimit:         gasLimit,
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             data,
+		DataAbiValues:    abiData,
+		AccessList:       nil,
+		SkipFromEOACheck: false,
+		SkipNonceChecks:  false,
 	}
 }
 
@@ -178,34 +183,36 @@ func (m *CallMessage) Clone() (*CallMessage, error) {
 
 	// Create a message with the same data copied over.
 	clone := &CallMessage{
-		From:              m.From,
-		To:                m.To, // this value should be read-only, so we re-use it rather than cloning.
-		Nonce:             m.Nonce,
-		Value:             new(big.Int).Set(m.Value),
-		GasLimit:          m.GasLimit,
-		GasPrice:          new(big.Int).Set(m.GasPrice),
-		GasFeeCap:         new(big.Int).Set(m.GasFeeCap),
-		GasTipCap:         new(big.Int).Set(m.GasTipCap),
-		Data:              slices.Clone(m.Data),
-		DataAbiValues:     clonedAbiValues,
-		AccessList:        m.AccessList,
-		SkipAccountChecks: m.SkipAccountChecks,
+		From:             m.From,
+		To:               m.To, // this value should be read-only, so we re-use it rather than cloning.
+		Nonce:            m.Nonce,
+		Value:            new(big.Int).Set(m.Value),
+		GasLimit:         m.GasLimit,
+		GasPrice:         new(big.Int).Set(m.GasPrice),
+		GasFeeCap:        new(big.Int).Set(m.GasFeeCap),
+		GasTipCap:        new(big.Int).Set(m.GasTipCap),
+		Data:             slices.Clone(m.Data),
+		DataAbiValues:    clonedAbiValues,
+		AccessList:       m.AccessList,
+		SkipFromEOACheck: m.SkipFromEOACheck,
+		SkipNonceChecks:  m.SkipNonceChecks,
 	}
 	return clone, nil
 }
 
 func (m *CallMessage) ToCoreMessage() *core.Message {
 	return &core.Message{
-		To:                m.To,
-		From:              m.From,
-		Nonce:             m.Nonce,
-		Value:             new(big.Int).Set(m.Value),
-		GasLimit:          m.GasLimit,
-		GasPrice:          new(big.Int).Set(m.GasPrice),
-		GasFeeCap:         new(big.Int).Set(m.GasFeeCap),
-		GasTipCap:         new(big.Int).Set(m.GasTipCap),
-		Data:              slices.Clone(m.Data),
-		AccessList:        m.AccessList,
-		SkipAccountChecks: m.SkipAccountChecks,
+		To:               m.To,
+		From:             m.From,
+		Nonce:            m.Nonce,
+		Value:            new(big.Int).Set(m.Value),
+		GasLimit:         m.GasLimit,
+		GasPrice:         new(big.Int).Set(m.GasPrice),
+		GasFeeCap:        new(big.Int).Set(m.GasFeeCap),
+		GasTipCap:        new(big.Int).Set(m.GasTipCap),
+		Data:             slices.Clone(m.Data),
+		AccessList:       m.AccessList,
+		SkipNonceChecks:  m.SkipNonceChecks,
+		SkipFromEOACheck: m.SkipFromEOACheck,
 	}
 }

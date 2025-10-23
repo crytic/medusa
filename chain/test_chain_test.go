@@ -1,17 +1,18 @@
 package chain
 
 import (
+	"context"
 	"math/big"
 	"math/rand"
 	"testing"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/compilation/platforms"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/testutils"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,30 +26,13 @@ func verifyChain(t *testing.T, chain *TestChain) {
 	assert.EqualValues(t, chain.blocks[len(chain.blocks)-1], chain.Head())
 
 	// Loop through all blocks
-	// Note: We use the API here rather than internally committed blocks (chain.blocks) to validate spoofed blocks
-	// from height jumps as well.
-	for i := int(chain.HeadBlockNumber()); i >= 0; i-- {
+	for _, currentBlock := range chain.blocks {
 		// Verify our count of messages, message results, and receipts match.
-		currentBlock, err := chain.BlockFromNumber(uint64(i))
-		assert.NoError(t, err)
 		assert.EqualValues(t, len(currentBlock.Messages), len(currentBlock.MessageResults))
 
-		// Verify our method to fetch block hashes works appropriately.
-		blockHash, err := chain.BlockHashFromNumber(uint64(i))
-		assert.NoError(t, err)
-		assert.EqualValues(t, currentBlock.Hash, blockHash)
-
 		// Try to obtain the state for this block
-		_, err = chain.StateAfterBlockNumber(uint64(i))
+		_, err := chain.StateAfterBlockNumber(uint64(currentBlock.Header.Number.Uint64()))
 		assert.NoError(t, err)
-
-		// If we didn't reach genesis, verify our previous block hash matches, and our timestamp is greater.
-		if i > 0 {
-			previousBlock, err := chain.BlockFromNumber(uint64(i - 1))
-			assert.NoError(t, err)
-			assert.EqualValues(t, previousBlock.Hash, currentBlock.Header.ParentHash)
-			assert.Less(t, previousBlock.Header.Time, currentBlock.Header.Time)
-		}
 	}
 }
 
@@ -75,7 +59,7 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	}
 
 	// Create a test chain with a default test chain configuration
-	chain, err := NewTestChain(genesisAlloc, nil)
+	chain, err := NewTestChain(context.Background(), genesisAlloc, nil)
 
 	assert.NoError(t, err)
 
@@ -132,7 +116,7 @@ func TestChainReverting(t *testing.T) {
 		chainBackup := chainBackups[i]
 
 		// Revert our main chain to this block height.
-		err := chain.RevertToBlockNumber(chainBackup.HeadBlockNumber())
+		err := chain.RevertToBlockIndex(uint64(len(chainBackup.CommittedBlocks())))
 		assert.NoError(t, err)
 
 		// Verify state matches
@@ -239,20 +223,20 @@ func TestChainDynamicDeployments(t *testing.T) {
 						})
 
 						// Deploy the currently indexed contract next
-
 						// Create a message to represent our contract deployment.
 						msg := core.Message{
-							To:                nil,
-							From:              senders[0],
-							Nonce:             chain.State().GetNonce(senders[0]),
-							Value:             big.NewInt(0),
-							GasLimit:          chain.BlockGasLimit,
-							GasPrice:          big.NewInt(1),
-							GasFeeCap:         big.NewInt(0),
-							GasTipCap:         big.NewInt(0),
-							Data:              contract.InitBytecode,
-							AccessList:        nil,
-							SkipAccountChecks: false,
+							To:               nil,
+							From:             senders[0],
+							Nonce:            chain.State().GetNonce(senders[0]),
+							Value:            big.NewInt(0),
+							GasLimit:         chain.BlockGasLimit,
+							GasPrice:         big.NewInt(1),
+							GasFeeCap:        big.NewInt(0),
+							GasTipCap:        big.NewInt(0),
+							Data:             contract.InitBytecode,
+							AccessList:       nil,
+							SkipNonceChecks:  false,
+							SkipFromEOACheck: false,
 						}
 
 						// Create a new pending block we'll commit to chain
@@ -367,17 +351,18 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 
 					// Create a message to represent our contract deployment.
 					msg := core.Message{
-						To:                nil,
-						From:              senders[0],
-						Nonce:             chain.State().GetNonce(senders[0]),
-						Value:             big.NewInt(0),
-						GasLimit:          chain.BlockGasLimit,
-						GasPrice:          big.NewInt(1),
-						GasFeeCap:         big.NewInt(0),
-						GasTipCap:         big.NewInt(0),
-						Data:              msgData,
-						AccessList:        nil,
-						SkipAccountChecks: false,
+						To:               nil,
+						From:             senders[0],
+						Nonce:            chain.State().GetNonce(senders[0]),
+						Value:            big.NewInt(0),
+						GasLimit:         chain.BlockGasLimit,
+						GasPrice:         big.NewInt(1),
+						GasFeeCap:        big.NewInt(0),
+						GasTipCap:        big.NewInt(0),
+						Data:             msgData,
+						AccessList:       nil,
+						SkipNonceChecks:  false,
+						SkipFromEOACheck: false,
 					}
 
 					// Create a new pending block we'll commit to chain
@@ -476,17 +461,18 @@ func TestChainCloning(t *testing.T) {
 
 							// Create a message to represent our contract deployment.
 							msg := core.Message{
-								To:                nil,
-								From:              senders[0],
-								Nonce:             chain.State().GetNonce(senders[0]),
-								Value:             big.NewInt(0),
-								GasLimit:          chain.BlockGasLimit,
-								GasPrice:          big.NewInt(1),
-								GasFeeCap:         big.NewInt(0),
-								GasTipCap:         big.NewInt(0),
-								Data:              contract.InitBytecode,
-								AccessList:        nil,
-								SkipAccountChecks: false,
+								To:               nil,
+								From:             senders[0],
+								Nonce:            chain.State().GetNonce(senders[0]),
+								Value:            big.NewInt(0),
+								GasLimit:         chain.BlockGasLimit,
+								GasPrice:         big.NewInt(1),
+								GasFeeCap:        big.NewInt(0),
+								GasTipCap:        big.NewInt(0),
+								Data:             contract.InitBytecode,
+								AccessList:       nil,
+								SkipNonceChecks:  false,
+								SkipFromEOACheck: false,
 							}
 
 							// Create a new pending block we'll commit to chain
@@ -570,17 +556,18 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 						for i := 0; i < 10; i++ {
 							// Create a message to represent our contract deployment.
 							msg := core.Message{
-								To:                nil,
-								From:              senders[0],
-								Nonce:             chain.State().GetNonce(senders[0]),
-								Value:             big.NewInt(0),
-								GasLimit:          chain.BlockGasLimit,
-								GasPrice:          big.NewInt(1),
-								GasFeeCap:         big.NewInt(0),
-								GasTipCap:         big.NewInt(0),
-								Data:              contract.InitBytecode,
-								AccessList:        nil,
-								SkipAccountChecks: false,
+								To:               nil,
+								From:             senders[0],
+								Nonce:            chain.State().GetNonce(senders[0]),
+								Value:            big.NewInt(0),
+								GasLimit:         chain.BlockGasLimit,
+								GasPrice:         big.NewInt(1),
+								GasFeeCap:        big.NewInt(0),
+								GasTipCap:        big.NewInt(0),
+								Data:             contract.InitBytecode,
+								AccessList:       nil,
+								SkipNonceChecks:  false,
+								SkipFromEOACheck: false,
 							}
 
 							// Create a new pending block we'll commit to chain
@@ -619,7 +606,7 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		}
 
 		// Create another test chain which we will recreate our state from.
-		recreatedChain, err := NewTestChain(chain.genesisDefinition.Alloc, nil)
+		recreatedChain, err := NewTestChain(context.Background(), chain.genesisDefinition.Alloc, nil)
 		assert.NoError(t, err)
 
 		// Replay all messages after genesis

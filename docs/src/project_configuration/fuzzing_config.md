@@ -33,6 +33,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   is provided, no test limit will be enforced.
 - **Default**: 0 calls
 
+### `shrinkLimit`
+
+- **Type**: Integer
+- **Description**: The number of iterations that shrinking will run for before returning the shrunken call sequence.
+- **Default**: 5000 iterations
+
 ### `callSequenceLength`
 
 - **Type**: Integer
@@ -47,20 +53,37 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   Enabling coverage allows for improved code exploration.
 - **Default**: `true`
 
+### `pruneFrequency`
+
+- **Type**: Integer
+- **Description**: Determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+  Setting `pruneFrequency` to 0 disables pruning.
+  `pruneFrequency` only matters if `coverageEnabled` is set to true; otherwise, no pruning will occur.
+- **Default**: `5`
+
 ### `corpusDirectory`
 
 - **Type**: String
 - **Description**: The file path where the corpus should be saved. The corpus collects sequences during a fuzzing campaign
   that help drive fuzzer features (e.g. a call sequence that increases code coverage is stored in the corpus). These sequences
-  can then be re-used/mutated by the fuzzer during the next fuzzing campaign.
+  can then be re-used/mutated by the fuzzer during the next fuzzing campaign. Note that if the `corpusDirectory` is
+  left as an empty string (which it is by default), no corpus will be loaded from disk and stored to disk.
 - **Default**: ""
 
 ### `coverageFormats`
 
 - **Type**: [String] (e.g. `["lcov"]`)
-- **Description**: The coverage reports to generate after the fuzzing campaign has completed. The coverage reports are saved
-  in the `coverage` directory within `crytic-export/` or `corpusDirectory` if configured.
+- **Description**: The [coverage reports](./../testing/reporting.md) to generate after the fuzzing campaign has
+  completed. The coverage reports are saved in the `coverage` directory within `crytic-export/` (by default) or
+  `corpusDirectory` if configured.
 - **Default**: `["lcov", "html"]`
+
+### `revertReporterEnabled`
+
+- **Type**: Boolean
+- **Description**: Enables or disables [revert reports](./../testing/reporting.md). Revert reports are saved in the
+  `coverage` directory within `crytic-export/` (by default) or `corpusDirectory` if configured.
+- **Default**: `false`
 
 ### `targetContracts`
 
@@ -79,15 +102,13 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > 🚩 Predeployed contracts do not accept constructor arguments. This may be added in the future.
 - **Default**: `{}`
 
-### `targetContractBalances`
+### `targetContractsBalances`
 
-- **Type**: [Base-16 Strings] (e.g. `[0x123, 0x456, 0x789]`)
+- **Type**: [Base-10 Strings, Hexadecimal Strings, Scientific notation for base-10 values] (e.g. `["1234", "0x1234", "1.2e18"]`)
 - **Description**: The starting balance for each contract in `targetContracts`. If the `constructor` for a target contract
   is marked `payable`, this configuration option can be used to send ether during contract deployment. Note that this array
-  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is
-  `["0", "0xff", "0"]`, then `B` will have a starting balance of 255 wei and `A` and `C` will have zero wei. Note that the wei-value
-  has to be hex-encoded and _cannot_ have leading zeros. For an improved user-experience, the balances may be encoded as base-10
-  format strings in the future.
+  has a one-to-one mapping to `targetContracts`. Thus, if `targetContracts` is `[A, B, C]` and `targetContractsBalances` is `["1234", "0x1234", "1.2e18"]`,
+  then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
 ### `constructorArgs`
@@ -125,15 +146,8 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: Integer
 - **Description**: The number of the maximum block timestamp jump the fuzzer should make between test transactions.
   The fuzzer will use this value to make the next block's `block.timestamp` between `[1, blockTimestampDelayMax]` more
-  than that of the previous block. Jumping `block.timestamp`time allows `medusa` to enter code paths that require a given amount of time to pass.
+  than that of the previous block. Jumping `block.timestamp` allows `medusa` to enter code paths that require a given amount of time to pass.
 - **Default**: `604_800`
-
-### `blockGasLimit`
-
-- **Type**: Integer
-- **Description**: The maximum amount of gas a block's transactions can use in total (thus defining max transactions per block).
-  > 🚩 It is advised not to change this naively, as a minimum must be set for the chain to operate.
-- **Default**: `125_000_000`
 
 ### `transactionGasLimit`
 
