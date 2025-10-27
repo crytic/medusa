@@ -262,27 +262,26 @@ func (fw *FuzzerWorker) updateMethods() {
 // bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker and
 // resolves ABI metadata needed for serialization.
 func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) error {
+	// Iterate across each call sequence element.
 	for _, element := range sequence {
-		if element == nil || element.Call == nil {
-			continue
-		}
-		// Deployments have no target address, so there is no contract to resolve.
+		// If the call deploys a contract, there is nothing to do.
 		if element.Call.To == nil {
 			continue
 		}
 
+		// Obtain our contract definition for this address.
 		contractDefinition, ok := fw.deployedContracts[*element.Call.To]
 		if !ok {
-			return fmt.Errorf("contract at address %s is not registered with worker %d", element.Call.To.String(), fw.workerIndex)
+			return fmt.Errorf("contract at address %v could not be resolved", element.Call.To.String())
 		}
-
 		element.Contract = contractDefinition
 
+		// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
+		// sufficient for runtime use, until we use it to resolve runtime references.
 		if abiValues := element.Call.DataAbiValues; abiValues != nil {
-			if abiValues.Method == nil {
-				if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
-					return fmt.Errorf("failed to resolve ABI for contract %s: %w", contractDefinition.Name(), err)
-				}
+			// Resolve the ABI values.
+			if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
+				return fmt.Errorf("error resolving method in contract '%v': %v", element.Contract.Name(), err)
 			}
 		}
 	}
@@ -314,13 +313,20 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	if err != nil {
 		return nil, err
 	}
-	isWarmupSequence := fw.sequenceGenerator.LastSequenceFromWarmup()
-	if isWarmupSequence {
-		if err = fw.bindContractsForSequence(fw.sequenceGenerator.CurrentSequence()); err != nil {
-			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Skipping warmup sequence: ", err)
+
+	// Check to see if we are still initializing the corpus
+	isInitializingCorpusSequence := fw.sequenceGenerator.initializingCorpus
+	if isInitializingCorpusSequence {
+		if sequenceInvalidErr := fw.bindContractsForSequence(fw.sequenceGenerator.baseSequence); sequenceInvalidErr != nil {
+			// TODO: We can no longer tell what the file associated with the sequence is, so we can't log it.
+			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Corpus item disabled due to error when replaying it", sequenceInvalidErr)
+			fw.fuzzer.corpus.MarkInitializationSequenceProcessed(false)
 			return nil, nil
 		}
 	}
+
+	// If we are done initializing the corpus, we should log it and notify user of overall corpus health.
+	// (Completion is handled centrally once all sequences finish.)
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
@@ -382,7 +388,14 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If we encountered an error, report it.
 	if err != nil {
+		if isInitializingCorpusSequence {
+			fw.fuzzer.corpus.MarkInitializationSequenceProcessed(false)
+		}
 		return nil, err
+	}
+
+	if isInitializingCorpusSequence {
+		fw.fuzzer.corpus.MarkInitializationSequenceProcessed(true)
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
@@ -391,7 +404,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
-	if isWarmupSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
+	if isInitializingCorpusSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
 		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight())
 		if err != nil {
 			return nil, err

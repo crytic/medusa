@@ -934,21 +934,22 @@ func (f *Fuzzer) Start() error {
 	f.logger.Info("Finished setting up test chain")
 
 	// Prepare corpus warmup so workers can replay persisted sequences while emitting test failures immediately.
-	var corpusActiveSequences, corpusTotalSequences int
 	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
-		f.logger.Info("Preparing corpus warmup queue")
+		f.logger.Info("Preparing corpus initialization")
 	}
-	corpusActiveSequences, corpusTotalSequences, err = f.corpus.PrepareForWarmup(baseTestChain, f.contractDefinitions)
+
+	// Initialize the corpus and define the onComplete callback that will emit a log message when the corpus has been initialized.
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions, func(active, total uint64) {
+		inactive := int(total - active)
+		f.logger.Info(
+			colors.Bold, "corpus: ", colors.Reset,
+			"warmup complete – ", colors.Bold, active, colors.Reset, "/", total,
+			" sequences (", inactive, " skipped)",
+		)
+	})
 	if err != nil {
 		f.logger.Error("Failed to prepare corpus warmup", err)
 		return err
-	}
-	if corpusTotalSequences > 0 {
-		f.logger.Info(
-			colors.Bold, "corpus: ", colors.Reset,
-			"warmup pending: ", colors.Bold, corpusActiveSequences, colors.Reset, ", ",
-			"total stored: ", colors.Bold, corpusTotalSequences, colors.Reset,
-		)
 	}
 
 	// Start the corpus pruner.
