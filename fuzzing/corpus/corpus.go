@@ -28,12 +28,6 @@ import (
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
 // reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
 // may create incompatibilities with corpus items.
-// warmupSequence tracks a stored corpus entry and whether it should rejoin the mutation chooser after replay.
-type warmupSequence struct {
-	sequence       calls.CallSequence
-	useInMutations bool
-}
-
 type Corpus struct {
 	// storageDirectory describes the directory to save corpus callSequenceFiles within.
 	storageDirectory string
@@ -51,7 +45,7 @@ type Corpus struct {
 	// unexecutedCallSequences defines the callSequences which have not yet been executed by the fuzzer. As each item
 	// is selected for execution by the fuzzer on startup, it is removed. This way, all call sequences loaded from disk
 	// are executed to check for test failures.
-	unexecutedCallSequences []warmupSequence
+	unexecutedCallSequences []calls.CallSequence
 
 	// mutationTargetSequenceChooser is a provider that allows for weighted random selection of callSequences. If a
 	// call sequence was not found to be compatible with this run, it is not added to the chooser.
@@ -74,7 +68,7 @@ func NewCorpus(corpusDirectory string) (*Corpus, error) {
 		coverageMaps:            coverage.NewCoverageMaps(),
 		callSequenceFiles:       newCorpusDirectory[calls.CallSequence](""),
 		testResultSequenceFiles: newCorpusDirectory[calls.CallSequence](""),
-		unexecutedCallSequences: make([]warmupSequence, 0),
+		unexecutedCallSequences: make([]calls.CallSequence, 0),
 		logger:                  logging.GlobalLogger.NewSubLogger("module", "corpus"),
 	}
 
@@ -517,17 +511,13 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 // MarkSequenceValidated records that a call sequence loaded from disk has been successfully replayed by a worker.
 // The sequence is cloned, stripped of runtime metadata, and registered with the mutation chooser so it can participate
 // in future mutations.
-func (c *Corpus) MarkSequenceValidated(sequence calls.CallSequence, mutationChooserWeight *big.Int, useInMutations bool) error {
+func (c *Corpus) MarkSequenceValidated(sequence calls.CallSequence, mutationChooserWeight *big.Int) error {
 	if mutationChooserWeight == nil {
 		mutationChooserWeight = big.NewInt(1)
 	}
 
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
-
-	if !useInMutations {
-		return nil
-	}
 
 	clonedSequence, err := sequence.Clone()
 	if err != nil {
@@ -608,18 +598,12 @@ func (c *Corpus) PrepareForWarmup(baseTestChain *chain.TestChain, contractDefini
 	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
 
 	c.callSequencesLock.Lock()
-	c.unexecutedCallSequences = make([]warmupSequence, 0, totalSequences)
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0, totalSequences)
 	for _, sequenceFileData := range c.testResultSequenceFiles.files {
-		c.unexecutedCallSequences = append(c.unexecutedCallSequences, warmupSequence{
-			sequence:       sequenceFileData.data,
-			useInMutations: false,
-		})
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
 	}
 	for _, sequenceFileData := range c.callSequenceFiles.files {
-		c.unexecutedCallSequences = append(c.unexecutedCallSequences, warmupSequence{
-			sequence:       sequenceFileData.data,
-			useInMutations: true,
-		})
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
 	}
 	activeSequences := len(c.unexecutedCallSequences)
 	c.callSequencesLock.Unlock()
@@ -632,11 +616,11 @@ func (c *Corpus) PrepareForWarmup(baseTestChain *chain.TestChain, contractDefini
 // failures. If a call sequence is returned, it will not be returned by this method again.
 // Returns a call sequence loaded from disk which has not yet been executed, to check for test failures. If all
 // sequences in the corpus have been executed, this will return nil.
-func (c *Corpus) UnexecutedCallSequence() (*calls.CallSequence, bool) {
+func (c *Corpus) UnexecutedCallSequence() *calls.CallSequence {
 	// Prior to thread locking, if we have no un-executed call sequences, quit.
 	// This is a speed optimization, as thread locking on a central component affects performance.
 	if len(c.unexecutedCallSequences) == 0 {
-		return nil, false
+		return nil
 	}
 
 	// Acquire a thread lock for the duration of this method.
@@ -646,7 +630,7 @@ func (c *Corpus) UnexecutedCallSequence() (*calls.CallSequence, bool) {
 	// Check that we have an item now that the thread is locked. This must be performed again as an item could've
 	// been removed between time of check (the prior exit condition) and time of use (thread locked operations).
 	if len(c.unexecutedCallSequences) == 0 {
-		return nil, false
+		return nil
 	}
 
 	// Otherwise obtain the first item and remove it from the slice.
@@ -654,7 +638,7 @@ func (c *Corpus) UnexecutedCallSequence() (*calls.CallSequence, bool) {
 	c.unexecutedCallSequences = c.unexecutedCallSequences[1:]
 
 	// Return the first sequence
-	return &firstSequence.sequence, firstSequence.useInMutations
+	return &firstSequence
 }
 
 // Flush writes corpus changes to disk. Returns an error if one occurs.

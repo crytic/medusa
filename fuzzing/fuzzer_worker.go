@@ -315,7 +315,6 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		return nil, err
 	}
 	isWarmupSequence := fw.sequenceGenerator.LastSequenceFromWarmup()
-	warmupUseInMutations := fw.sequenceGenerator.WarmupSequenceUseInMutations()
 	if isWarmupSequence {
 		if err = fw.bindContractsForSequence(fw.sequenceGenerator.CurrentSequence()); err != nil {
 			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Skipping warmup sequence: ", err)
@@ -393,7 +392,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
 	if isWarmupSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
-		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight(), warmupUseInMutations)
+		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight())
 		if err != nil {
 			return nil, err
 		}
