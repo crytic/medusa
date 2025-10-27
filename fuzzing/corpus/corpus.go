@@ -69,6 +69,8 @@ type Corpus struct {
 	logger *logging.Logger
 }
 
+// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
+// to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	var err error
 	corpus := &Corpus{
@@ -185,8 +187,8 @@ func (c *Corpus) migrateLegacyCorpus() error {
 
 // Initialize initializes the in-memory corpus state but does not actually replay any of the sequences stored in the corpus.
 // It seeds coverage information from the post-setup chain while enqueueing all persisted sequences for execution. The fuzzer workers
-// will concurrently all the sequences stored in the corpus and then the onComplete hook is invoked to notify the fuzzer that the corpus has been initialized.
-// Returns an error if seeding fails.
+// will concurrently execute all the sequences stored in the corpus and then the onComplete hook is invoked to notify the fuzzer that
+// the corpus has been initialized. Returns an error if seeding fails.
 func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts, onComplete func(active uint64, total uint64)) error {
 	// Acquire our call sequences lock during the duration of this method.
 	c.callSequencesLock.Lock()
@@ -226,7 +228,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to seed coverage maps during warmup preparation: %v", err)
+		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
 	}
 	defer testChain.Close()
 
