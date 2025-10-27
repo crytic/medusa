@@ -942,6 +942,11 @@ func (f *Fuzzer) Start() error {
 	startTime := time.Now()
 	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions,
 		func(active, total uint64) {
+			// No need to log anything if there are no sequences to initialize
+			if total == 0 {
+				return
+			}
+
 			// Log how much time it took to initialize the corpus
 			f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
 			inactive := int(total - active)
