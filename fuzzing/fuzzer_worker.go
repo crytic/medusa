@@ -260,7 +260,8 @@ func (fw *FuzzerWorker) updateMethods() {
 }
 
 // bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker and
-// resolves ABI metadata needed for serialization.
+// resolves ABI metadata needed for serialization. This is essential for initializing the corpus. If the function
+// returns an error, the call sequence/corpus item is marked as invalid and will not be used for mutations.
 func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) error {
 	// Iterate across each call sequence element.
 	for _, element := range sequence {
@@ -320,7 +321,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		if sequenceInvalidErr := fw.bindContractsForSequence(fw.sequenceGenerator.baseSequence); sequenceInvalidErr != nil {
 			// TODO: We can no longer tell what the file associated with the sequence is, so we can't log it.
 			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Corpus item disabled due to error when replaying it", sequenceInvalidErr)
-			fw.fuzzer.corpus.MarkInitializationSequenceProcessed(false)
+			fw.fuzzer.corpus.IncrementValid(false)
 			return nil, nil
 		}
 	}
@@ -389,13 +390,9 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	// If we encountered an error, report it.
 	if err != nil {
 		if isInitializingCorpusSequence {
-			fw.fuzzer.corpus.MarkInitializationSequenceProcessed(false)
+			fw.fuzzer.corpus.IncrementValid(false)
 		}
 		return nil, err
-	}
-
-	if isInitializingCorpusSequence {
-		fw.fuzzer.corpus.MarkInitializationSequenceProcessed(true)
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
@@ -403,11 +400,13 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		return nil, nil
 	}
 
-	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
-	if isInitializingCorpusSequence && len(shrinkCallSequenceRequests) == 0 && len(executedSequence) > 0 {
-		err = fw.fuzzer.corpus.MarkSequenceValidated(executedSequence, fw.getNewCorpusCallSequenceWeight())
-		if err != nil {
-			return nil, err
+	// We successfully executed a corpus element
+	if isInitializingCorpusSequence {
+		fw.fuzzer.corpus.IncrementValid(true)
+		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
+		if len(shrinkCallSequenceRequests) == 0 {
+			// We don't really want an error here to stop fuzzing, so we ignore it.
+			_ = fw.fuzzer.corpus.MarkCorpusElementForMutation(executedSequence, big.NewInt(1))
 		}
 	}
 

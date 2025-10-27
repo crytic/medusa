@@ -939,16 +939,22 @@ func (f *Fuzzer) Start() error {
 	}
 
 	// Initialize the corpus and define the onComplete callback that will emit a log message when the corpus has been initialized.
-	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions, func(active, total uint64) {
-		inactive := int(total - active)
-		f.logger.Info(
-			colors.Bold, "corpus: ", colors.Reset,
-			"warmup complete – ", colors.Bold, active, colors.Reset, "/", total,
-			" sequences (", inactive, " skipped)",
-		)
-	})
+	startTime := time.Now()
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions,
+		func(active, total uint64) {
+			// Log how much time it took to initialize the corpus
+			f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
+			inactive := int(total - active)
+
+			// Log the overall corpus health
+			f.logger.Info(
+				colors.Bold, "corpus: ", colors.Reset,
+				"health: ", colors.Bold, int(float32(active)/float32(total)*100), "%", colors.Reset, ", ",
+				"sequences: ", colors.Bold, total, " (", active, " valid, ", inactive, " invalid)", colors.Reset,
+			)
+		})
 	if err != nil {
-		f.logger.Error("Failed to prepare corpus warmup", err)
+		f.logger.Error("Failed to initialize the corpus", err)
 		return err
 	}
 
