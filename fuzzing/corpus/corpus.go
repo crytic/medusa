@@ -421,6 +421,10 @@ func (c *Corpus) MarkCallSequenceForMutation(sequence calls.CallSequence, mutati
 		mutationChooserWeight = big.NewInt(1)
 	}
 
+	// Unclear whether a lock is needed but might as well be safe
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
 	// Add the sequence to the mutation chooser
 	c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice(sequence, mutationChooserWeight))
 	return nil
@@ -432,7 +436,7 @@ func (c *Corpus) IncrementValid() {
 }
 
 // ValidCallSequences returns the number of valid call sequences in the corpus.
-// Note that this value is not accurate right before fuzzing actually begins
+// Note that this value is only accurate right after corpus initialization.
 func (c *Corpus) ValidCallSequences() uint64 {
 	return c.validCallSequences.Load()
 }
