@@ -414,6 +414,22 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	return nil
 }
 
+// MarkCallSequenceForMutation records that a call sequence in the corpus has been successfully executed and can be used for mutations.
+func (c *Corpus) MarkCallSequenceForMutation(sequence calls.CallSequence, mutationChooserWeight *big.Int) error {
+	// If no weight is provided, set it to 1.
+	if mutationChooserWeight == nil {
+		mutationChooserWeight = big.NewInt(1)
+	}
+
+	// Unclear whether a lock is needed but might as well be safe
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Add the sequence to the mutation chooser
+	c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice(sequence, mutationChooserWeight))
+	return nil
+}
+
 // IncrementValid increments the valid call sequences counter.
 func (c *Corpus) IncrementValid() {
 	c.validCallSequences.Add(1)
