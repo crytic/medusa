@@ -187,7 +187,7 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 // InitializeNextSequence prepares the CallSequenceGenerator for generating a new sequence. Each element can be
 // obtained by calling PopSequenceElement iteratively.
 // Returns a boolean indicating whether the initialized sequence is a newly generated sequence (rather than an
-// unmodified one loaded from the corpus), whether an error if one occurred.
+// unmodified one loaded from the corpus), or an error if one occurred.
 func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	// Reset the state of our generator.
 	g.baseSequence = make(calls.CallSequence, g.worker.fuzzer.config.Fuzzing.CallSequenceLength)

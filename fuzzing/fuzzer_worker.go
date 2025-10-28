@@ -330,8 +330,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		if !isNewSequence {
 			err := fw.bindCorpusElement(currentIndex)
 
+			// We will separately capture the error and log that the corpus element is disabled
 			if err != nil {
-				// TODO: Maybe emit an event to the fuzzer or something to log the issue but we don't actually want to throw an error here
 				return nil, err
 			}
 		}
@@ -356,9 +356,9 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		_, coverageErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
-		if coverageErr != nil {
-			return true, coverageErr
+		err = fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		if err != nil {
+			return true, err
 		}
 
 		// Loop through each test function, signal our worker tested a call, and collect any requests to shrink
@@ -455,7 +455,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
 		// Check for updates to coverage and corpus (using only the section of the sequence we tested so far).
 		// If we detect coverage changes, add this sequence.
-		_, seqErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		seqErr := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if seqErr != nil {
 			return true, seqErr
 		}

@@ -249,6 +249,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		}
 	}
 
+	// Add all test results and call sequences to the unexecuted call sequences list
 	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
 	c.unexecutedCallSequences = make([]calls.CallSequence, totalSequences)
 	for _, sequenceFileData := range c.testResultSequenceFiles.files {
@@ -396,10 +397,10 @@ func checkSequenceCoverageAndUpdate(callSequence calls.CallSequence, coverageMap
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
 // Returns a boolean indicating whether coverage increased, and an error if one occurs.
-func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) (bool, error) {
+func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) error {
 	coverageUpdated, err := checkSequenceCoverageAndUpdate(callSequence, c.coverageMaps)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// If we had an increase in coverage, we save the sequence.
@@ -407,10 +408,10 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 		// If we achieved new coverage, save this sequence for mutation purposes.
 		err = c.addCallSequence(c.callSequenceFiles, callSequence, true, mutationChooserWeight, flushImmediately)
 		if err != nil {
-			return true, err
+			return err
 		}
 	}
-	return coverageUpdated, nil
+	return nil
 }
 
 // MarkCallSequenceForMutation records that a call sequence in the corpus has been successfully executed and can be used for mutations.
