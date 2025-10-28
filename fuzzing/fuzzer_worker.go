@@ -392,12 +392,12 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If we encountered an error, report it.
 	if err != nil {
+		// If a corpus element fails to execute, log it (in debug mode) and exit the function early
 		if !isNewSequence {
-			fw.fuzzer.logger.Debug("DEBUG: failed to execute corpus sequence", err)
-			fw.fuzzer.corpus.IncrementValid(false)
-		} else {
-			return nil, err
+			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] corpus element has been disabled due to an error:", err)
+			return nil, nil
 		}
+		return nil, err
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
@@ -407,11 +407,11 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// We successfully executed a corpus element
 	if !isNewSequence {
-		fw.fuzzer.corpus.IncrementValid(true)
+		fw.fuzzer.corpus.IncrementValid()
 		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
 		if len(shrinkCallSequenceRequests) == 0 {
 			// We don't really want an error here to stop fuzzing, so we ignore it.
-			_ = fw.fuzzer.corpus.MarkCorpusElementForMutation(executedSequence, big.NewInt(1))
+			_ = fw.fuzzer.corpus.MarkCallSequenceForMutation(executedSequence, big.NewInt(1))
 		}
 	}
 

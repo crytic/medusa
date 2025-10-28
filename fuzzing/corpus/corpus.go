@@ -54,23 +54,15 @@ type Corpus struct {
 	// callSequences.
 	callSequencesLock sync.Mutex
 
-	// initializationTotal captures the total number of corpus sequences that need to be executed to initialize the fuzzer.
-	initializationTotal uint64
-	// initializationProcessed tracks how many initialization sequences have been executed.
-	initializationProcessed atomic.Uint64
-	// initializationSuccessful tracks how many initialization sequences were executed successfully.
-	initializationSuccessful atomic.Uint64
-	// initializationOnce ensures the initializationDoneCallback is invoked only once.
-	initializationOnce sync.Once
-	// initializationDoneCallback is invoked when all initialization sequences finish execution to notify the fuzzer that the corpus has been initialized.
-	initializationDoneCallback func(active uint64, total uint64)
+	// validCallSequences tracks how many call sequences in the corpus are valid when the corpus is re-run.
+	validCallSequences atomic.Uint64
 
 	// logger describes the Corpus's log object that can be used to log important events
 	logger *logging.Logger
 }
 
-// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
-// to an empty path, artifacts will not be persistently stored.
+// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory and preparing in-memory
+// state required for fuzzing. If the directory refers to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	var err error
 	corpus := &Corpus{
@@ -187,9 +179,8 @@ func (c *Corpus) migrateLegacyCorpus() error {
 
 // Initialize initializes the in-memory corpus state but does not actually replay any of the sequences stored in the corpus.
 // It seeds coverage information from the post-setup chain while enqueueing all persisted sequences for execution. The fuzzer workers
-// will concurrently execute all the sequences stored in the corpus and then the onComplete hook is invoked to notify the fuzzer that
-// the corpus has been initialized. Returns an error if seeding fails.
-func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts, onComplete func(active uint64, total uint64)) error {
+// will concurrently execute all the sequences stored in the corpus before actually starting the fuzzing campaign.
+func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) error {
 	// Acquire our call sequences lock during the duration of this method.
 	c.callSequencesLock.Lock()
 	defer c.callSequencesLock.Unlock()
@@ -259,7 +250,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 	}
 
 	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
-	c.unexecutedCallSequences = make([]calls.CallSequence, 0, totalSequences)
+	c.unexecutedCallSequences = make([]calls.CallSequence, totalSequences)
 	for _, sequenceFileData := range c.testResultSequenceFiles.files {
 		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
 	}
@@ -267,19 +258,8 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
 	}
 
-	// Reset warmup tracking counters.
-	c.initializationProcessed.Store(0)
-	c.initializationSuccessful.Store(0)
-	c.initializationOnce = sync.Once{}
-	c.initializationDoneCallback = onComplete
-	c.initializationTotal = uint64(len(c.unexecutedCallSequences))
-
-	// If there are no sequences to process, trigger the callback immediately.
-	if c.initializationTotal == 0 && c.initializationDoneCallback != nil {
-		c.initializationOnce.Do(func() {
-			c.initializationDoneCallback(0, 0)
-		})
-	}
+	// This value will increment as call sequences in the corpus are executed and marked as valid.
+	c.validCallSequences.Store(0)
 
 	return nil
 }
@@ -433,10 +413,8 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 	return coverageUpdated, nil
 }
 
-// MarkCorpusElementForMutation records that a corpus element has been successfully executed and can be used for mutations.
-// The sequence is cloned, stripped of runtime metadata, and registered with the mutation chooser so it can participate
-// in future mutations.
-func (c *Corpus) MarkCorpusElementForMutation(sequence calls.CallSequence, mutationChooserWeight *big.Int) error {
+// MarkCallSequenceForMutation records that a call sequence in the corpus has been successfully executed and can be used for mutations.
+func (c *Corpus) MarkCallSequenceForMutation(sequence calls.CallSequence, mutationChooserWeight *big.Int) error {
 	// If no weight is provided, set it to 1.
 	if mutationChooserWeight == nil {
 		mutationChooserWeight = big.NewInt(1)
@@ -447,34 +425,15 @@ func (c *Corpus) MarkCorpusElementForMutation(sequence calls.CallSequence, mutat
 	return nil
 }
 
-// IncrementValid records that a previously unexecuted corpus element has finished executing.
-// The valid parameter should be true when the call sequence execution succeeded (even if it triggered a test failure),
-// and false if it was skipped due to incompatibility or other errors.
-func (c *Corpus) IncrementValid(valid bool) {
-	// Guard clause
-	total := c.initializationTotal
-	if total == 0 {
-		return
-	}
+// IncrementValid increments the valid call sequences counter.
+func (c *Corpus) IncrementValid() {
+	c.validCallSequences.Add(1)
+}
 
-	// Increment the processed counter.
-	processed := c.initializationProcessed.Add(1)
-
-	// If the call sequence execution was successful, increment the successful counter.
-	if valid {
-		c.initializationSuccessful.Add(1)
-	}
-
-	// If we have processed all corpus elements, invoke the completion callback.
-	if processed == total {
-		c.initializationOnce.Do(func() {
-			// Invoke the completion callback if it is set.
-			if c.initializationDoneCallback != nil {
-				// Invoke the completion callback with the total number of corpus elements and the number of successful corpus elements.
-				c.initializationDoneCallback(c.initializationSuccessful.Load(), total)
-			}
-		})
-	}
+// ValidCallSequences returns the number of valid call sequences in the corpus.
+// Note that this value is not accurate right before fuzzing actually begins
+func (c *Corpus) ValidCallSequences() uint64 {
+	return c.validCallSequences.Load()
 }
 
 // UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.
