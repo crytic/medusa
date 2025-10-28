@@ -396,7 +396,7 @@ func checkSequenceCoverageAndUpdate(callSequence calls.CallSequence, coverageMap
 // CheckSequenceCoverageAndUpdate checks if the most recent call executed in the provided call sequence achieved
 // coverage the Corpus did not with any of its call sequences. If it did, the call sequence is added to the corpus
 // and the Corpus coverage maps are updated accordingly.
-// Returns a boolean indicating whether coverage increased, and an error if one occurs.
+// Returns an error if one occurs.
 func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence, mutationChooserWeight *big.Int, flushImmediately bool) error {
 	coverageUpdated, err := checkSequenceCoverageAndUpdate(callSequence, c.coverageMaps)
 	if err != nil {

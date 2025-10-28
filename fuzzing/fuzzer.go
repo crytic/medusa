@@ -943,10 +943,10 @@ func (f *Fuzzer) Start() error {
 	// Log that we will initialize corpus if there are any call sequences or test results
 	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
 		f.logger.Info("Initializing corpus...")
-	}
 
-	// Monitor corpus initialization
-	go f.monitorCorpusInitialization()
+		// Monitor corpus initialization
+		go f.monitorCorpusInitialization()
+	}
 
 	// Start the corpus pruner.
 	err = f.corpusPruner.Start(f.ctx, f.corpus, baseTestChain)
