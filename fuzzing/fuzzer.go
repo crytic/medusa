@@ -814,6 +814,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 			if err == nil && workerCreatedErr != nil {
 				err = workerCreatedErr
 			}
+
 			if err == nil {
 				// Publish an event indicating we created a worker.
 				workerCreatedErr = f.Events.WorkerCreated.Publish(FuzzerWorkerCreatedEvent{Worker: worker})
@@ -894,13 +895,6 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// Set up the corpus
-	f.logger.Info("Initializing corpus")
-	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
-	if err != nil {
-		f.logger.Error("Failed to create the corpus", err)
-		return err
-	}
 	// Start the revert reporter
 	f.revertReporter.Start(f.ctx)
 
@@ -933,28 +927,25 @@ func (f *Fuzzer) Start() error {
 	}
 	f.logger.Info("Finished setting up test chain")
 
-	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	var corpusActiveSequences, corpusTotalSequences int
-	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
-		f.logger.Info("Running call sequences in the corpus")
+	// Create and initialize the corpus
+	f.logger.Info("Creating corpus...")
+	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		f.logger.Error("Failed to create the corpus", err)
+		return err
 	}
-	startTime := time.Now()
-	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
-	if corpusTotalSequences > 0 {
-		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
-	}
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
 	}
 
-	// Log corpus health statistics, if we have any existing sequences.
-	if corpusTotalSequences > 0 {
-		f.logger.Info(
-			colors.Bold, "corpus: ", colors.Reset,
-			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
-			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
-		)
+	// Log that we will initialize corpus if there are any call sequences or test results
+	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
+		f.logger.Info("Initializing corpus...")
+
+		// Monitor corpus initialization
+		go f.monitorCorpusInitialization()
 	}
 
 	// Start the corpus pruner.
@@ -1078,6 +1069,45 @@ func (f *Fuzzer) Terminate() {
 	// Cancel the main context as well
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
+	}
+}
+
+// monitorCorpusInitialization monitors the corpus initialization process and logs the corpus health when it is complete.
+// This goroutine is short-lived and exits when the corpus is initialized.
+func (f *Fuzzer) monitorCorpusInitialization() {
+	// There is nothing to do if there are no corpus elements or unexecuted call sequences
+	totalSequences, totalTestResults := f.corpus.CallSequenceEntryCount()
+	if !f.corpus.InitializingCorpus() || totalSequences == 0 || totalTestResults == 0 {
+		return
+	}
+
+	// Capture an approximate start time
+	startTime := time.Now()
+	for !utils.CheckContextDone(f.ctx) && !utils.CheckContextDone(f.emergencyCtx) {
+		// Go to sleep if corpus is still initializing
+		if f.corpus.InitializingCorpus() {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+
+		// Calculate the necessary variables for corpus health
+		totalSequences, totalTestResults := f.corpus.CallSequenceEntryCount()
+		totalCorpusEntries := totalSequences + totalTestResults
+		validSequences := f.corpus.ValidCallSequences()
+		invalidSequences := int(totalSequences - int(validSequences))
+
+		// Log how much time it took to initialize the corpus
+		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
+
+		// Log the overall corpus health
+		f.logger.Info(
+			colors.Bold, "corpus: ", colors.Reset,
+			"health: ", colors.Bold, int(float32(validSequences)/float32(totalCorpusEntries)*100), "%", colors.Reset, ", ",
+			"sequences: ", colors.Bold, totalCorpusEntries, " (", validSequences, " valid, ", invalidSequences, " invalid)", colors.Reset,
+		)
+
+		// Now we can exit the goroutine
+		break
 	}
 }
 
