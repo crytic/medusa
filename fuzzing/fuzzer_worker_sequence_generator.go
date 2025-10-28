@@ -26,9 +26,6 @@ type CallSequenceGenerator struct {
 	// potentially further mutated values with PopSequenceElement iteratively.
 	baseSequence calls.CallSequence
 
-	// initializingCorpus indicates whether the most recent sequence is part of the corpus initialization process.
-	initializingCorpus bool
-
 	// fetchIndex describes the current position in the baseSequence which defines the next element to be mutated and
 	// returned when calling PopSequenceElement.
 	fetchIndex int
@@ -190,20 +187,18 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 // InitializeNextSequence prepares the CallSequenceGenerator for generating a new sequence. Each element can be
 // obtained by calling PopSequenceElement iteratively.
 // Returns a boolean indicating whether the initialized sequence is a newly generated sequence (rather than an
-// unmodified one loaded from the corpus), or an error if one occurred.
+// unmodified one loaded from the corpus), whether an error if one occurred.
 func (g *CallSequenceGenerator) InitializeNextSequence() (bool, error) {
 	// Reset the state of our generator.
 	g.baseSequence = make(calls.CallSequence, g.worker.fuzzer.config.Fuzzing.CallSequenceLength)
 	g.fetchIndex = 0
 	g.prefetchModifyCallFunc = nil
-	g.initializingCorpus = false
 
 	// Check if there are any previously un-executed corpus call sequences. If there are, the fuzzer should execute
 	// those first.
 	unexecutedSequence := g.worker.fuzzer.corpus.UnexecutedCallSequence()
 	if unexecutedSequence != nil {
 		g.baseSequence = *unexecutedSequence
-		g.initializingCorpus = true
 		return false, nil
 	}
 
@@ -267,8 +262,11 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 		}
 	}
 
-	// Update the element with the current nonce for the associated chain.
-	element.Call.FillFromTestChainProperties(g.worker.chain)
+	// Update the element with the current nonce for the associated chain only if we are not replaying a corpus sequence.
+	// TODO: This feels a little hacky
+	if !g.worker.fuzzer.corpus.InitializingCorpus() {
+		element.Call.FillFromTestChainProperties(g.worker.chain)
+	}
 
 	// Update our base sequence, advance our position, and return the processed element from this round.
 	g.baseSequence[g.fetchIndex] = element

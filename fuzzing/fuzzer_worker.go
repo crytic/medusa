@@ -259,40 +259,41 @@ func (fw *FuzzerWorker) updateMethods() {
 	}
 }
 
-// bindContractsForSequence ensures each call sequence element references the deployed contract known to the worker and
-// resolves ABI metadata needed for serialization. This is essential for initializing the corpus. If the function
+// bindCorpusElement ensures that the de-serialized corpus element is ready for runtime use.
+// The index for the element is provided and the base sequence used for execution is updated in-place.
+// It resolves the contract definition and ABI metadata needed for runtime execution. If the function
 // returns an error, the call sequence/corpus item is marked as invalid and will not be used for mutations.
-func (fw *FuzzerWorker) bindContractsForSequence(sequence calls.CallSequence) error {
-	// Iterate across each call sequence element.
-	for _, element := range sequence {
-		// If the call deploys a contract, there is nothing to do.
-		if element.Call.To == nil {
-			continue
-		}
+func (fw *FuzzerWorker) bindCorpusElement(currentIndex int) error {
+	// Obtain the corpus element
+	element := fw.sequenceGenerator.baseSequence[currentIndex]
 
-		// Obtain our contract definition for this address.
-		contractDefinition, ok := fw.deployedContracts[*element.Call.To]
-		if !ok {
-			return fmt.Errorf("contract at address %v could not be resolved", element.Call.To.String())
-		}
-		element.Contract = contractDefinition
+	// If it is a contract creation, there is nothing to do.
+	if element.Call.To == nil {
+		return nil
+	}
 
-		// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
-		// sufficient for runtime use, until we use it to resolve runtime references.
-		if abiValues := element.Call.DataAbiValues; abiValues != nil {
-			// Resolve the ABI values.
-			if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
-				return fmt.Errorf("error resolving method in contract '%v': %v", element.Contract.Name(), err)
-			}
+	contractDefinition, ok := fw.deployedContracts[*element.Call.To]
+	if !ok {
+		return fmt.Errorf("contract at address %v could not be resolved", element.Call.To.String())
+	}
+	element.Contract = contractDefinition
+
+	// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
+	// sufficient for runtime use, until we use it to resolve runtime references.
+	if abiValues := element.Call.DataAbiValues; abiValues != nil {
+		// Resolve the ABI values.
+		if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
+			return fmt.Errorf("error resolving method in contract '%v': %v", element.Contract.Name(), err)
 		}
 	}
+
 	return nil
 }
 
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
-// deployed in the Chain.
+// deployed in the Chain. Note that this function also replays the corpus call sequences before entering the main fuzzing loop.
 // Returns any requests for call sequence shrinking or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, error) {
 	// We will make a copy of the worker's base value set so that we can rollback to it at the end of the call sequence
@@ -309,31 +310,28 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}()
 
 	// Initialize a new sequence within our sequence generator.
-	var isNewSequence bool
-	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
+	var isCorpusSequence bool
+	isCorpusSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
 		return nil, err
 	}
-
-	// Check to see if we are still initializing the corpus
-	isInitializingCorpusSequence := fw.sequenceGenerator.initializingCorpus
-	if isInitializingCorpusSequence {
-		if sequenceInvalidErr := fw.bindContractsForSequence(fw.sequenceGenerator.baseSequence); sequenceInvalidErr != nil {
-			// TODO: We can no longer tell what the file associated with the sequence is, so we can't log it.
-			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] Corpus item disabled due to error when replaying it", sequenceInvalidErr)
-			fw.fuzzer.corpus.IncrementValid(false)
-			return nil, nil
-		}
-	}
-
-	// If we are done initializing the corpus, we should log it and notify user of overall corpus health.
-	// (Completion is handled centrally once all sequences finish.)
 
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		// We need to prepare the corpus element for runtime execution if we are replaying a corpus sequence
+		if isCorpusSequence {
+			err := fw.bindCorpusElement(currentIndex)
+
+			if err != nil {
+				// TODO: Maybe emit an event to the fuzzer or something to log the issue but we don't actually want to throw an error here
+				return nil, err
+			}
+		}
+
+		// Now, we are ready to fetch the next element from the sequence generator
 		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
@@ -389,10 +387,12 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If we encountered an error, report it.
 	if err != nil {
-		if isInitializingCorpusSequence {
+		if isCorpusSequence {
+			fw.fuzzer.logger.Debug("DEBUG: failed to execute corpus sequence", err)
 			fw.fuzzer.corpus.IncrementValid(false)
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
@@ -401,7 +401,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// We successfully executed a corpus element
-	if isInitializingCorpusSequence {
+	if isCorpusSequence {
 		fw.fuzzer.corpus.IncrementValid(true)
 		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
 		if len(shrinkCallSequenceRequests) == 0 {
@@ -410,7 +410,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		}
 	}
 
-	if !isNewSequence {
+	// We don't want to save shrink results from corpus sequences since we already did.
+	if !isCorpusSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
 		}
