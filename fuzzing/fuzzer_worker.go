@@ -264,6 +264,11 @@ func (fw *FuzzerWorker) updateMethods() {
 // It resolves the contract definition and ABI metadata needed for runtime execution. If the function
 // returns an error, the call sequence/corpus item is marked as invalid and will not be used for mutations.
 func (fw *FuzzerWorker) bindCorpusElement(currentIndex int) error {
+	// Guard clause
+	if currentIndex >= len(fw.sequenceGenerator.baseSequence) {
+		return nil
+	}
+
 	// Obtain the corpus element
 	element := fw.sequenceGenerator.baseSequence[currentIndex]
 
@@ -310,8 +315,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}()
 
 	// Initialize a new sequence within our sequence generator.
-	var isCorpusSequence bool
-	isCorpusSequence, err = fw.sequenceGenerator.InitializeNextSequence()
+	var isNewSequence bool
+	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +327,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
 		// We need to prepare the corpus element for runtime execution if we are replaying a corpus sequence
-		if isCorpusSequence {
+		if !isNewSequence {
 			err := fw.bindCorpusElement(currentIndex)
 
 			if err != nil {
@@ -387,7 +392,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If we encountered an error, report it.
 	if err != nil {
-		if isCorpusSequence {
+		if !isNewSequence {
 			fw.fuzzer.logger.Debug("DEBUG: failed to execute corpus sequence", err)
 			fw.fuzzer.corpus.IncrementValid(false)
 		} else {
@@ -401,7 +406,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// We successfully executed a corpus element
-	if isCorpusSequence {
+	if !isNewSequence {
 		fw.fuzzer.corpus.IncrementValid(true)
 		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
 		if len(shrinkCallSequenceRequests) == 0 {
@@ -411,7 +416,7 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// We don't want to save shrink results from corpus sequences since we already did.
-	if !isCorpusSequence {
+	if !isNewSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
 		}
