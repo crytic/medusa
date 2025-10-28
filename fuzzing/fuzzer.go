@@ -429,17 +429,24 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				f.contractDefinitions = append(f.contractDefinitions, contractDefinition)
 			}
 		}
-		// Generate a topologically sorted deployment order based on library dependencies
-		// This ensures that libraries are deployed before contracts that depend on them
-		f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, f.config.Fuzzing.TargetContracts)
-		if err != nil {
-			f.logger.Warn("Could not get a deployment order", err)
-		}
 		// Cache all of our source code if it hasn't been already.
-		err := compilation.CacheSourceCode()
+		err = compilation.CacheSourceCode()
 		if err != nil {
 			f.logger.Warn("Failed to cache compilation source file data", err)
 		}
+	}
+
+	// We need a list of predeploys to feed to GetDeploymentOrder. PredeployedContracts is a map, we just need a list of keys.
+	predeploys := make([]string, 0, len(f.config.Fuzzing.PredeployedContracts))
+	for p := range f.config.Fuzzing.PredeployedContracts {
+		predeploys = append(predeploys, p)
+	}
+
+	// Generate a topologically sorted deployment order based on library dependencies
+	// This ensures that libraries are deployed before contracts that depend on them
+	f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, predeploys, f.config.Fuzzing.TargetContracts)
+	if err != nil {
+		f.logger.Warn("Could not get a deployment order", err)
 	}
 }
 
@@ -493,10 +500,13 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 
 	// Create our test chain with our basic allocations and passed medusa's chain configuration
 	testChain, err := chain.NewTestChain(f.ctx, genesisAlloc, &f.config.Fuzzing.TestChainConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Set our block gas limit
 	testChain.BlockGasLimit = blockGasLimit
-	return testChain, err
+	return testChain, nil
 }
 
 // chainSetupFromCompilations is a TestChainSetupFunc which sets up the base test chain state by deploying
@@ -538,11 +548,6 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	}
 
 	if len(fuzzer.deploymentOrder) > 0 {
-		// Skip already included predeployed contracts
-		predeployed := make(map[string]bool)
-		for name := range fuzzer.config.Fuzzing.PredeployedContracts {
-			predeployed[name] = true
-		}
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
 		targetContractBalances := make(map[string]*config.ContractBalance)
@@ -555,7 +560,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		}
 		// Add contracts from the deployment order
 		for _, name := range fuzzer.deploymentOrder {
-			if !predeployed[name] && (targetContracts[name] || fuzzer.isLibrary(name)) {
+			_, isPredeploy := fuzzer.config.Fuzzing.PredeployedContracts[name]
+			if isPredeploy || targetContracts[name] || fuzzer.isLibrary(name) {
 				contractsToDeploy = append(contractsToDeploy, name)
 				// Add balance for target contracts, zero for libraries
 				if balance, ok := targetContractBalances[name]; ok {
@@ -764,6 +770,16 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 	contractName := contract.Name()
 	contract.CompiledContract().LinkBytecodes(contractName, deployedContracts)
 
+	// Ensure the linked bytecodes are reflected back into the compilation artifacts used later
+	// for coverage analysis and reporting. Without this, the analysis may use unlinked/hex-string
+	// bytecode for contracts that required library linking, causing coverage lookups to fail.
+	if comp := contract.Compilation(); comp != nil {
+		if srcArtifact, ok := comp.SourcePathToArtifact[contract.SourcePath()]; ok {
+			srcArtifact.Contracts[contractName] = *contract.CompiledContract()
+			comp.SourcePathToArtifact[contract.SourcePath()] = srcArtifact
+		}
+	}
+
 	// Construct our deployment message/tx data field
 	msgData, err := contract.CompiledContract().GetDeploymentMessageData(args)
 	if err != nil {
@@ -934,6 +950,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 			if err == nil && workerCreatedErr != nil {
 				err = workerCreatedErr
 			}
+
 			if err == nil {
 				// Publish an event indicating we created a worker.
 				workerCreatedErr = f.Events.WorkerCreated.Publish(FuzzerWorkerCreatedEvent{Worker: worker})
@@ -1014,13 +1031,6 @@ func (f *Fuzzer) Start() error {
 		f.ctx, f.ctxCancelFunc = context.WithTimeout(f.ctx, time.Duration(f.config.Fuzzing.Timeout)*time.Second)
 	}
 
-	// Set up the corpus
-	f.logger.Info("Initializing corpus")
-	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
-	if err != nil {
-		f.logger.Error("Failed to create the corpus", err)
-		return err
-	}
 	// Start the revert reporter
 	f.revertReporter.Start(f.ctx)
 
@@ -1053,28 +1063,25 @@ func (f *Fuzzer) Start() error {
 	}
 	f.logger.Info("Finished setting up test chain")
 
-	// Initialize our coverage maps by measuring the coverage we get from the corpus.
-	var corpusActiveSequences, corpusTotalSequences int
-	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
-		f.logger.Info("Running call sequences in the corpus")
+	// Create and initialize the corpus
+	f.logger.Info("Creating corpus...")
+	f.corpus, err = corpus.NewCorpus(f.config.Fuzzing.CorpusDirectory)
+	if err != nil {
+		f.logger.Error("Failed to create the corpus", err)
+		return err
 	}
-	startTime := time.Now()
-	corpusActiveSequences, corpusTotalSequences, err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
-	if corpusTotalSequences > 0 {
-		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
-	}
+	err = f.corpus.Initialize(baseTestChain, f.contractDefinitions)
 	if err != nil {
 		f.logger.Error("Failed to initialize the corpus", err)
 		return err
 	}
 
-	// Log corpus health statistics, if we have any existing sequences.
-	if corpusTotalSequences > 0 {
-		f.logger.Info(
-			colors.Bold, "corpus: ", colors.Reset,
-			"health: ", colors.Bold, int(float32(corpusActiveSequences)/float32(corpusTotalSequences)*100.0), "%", colors.Reset, ", ",
-			"sequences: ", colors.Bold, corpusTotalSequences, " (", corpusActiveSequences, " valid, ", corpusTotalSequences-corpusActiveSequences, " invalid)", colors.Reset,
-		)
+	// Log that we will initialize corpus if there are any call sequences or test results
+	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
+		f.logger.Info("Initializing corpus...")
+
+		// Monitor corpus initialization
+		go f.monitorCorpusInitialization()
 	}
 
 	// Start the corpus pruner.
@@ -1142,7 +1149,7 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
-		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.logger)
+		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.config.Fuzzing.CoverageExclusions, f.logger)
 
 		if err != nil {
 			f.logger.Error("Failed to analyze source coverage", err)
@@ -1198,6 +1205,45 @@ func (f *Fuzzer) Terminate() {
 	// Cancel the main context as well
 	if f.ctxCancelFunc != nil {
 		f.ctxCancelFunc()
+	}
+}
+
+// monitorCorpusInitialization monitors the corpus initialization process and logs the corpus health when it is complete.
+// This goroutine is short-lived and exits when the corpus is initialized.
+func (f *Fuzzer) monitorCorpusInitialization() {
+	// There is nothing to do if there are no corpus elements or unexecuted call sequences
+	totalSequences, totalTestResults := f.corpus.CallSequenceEntryCount()
+	if !f.corpus.InitializingCorpus() || totalSequences == 0 || totalTestResults == 0 {
+		return
+	}
+
+	// Capture an approximate start time
+	startTime := time.Now()
+	for !utils.CheckContextDone(f.ctx) && !utils.CheckContextDone(f.emergencyCtx) {
+		// Go to sleep if corpus is still initializing
+		if f.corpus.InitializingCorpus() {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+
+		// Calculate the necessary variables for corpus health
+		totalSequences, totalTestResults := f.corpus.CallSequenceEntryCount()
+		totalCorpusEntries := totalSequences + totalTestResults
+		validSequences := f.corpus.ValidCallSequences()
+		invalidSequences := int(totalSequences - int(validSequences))
+
+		// Log how much time it took to initialize the corpus
+		f.logger.Info("Finished running call sequences in the corpus in ", time.Since(startTime).Round(time.Second))
+
+		// Log the overall corpus health
+		f.logger.Info(
+			colors.Bold, "corpus: ", colors.Reset,
+			"health: ", colors.Bold, int(float32(validSequences)/float32(totalCorpusEntries)*100), "%", colors.Reset, ", ",
+			"sequences: ", colors.Bold, totalCorpusEntries, " (", validSequences, " valid, ", invalidSequences, " invalid)", colors.Reset,
+		)
+
+		// Now we can exit the goroutine
+		break
 	}
 }
 

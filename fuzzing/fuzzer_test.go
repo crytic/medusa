@@ -821,8 +821,6 @@ func TestValueGenerationSolving(t *testing.T) {
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
 		"testdata/contracts/value_generation/match_structs_xy.sol",
-		"testdata/contracts/value_generation/match_ints_xy.sol",
-		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
 	for _, filePath := range filePaths {
@@ -832,6 +830,36 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for any failed tests and verify coverage was captured
+				assertFailedTestsExpected(f, true)
+				assertCorpusCallSequencesCollected(f, true)
+			},
+		})
+	}
+}
+
+// TestComplexValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
+// Specifically, this test provides a much larger test limit since some of these tests fail to get solved in the CI fast enough.
+func TestComplexValueGenerationSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/value_generation/match_ints_xy.sol",
+		"testdata/contracts/value_generation/match_uints_xy.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.TestLimit = 15_000_000
 				config.Slither.UseSlither = true
 			},
 			method: func(f *fuzzerTestContext) {

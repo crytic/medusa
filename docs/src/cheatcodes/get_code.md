@@ -6,11 +6,11 @@ The `getCode` cheatcode returns the creation bytecode for a contract in the proj
 
 ## Example
 
-```
+```solidity
 contract TestContract {
     function test() public {
         // Obtain cheat code contract reference
-        IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Get the creation bytecode for a contract
         bytes memory bytecode = cheats.getCode("MyContract.sol");

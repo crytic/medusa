@@ -10,26 +10,25 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/google/uuid"
-
-	"github.com/crytic/medusa/fuzzing/contracts"
 )
 
 // Corpus describes an archive of fuzzer-generated artifacts used to further fuzzing efforts. These artifacts are
 // reusable across fuzzer runs. Changes to the fuzzer/chain configuration or definitions within smart contracts
 // may create incompatibilities with corpus items.
 type Corpus struct {
-	// storageDirectory describes the directory to save corpus callSequencesByFilePath within.
+	// storageDirectory describes the directory to save corpus callSequenceFiles within.
 	storageDirectory string
 
 	// coverageMaps describes the total code coverage known to be achieved across all corpus call sequences.
@@ -55,12 +54,15 @@ type Corpus struct {
 	// callSequences.
 	callSequencesLock sync.Mutex
 
+	// validCallSequences tracks how many call sequences in the corpus are valid when the corpus is re-run.
+	validCallSequences atomic.Uint64
+
 	// logger describes the Corpus's log object that can be used to log important events
 	logger *logging.Logger
 }
 
-// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory. If the directory refers
-// to an empty path, artifacts will not be persistently stored.
+// NewCorpus initializes a new Corpus object, reading artifacts from the provided directory and preparing in-memory
+// state required for fuzzing. If the directory refers to an empty path, artifacts will not be persistently stored.
 func NewCorpus(corpusDirectory string) (*Corpus, error) {
 	var err error
 	corpus := &Corpus{
@@ -175,6 +177,94 @@ func (c *Corpus) migrateLegacyCorpus() error {
 	return nil
 }
 
+// Initialize initializes the in-memory corpus state but does not actually replay any of the sequences stored in the corpus.
+// It seeds coverage information from the post-setup chain while enqueueing all persisted sequences for execution. The fuzzer workers
+// will concurrently execute all the sequences stored in the corpus before actually starting the fuzzing campaign.
+func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) error {
+	// Acquire our call sequences lock during the duration of this method.
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Initialize our call sequence structures.
+	c.mutationTargetSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
+
+	// Create a coverage tracer to track coverage across all blocks.
+	c.coverageMaps = coverage.NewCoverageMaps()
+	coverageTracer := coverage.NewCoverageTracer()
+
+	// Create our structure and event listeners to track deployed contracts
+	deployedContracts := make(map[common.Address]*contracts.Contract, 0)
+
+	// Clone our test chain, adding listeners for contract deployment events from genesis.
+	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
+		// After genesis, prior to adding other blocks, we attach our coverage tracer
+		newChain.AddTracer(coverageTracer.NativeTracer(), true, false)
+
+		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
+		// sequences.
+		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event chain.ContractDeploymentsAddedEvent) error {
+			if contractDefinitions != nil {
+				matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
+				if matchedContract != nil {
+					deployedContracts[event.Contract.Address] = matchedContract
+				}
+			}
+			return nil
+		})
+		newChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(func(event chain.ContractDeploymentsRemovedEvent) error {
+			delete(deployedContracts, event.Contract.Address)
+			return nil
+		})
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
+	}
+	defer testChain.Close()
+
+	// Freeze a set of deployedContracts's keys so that we have a set of addresses present in baseTestChain.
+	// Feed this set to the coverage tracer.
+	initialContractsSet := make(map[common.Address]struct{}, len(deployedContracts))
+	for addr := range deployedContracts {
+		initialContractsSet[addr] = struct{}{}
+	}
+	coverageTracer.SetInitialContractsSet(&initialContractsSet)
+
+	// Set our coverage maps to those collected when replaying all blocks when cloning.
+	c.coverageMaps = coverage.NewCoverageMaps()
+	for _, block := range testChain.CommittedBlocks() {
+		for _, messageResults := range block.MessageResults {
+			// Grab the coverage maps
+			covMaps := coverage.GetCoverageTracerResults(messageResults)
+
+			// Memory optimization: Remove the coverage maps from the message results
+			coverage.RemoveCoverageTracerResults(messageResults)
+
+			// Update the global coverage maps
+			_, covErr := c.coverageMaps.Update(covMaps)
+			if covErr != nil {
+				return covErr
+			}
+		}
+	}
+
+	// Add all test results and call sequences to the unexecuted call sequences list
+	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0, totalSequences)
+	for _, sequenceFileData := range c.testResultSequenceFiles.files {
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
+	}
+	for _, sequenceFileData := range c.callSequenceFiles.files {
+		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
+	}
+
+	// This value will increment as call sequences in the corpus are executed and marked as valid.
+	c.validCallSequences.Store(0)
+
+	return nil
+}
+
 // CoverageMaps exposes coverage details for all call sequences known to the corpus.
 func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 	return c.coverageMaps
@@ -184,6 +274,11 @@ func (c *Corpus) CoverageMaps() *coverage.CoverageMaps {
 // that led to a failure.
 func (c *Corpus) CallSequenceEntryCount() (int, int) {
 	return len(c.callSequenceFiles.files), len(c.testResultSequenceFiles.files)
+}
+
+// InitializingCorpus returns true if the corpus is still initializing, false otherwise.
+func (c *Corpus) InitializingCorpus() bool {
+	return len(c.unexecutedCallSequences) > 0
 }
 
 // ActiveMutableSequenceCount returns the count of call sequences recorded in the corpus which have been validated
@@ -208,193 +303,6 @@ func (c *Corpus) RandomMutationTargetSequence() (calls.CallSequence, error) {
 		return nil, err
 	}
 	return seq.Clone()
-}
-
-// initializeSequences is a helper method for Initialize. It validates a list of call sequence files on a given
-// chain, using the map of deployed contracts (e.g. to check for non-existent method called, due to code changes).
-// Valid call sequences are added to the list of un-executed sequences the fuzzer should execute first.
-// If this sequence list being initialized is for use with mutations, it is added to the mutationTargetSequenceChooser.
-// Returns an error if one occurs.
-func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSequence], testChain *chain.TestChain, deployedContracts map[common.Address]*contracts.Contract, useInMutations bool) error {
-	// Cache the base block index so that you can reset back to it after every sequence
-	baseBlockIndex := uint64(len(testChain.CommittedBlocks()))
-
-	// Loop for each sequence
-	var err error
-	for _, sequenceFileData := range sequenceFiles.files {
-		// Unwrap the underlying sequence.
-		sequence := sequenceFileData.data
-
-		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
-		// way).
-		sequenceInvalidError := error(nil)
-		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
-			// If we are at the end of our sequence, return nil indicating we should stop executing.
-			if currentIndex >= len(sequence) {
-				return nil, nil
-			}
-
-			// If we are deploying a contract and not targeting one with this call, there should be no work to do.
-			currentSequenceElement := sequence[currentIndex]
-			if currentSequenceElement.Call.To == nil {
-				return currentSequenceElement, nil
-			}
-
-			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
-			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.To]
-			if !resolvedContractExists {
-				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.To.String())
-				return nil, nil
-			}
-			currentSequenceElement.Contract = resolvedContract
-
-			// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
-			// sufficient for runtime use, until we use it to resolve runtime references.
-			callAbiValues := currentSequenceElement.Call.DataAbiValues
-			if callAbiValues != nil {
-				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
-				if sequenceInvalidError != nil {
-					sequenceInvalidError = fmt.Errorf("error resolving method in contract '%v': %v", currentSequenceElement.Contract.Name(), sequenceInvalidError)
-					return nil, nil
-				}
-			}
-			return currentSequenceElement, nil
-		}
-
-		// Define actions to perform after executing each call in the sequence.
-		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-			// Grab the coverage maps for the last executed sequence element
-			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
-			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
-
-			// Memory optimization: Remove the coverage maps from the message results
-			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
-
-			// Update the global coverage maps
-			_, covErr := c.coverageMaps.Update(covMaps)
-			if covErr != nil {
-				return true, covErr
-			}
-			return false, nil
-		}
-
-		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
-
-		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
-		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v", err)
-		}
-
-		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
-		if sequenceInvalidError == nil {
-			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
-			}
-			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
-		} else {
-			c.logger.Debug("Corpus item ", colors.Bold, sequenceFileData.fileName, colors.Reset, " disabled due to error when replaying it", sequenceInvalidError)
-		}
-
-		// Revert chain state to our starting point to test the next sequence.
-		if err := testChain.RevertToBlockIndex(baseBlockIndex); err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v", err)
-		}
-	}
-	return nil
-}
-
-// Initialize initializes any runtime data needed for a Corpus on startup. Call sequences are replayed on the post-setup
-// (deployment) test chain to calculate coverage, while resolving references to compiled contracts.
-// Returns the active number of corpus items, total number of corpus items, or an error if one occurred. If an error
-// is returned, then the corpus counts returned will always be zero.
-func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions contracts.Contracts) (int, int, error) {
-	// Acquire our call sequences lock during the duration of this method.
-	c.callSequencesLock.Lock()
-	defer c.callSequencesLock.Unlock()
-
-	// Initialize our call sequence structures.
-	c.mutationTargetSequenceChooser = randomutils.NewWeightedRandomChooser[calls.CallSequence]()
-	c.unexecutedCallSequences = make([]calls.CallSequence, 0)
-
-	// Create a coverage tracer to track coverage across all blocks.
-	c.coverageMaps = coverage.NewCoverageMaps()
-	coverageTracer := coverage.NewCoverageTracer()
-
-	// Create our structure and event listeners to track deployed contracts
-	deployedContracts := make(map[common.Address]*contracts.Contract, 0)
-
-	// Clone our test chain, adding listeners for contract deployment events from genesis.
-	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
-		// After genesis, prior to adding other blocks, we attach our coverage tracer
-		newChain.AddTracer(coverageTracer.NativeTracer(), true, false)
-
-		// We also track any contract deployments, so we can resolve contract/method definitions for corpus call
-		// sequences.
-		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(func(event chain.ContractDeploymentsAddedEvent) error {
-			matchedContract := contractDefinitions.MatchBytecode(event.Contract.InitBytecode, event.Contract.RuntimeBytecode)
-			if matchedContract != nil {
-				deployedContracts[event.Contract.Address] = matchedContract
-			}
-			return nil
-		})
-		newChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(func(event chain.ContractDeploymentsRemovedEvent) error {
-			delete(deployedContracts, event.Contract.Address)
-			return nil
-		})
-		return nil
-	})
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to initialize coverage maps, base test chain cloning encountered error: %v", err)
-	}
-
-	// Freeze a set of deployedContracts's keys so that we have a set of addresses present in baseTestChain.
-	// Feed this set to the coverage tracer.
-	initialContractsSet := make(map[common.Address]struct{}, len(deployedContracts))
-	for addr := range deployedContracts {
-		initialContractsSet[addr] = struct{}{}
-	}
-	coverageTracer.SetInitialContractsSet(&initialContractsSet)
-
-	// Set our coverage maps to those collected when replaying all blocks when cloning.
-	c.coverageMaps = coverage.NewCoverageMaps()
-	for _, block := range testChain.CommittedBlocks() {
-		for _, messageResults := range block.MessageResults {
-			// Grab the coverage maps
-			covMaps := coverage.GetCoverageTracerResults(messageResults)
-
-			// Memory optimization: Remove the coverage maps from the message results
-			coverage.RemoveCoverageTracerResults(messageResults)
-
-			// Update the global coverage maps
-			_, covErr := c.coverageMaps.Update(covMaps)
-			if covErr != nil {
-				return 0, 0, covErr
-			}
-		}
-	}
-
-	// Next we replay every call sequence, checking its validity on this chain and measuring coverage. Valid sequences
-	// are added to the corpus for mutations, re-execution, etc.
-	//
-	// The order of initializations here is important, as it determines the order of "unexecuted sequences" to replay
-	// when the fuzzer's worker starts up. We want to replay test results first, so that other corpus items
-	// do not trigger the same test failures instead.
-	err = c.initializeSequences(c.testResultSequenceFiles, testChain, deployedContracts, false)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	err = c.initializeSequences(c.callSequenceFiles, testChain, deployedContracts, true)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	// Calculate corpus health metrics
-	corpusSequencesTotal := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
-	corpusSequencesActive := len(c.unexecutedCallSequences)
-
-	return corpusSequencesActive, corpusSequencesTotal, nil
 }
 
 // addCallSequence adds a call sequence to the corpus in a given corpus directory.
@@ -437,7 +345,7 @@ func (c *Corpus) addCallSequence(sequenceFiles *corpusDirectory[calls.CallSequen
 		if mutationChooserWeight == nil {
 			mutationChooserWeight = big.NewInt(1)
 		}
-		c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, mutationChooserWeight))
+		c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice(sequence, mutationChooserWeight))
 	}
 
 	// Unlock now, as flushing will lock on its own.
@@ -504,6 +412,33 @@ func (c *Corpus) CheckSequenceCoverageAndUpdate(callSequence calls.CallSequence,
 		}
 	}
 	return nil
+}
+
+// MarkCallSequenceForMutation records that a call sequence in the corpus has been successfully executed and can be used for mutations.
+func (c *Corpus) MarkCallSequenceForMutation(sequence calls.CallSequence, mutationChooserWeight *big.Int) error {
+	// If no weight is provided, set it to 1.
+	if mutationChooserWeight == nil {
+		mutationChooserWeight = big.NewInt(1)
+	}
+
+	// Unclear whether a lock is needed but might as well be safe
+	c.callSequencesLock.Lock()
+	defer c.callSequencesLock.Unlock()
+
+	// Add the sequence to the mutation chooser
+	c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice(sequence, mutationChooserWeight))
+	return nil
+}
+
+// IncrementValid increments the valid call sequences counter.
+func (c *Corpus) IncrementValid() {
+	c.validCallSequences.Add(1)
+}
+
+// ValidCallSequences returns the number of valid call sequences in the corpus.
+// Note that this value is only accurate right after corpus initialization.
+func (c *Corpus) ValidCallSequences() uint64 {
+	return c.validCallSequences.Load()
 }
 
 // UnexecutedCallSequence returns a call sequence loaded from disk which has not yet been returned by this method.
@@ -574,6 +509,10 @@ func (c *Corpus) Flush() error {
 // PruneSequences takes a chain.TestChain parameter used to run transactions.
 // It returns an int indicating the number of sequences removed from the corpus, and an error if any occurred.
 func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (int, error) {
+	if c.mutationTargetSequenceChooser == nil {
+		return 0, nil
+	}
+
 	chainOriginalIndex := uint64(len(chain.CommittedBlocks()))
 	tmpMap := coverage.NewCoverageMaps()
 

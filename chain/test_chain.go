@@ -499,7 +499,7 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions, as it
-// executed a transaction without committing any changes, instead discarding them.
+// executes a transaction without committing any changes, instead discarding them.
 // It takes an optional state argument, which is the state to execute the message over. If not provided, the
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.

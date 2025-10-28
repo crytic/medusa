@@ -65,7 +65,7 @@ func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
 		min = big.NewInt(0).Mul(max, big.NewInt(-1))
 		min.Sub(min, big.NewInt(1))
 	} else {
-		// Set minimum as 2^bitLen - 1
+		// Set maximum as 2^bitLen - 1
 		max = big.NewInt(2)
 		max.Exp(max, big.NewInt(int64(bitLength)), nil)
 		max.Sub(max, big.NewInt(1))

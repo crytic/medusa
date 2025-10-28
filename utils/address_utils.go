@@ -13,7 +13,7 @@ func HexStringToAddress(addressHexString string) (common.Address, error) {
 	// Remove the 0x prefix and decode the hex string into a byte array
 	trimmedString := strings.TrimPrefix(addressHexString, "0x")
 
-	// Pad the hex string with a 0 if its odd-length.
+	// Pad the hex string with a 0 if it's odd-length.
 	if len(trimmedString)%2 != 0 {
 		trimmedString = "0" + trimmedString
 	}
@@ -65,8 +65,16 @@ func TrimLeadingZeroesFromAddress(address common.Address) string {
 	hexString := address.String()
 	if strings.HasPrefix(hexString, "0x") {
 		// Retain "0x" and trim leading zeroes from the rest of the string
-		return "0x" + strings.TrimLeft(hexString[2:], "0")
+		trimmed := strings.TrimLeft(hexString[2:], "0")
+		if trimmed == "" {
+			return "0x0"
+		}
+		return "0x" + trimmed
 	}
 	// Trim leading zeroes if there's no "0x" prefix
-	return strings.TrimLeft(hexString, "0")
+	trimmed := strings.TrimLeft(hexString, "0")
+	if trimmed == "" {
+		return "0"
+	}
+	return trimmed
 }
