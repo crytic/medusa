@@ -262,8 +262,11 @@ func (g *CallSequenceGenerator) PopSequenceElement() (*calls.CallSequenceElement
 		}
 	}
 
-	// Update the element with the current nonce for the associated chain.
-	element.Call.FillFromTestChainProperties(g.worker.chain)
+	// Update the element with the current nonce for the associated chain only if we are not replaying a corpus sequence.
+	// TODO: This feels a little hacky
+	if !g.worker.fuzzer.corpus.InitializingCorpus() {
+		element.Call.FillFromTestChainProperties(g.worker.chain)
+	}
 
 	// Update our base sequence, advance our position, and return the processed element from this round.
 	g.baseSequence[g.fetchIndex] = element

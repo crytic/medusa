@@ -3,11 +3,12 @@ package corpus
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/crytic/medusa/utils"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/crytic/medusa/utils"
 )
 
 // corpusFile represents corpus data and its state on the filesystem.
@@ -176,7 +177,7 @@ func (cd *corpusDirectory[T]) writeFiles() error {
 			// Write the JSON encoded data.
 			err = os.WriteFile(filePath, jsonEncodedData, os.ModePerm)
 			if err != nil {
-				return fmt.Errorf("An error occurred while writing corpus data to file: %v\n", err)
+				return fmt.Errorf("an error occurred while writing corpus data to file: %v", err)
 			}
 
 			// Update our written to disk status.
