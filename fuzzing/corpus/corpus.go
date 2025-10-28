@@ -251,7 +251,7 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 
 	// Add all test results and call sequences to the unexecuted call sequences list
 	totalSequences := len(c.callSequenceFiles.files) + len(c.testResultSequenceFiles.files)
-	c.unexecutedCallSequences = make([]calls.CallSequence, totalSequences)
+	c.unexecutedCallSequences = make([]calls.CallSequence, 0, totalSequences)
 	for _, sequenceFileData := range c.testResultSequenceFiles.files {
 		c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequenceFileData.data)
 	}
