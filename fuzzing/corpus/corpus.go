@@ -19,7 +19,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/logging"
-	"github.com/crytic/medusa/logging/colors"
 	"github.com/crytic/medusa/utils"
 	"github.com/crytic/medusa/utils/randomutils"
 	"github.com/google/uuid"
@@ -282,100 +281,6 @@ func (c *Corpus) Initialize(baseTestChain *chain.TestChain, contractDefinitions 
 		})
 	}
 
-	return nil
-}
-
-// initializeSequences is a helper method for Initialize. It validates a list of call sequence files on a given
-// chain, using the map of deployed contracts (e.g. to check for non-existent method called, due to code changes).
-// Valid call sequences are added to the list of un-executed sequences the fuzzer should execute first.
-// If this sequence list being initialized is for use with mutations, it is added to the mutationTargetSequenceChooser.
-// Returns an error if one occurs.
-func (c *Corpus) initializeSequences(sequenceFiles *corpusDirectory[calls.CallSequence], testChain *chain.TestChain, deployedContracts map[common.Address]*contracts.Contract, useInMutations bool) error {
-	// Cache the base block index so that you can reset back to it after every sequence
-	baseBlockIndex := uint64(len(testChain.CommittedBlocks()))
-
-	// Loop for each sequence
-	var err error
-	for _, sequenceFileData := range sequenceFiles.files {
-		// Unwrap the underlying sequence.
-		sequence := sequenceFileData.data
-
-		// Define a variable to track whether we should disable this sequence (if it is no longer applicable in some
-		// way).
-		sequenceInvalidError := error(nil)
-		fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
-			// If we are at the end of our sequence, return nil indicating we should stop executing.
-			if currentIndex >= len(sequence) {
-				return nil, nil
-			}
-
-			// If we are deploying a contract and not targeting one with this call, there should be no work to do.
-			currentSequenceElement := sequence[currentIndex]
-			if currentSequenceElement.Call.To == nil {
-				return currentSequenceElement, nil
-			}
-
-			// We are calling a contract with this call, ensure we can resolve the contract call is targeting.
-			resolvedContract, resolvedContractExists := deployedContracts[*currentSequenceElement.Call.To]
-			if !resolvedContractExists {
-				sequenceInvalidError = fmt.Errorf("contract at address '%v' could not be resolved", currentSequenceElement.Call.To.String())
-				return nil, nil
-			}
-			currentSequenceElement.Contract = resolvedContract
-
-			// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
-			// sufficient for runtime use, until we use it to resolve runtime references.
-			callAbiValues := currentSequenceElement.Call.DataAbiValues
-			if callAbiValues != nil {
-				sequenceInvalidError = callAbiValues.Resolve(currentSequenceElement.Contract.CompiledContract().Abi)
-				if sequenceInvalidError != nil {
-					sequenceInvalidError = fmt.Errorf("error resolving method in contract '%v': %v", currentSequenceElement.Contract.Name(), sequenceInvalidError)
-					return nil, nil
-				}
-			}
-			return currentSequenceElement, nil
-		}
-
-		// Define actions to perform after executing each call in the sequence.
-		executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
-			// Grab the coverage maps for the last executed sequence element
-			lastExecutedSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
-			covMaps := coverage.GetCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
-
-			// Memory optimization: Remove the coverage maps from the message results
-			coverage.RemoveCoverageTracerResults(lastExecutedSequenceElement.ChainReference.MessageResults())
-
-			// Update the global coverage maps
-			_, covErr := c.coverageMaps.Update(covMaps)
-			if covErr != nil {
-				return true, covErr
-			}
-			return false, nil
-		}
-
-		// Execute each call sequence, populating runtime data and collecting coverage data along the way.
-		_, err = calls.ExecuteCallSequenceIteratively(testChain, fetchElementFunc, executionCheckFunc)
-
-		// If we failed to replay a sequence and measure coverage due to an unexpected error, report it.
-		if err != nil {
-			return fmt.Errorf("failed to initialize coverage maps from corpus, encountered an error while executing call sequence: %v", err)
-		}
-
-		// If the sequence was replayed successfully, we add it. If it was not, we exclude it with a warning.
-		if sequenceInvalidError == nil {
-			if useInMutations && c.mutationTargetSequenceChooser != nil {
-				c.mutationTargetSequenceChooser.AddChoices(randomutils.NewWeightedRandomChoice[calls.CallSequence](sequence, big.NewInt(1)))
-			}
-			c.unexecutedCallSequences = append(c.unexecutedCallSequences, sequence)
-		} else {
-			c.logger.Debug("Corpus item ", colors.Bold, sequenceFileData.fileName, colors.Reset, " disabled due to error when replaying it", sequenceInvalidError)
-		}
-
-		// Revert chain state to our starting point to test the next sequence.
-		if err := testChain.RevertToBlockIndex(baseBlockIndex); err != nil {
-			return fmt.Errorf("failed to reset the chain while seeding coverage: %v", err)
-		}
-	}
 	return nil
 }
 
