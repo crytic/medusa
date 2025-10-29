@@ -29,7 +29,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
 
-	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
@@ -456,17 +455,17 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(types.GenesisAlloc)
 
-	// Fund all of our sender addresses in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
+	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
-			Balance: initBalance,
+			Balance: new(big.Int).Set(initBalance),
 		}
 	}
 
 	// Fund our deployer address in the genesis block
 	genesisAlloc[f.deployer] = types.Account{
-		Balance: initBalance,
+		Balance: new(big.Int).Set(initBalance),
 	}
 
 	// Identify which contracts need to be predeployed to a deterministic address by iterating across the mapping
