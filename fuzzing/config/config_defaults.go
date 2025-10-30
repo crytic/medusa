@@ -39,7 +39,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 	// Create a project configuration
 	projectConfig := &ProjectConfig{
 		Fuzzing: FuzzingConfig{
-      Workers:                      10,
+			Workers:                      10,
 			WorkerResetLimit:             50,
 			Timeout:                      0,
 			TestLimit:                    0,

@@ -551,11 +551,25 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
 		targetContractBalances := make(map[string]*config.ContractBalance)
+		targetContractInitFunctions := make(map[string]string)
 
 		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
 			targetContracts[name] = true
 			if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
 				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
+			}
+
+			// Map init functions by contract name
+			if fuzzer.config.Fuzzing.UseInitFunctions {
+				initFunction := "" // Default: no initialization
+				if i < len(fuzzer.config.Fuzzing.TargetContractsInitFunctions) && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
+					// Use explicit per-contract config
+					initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+				} else if len(fuzzer.config.Fuzzing.TargetContractsInitFunctions) == 1 {
+					// If only one init function specified (like "setUp") apply it to all contracts
+					initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[0]
+				}
+				targetContractInitFunctions[name] = initFunction
 			}
 		}
 		// Add contracts from the deployment order
@@ -569,31 +583,37 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				} else {
 					balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
 				}
+				// Add init function for target contracts, empty for libraries/predeployed
+				if initFunc, ok := targetContractInitFunctions[name]; ok {
+					initFunctions = append(initFunctions, initFunc)
+				} else {
+					initFunctions = append(initFunctions, "")
+				}
 			}
 		}
 	} else {
 		contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
 		balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
-	}
 
-	// Process target contracts init functions
-	targetContractsCount := len(fuzzer.config.Fuzzing.TargetContracts)
-	initConfigCount := len(fuzzer.config.Fuzzing.TargetContractsInitFunctions)
+		// Process target contracts init functions
+		targetContractsCount := len(fuzzer.config.Fuzzing.TargetContracts)
+		initConfigCount := len(fuzzer.config.Fuzzing.TargetContractsInitFunctions)
 
-	// Add initialization functions for target contracts
-	for i := 0; i < targetContractsCount; i++ {
-		initFunction := "" // Default: no initialization
+		// Add initialization functions for target contracts
+		for i := 0; i < targetContractsCount; i++ {
+			initFunction := "" // Default: no initialization
 
-		if fuzzer.config.Fuzzing.UseInitFunctions {
-			if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
-				// Use explicit per-contract config
-				initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
-			} else if len(fuzzer.config.Fuzzing.TargetContractsInitFunctions) == 1 {
-				// If only one init function specified (like "setUp") apply it to all contracts
-				initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[0]
+			if fuzzer.config.Fuzzing.UseInitFunctions {
+				if i < initConfigCount && fuzzer.config.Fuzzing.TargetContractsInitFunctions[i] != "" {
+					// Use explicit per-contract config
+					initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[i]
+				} else if len(fuzzer.config.Fuzzing.TargetContractsInitFunctions) == 1 {
+					// If only one init function specified (like "setUp") apply it to all contracts
+					initFunction = fuzzer.config.Fuzzing.TargetContractsInitFunctions[0]
+				}
 			}
+			initFunctions = append(initFunctions, initFunction)
 		}
-		initFunctions = append(initFunctions, initFunction)
 	}
 
 	deployedContractAddr := make(map[string]common.Address)
@@ -706,7 +726,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						// Create and send the transaction
 						destAddr := contractAddr
 						msg := calls.NewCallMessage(fuzzer.deployer, &destAddr, 0, big.NewInt(0),
-							fuzzer.config.Fuzzing.BlockGasLimit, nil, nil, nil, callData)
+							blockGasLimit, nil, nil, nil, callData)
 						msg.FillFromTestChainProperties(testChain)
 
 						// Debug log after creating the message
