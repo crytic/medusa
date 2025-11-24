@@ -1,4 +1,4 @@
-name: vendorHash Check
+name: Nix
 
 on:
   pull_request:
@@ -9,10 +9,29 @@ on:
       - "go.sum"
 
 concurrency:
-  group: vendorhash-check-${{ github.ref }}
+  group: nix-check-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  nix-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - check-vendorhash
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+
+      - name: Build with Nix
+        run: nix build
+
   check-vendorhash:
     runs-on: ubuntu-latest
     timeout-minutes: 10
