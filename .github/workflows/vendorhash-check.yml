@@ -1,0 +1,120 @@
+name: vendorHash Check
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "go.mod"
+      - "go.sum"
+
+concurrency:
+  group: vendorhash-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-vendorhash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+
+      - name: Check vendorHash
+        id: check
+        run: |
+          # Read existing vendorHash from flake.nix
+          EXISTING_HASH=$(grep -oP 'vendorHash = "\K[^"]+' flake.nix)
+          echo "Existing vendorHash: $EXISTING_HASH"
+          echo "existing_hash=$EXISTING_HASH" >> "$GITHUB_OUTPUT"
+
+          # Replace vendorHash with pkgs.lib.fakeHash
+          sed -i 's|vendorHash = "[^"]*"|vendorHash = pkgs.lib.fakeHash|g' flake.nix
+
+          # Try to build and capture the error output
+          set +e
+          BUILD_OUTPUT=$(nix build 2>&1)
+          BUILD_EXIT=$?
+          set -e
+
+          # Extract the updated hash from the error message
+          if [ $BUILD_EXIT -ne 0 ]; then
+            UPDATED_HASH=$(echo "$BUILD_OUTPUT" | grep -oP 'got:\s+\K[^\s]+' | head -1)
+            if [ -z "$UPDATED_HASH" ]; then
+              echo "Error: Could not extract vendorHash from build output"
+              echo "Build output:"
+              echo "$BUILD_OUTPUT"
+              exit 1
+            fi
+            echo "Updated vendorHash: $UPDATED_HASH"
+            echo "updated_hash=$UPDATED_HASH" >> "$GITHUB_OUTPUT"
+
+            # Compare hashes
+            if [ "$EXISTING_HASH" != "$UPDATED_HASH" ]; then
+              echo "needs_update=true" >> "$GITHUB_OUTPUT"
+              echo "vendorHash is out of date!"
+              exit 0  # Don't fail yet, we'll fail after posting the comment
+            else
+              echo "needs_update=false" >> "$GITHUB_OUTPUT"
+              echo "vendorHash is up to date!"
+            fi
+          else
+            echo "Unexpected: nix build succeeded with lib.fakeHash"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post PR comment
+        if: steps.check.outputs.needs_update == 'true'
+        uses: actions/github-script@v7
+        env:
+          EXISTING_HASH: ${{ steps.check.outputs.existing_hash }}
+          UPDATED_HASH: ${{ steps.check.outputs.updated_hash }}
+        with:
+          script: |
+            const existingHash = process.env.EXISTING_HASH;
+            const updatedHash = process.env.UPDATED_HASH;
+
+            const body = `## \u26a0\ufe0f vendorHash Update Required
+
+            The Go dependencies have changed, but the \`vendorHash\` in \`flake.nix\` is out of date.
+
+            **Existing hash:**
+            \`\`\`
+            ${existingHash}
+            \`\`\`
+
+            **Updated hash:**
+            \`\`\`
+            ${updatedHash}
+            \`\`\`
+
+            **To fix this:**
+            Update line 22 in \`flake.nix\` with the updated hash above.
+
+            See the [Contributing Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/CONTRIBUTING.md#updating-go-dependencies) for more information.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+      - name: Fail if vendorHash is out of date
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          EXISTING_HASH: ${{ steps.check.outputs.existing_hash }}
+          UPDATED_HASH: ${{ steps.check.outputs.updated_hash }}
+        run: |
+          echo "vendorHash in flake.nix needs to be updated!"
+          echo "Existing: $EXISTING_HASH"
+          echo "Updated: $UPDATED_HASH"
+          exit 1
