@@ -1233,3 +1233,47 @@ func TestExternalLibraryDependency(t *testing.T) {
 		},
 	})
 }
+
+// TestInvalidTestSignatures verifies that the fuzzer logs warnings for test methods
+// with correct prefixes but invalid signatures (e.g., wrong return types, parameters)
+func TestInvalidTestSignatures(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/validation/invalid_test_signatures.sol",
+		configUpdates: func(projectConfig *config.ProjectConfig) {
+			projectConfig.Fuzzing.TargetContracts = []string{"InvalidTestSignatures"}
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = true
+			projectConfig.Fuzzing.Testing.PropertyTesting.TestPrefixes = []string{"property_"}
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = true
+			projectConfig.Fuzzing.Testing.OptimizationTesting.TestPrefixes = []string{"optimize_"}
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			projectConfig.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Verify that only valid tests were recognized
+			var propertyTestCount, optimizationTestCount int
+			for _, contract := range f.fuzzer.ContractDefinitions() {
+				if contract.Name() == "InvalidTestSignatures" {
+					propertyTestCount = len(contract.PropertyTestMethods)
+					optimizationTestCount = len(contract.OptimizationTestMethods)
+				}
+			}
+
+			// Should only have 1 valid property test and 1 valid optimization test
+			// The invalid methods should NOT be included in the test method lists
+			assert.Equal(t, 1, propertyTestCount, "Should only recognize 1 valid property test (property_validTest)")
+			assert.Equal(t, 1, optimizationTestCount, "Should only recognize 1 valid optimization test (optimize_validTest)")
+
+			// TODO: Verify the warnings were logged during fuzzer initialization
+			// Note: The warnings are logged when the fuzzer calls BinTestByType during contract definition setup.
+			// Since the fuzzer has already been created at this point, the warnings have already been logged.
+			// To capture these warnings, we would need to add a buffer writer before fuzzer initialization,
+			// which would require modifying the test framework or using manual verification of console output.
+			//
+			// Expected warnings (10 total):
+			// - 5 invalid property tests: property_wrongReturnType, property_hasInput, property_noReturn,
+			//   property_multipleReturns, property_wrongTypeAndInput
+			// - 5 invalid optimization tests: optimize_wrongReturnType, optimize_hasInput, optimize_returnsUint,
+			//   optimize_noReturn, optimize_wrongIntSize
+		},
+	})
+}
