@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 
@@ -1230,6 +1231,41 @@ func TestExternalLibraryDependency(t *testing.T) {
 			for _, expectedTraceMessage := range expectedTraceMessages {
 				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
 			}
+		},
+	})
+}
+
+// TestExternalProject allows you to debug Medusa on a full external project with Go debugging tools.
+//
+// Usage:
+//  1. Create a medusa.json in your external project directory (or use existing config)
+//  2. Set MEDUSA_DEBUG_PROJECT in your IDE's test configuration (GoLand: Run → Edit Configurations → Environment variables)
+//  3. Set breakpoints anywhere in Medusa code (e.g., fuzzer.go, coverage_maps.go, fuzzer_worker.go, etc.)
+//  4. Debug this test function
+//
+// The test will:
+//   - Load the project's medusa.json configuration
+//   - Compile the project using crytic-compile (runs in project directory)
+//   - Deploy contracts and start fuzzing
+//   - Stop at your breakpoints for inspection
+//
+// This eliminates the need for print statements and recompilation when debugging issues
+// that only reproduce on larger projects.
+func TestExternalProject(t *testing.T) {
+	projectPath := os.Getenv("MEDUSA_DEBUG_PROJECT")
+	if projectPath == "" {
+		t.Skip("Skipping external project test. Set MEDUSA_DEBUG_PROJECT=/path/to/project to enable.")
+	}
+
+	runFuzzerTest(t, &fuzzerProjectTest{
+		projectPath: projectPath,
+		configUpdates: func(config *config.ProjectConfig) {
+			// Optional: Add any config updates here to override settings from medusa.json
+			// Example: config.Fuzzing.TestLimit = 1000
+		},
+		method: func(ctx *fuzzerTestContext) {
+			err := ctx.fuzzer.Start()
+			assert.NoError(ctx.t, err)
 		},
 	})
 }

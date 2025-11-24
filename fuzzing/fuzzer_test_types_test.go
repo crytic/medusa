@@ -2,12 +2,13 @@ package fuzzing
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/compilation/platforms"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/utils/testutils"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 // fuzzerTest is an interface which is used to implement different test structures to invoke a test against the Fuzzer.
@@ -71,6 +72,45 @@ func (c *fuzzerSolcFileTest) run(t *testing.T) {
 
 			// Run our test case
 			executeFuzzerTestMethodInternal(t, projectConfig, c.method)
+		})
+	})
+}
+
+// fuzzerProjectTest describes a test to be run against the Fuzzer using a full external project.
+type fuzzerProjectTest struct {
+	// projectPath describes the path to the external project directory containing a medusa.json config file.
+	projectPath string
+
+	// configUpdates is an optional function which can be used to update the project configuration loaded
+	// from medusa.json, allowing for programmatic configuration adjustments during testing.
+	configUpdates func(config *config.ProjectConfig)
+
+	// method is the actual testing logic to execute once a Fuzzer has been created with the project configuration
+	// and the relevant testing context has been created.
+	method func(fc *fuzzerTestContext)
+}
+
+// run implements fuzzerTest.run for a full external project described by the fuzzerProjectTest.
+func (p *fuzzerProjectTest) run(t *testing.T) {
+	t.Run(p.projectPath, func(t *testing.T) {
+		// Print a status message
+		fmt.Printf("##############################################################\n")
+		fmt.Printf("Fuzzing external project '%s'...\n", p.projectPath)
+		fmt.Printf("##############################################################\n")
+
+		// Execute the test in the project directory
+		testutils.ExecuteInDirectory(t, p.projectPath, func() {
+			// Read the medusa.json configuration from the project directory
+			projectConfig, err := config.ReadProjectConfigFromFile("medusa.json", "crytic-compile")
+			assert.NoError(t, err)
+
+			// Apply any config updates provided for this test case
+			if p.configUpdates != nil {
+				p.configUpdates(projectConfig)
+			}
+
+			// Run our test case
+			executeFuzzerTestMethodInternal(t, projectConfig, p.method)
 		})
 	})
 }
