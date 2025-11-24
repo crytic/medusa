@@ -270,6 +270,26 @@ func (f *Fuzzer) DeployerAddress() common.Address {
 	return f.deployer
 }
 
+// Metrics exposes the underlying fuzzer metrics for TUI and monitoring
+func (f *Fuzzer) Metrics() *FuzzerMetrics {
+	return f.metrics
+}
+
+// Corpus exposes the underlying corpus for TUI and monitoring
+func (f *Fuzzer) Corpus() *corpus.Corpus {
+	return f.corpus
+}
+
+// Workers exposes the underlying workers for TUI and monitoring
+func (f *Fuzzer) Workers() []*FuzzerWorker {
+	return f.workers
+}
+
+// IsStopped returns true if the fuzzer has been stopped
+func (f *Fuzzer) IsStopped() bool {
+	return utils.CheckContextDone(f.ctx)
+}
+
 // isLibrary checks if a contract with the given name is a library
 func (f *Fuzzer) isLibrary(name string) bool {
 	for _, contract := range f.contractDefinitions {
@@ -957,8 +977,10 @@ func (f *Fuzzer) Start() error {
 	// Log the start of our fuzzing campaign.
 	f.logger.Info("Fuzzing with ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers")
 
-	// Start our printing loop now that we're about to begin fuzzing.
-	go f.printMetricsLoop()
+	// Start metrics loop only if TUI is not enabled (TUI will be started from cmd layer if enabled to avoid import cycle)
+	if !f.config.Fuzzing.EnableTUI {
+		go f.printMetricsLoop()
+	}
 
 	// Publish a fuzzer starting event.
 	err = f.Events.FuzzerStarting.Publish(FuzzerStartingEvent{Fuzzer: f})

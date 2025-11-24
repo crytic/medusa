@@ -84,6 +84,10 @@ func addFuzzFlags() error {
 
 	// Log level
 	fuzzCmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
+
+	// Enable TUI
+	fuzzCmd.Flags().Bool("tui", false, "enables the terminal user interface dashboard for real-time monitoring")
+
 	return nil
 }
 
@@ -273,6 +277,14 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 
 		projectConfig.Logging.Level = level
+	}
+
+	// Enable TUI
+	if cmd.Flags().Changed("tui") {
+		projectConfig.Fuzzing.EnableTUI, err = cmd.Flags().GetBool("tui")
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

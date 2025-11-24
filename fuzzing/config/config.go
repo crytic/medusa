@@ -115,6 +115,9 @@ type FuzzingConfig struct {
 
 	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
+
+	// EnableTUI enables the terminal user interface dashboard for real-time fuzzing monitoring
+	EnableTUI bool `json:"enableTUI"`
 }
 
 // ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling

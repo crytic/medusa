@@ -93,6 +93,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				},
 			},
 			TestChainConfig: *chainConfig,
+			EnableTUI:       false, // Disabled by default for backwards compatibility
 		},
 		Compilation: compilationConfig,
 		Slither:     slitherConfig,

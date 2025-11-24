@@ -64,6 +64,9 @@ type FuzzerWorker struct {
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
 
+	// activity tracks the current activity of this worker for monitoring and TUI display
+	activity *WorkerActivity
+
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
 }
@@ -98,6 +101,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
 		valueSet:                   valueSet,
+		activity:                   NewWorkerActivity(),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -113,6 +117,16 @@ func (fw *FuzzerWorker) WorkerIndex() int {
 // workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
 func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+}
+
+// WorkerMetrics returns the fuzzerWorkerMetrics for this specific worker (public accessor for TUI).
+func (fw *FuzzerWorker) WorkerMetrics() *fuzzerWorkerMetrics {
+	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+}
+
+// Activity returns the activity tracker for this worker, used for monitoring and TUI display
+func (fw *FuzzerWorker) Activity() *WorkerActivity {
+	return fw.activity
 }
 
 // Fuzzer returns the parent Fuzzer which spawned this FuzzerWorker.
@@ -321,6 +335,17 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		return nil, err
 	}
 
+	// Update activity tracking based on whether this is a new sequence or corpus replay
+	if !isNewSequence {
+		// Replaying corpus - we'll set the exact index later if needed
+		fw.activity.SetState(WorkerStateReplayingCorpus)
+	} else {
+		// Generating new sequence
+		fw.activity.SetState(WorkerStateGenerating)
+		// TODO: Track specific generation strategy (splice, mutate, etc.)
+		fw.activity.SetStrategy("New")
+	}
+
 	// Define our shrink requests we'll collect during execution.
 	shrinkCallSequenceRequests := make([]ShrinkCallSequenceRequest, 0)
 
@@ -392,9 +417,13 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// If we encountered an error, report it.
 	if err != nil {
-		// If a corpus element fails to execute, log it (in debug mode) and exit the function early
+		// If a corpus element fails to execute, log it and exit the function early
 		if !isNewSequence {
+			// Log at INFO level so users know why fuzzing might appear stalled (Issue #321)
+			fw.fuzzer.logger.Info("[Worker ", fw.workerIndex, "] Corpus entry failed during replay - this may cause temporary stall during shrinking. Error: ", err)
 			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] corpus element has been disabled due to an error:", err)
+			// Clear corpus replay state
+			fw.activity.ClearCorpusReplay()
 			return nil, nil
 		}
 		return nil, err
@@ -413,6 +442,8 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 			// We don't really want an error here to stop fuzzing, so we ignore it.
 			_ = fw.fuzzer.corpus.MarkCallSequenceForMutation(executedSequence, big.NewInt(1))
 		}
+		// Clear corpus replay state now that we're done
+		fw.activity.ClearCorpusReplay()
 	}
 
 	// We don't want to save shrink results from corpus sequences since we already did.
@@ -520,6 +551,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
+		// Update activity tracking to indicate shrinking
+		fw.activity.SetShrinking(0, int(shrinkLimit))
 		fw.fuzzer.logger.Info("[Worker ", fw.workerIndex, "] Shrinking call sequence for ", colors.GreenBold,
 			shrinkRequest.TestName, colors.Bold, " with ", len(shrinkRequest.CallSequenceToShrink), " call(s)")
 
@@ -547,6 +580,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
 				shrinkIteration++
+				// Update shrinking progress periodically (every 100 iterations to avoid overhead)
+				if shrinkIteration%100 == 0 {
+					fw.activity.SetShrinking(int(shrinkIteration), int(shrinkLimit))
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -581,6 +618,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)
 				shrinkIteration++
+				// Update shrinking progress periodically (every 100 iterations to avoid overhead)
+				if shrinkIteration%100 == 0 {
+					fw.activity.SetShrinking(int(shrinkIteration), int(shrinkLimit))
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -591,7 +632,10 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 				}
 			}
 		}
+		// Shrinking complete - clear activity state
 		fw.workerMetrics().shrinking = false
+		fw.activity.ClearShrinking()
+		fw.activity.SetState(WorkerStateIdle)
 	}
 
 	// If the shrink request wanted the sequence recorded in the corpus, do so now.

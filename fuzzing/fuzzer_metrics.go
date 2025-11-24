@@ -115,6 +115,36 @@ func (m *FuzzerMetrics) WorkersShrinkingCount() uint64 {
 	return shrinkingCount
 }
 
+// CallsTested returns the amount of calls this worker has tested.
+func (m *fuzzerWorkerMetrics) CallsTested() *big.Int {
+	return m.callsTested
+}
+
+// SequencesTested returns the amount of sequences this worker has tested.
+func (m *fuzzerWorkerMetrics) SequencesTested() *big.Int {
+	return m.sequencesTested
+}
+
+// FailedSequences returns the amount of failed sequences for this worker.
+func (m *fuzzerWorkerMetrics) FailedSequences() *big.Int {
+	return m.failedSequences
+}
+
+// GasUsed returns the total gas used by this worker.
+func (m *fuzzerWorkerMetrics) GasUsed() *big.Int {
+	return m.gasUsed
+}
+
+// WorkerStartupCount returns the number of times this worker has been started.
+func (m *fuzzerWorkerMetrics) WorkerStartupCount() *big.Int {
+	return m.workerStartupCount
+}
+
+// Shrinking returns whether this worker is currently shrinking.
+func (m *fuzzerWorkerMetrics) Shrinking() bool {
+	return m.shrinking
+}
+
 // updateRevertMetrics updates the revert metrics for the fuzzer worker based on the call sequence element.
 func (m *fuzzerWorkerMetrics) updateRevertMetrics(callSequenceElement *calls.CallSequenceElement) {
 	// The channel will be nil if revert metrics are not enabled

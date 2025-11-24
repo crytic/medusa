@@ -5,12 +5,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crytic/medusa/cmd/exitcodes"
-	"github.com/crytic/medusa/logging/colors"
-
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/tui"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -164,8 +166,30 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
+	// If TUI is enabled, launch it in a separate goroutine before starting fuzzer
+	var tuiProgram *tea.Program
+	if projectConfig.Fuzzing.EnableTUI {
+		tuiModel := tui.NewFuzzerTUI(fuzzer)
+		tuiProgram = tea.NewProgram(tuiModel, tea.WithAltScreen())
+
+		// Run TUI in background - it will handle its own lifecycle
+		go func() {
+			if _, err := tuiProgram.Run(); err != nil {
+				cmdLogger.Error("TUI encountered an error:", err)
+			}
+		}()
+	}
+
 	// Start the fuzzing process with our cancellable context.
 	fuzzErr = fuzzer.Start()
+
+	// If TUI was running, ensure it's fully stopped before logging
+	if tuiProgram != nil {
+		tuiProgram.Quit()
+		// Give TUI time to cleanly exit alternate screen
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	if fuzzErr != nil {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
