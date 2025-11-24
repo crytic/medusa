@@ -2,9 +2,11 @@
   description = "Medusa smart-contract fuzzer";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     utils.url = "github:numtide/flake-utils";
     crytic.url = "github:crytic/crytic.nix";
+    crytic.inputs.nixpkgs.follows = "nixpkgs";
+    crytic.inputs.utils.follows = "utils";
   };
 
   outputs = inputs: with inputs;
