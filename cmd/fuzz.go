@@ -5,13 +5,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crytic/medusa/cmd/exitcodes"
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/tui"
+	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -166,28 +166,30 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
-	// If TUI is enabled, launch it in a separate goroutine before starting fuzzer
-	var tuiProgram *tea.Program
+	// If TUI is enabled, launch it and let it run until user quits
+	var tuiErr error
 	if projectConfig.Fuzzing.EnableTUI {
 		tuiModel := tui.NewFuzzerTUI(fuzzer)
-		tuiProgram = tea.NewProgram(tuiModel, tea.WithAltScreen())
+		tuiProgram := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
-		// Run TUI in background - it will handle its own lifecycle
+		// Start fuzzer in background
 		go func() {
-			if _, err := tuiProgram.Run(); err != nil {
-				cmdLogger.Error("TUI encountered an error:", err)
-			}
+			fuzzErr = fuzzer.Start()
 		}()
-	}
 
-	// Start the fuzzing process with our cancellable context.
-	fuzzErr = fuzzer.Start()
+		// Run TUI in foreground - it blocks until user presses 'q'
+		// This allows user to see the failure screen before exiting
+		_, tuiErr = tuiProgram.Run()
+		if tuiErr != nil {
+			cmdLogger.Error("TUI encountered an error:", tuiErr)
+		}
 
-	// If TUI was running, ensure it's fully stopped before logging
-	if tuiProgram != nil {
-		tuiProgram.Quit()
-		// Give TUI time to cleanly exit alternate screen
-		time.Sleep(100 * time.Millisecond)
+		// Re-enable stdout logging now that TUI is done
+		// This allows final summary logs to be displayed
+		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+	} else {
+		// Start the fuzzing process normally if TUI is disabled
+		fuzzErr = fuzzer.Start()
 	}
 
 	if fuzzErr != nil {

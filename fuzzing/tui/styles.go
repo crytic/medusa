@@ -38,6 +38,13 @@ var workerBoxStyle = lipgloss.NewStyle().
 	Height(4).
 	MarginRight(1)
 
+// Focused box style (highlighted border)
+var focusedBoxStyle = lipgloss.NewStyle().
+	Border(lipgloss.ThickBorder()).
+	BorderForeground(colorPrimary).
+	Padding(1, 2).
+	MarginBottom(1)
+
 // Text styles
 var (
 	titleStyle = lipgloss.NewStyle().

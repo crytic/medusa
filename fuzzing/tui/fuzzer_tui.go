@@ -13,31 +13,50 @@ import (
 	"github.com/crytic/medusa/fuzzing"
 )
 
+// FocusedSection represents which section has focus for independent scrolling
+type FocusedSection int
+
+const (
+	FocusNone FocusedSection = iota
+	FocusTestCases
+	FocusWorkers
+)
+
 // FuzzerTUI is the bubbletea model for the fuzzer dashboard
 type FuzzerTUI struct {
-	fuzzer      *fuzzing.Fuzzer
-	startTime   time.Time
-	lastUpdate  time.Time
-	width       int
-	height      int
-	showDebug   bool
-	paused      bool
-	updateCount int
-	viewport    viewport.Model
-	ready       bool
+	fuzzer           *fuzzing.Fuzzer
+	startTime        time.Time
+	lastUpdate       time.Time
+	width            int
+	height           int
+	showDebug        bool
+	paused           bool
+	updateCount      int
+	viewport         viewport.Model
+	ready            bool
+	selectedTestIdx  int            // Index of selected failed test (-1 = none)
+	showingTrace     bool           // Whether we're showing the trace view
+	mouseEnabled     bool           // Whether mouse scrolling is enabled
+	focusedSection   FocusedSection // Which section has focus for independent scrolling
+	testCasesViewport viewport.Model // Independent viewport for test cases section
+	workersViewport   viewport.Model // Independent viewport for workers section
 }
 
 // NewFuzzerTUI creates a new TUI for the fuzzer
 func NewFuzzerTUI(fuzzer *fuzzing.Fuzzer) *FuzzerTUI {
 	return &FuzzerTUI{
-		fuzzer:      fuzzer,
-		startTime:   time.Now(),
-		lastUpdate:  time.Time{},
-		width:       80,
-		height:      24,
-		showDebug:   false,
-		paused:      false,
-		updateCount: 0,
+		fuzzer:          fuzzer,
+		startTime:       time.Now(),
+		lastUpdate:      time.Time{},
+		width:           80,
+		height:          24,
+		showDebug:       false,
+		paused:          false,
+		updateCount:     0,
+		selectedTestIdx: -1,
+		showingTrace:    false,
+		mouseEnabled:    true,        // Start with mouse enabled
+		focusedSection:  FocusNone,   // No section focused initially
 	}
 }
 
@@ -48,7 +67,6 @@ type tickMsg time.Time
 func (m FuzzerTUI) Init() tea.Cmd {
 	return tea.Batch(
 		tickCmd(),
-		tea.EnterAltScreen,
 	)
 }
 
@@ -62,13 +80,21 @@ func tickCmd() tea.Cmd {
 // Update handles messages and updates the model
 func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			// Stop fuzzing gracefully
-			m.fuzzer.Stop()
+			// If fuzzer is already stopped with failures, just quit TUI
+			// Otherwise, stop fuzzing first
+			if !m.fuzzer.IsStopped() {
+				m.fuzzer.Stop()
+				// Don't quit yet - let the user see the failure screen first
+				// The next render will show it, then they can press 'q' again to quit
+				return m, nil
+			}
+			// Fuzzer already stopped - quit TUI
 			return m, tea.Quit
 		case "p":
 			m.paused = !m.paused
@@ -76,24 +102,76 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			m.showDebug = !m.showDebug
 			return m, nil
+		case "m":
+			// Toggle mouse mode
+			m.mouseEnabled = !m.mouseEnabled
+			if m.mouseEnabled {
+				return m, tea.EnableMouseCellMotion
+			}
+			return m, tea.DisableMouse
+		case "f", "tab":
+			// Cycle through focused sections: None -> TestCases -> Workers -> None
+			if m.showingTrace {
+				return m, nil // Don't allow focus cycling in trace view
+			}
+			switch m.focusedSection {
+			case FocusNone:
+				m.focusedSection = FocusTestCases
+			case FocusTestCases:
+				m.focusedSection = FocusWorkers
+			case FocusWorkers:
+				m.focusedSection = FocusNone
+			}
+			return m, nil
 		case "up", "k":
-			if m.ready {
-				m.viewport.LineUp(1)
+			// If showing trace view, navigate between failed tests
+			if m.showingTrace {
+				failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+				if len(failedTests) > 0 {
+					m.selectedTestIdx--
+					if m.selectedTestIdx < 0 {
+						m.selectedTestIdx = len(failedTests) - 1
+					}
+					// Reset scroll position when changing tests
+					m.viewport.GotoTop()
+				}
+				return m, nil
 			}
-			return m, nil
+			// Fall through to let viewport handle scrolling
 		case "down", "j":
-			if m.ready {
-				m.viewport.LineDown(1)
+			// If showing trace view, navigate between failed tests
+			if m.showingTrace {
+				failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+				if len(failedTests) > 0 {
+					m.selectedTestIdx++
+					if m.selectedTestIdx >= len(failedTests) {
+						m.selectedTestIdx = 0
+					}
+					// Reset scroll position when changing tests
+					m.viewport.GotoTop()
+				}
+				return m, nil
+			}
+			// Fall through to let viewport handle scrolling
+		case "pgup", "pgdown":
+			// Let viewport handle page scrolling (falls through to viewport.Update)
+		case "enter", "t":
+			// Toggle trace view for failed tests
+			failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+			if len(failedTests) > 0 {
+				m.showingTrace = !m.showingTrace
+				if m.showingTrace && m.selectedTestIdx == -1 {
+					// Select first test when entering trace view
+					m.selectedTestIdx = 0
+				}
+				m.viewport.GotoTop()
 			}
 			return m, nil
-		case "pgup":
-			if m.ready {
-				m.viewport.ViewUp()
-			}
-			return m, nil
-		case "pgdown":
-			if m.ready {
-				m.viewport.ViewDown()
+		case "esc":
+			// Exit trace view
+			if m.showingTrace {
+				m.showingTrace = false
+				m.viewport.GotoTop()
 			}
 			return m, nil
 		}
@@ -102,29 +180,111 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Reserve space for header (2 lines) and footer (2 lines)
+		viewportHeight := msg.Height - 4
+		if viewportHeight < 1 {
+			viewportHeight = 1
+		}
+
 		if !m.ready {
-			// Reserve space for footer
-			m.viewport = viewport.New(msg.Width, msg.Height-2)
+			m.viewport = viewport.New(msg.Width, viewportHeight)
 			m.viewport.YPosition = 0
+
+			// Initialize focused section viewports
+			// Limit to reasonable height (not more than 1/2 viewport or 20 lines)
+			focusedHeight := viewportHeight / 2
+			if focusedHeight < 5 {
+				focusedHeight = 5
+			}
+			if focusedHeight > 20 {
+				focusedHeight = 20
+			}
+			m.testCasesViewport = viewport.New(msg.Width-4, focusedHeight)
+			m.workersViewport = viewport.New(msg.Width-4, focusedHeight)
+
 			m.ready = true
+
+			// Set initial content
+			var sections []string
+			sections = append(sections, m.renderGlobalStats())
+			sections = append(sections, m.renderTestCases())
+			sections = append(sections, m.renderWorkerStatus())
+			content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+			m.viewport.SetContent(content)
 		} else {
 			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height - 2
+			m.viewport.Height = viewportHeight
+
+			// Update focused viewport dimensions
+			// Limit to reasonable height (not more than 1/2 viewport or 20 lines)
+			focusedHeight := viewportHeight / 2
+			if focusedHeight < 5 {
+				focusedHeight = 5
+			}
+			if focusedHeight > 20 {
+				focusedHeight = 20
+			}
+			m.testCasesViewport.Width = msg.Width - 4
+			m.testCasesViewport.Height = focusedHeight
+			m.workersViewport.Width = msg.Width - 4
+			m.workersViewport.Height = focusedHeight
 		}
 		return m, nil
 
 	case tickMsg:
 		m.lastUpdate = time.Time(msg)
 		m.updateCount++
+
+		// Update viewport content when we receive a tick
+		// This is when content changes (fuzzer stats update)
+		if m.showingTrace {
+			// Update trace view content
+			m.updateTraceViewContent()
+		} else if m.fuzzer.IsStopped() {
+			// Update failure screen content
+			failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+			if len(failedTests) > 0 {
+				content := m.renderFailureScreen(failedTests)
+				m.viewport.SetContent(content)
+			}
+		} else {
+			// Update main dashboard content
+			if m.focusedSection == FocusNone {
+				// Normal mode: all sections in main viewport
+				var sections []string
+				sections = append(sections, m.renderGlobalStats())
+				sections = append(sections, m.renderTestCases())
+				sections = append(sections, m.renderWorkerStatus())
+				content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+				m.viewport.SetContent(content)
+			} else {
+				// Focused mode: update independent viewports
+				m.testCasesViewport.SetContent(m.renderTestCasesContent())
+				m.workersViewport.SetContent(m.renderWorkerStatusContent())
+			}
+		}
+
 		return m, tickCmd()
 	}
 
-	// Update viewport
-	if m.ready {
+	// Update viewport (handles scrolling)
+	if m.focusedSection == FocusNone {
+		// Normal mode: update main viewport
 		m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, cmd)
+	} else {
+		// Focused mode: only update the focused viewport
+		switch m.focusedSection {
+		case FocusTestCases:
+			m.testCasesViewport, cmd = m.testCasesViewport.Update(msg)
+			cmds = append(cmds, cmd)
+		case FocusWorkers:
+			m.workersViewport, cmd = m.workersViewport.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	}
 
-	return m, cmd
+	return m, tea.Batch(cmds...)
 }
 
 // View renders the TUI
@@ -133,38 +293,77 @@ func (m FuzzerTUI) View() string {
 		return "Initializing..."
 	}
 
+	// If showing trace view, render that instead
+	if m.showingTrace {
+		return m.renderTraceView()
+	}
+
 	// Check if fuzzing is done
 	if m.fuzzer.IsStopped() {
 		// Check if we stopped due to a test failure
 		failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
 		if len(failedTests) > 0 {
-			return m.renderFailureScreen(failedTests)
+			// Content was already set by tickMsg in Update()
+			return lipgloss.JoinVertical(lipgloss.Left,
+				headerStyle.Width(m.width).Render("FUZZING STOPPED - TEST FAILURE"),
+				m.viewport.View(),
+				footerStyle.Width(m.width).Render("↑/↓: Scroll | q: Quit (logs will print)"),
+			)
 		}
 		return m.renderExitScreen()
 	}
 
-	// Build content for viewport
-	var sections []string
-
 	// Header (not in viewport, stays at top)
 	header := m.renderHeader()
-
-	// Content sections (will be scrollable)
-	sections = append(sections, m.renderGlobalStats())
-	sections = append(sections, m.renderTestCases())
-	sections = append(sections, m.renderWorkerStatus())
-
-	// Set viewport content
-	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
-	m.viewport.SetContent(content)
 
 	// Footer (not in viewport, stays at bottom)
 	footer := m.renderFooter()
 
-	// Combine: header + viewport + footer
+	// Render based on focus mode
+	if m.focusedSection == FocusNone {
+		// Normal mode: all content in main viewport
+		// Content was already set by tickMsg in Update()
+		return lipgloss.JoinVertical(lipgloss.Left,
+			header,
+			m.viewport.View(),
+			footer,
+		)
+	}
+
+	// Focused mode: render sections with focused one in viewport
+	var content string
+	switch m.focusedSection {
+	case FocusTestCases:
+		// Render: stats (fixed) + focused test cases (scrollable) + workers (fixed)
+		focusedTestCases := focusedBoxStyle.Width(m.width - 2).Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				titleStyle.Render("Test Cases [FOCUSED - Press f/tab to unfocus]"),
+				m.testCasesViewport.View(),
+			),
+		)
+		content = lipgloss.JoinVertical(lipgloss.Left,
+			m.renderGlobalStats(),
+			focusedTestCases,
+			m.renderWorkerStatus(),
+		)
+	case FocusWorkers:
+		// Render: stats (fixed) + test cases (fixed) + focused workers (scrollable)
+		focusedWorkers := focusedBoxStyle.Width(m.width - 2).Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				titleStyle.Render("Worker Status [FOCUSED - Press f/tab to unfocus]"),
+				m.workersViewport.View(),
+			),
+		)
+		content = lipgloss.JoinVertical(lipgloss.Left,
+			m.renderGlobalStats(),
+			m.renderTestCases(),
+			focusedWorkers,
+		)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		m.viewport.View(),
+		content,
 		footer,
 	)
 }
@@ -180,8 +379,8 @@ func (m FuzzerTUI) renderHeader() string {
 
 // renderGlobalStats renders global fuzzing statistics
 func (m FuzzerTUI) renderGlobalStats() string {
-	// Dynamically set box width based on terminal width
-	boxWidth := m.width - 4
+	// Use full width minus small margin
+	boxWidth := m.width - 2
 	if boxWidth < 40 {
 		boxWidth = 40
 	}
@@ -300,8 +499,8 @@ func (m FuzzerTUI) renderGlobalStats() string {
 
 // renderTestCases renders test case status
 func (m FuzzerTUI) renderTestCases() string {
-	// Dynamically set box width based on terminal width
-	boxWidth := m.width - 4
+	// Use full width minus small margin
+	boxWidth := m.width - 2
 	if boxWidth < 40 {
 		boxWidth = 40
 	}
@@ -310,29 +509,167 @@ func (m FuzzerTUI) renderTestCases() string {
 	lines = append(lines, titleStyle.Render("Test Cases"))
 	lines = append(lines, "")
 
-	// Show failed tests
+	// Calculate max lines based on terminal height
+	// Reserve space for: header (3), global stats (~8), workers (~8), footer (2), margins (~4)
+	// Remaining space goes to test cases
+	reservedLines := 25
+	availableLines := m.height - reservedLines
+	if availableLines < 5 {
+		availableLines = 5 // Minimum 5 lines
+	}
+	if availableLines > 30 {
+		availableLines = 30 // Maximum 30 lines to prevent it from dominating
+	}
+
+	maxTestLines := availableLines
+	currentLines := 0
+
+	// Show failed tests (limited)
+	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	runningTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusRunning)
+	passedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusPassed)
+	totalTests := len(failedTests) + len(runningTests) + len(passedTests)
+
+	if len(failedTests) > 0 && currentLines < maxTestLines {
+		lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
+		currentLines++
+		for _, tc := range failedTests {
+			if currentLines >= maxTestLines {
+				break
+			}
+			lines = append(lines, fmt.Sprintf("  %s %s", errorStyle.Render("✗"), tc.Name()))
+			currentLines++
+			totalTests--
+		}
+		lines = append(lines, "")
+		currentLines++
+	}
+
+	// Show running tests (limited)
+	if len(runningTests) > 0 && currentLines < maxTestLines {
+		lines = append(lines, valueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
+		currentLines++
+		for _, tc := range runningTests {
+			if currentLines >= maxTestLines {
+				break
+			}
+			lines = append(lines, fmt.Sprintf("  %s %s", valueStyle.Render("⚡"), tc.Name()))
+			currentLines++
+			totalTests--
+		}
+		lines = append(lines, "")
+		currentLines++
+	}
+
+	// Show passed tests count
+	if len(passedTests) > 0 && currentLines < maxTestLines {
+		lines = append(lines, fmt.Sprintf("%s %d tests passed", valueStyle.Render("✓"), len(passedTests)))
+	}
+
+	// If no test info to show, show a message
+	if len(failedTests) == 0 && len(runningTests) == 0 && len(passedTests) == 0 {
+		lines = append(lines, mutedStyle.Render("No test results yet..."))
+	} else if currentLines >= maxTestLines {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  ... and %d more (press f to focus)", totalTests)))
+	}
+
+	content := strings.Join(lines, "\n")
+	return boxStyle.Width(boxWidth).Render(content)
+}
+
+// renderWorkerStatus renders individual worker status
+func (m FuzzerTUI) renderWorkerStatus() string {
+	// Use full width minus small margin
+	boxWidth := m.width - 2
+	if boxWidth < 40 {
+		boxWidth = 40
+	}
+
+	workers := m.fuzzer.Workers()
+
+	var lines []string
+	lines = append(lines, titleStyle.Render("Worker Status"))
+	lines = append(lines, "")
+
+	// Determine workers per row based on terminal width
+	// Start with a reasonable fixed width that looks good
+	baseWorkerWidth := 30 // includes content + borders + margins
+
+	workersPerRow := m.width / baseWorkerWidth
+	if workersPerRow < 1 {
+		workersPerRow = 1
+	}
+	if workersPerRow > 5 {
+		workersPerRow = 5 // Cap at 5 for readability
+	}
+
+	// Calculate max rows based on terminal height
+	// Reserve space for: header (3), global stats (~8), test cases (~variable), footer (2), margins (~4)
+	// Each worker row takes ~6 lines (including borders/spacing)
+	reservedLines := 25
+	availableLines := m.height - reservedLines
+	if availableLines < 6 {
+		availableLines = 6 // Minimum 1 row of workers
+	}
+	maxRows := availableLines / 6
+	if maxRows < 1 {
+		maxRows = 1 // Always show at least 1 row
+	}
+	if maxRows > 6 {
+		maxRows = 6 // Maximum 6 rows
+	}
+
+	// Use fixed width - it's simpler and looks better
+	workerBoxWidth := 24
+
+	totalRows := (len(workers) + workersPerRow - 1) / workersPerRow
+	displayRows := totalRows
+	if displayRows > maxRows {
+		displayRows = maxRows
+	}
+
+	for row := 0; row < displayRows; row++ {
+		i := row * workersPerRow
+		var rowBoxes []string
+		for j := 0; j < workersPerRow && i+j < len(workers); j++ {
+			workerIndex := i + j
+			rowBoxes = append(rowBoxes, m.renderWorkerBox(workerIndex, workers[workerIndex], workerBoxWidth))
+		}
+		rowStr := lipgloss.JoinHorizontal(lipgloss.Top, rowBoxes...)
+		lines = append(lines, rowStr)
+	}
+
+	// Show "more workers" message if truncated
+	if totalRows > maxRows {
+		remainingWorkers := len(workers) - (displayRows * workersPerRow)
+		lines = append(lines, "")
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("... and %d more workers (press f to focus)", remainingWorkers)))
+	}
+
+	content := strings.Join(lines, "\n")
+	return boxStyle.Width(boxWidth).Render(content)
+}
+
+// renderTestCasesContent returns just the content for test cases (no box wrapper)
+// Used when test cases section is focused
+func (m FuzzerTUI) renderTestCasesContent() string {
+	var lines []string
+
+	// Show failed tests (no limit - scrolling allows viewing all)
 	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
 	if len(failedTests) > 0 {
 		lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
-		for i, tc := range failedTests {
-			if i >= 5 { // Limit to 5 most recent
-				lines = append(lines, mutedStyle.Render(fmt.Sprintf("  ... and %d more", len(failedTests)-5)))
-				break
-			}
+		for _, tc := range failedTests {
 			lines = append(lines, fmt.Sprintf("  %s %s", errorStyle.Render("✗"), tc.Name()))
 		}
 		lines = append(lines, "")
 	}
 
-	// Show running tests
+	// Show running tests (no limit - scrolling allows viewing all)
 	runningTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusRunning)
 	if len(runningTests) > 0 {
 		lines = append(lines, valueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
-		for i, tc := range runningTests {
-			if i >= 3 {
-				lines = append(lines, mutedStyle.Render(fmt.Sprintf("  ... and %d more", len(runningTests)-3)))
-				break
-			}
+		for _, tc := range runningTests {
 			lines = append(lines, fmt.Sprintf("  %s %s", valueStyle.Render("⚡"), tc.Name()))
 		}
 		lines = append(lines, "")
@@ -349,42 +686,44 @@ func (m FuzzerTUI) renderTestCases() string {
 		lines = append(lines, mutedStyle.Render("No test results yet..."))
 	}
 
-	content := strings.Join(lines, "\n")
-	return boxStyle.Width(boxWidth).Render(content)
+	return strings.Join(lines, "\n")
 }
 
-// renderWorkerStatus renders individual worker status
-func (m FuzzerTUI) renderWorkerStatus() string {
-	// Dynamically set box width based on terminal width
-	boxWidth := m.width - 4
-	if boxWidth < 40 {
-		boxWidth = 40
-	}
-
+// renderWorkerStatusContent returns just the content for worker status (no box wrapper)
+// Used when workers section is focused
+func (m FuzzerTUI) renderWorkerStatusContent() string {
 	workers := m.fuzzer.Workers()
 
 	var lines []string
-	lines = append(lines, titleStyle.Render("Worker Status"))
-	lines = append(lines, "")
 
-	// Render workers in rows of 3
-	workersPerRow := 3
+	// Determine workers per row based on terminal width
+	baseWorkerWidth := 30
+	workersPerRow := m.width / baseWorkerWidth
+	if workersPerRow < 1 {
+		workersPerRow = 1
+	}
+	if workersPerRow > 5 {
+		workersPerRow = 5
+	}
+
+	// Use fixed width
+	workerBoxWidth := 24
+
 	for i := 0; i < len(workers); i += workersPerRow {
 		var rowBoxes []string
 		for j := 0; j < workersPerRow && i+j < len(workers); j++ {
 			workerIndex := i + j
-			rowBoxes = append(rowBoxes, m.renderWorkerBox(workerIndex, workers[workerIndex]))
+			rowBoxes = append(rowBoxes, m.renderWorkerBox(workerIndex, workers[workerIndex], workerBoxWidth))
 		}
 		row := lipgloss.JoinHorizontal(lipgloss.Top, rowBoxes...)
 		lines = append(lines, row)
 	}
 
-	content := strings.Join(lines, "\n")
-	return boxStyle.Width(boxWidth).Render(content)
+	return strings.Join(lines, "\n")
 }
 
 // renderWorkerBox renders a single worker's status box
-func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker) string {
+func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker, width int) string {
 	// Get worker activity snapshot
 	activity := worker.Activity().Snapshot()
 
@@ -401,12 +740,16 @@ func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker) stri
 	line1 := fmt.Sprintf("%s %s", icon, stateStyle.Render(stateStr))
 
 	var line2 string
+	progressBarWidth := width - 4 // Leave room for padding
+	if progressBarWidth < 10 {
+		progressBarWidth = 10
+	}
 	if activity.State.String() == "Shrinking" && activity.ShrinkLimit > 0 {
 		// Show progress bar for shrinking
 		progress := activity.ShrinkProgress()
-		line2 = renderProgressBar(progress, 18)
+		line2 = renderProgressBar(progress, progressBarWidth)
 	} else if activity.Strategy != "" {
-		line2 = truncateString(activity.Strategy, 20)
+		line2 = truncateString(activity.Strategy, width-4)
 	} else {
 		line2 = ""
 	}
@@ -424,7 +767,10 @@ func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker) stri
 	contentLines = append(contentLines, mutedStyle.Render(line4))
 
 	content := strings.Join(contentLines, "\n")
-	return workerBoxStyle.Render(content)
+
+	// Create responsive worker box style
+	responsiveWorkerBoxStyle := workerBoxStyle.Width(width)
+	return responsiveWorkerBoxStyle.Render(content)
 }
 
 // renderFooter renders the footer with help text
@@ -438,7 +784,35 @@ func (m FuzzerTUI) renderFooter() string {
 		}
 	}
 
-	helpText := fmt.Sprintf("↑/↓: Scroll | q: Quit | p: Pause | d: Debug%s", scrollInfo)
+	// Show mouse mode status
+	mouseInfo := ""
+	if !m.mouseEnabled {
+		mouseInfo = " | Mouse: OFF"
+	}
+
+	// Show focus mode status
+	focusInfo := ""
+	switch m.focusedSection {
+	case FocusTestCases:
+		focusInfo = " | Focused: Test Cases"
+	case FocusWorkers:
+		focusInfo = " | Focused: Workers"
+	}
+
+	var helpText string
+	if m.showingTrace {
+		// Trace view controls
+		helpText = fmt.Sprintf("↑/↓: Next/Prev Test | PgUp/PgDn: Scroll Trace | Esc/t: Exit Trace | m: Mouse | q: Quit%s%s", scrollInfo, mouseInfo)
+	} else {
+		// Normal controls
+		failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+		if len(failedTests) > 0 {
+			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section | t/Enter: View Traces | m: Mouse | q: Quit%s%s%s", scrollInfo, mouseInfo, focusInfo)
+		} else {
+			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section | m: Mouse | q: Quit | p: Pause | d: Debug%s%s%s", scrollInfo, mouseInfo, focusInfo)
+		}
+	}
+
 	return footerStyle.Width(m.width).Render(helpText)
 }
 
@@ -446,10 +820,7 @@ func (m FuzzerTUI) renderFooter() string {
 func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 	var lines []string
 
-	lines = append(lines, headerStyle.Width(m.width).Render("FUZZING STOPPED - TEST FAILURE"))
-	lines = append(lines, "")
-
-	// Show failed test information
+	// Show failed test information with full traces
 	lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
 	lines = append(lines, "")
 
@@ -459,20 +830,43 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 			break
 		}
 
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("  ✗ %s", tc.Name())))
+		lines = append(lines, errorStyle.Render(fmt.Sprintf("✗ %s", tc.Name())))
+		lines = append(lines, "")
 
-		// Get a short summary of the failure (first line only)
+		// Show full message which includes call sequence and execution trace
 		message := tc.Message()
 		messageLines := strings.Split(message, "\n")
-		if len(messageLines) > 0 && messageLines[0] != "" {
-			// Truncate long messages
-			summary := messageLines[0]
-			if len(summary) > 80 {
-				summary = summary[:77] + "..."
+
+		skipFirstName := false
+		for _, line := range messageLines {
+			// Skip the status line (e.g., "[FAILED] Property Test: ...")
+			if strings.HasPrefix(strings.TrimSpace(line), "[") && strings.Contains(line, tc.Name()) {
+				skipFirstName = true
+				continue
 			}
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("    %s", summary)))
+
+			// Add all other lines with indentation for readability
+			if strings.TrimSpace(line) != "" {
+				lines = append(lines, "  "+line)
+			} else if skipFirstName {
+				// Allow empty lines after we've started showing content
+				lines = append(lines, "")
+			}
 		}
+
 		lines = append(lines, "")
+		// Add separator between test failures
+		if i < len(failedTests)-1 && i < 9 {
+			separatorWidth := m.width - 4
+			if separatorWidth > 80 {
+				separatorWidth = 80
+			}
+			if separatorWidth < 20 {
+				separatorWidth = 20
+			}
+			lines = append(lines, mutedStyle.Render(strings.Repeat("─", separatorWidth)))
+			lines = append(lines, "")
+		}
 	}
 
 	// Final statistics
@@ -480,15 +874,87 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 	callsTested := m.fuzzer.Metrics().CallsTested()
 	sequencesTested := m.fuzzer.Metrics().SequencesTested()
 
+	lines = append(lines, "")
 	lines = append(lines, titleStyle.Render("Campaign Statistics:"))
 	lines = append(lines, "")
 	lines = append(lines, fmt.Sprintf("  Total Time: %s", formatDuration(elapsed)))
 	lines = append(lines, fmt.Sprintf("  Calls Tested: %s", formatNumber(callsTested)))
 	lines = append(lines, fmt.Sprintf("  Sequences Tested: %s", formatNumber(sequencesTested)))
-	lines = append(lines, "")
-	lines = append(lines, warningStyle.Render("Press 'q' to quit and see detailed logs"))
 
 	return strings.Join(lines, "\n")
+}
+
+// renderTraceView renders the detailed trace view for a selected failed test
+// updateTraceViewContent updates the viewport content for trace view
+// This should be called from Update() when content changes, not from View()
+func (m *FuzzerTUI) updateTraceViewContent() {
+	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	if len(failedTests) == 0 {
+		m.viewport.SetContent("No failed tests to display")
+		return
+	}
+
+	// Ensure selected index is valid
+	if m.selectedTestIdx < 0 || m.selectedTestIdx >= len(failedTests) {
+		m.selectedTestIdx = 0
+	}
+
+	selectedTest := failedTests[m.selectedTestIdx]
+
+	// Get the full trace message
+	message := selectedTest.Message()
+	messageLines := strings.Split(message, "\n")
+
+	var lines []string
+	skipFirstName := false
+	for _, line := range messageLines {
+		// Skip the status line (e.g., "[FAILED] Property Test: ...")
+		if strings.HasPrefix(strings.TrimSpace(line), "[") && strings.Contains(line, selectedTest.Name()) {
+			skipFirstName = true
+			continue
+		}
+
+		// Add all other lines
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		} else if skipFirstName {
+			// Allow empty lines after we've started showing content
+			lines = append(lines, "")
+		}
+	}
+
+	content := strings.Join(lines, "\n")
+	m.viewport.SetContent(content)
+}
+
+func (m FuzzerTUI) renderTraceView() string {
+	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	if len(failedTests) == 0 {
+		return "No failed tests to display"
+	}
+
+	// Ensure selected index is valid
+	if m.selectedTestIdx < 0 || m.selectedTestIdx >= len(failedTests) {
+		m.selectedTestIdx = 0
+	}
+
+	selectedTest := failedTests[m.selectedTestIdx]
+
+	// Build header showing which test we're viewing
+	header := headerStyle.Width(m.width).Render(
+		fmt.Sprintf("TEST TRACE (%d/%d): %s", m.selectedTestIdx+1, len(failedTests), selectedTest.Name()),
+	)
+
+	// Footer
+	footer := m.renderFooter()
+
+	// Content was already set by updateTraceViewContent() in Update()
+	// Combine: header + viewport + footer
+	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		m.viewport.View(),
+		footer,
+	)
 }
 
 // renderExitScreen renders the exit summary

@@ -131,7 +131,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create the global logger and add stdout as an unstructured output stream
 	// Note that we are not using the project config's log level because we have not validated it yet
 	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
-	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
+
+	// Only add stdout writer if TUI is not enabled (TUI conflicts with stdout logging)
+	if !config.Fuzzing.EnableTUI {
+		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
+	}
 
 	// If the log directory is a non-empty string, create a file for unstructured, un-colorized file logging
 	if config.Logging.LogDirectory != "" {
