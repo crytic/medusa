@@ -31,6 +31,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -348,8 +349,14 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	// Retrieve the compilation target for slither
 	target := platformConfig.GetTarget()
 
+	// Extract solc version if using crytic-compile platform
+	var solcVersion string
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		solcVersion = cryticConfig.SolcVersion
+	}
+
 	// Run slither and handle errors
-	slitherResults, err := f.config.Slither.RunSlither(target)
+	slitherResults, err := f.config.Slither.RunSlither(target, solcVersion)
 	if err != nil || slitherResults == nil {
 		if err != nil {
 			f.logger.Warn("Failed to run slither", err)
