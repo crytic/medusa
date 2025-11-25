@@ -21,7 +21,7 @@ func IsOptimizationTest(method abi.Method, prefixes []string) (bool, string) {
 			}
 			// Has prefix but invalid signature
 			expectedSig := method.Name + "() " + method.StateMutability + " returns (int256)"
-			return false, fmt.Sprintf("has signature '%s' but optimization tests expect '%s'", method.String(), expectedSig)
+			return false, fmt.Sprintf("has signature '%s' but optimization testing provider expects '%s'", method.String(), expectedSig)
 		}
 	}
 	return false, ""
@@ -40,7 +40,7 @@ func IsPropertyTest(method abi.Method, prefixes []string) (bool, string) {
 			}
 			// Has prefix but invalid signature
 			expectedSig := method.Name + "() " + method.StateMutability + " returns (bool)"
-			return false, fmt.Sprintf("has signature '%s' but property tests expect '%s'", method.String(), expectedSig)
+			return false, fmt.Sprintf("has signature '%s' but property testing provider expects '%s'", method.String(), expectedSig)
 		}
 	}
 	return false, ""
