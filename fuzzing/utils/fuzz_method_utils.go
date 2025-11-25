@@ -60,7 +60,6 @@ func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPref
 		}
 		if propertyWarning != "" {
 			warnings = append(warnings, fmt.Sprintf("method '%s' %s", method.Name, propertyWarning))
-			continue
 		}
 
 		// Check if it's an optimization test
@@ -71,7 +70,6 @@ func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPref
 		}
 		if optimizationWarning != "" {
 			warnings = append(warnings, fmt.Sprintf("method '%s' %s", method.Name, optimizationWarning))
-			continue
 		}
 
 		// Not a property or optimization test, check if it's an assertion test
