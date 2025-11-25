@@ -8,8 +8,8 @@ import (
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 )
 
-// CoverageMaps represents a data structure used to identify instruction execution coverage of various smart contracts
-// across a transaction or multiple transactions.
+// CoverageMaps represents a data structure used to identify branch coverage of various smart contracts
+// across a transaction or multiple transactions. Branch coverage includes jumps, returns, reverts, and contract entrance.
 type CoverageMaps struct {
 	// maps represents a structure used to track every ContractCoverageMap by a given deployed address/lookup hash.
 	maps map[common.Hash]map[common.Address]*ContractCoverageMap
