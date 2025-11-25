@@ -190,11 +190,6 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
 
-	// Set log buffer on fuzzer for reference
-	if projectConfig.Fuzzing.EnableTUI {
-		fuzzer.SetLogBuffer(logBuffer)
-	}
-
 	// Stop our fuzzing on keyboard interrupts
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)

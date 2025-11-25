@@ -107,9 +107,6 @@ type Fuzzer struct {
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
 
-	// logBuffer optionally stores logs for TUI display (only when TUI is enabled)
-	logBuffer interface{} // Type is *tui.LogBufferWriter but we avoid import cycle
-
 	// lastPCsLogMsg records the last time we logged total PCs hit.
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
@@ -298,16 +295,6 @@ func (f *Fuzzer) Corpus() *corpus.Corpus {
 // Workers exposes the underlying workers for TUI and monitoring
 func (f *Fuzzer) Workers() []*FuzzerWorker {
 	return f.workers
-}
-
-// LogBuffer returns the log buffer used for TUI display (if set)
-func (f *Fuzzer) LogBuffer() interface{} {
-	return f.logBuffer
-}
-
-// SetLogBuffer sets the log buffer for TUI display
-func (f *Fuzzer) SetLogBuffer(logBuffer interface{}) {
-	f.logBuffer = logBuffer
 }
 
 // IsStopped returns true if the fuzzer has been stopped
