@@ -1,11 +1,11 @@
 package rpc
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/crytic/medusa-geth/rpc"
-	"golang.org/x/net/context"
 )
 
 const maxRetries = 3
