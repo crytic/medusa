@@ -23,3 +23,9 @@ The logging configuration defines the parameters for logging to console and/or f
 - **Type**: Boolean
 - **Description**: Disables colored output to console.
 - **Default**: `false`
+
+### `enableTUI`
+
+- **Type**: Boolean
+- **Description**: Whether to enable the Terminal User Interface (TUI) for an interactive fuzzing experience. The TUI provides real-time visualization of fuzzing progress, worker status, test results, and interactive trace viewing. See the [--tui flag documentation](../cli/fuzz.md#--tui) for keyboard controls and features.
+- **Default**: `false`

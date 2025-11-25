@@ -191,7 +191,7 @@ medusa fuzz --log-level debug
 
 ### `--tui`
 
-The `--tui` flag enables the Terminal User Interface (TUI) mode for an interactive fuzzing experience (equivalent to [`fuzzing.enableTUI`](../project_configuration/fuzzing_config.md#enabletui)).
+The `--tui` flag enables the Terminal User Interface (TUI) mode for an interactive fuzzing experience (equivalent to [`logging.enableTUI`](../project_configuration/logging_config.md#enabletui)).
 
 The TUI provides:
 

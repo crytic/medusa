@@ -131,7 +131,7 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create or configure the global logger
 	// Note: GlobalLogger is initialized in logging/init.go with Disabled level and no writers
 
-	if config.Fuzzing.EnableTUI {
+	if config.Logging.EnableTUI {
 		// TUI mode: GlobalLogger was already created by cmd layer with log buffer
 		// Just update the log level
 		logging.GlobalLogger.SetLevel(config.Logging.Level)
@@ -990,7 +990,7 @@ func (f *Fuzzer) Start() error {
 	f.logger.Info("Fuzzing with ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers")
 
 	// Start metrics loop only if TUI is not enabled (TUI will be started from cmd layer if enabled to avoid import cycle)
-	if !f.config.Fuzzing.EnableTUI {
+	if !f.config.Logging.EnableTUI {
 		go f.printMetricsLoop()
 	} else {
 		// When TUI is enabled, we still need to monitor the test limit

@@ -281,7 +281,7 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Enable TUI
 	if cmd.Flags().Changed("tui") {
-		projectConfig.Fuzzing.EnableTUI, err = cmd.Flags().GetBool("tui")
+		projectConfig.Logging.EnableTUI, err = cmd.Flags().GetBool("tui")
 		if err != nil {
 			return err
 		}

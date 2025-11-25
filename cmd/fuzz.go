@@ -156,7 +156,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 
 	// Create log buffer if TUI is enabled
 	var logBuffer *tui.LogBufferWriter
-	if projectConfig.Fuzzing.EnableTUI {
+	if projectConfig.Logging.EnableTUI {
 		logBuffer = tui.NewLogBufferWriter(5000) // 5000 entry capacity
 
 		// Create GlobalLogger and add log buffer BEFORE creating fuzzer
@@ -170,7 +170,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
 		// If fuzzer creation failed and TUI was enabled, we need to show the error
-		if projectConfig.Fuzzing.EnableTUI && logBuffer != nil {
+		if projectConfig.Logging.EnableTUI && logBuffer != nil {
 			// Add stdout writer
 			logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
 
@@ -199,7 +199,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Branch: TUI vs Non-TUI mode
-	if projectConfig.Fuzzing.EnableTUI {
+	if projectConfig.Logging.EnableTUI {
 		errChan := make(chan error, 1)
 		tuiModel := tui.NewFuzzerTUIWithErrChan(fuzzer, errChan)
 		tuiModel.SetLogBuffer(logBuffer)

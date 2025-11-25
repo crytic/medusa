@@ -115,9 +115,6 @@ type FuzzingConfig struct {
 
 	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
-
-	// EnableTUI enables the terminal user interface dashboard for real-time fuzzing monitoring
-	EnableTUI bool `json:"enableTUI"`
 }
 
 // ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling
@@ -340,6 +337,9 @@ type LoggingConfig struct {
 
 	// NoColor indicates whether log messages should be displayed with colored formatting.
 	NoColor bool `json:"noColor"`
+
+	// EnableTUI enables the terminal user interface dashboard for real-time fuzzing monitoring
+	EnableTUI bool `json:"enableTUI"`
 }
 
 // ConsoleLoggingConfig describes the configuration options for logging to console. Note that this not being used right now
