@@ -350,6 +350,7 @@ func TestConsoleLog(t *testing.T) {
 			filePath: filePath,
 			configUpdates: func(config *config.ProjectConfig) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TargetContractsInitFunctions = []string{"testConsoleLog"}
 				config.Fuzzing.TestLimit = 10000
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
@@ -511,6 +512,52 @@ func TestDeploymentsWithPayableConstructors(t *testing.T) {
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, false)
 			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestInitializationFunctions runs a test to ensure initialization functions work both with and without arguments
+func TestInitializationWithParam(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/deployments/deploy_with_init_fns.sol",
+		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.EnableInitFunctions([]string{"initWithParam"})
+			// Just a single contract
+			pkgConfig.Fuzzing.TargetContracts = []string{"SimpleInitParamTest"}
+
+			// With zero balance
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{
+				{Int: *big.NewInt(0)},
+			}
+
+			// Initialization function with a parameter
+			pkgConfig.Fuzzing.TargetContractsInitFunctions = []string{"initWithParam"}
+
+			// Create the initialization args map if it doesn't exist
+			if pkgConfig.Fuzzing.InitializationArgs == nil {
+				pkgConfig.Fuzzing.InitializationArgs = make(map[string]map[string]any)
+			}
+
+			// Specify the parameter value - must match the exact parameter name
+			pkgConfig.Fuzzing.InitializationArgs["SimpleInitParamTest"] = map[string]any{
+				"_value": "42",
+			}
+
+			// Enable property testing
+			pkgConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			pkgConfig.Fuzzing.TestLimit = 10
+			pkgConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			pkgConfig.Slither.UseSlither = false
+
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			assertFailedTestsExpected(f, false)
+
 		},
 	})
 }
@@ -698,7 +745,7 @@ func TestTestingScope(t *testing.T) {
 // TestDeploymentsWithArgs runs tests to ensure contracts deployed with config provided constructor arguments are
 // deployed as expected. It expects all properties should fail (indicating values provided were set accordingly).
 func TestDeploymentsWithArgs(t *testing.T) {
-	// This contract deploys a contract with specific constructor arguments. Property tests will fail if they are
+	// This contract deploys a contract with specific constructor arguments as well as init functions with arguments. Property tests will fail if they are
 	// set correctly.
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deployment_with_args.sol",
@@ -717,6 +764,16 @@ func TestDeploymentsWithArgs(t *testing.T) {
 					"_deployed": "DeployedContract:DeploymentWithArgs",
 				},
 			}
+			config.Fuzzing.TargetContractsInitFunctions = []string{"dummyFunction", "dummyFunction"} // this should execute predefined functions in the respective contracts
+			config.Fuzzing.InitializationArgs = map[string]map[string]any{
+				"DeploymentWithArgs": {
+					"a": "100", // argument for DeploymentWithArgs.dummyFunction
+				},
+				"Dependent": {
+					"a": "200", // argument for Dependent.dummyFunction
+				},
+			}
+
 			config.Fuzzing.Testing.StopOnFailedTest = false
 			config.Fuzzing.TestLimit = 500 // this test should expose a failure quickly.
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
