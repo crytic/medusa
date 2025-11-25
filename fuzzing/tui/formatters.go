@@ -106,19 +106,3 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
-
-// padRight pads a string to the right to reach width
-func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-len(s))
-}
-
-// padLeft pads a string to the left to reach width
-func padLeft(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return strings.Repeat(" ", width-len(s)) + s
-}

@@ -30,16 +30,20 @@ type FuzzerTUI struct {
 	width            int
 	height           int
 	showDebug        bool
-	paused           bool
 	updateCount      int
 	viewport         viewport.Model
 	ready            bool
 	selectedTestIdx  int            // Index of selected failed test (-1 = none)
 	showingTrace     bool           // Whether we're showing the trace view
+	showingLogs      bool           // Whether we're showing the log view
 	mouseEnabled     bool           // Whether mouse scrolling is enabled
 	focusedSection   FocusedSection // Which section has focus for independent scrolling
 	testCasesViewport viewport.Model // Independent viewport for test cases section
 	workersViewport   viewport.Model // Independent viewport for workers section
+	logsViewport      viewport.Model // Independent viewport for logs section
+	errChan          <-chan error   // Channel to receive fuzzer errors
+	fuzzErr          error          // Stores fuzzer error when it occurs
+	logBuffer        *LogBufferWriter // Buffer for capturing logs
 }
 
 // NewFuzzerTUI creates a new TUI for the fuzzer
@@ -51,13 +55,34 @@ func NewFuzzerTUI(fuzzer *fuzzing.Fuzzer) *FuzzerTUI {
 		width:           80,
 		height:          24,
 		showDebug:       false,
-		paused:          false,
 		updateCount:     0,
 		selectedTestIdx: -1,
 		showingTrace:    false,
+		showingLogs:     false,
 		mouseEnabled:    true,        // Start with mouse enabled
 		focusedSection:  FocusNone,   // No section focused initially
+		errChan:         nil,         // No error channel by default
+		fuzzErr:         nil,
+		logBuffer:       nil,         // No log buffer by default
 	}
+}
+
+// NewFuzzerTUIWithErrChan creates a new TUI for the fuzzer with an error channel
+// The error channel allows the TUI to detect when the fuzzer stops with an error in real-time
+func NewFuzzerTUIWithErrChan(fuzzer *fuzzing.Fuzzer, errChan <-chan error) *FuzzerTUI {
+	tui := NewFuzzerTUI(fuzzer)
+	tui.errChan = errChan
+	return tui
+}
+
+// SetLogBuffer sets the log buffer for the TUI
+func (m *FuzzerTUI) SetLogBuffer(logBuffer *LogBufferWriter) {
+	m.logBuffer = logBuffer
+}
+
+// FuzzErr returns the fuzzer error if one was received
+func (m FuzzerTUI) FuzzErr() error {
+	return m.fuzzErr
 }
 
 // Messages for the bubbletea update loop
@@ -96,9 +121,6 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Fuzzer already stopped - quit TUI
 			return m, tea.Quit
-		case "p":
-			m.paused = !m.paused
-			return m, nil
 		case "d":
 			m.showDebug = !m.showDebug
 			return m, nil
@@ -168,10 +190,27 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "esc":
-			// Exit trace view
+			// Exit trace view or log view
 			if m.showingTrace {
 				m.showingTrace = false
 				m.viewport.GotoTop()
+			} else if m.showingLogs {
+				m.showingLogs = false
+				m.viewport.GotoTop()
+			}
+			return m, nil
+		case "l":
+			// Toggle log view
+			if m.logBuffer != nil {
+				m.showingLogs = !m.showingLogs
+				if m.showingLogs {
+					// Entering log view - update content
+					m.updateLogViewContent()
+					m.logsViewport.GotoBottom() // Start at bottom (most recent logs)
+				} else {
+					// Exiting log view
+					m.viewport.GotoTop()
+				}
 			}
 			return m, nil
 		}
@@ -201,6 +240,7 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.testCasesViewport = viewport.New(msg.Width-4, focusedHeight)
 			m.workersViewport = viewport.New(msg.Width-4, focusedHeight)
+			m.logsViewport = viewport.New(msg.Width, viewportHeight)
 
 			m.ready = true
 
@@ -228,6 +268,8 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.testCasesViewport.Height = focusedHeight
 			m.workersViewport.Width = msg.Width - 4
 			m.workersViewport.Height = focusedHeight
+			m.logsViewport.Width = msg.Width
+			m.logsViewport.Height = viewportHeight
 		}
 		return m, nil
 
@@ -235,11 +277,25 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastUpdate = time.Time(msg)
 		m.updateCount++
 
+		// Non-blocking check for fuzzer error
+		if m.errChan != nil {
+			select {
+			case err := <-m.errChan:
+				m.fuzzErr = err
+				// Fuzzer has stopped - the error will be displayed in View()
+			default:
+				// No error yet, continue normal operation
+			}
+		}
+
 		// Update viewport content when we receive a tick
 		// This is when content changes (fuzzer stats update)
 		if m.showingTrace {
 			// Update trace view content
 			m.updateTraceViewContent()
+		} else if m.showingLogs {
+			// Update log view content
+			m.updateLogViewContent()
 		} else if m.fuzzer.IsStopped() {
 			// Update failure screen content
 			failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
@@ -268,7 +324,11 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update viewport (handles scrolling)
-	if m.focusedSection == FocusNone {
+	if m.showingLogs {
+		// Log view mode: update logs viewport
+		m.logsViewport, cmd = m.logsViewport.Update(msg)
+		cmds = append(cmds, cmd)
+	} else if m.focusedSection == FocusNone {
 		// Normal mode: update main viewport
 		m.viewport, cmd = m.viewport.Update(msg)
 		cmds = append(cmds, cmd)
@@ -293,9 +353,19 @@ func (m FuzzerTUI) View() string {
 		return "Initializing..."
 	}
 
+	// Check if fuzzer encountered an error
+	if m.fuzzErr != nil {
+		return m.renderErrorScreen()
+	}
+
 	// If showing trace view, render that instead
 	if m.showingTrace {
 		return m.renderTraceView()
+	}
+
+	// If showing log view, render that instead
+	if m.showingLogs {
+		return m.renderLogView()
 	}
 
 	// Check if fuzzing is done
@@ -371,9 +441,6 @@ func (m FuzzerTUI) View() string {
 // renderHeader renders the dashboard header
 func (m FuzzerTUI) renderHeader() string {
 	header := "MEDUSA FUZZING DASHBOARD"
-	if m.paused {
-		header += " [PAUSED]"
-	}
 	return headerStyle.Width(m.width).Render(header)
 }
 
@@ -385,11 +452,21 @@ func (m FuzzerTUI) renderGlobalStats() string {
 		boxWidth = 40
 	}
 
-	// Get metrics
+	// Get metrics (with nil checks)
 	elapsed := time.Since(m.startTime)
-	callsTested := m.fuzzer.Metrics().CallsTested()
-	sequencesTested := m.fuzzer.Metrics().SequencesTested()
-	failedSequences := m.fuzzer.Metrics().FailedSequences()
+	callsTested := big.NewInt(0)
+	sequencesTested := big.NewInt(0)
+	failedSequences := big.NewInt(0)
+	gasUsed := big.NewInt(0)
+	shrinkingWorkers := uint64(0)
+
+	if metrics := m.fuzzer.Metrics(); metrics != nil {
+		callsTested = metrics.CallsTested()
+		sequencesTested = metrics.SequencesTested()
+		failedSequences = metrics.FailedSequences()
+		gasUsed = metrics.GasUsed()
+		shrinkingWorkers = metrics.WorkersShrinkingCount()
+	}
 
 	// Get coverage metrics (with nil checks)
 	branches := uint64(0)
@@ -405,8 +482,6 @@ func (m FuzzerTUI) renderGlobalStats() string {
 		corpusSize = uint64(corpus.ActiveMutableSequenceCount())
 	}
 
-	gasUsed := m.fuzzer.Metrics().GasUsed()
-
 	// Calculate rates
 	seconds := elapsed.Seconds()
 	callsPerSec := uint64(0)
@@ -420,7 +495,6 @@ func (m FuzzerTUI) renderGlobalStats() string {
 
 	// Get worker counts
 	totalWorkers := len(m.fuzzer.Workers())
-	shrinkingWorkers := m.fuzzer.Metrics().WorkersShrinkingCount()
 	activeWorkers := 0
 	for _, worker := range m.fuzzer.Workers() {
 		if worker.Activity().Snapshot().IsActive() {
@@ -803,13 +877,20 @@ func (m FuzzerTUI) renderFooter() string {
 	if m.showingTrace {
 		// Trace view controls
 		helpText = fmt.Sprintf("↑/↓: Next/Prev Test | PgUp/PgDn: Scroll Trace | Esc/t: Exit Trace | m: Mouse | q: Quit%s%s", scrollInfo, mouseInfo)
+	} else if m.showingLogs {
+		// Log view controls
+		helpText = fmt.Sprintf("↑/↓: Scroll Logs | Esc/l: Exit Logs | m: Mouse | q: Quit%s%s", scrollInfo, mouseInfo)
 	} else {
 		// Normal controls
 		failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+		logControls := ""
+		if m.logBuffer != nil {
+			logControls = " | l: Logs"
+		}
 		if len(failedTests) > 0 {
-			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section | t/Enter: View Traces | m: Mouse | q: Quit%s%s%s", scrollInfo, mouseInfo, focusInfo)
+			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section | t/Enter: View Traces%s | m: Mouse | q: Quit%s%s%s", logControls, scrollInfo, mouseInfo, focusInfo)
 		} else {
-			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section | m: Mouse | q: Quit | p: Pause | d: Debug%s%s%s", scrollInfo, mouseInfo, focusInfo)
+			helpText = fmt.Sprintf("↑/↓: Scroll | f/Tab: Focus Section%s | m: Mouse | q: Quit | d: Debug%s%s%s", logControls, scrollInfo, mouseInfo, focusInfo)
 		}
 	}
 
@@ -825,11 +906,6 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 	lines = append(lines, "")
 
 	for i, tc := range failedTests {
-		if i >= 10 { // Limit to first 10 failures
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("... and %d more failures", len(failedTests)-10)))
-			break
-		}
-
 		lines = append(lines, errorStyle.Render(fmt.Sprintf("✗ %s", tc.Name())))
 		lines = append(lines, "")
 
@@ -856,7 +932,7 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 
 		lines = append(lines, "")
 		// Add separator between test failures
-		if i < len(failedTests)-1 && i < 9 {
+		if i < len(failedTests)-1 {
 			separatorWidth := m.width - 4
 			if separatorWidth > 80 {
 				separatorWidth = 80
@@ -871,8 +947,12 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 
 	// Final statistics
 	elapsed := time.Since(m.startTime)
-	callsTested := m.fuzzer.Metrics().CallsTested()
-	sequencesTested := m.fuzzer.Metrics().SequencesTested()
+	callsTested := big.NewInt(0)
+	sequencesTested := big.NewInt(0)
+	if metrics := m.fuzzer.Metrics(); metrics != nil {
+		callsTested = metrics.CallsTested()
+		sequencesTested = metrics.SequencesTested()
+	}
 
 	lines = append(lines, "")
 	lines = append(lines, titleStyle.Render("Campaign Statistics:"))
@@ -966,9 +1046,14 @@ func (m FuzzerTUI) renderExitScreen() string {
 
 	// Final statistics
 	elapsed := time.Since(m.startTime)
-	callsTested := m.fuzzer.Metrics().CallsTested()
-	sequencesTested := m.fuzzer.Metrics().SequencesTested()
-	failedSequences := m.fuzzer.Metrics().FailedSequences()
+	callsTested := big.NewInt(0)
+	sequencesTested := big.NewInt(0)
+	failedSequences := big.NewInt(0)
+	if metrics := m.fuzzer.Metrics(); metrics != nil {
+		callsTested = metrics.CallsTested()
+		sequencesTested = metrics.SequencesTested()
+		failedSequences = metrics.FailedSequences()
+	}
 
 	// Get coverage with nil checks
 	branches := uint64(0)
@@ -991,11 +1076,93 @@ func (m FuzzerTUI) renderExitScreen() string {
 	return strings.Join(lines, "\n")
 }
 
+// updateLogViewContent updates the viewport content for log view
+// This should be called from Update() when content changes, not from View()
+func (m *FuzzerTUI) updateLogViewContent() {
+	if m.logBuffer == nil {
+		m.logsViewport.SetContent("No logs available")
+		return
+	}
+
+	// Get all log entries
+	entries := m.logBuffer.GetAllEntries()
+	if len(entries) == 0 {
+		m.logsViewport.SetContent("No logs yet...")
+		return
+	}
+
+	// Format log entries
+	var lines []string
+	for _, entry := range entries {
+		// Format timestamp
+		timestamp := entry.Timestamp.Format("15:04:05.000")
+
+		// Clean up the message (remove trailing newlines)
+		message := strings.TrimRight(entry.Message, "\n")
+
+		// Format: [timestamp] message
+		line := fmt.Sprintf("[%s] %s", mutedStyle.Render(timestamp), message)
+		lines = append(lines, line)
+	}
+
+	content := strings.Join(lines, "\n")
+	m.logsViewport.SetContent(content)
+}
+
+// renderLogView renders the log view
+func (m FuzzerTUI) renderLogView() string {
+	if m.logBuffer == nil {
+		return "No log buffer available"
+	}
+
+	// Build header showing log count
+	logCount := m.logBuffer.Count()
+	header := headerStyle.Width(m.width).Render(
+		fmt.Sprintf("LOGS (%d entries)", logCount),
+	)
+
+	// Footer
+	footer := m.renderFooter()
+
+	// Content was already set by updateLogViewContent() in Update()
+	// Combine: header + viewport + footer
+	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		m.logsViewport.View(),
+		footer,
+	)
+}
+
+// renderErrorScreen renders an error screen when the fuzzer encounters a fatal error
+func (m FuzzerTUI) renderErrorScreen() string {
+	header := headerStyle.Width(m.width).Render("FUZZER ERROR")
+
+	var lines []string
+	lines = append(lines, "")
+	lines = append(lines, errorStyle.Render("The fuzzer encountered an error and has stopped:"))
+	lines = append(lines, "")
+
+	// Display the error message
+	if m.fuzzErr != nil {
+		errorLines := strings.Split(m.fuzzErr.Error(), "\n")
+		for _, line := range errorLines {
+			lines = append(lines, "  "+line)
+		}
+	} else {
+		lines = append(lines, "  Unknown error")
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, mutedStyle.Render("Press 'q' to exit. The error details will be printed to the console."))
+
+	content := strings.Join(lines, "\n")
+	footer := footerStyle.Width(m.width).Render("q: Quit")
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
+}
+
 // getFuzzerStatus returns the current fuzzer status string
 func (m FuzzerTUI) getFuzzerStatus() string {
-	if m.paused {
-		return warningStyle.Render("PAUSED")
-	}
 	if corpus := m.fuzzer.Corpus(); corpus != nil && corpus.InitializingCorpus() {
 		return warningStyle.Render("INITIALIZING")
 	}

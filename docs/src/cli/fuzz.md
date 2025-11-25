@@ -188,3 +188,29 @@ The `--log-level` flag sets which level of log messages will be displayed (trace
 # Enable debug log messages
 medusa fuzz --log-level debug
 ```
+
+### `--tui`
+
+The `--tui` flag enables the Terminal User Interface (TUI) mode for an interactive fuzzing experience (equivalent to [`fuzzing.enableTUI`](../project_configuration/fuzzing_config.md#enabletui)).
+
+The TUI provides:
+- Real-time fuzzing statistics and worker status
+- Live test case monitoring
+- Interactive trace viewing for failed tests (press `t` or `Enter`)
+- Scrollable log viewer (press `l`)
+- Mouse and keyboard navigation support
+
+**Keyboard Controls:**
+- `↑/↓` or `j/k` - Scroll content
+- `PgUp/PgDn` - Page up/down
+- `Home/End` - Jump to top/bottom
+- `t` or `Enter` - View test failure traces
+- `l` - Toggle log viewer
+- `f` or `Tab` - Focus sections (test cases/workers)
+- `m` - Toggle mouse support
+- `q` - Quit TUI
+
+```shell
+# Enable TUI mode
+medusa fuzz --tui
+```

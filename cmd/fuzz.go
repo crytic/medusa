@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crytic/medusa/cmd/exitcodes"
@@ -152,10 +154,45 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
 	}
 
-	// Create our fuzzer
-	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
+	// Create log buffer if TUI is enabled
+	var logBuffer *tui.LogBufferWriter
+	if projectConfig.Fuzzing.EnableTUI {
+		logBuffer = tui.NewLogBufferWriter(5000) // 5000 entry capacity
+
+		// Create GlobalLogger and add log buffer BEFORE creating fuzzer
+		// This ensures NewFuzzer won't recreate the logger and lose our buffer
+		logging.GlobalLogger = logging.NewLogger(projectConfig.Logging.Level)
+		// Use colors in log buffer unless NoColor is set (same as stdout behavior)
+		logging.GlobalLogger.AddWriter(logBuffer, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+	}
+
+	// Create fuzzer (will use existing GlobalLogger if TUI enabled, or create new one if not)
+	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig, logBuffer)
 	if fuzzErr != nil {
+		// If fuzzer creation failed and TUI was enabled, we need to show the error
+		if projectConfig.Fuzzing.EnableTUI && logBuffer != nil {
+			// Add stdout writer
+			logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+
+			// Dump all buffered logs to stdout so user can see what went wrong
+			// (e.g., compilation errors that were logged to buffer)
+			fmt.Fprintln(os.Stderr, "\nFuzzer initialization failed. Log history:")
+			fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
+			entries := logBuffer.GetAllEntries()
+			for _, entry := range entries {
+				fmt.Fprintf(os.Stderr, "[%s] %s", entry.Timestamp.Format("15:04:05"), entry.Message)
+				if !strings.HasSuffix(entry.Message, "\n") {
+					fmt.Fprintln(os.Stderr)
+				}
+			}
+			fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
+		}
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
+	}
+
+	// Set log buffer on fuzzer for reference
+	if projectConfig.Fuzzing.EnableTUI {
+		fuzzer.SetLogBuffer(logBuffer)
 	}
 
 	// Stop our fuzzing on keyboard interrupts
@@ -166,29 +203,45 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
-	// If TUI is enabled, launch it and let it run until user quits
-	var tuiErr error
+	// Branch: TUI vs Non-TUI mode
 	if projectConfig.Fuzzing.EnableTUI {
-		tuiModel := tui.NewFuzzerTUI(fuzzer)
+		errChan := make(chan error, 1)
+		tuiModel := tui.NewFuzzerTUIWithErrChan(fuzzer, errChan)
+		tuiModel.SetLogBuffer(logBuffer)
 		tuiProgram := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 		// Start fuzzer in background
 		go func() {
-			fuzzErr = fuzzer.Start()
+			errChan <- fuzzer.Start()
 		}()
 
 		// Run TUI in foreground - it blocks until user presses 'q'
-		// This allows user to see the failure screen before exiting
-		_, tuiErr = tuiProgram.Run()
+		// When it returns, the terminal has been restored to normal mode
+		finalModel, tuiErr := tuiProgram.Run()
+
+		// Now that TUI has fully exited and terminal is restored, re-enable stdout logging
+		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+
 		if tuiErr != nil {
 			cmdLogger.Error("TUI encountered an error:", tuiErr)
 		}
 
-		// Re-enable stdout logging now that TUI is done
-		// This allows final summary logs to be displayed
-		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+		// Check if the TUI already consumed the fuzzer error
+		if tuiModel, ok := finalModel.(tui.FuzzerTUI); ok {
+			if tuiModel.FuzzErr() != nil {
+				fuzzErr = tuiModel.FuzzErr()
+			} else {
+				// TUI didn't get the error yet, read from channel with short timeout
+				select {
+				case fuzzErr = <-errChan:
+					// Got the error from the channel
+				case <-time.After(5 * time.Second):
+					// Timeout - fuzzer is taking a while to finish
+				}
+			}
+		}
 	} else {
-		// Start the fuzzing process normally if TUI is disabled
+		// Non-TUI mode: start fuzzing normally
 		fuzzErr = fuzzer.Start()
 	}
 

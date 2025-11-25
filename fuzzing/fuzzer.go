@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"math/rand"
 	"os"
@@ -107,6 +108,9 @@ type Fuzzer struct {
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
 
+	// logBuffer optionally stores logs for TUI display (only when TUI is enabled)
+	logBuffer interface{} // Type is *tui.LogBufferWriter but we avoid import cycle
+
 	// lastPCsLogMsg records the last time we logged total PCs hit.
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
@@ -122,18 +126,23 @@ const blockGasLimit = 0x0FFFFFFFFFFFFFFF
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
-func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
+func NewFuzzer(config config.ProjectConfig, tuiLogWriter io.Writer) (*Fuzzer, error) {
 	// Disable colors if requested
 	if config.Logging.NoColor {
 		colors.DisableColor()
 	}
 
-	// Create the global logger and add stdout as an unstructured output stream
-	// Note that we are not using the project config's log level because we have not validated it yet
-	logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
+	// Create or configure the global logger
+	// Note: GlobalLogger is initialized in logging/init.go with Disabled level and no writers
 
-	// Only add stdout writer if TUI is not enabled (TUI conflicts with stdout logging)
-	if !config.Fuzzing.EnableTUI {
+	if config.Fuzzing.EnableTUI {
+		// TUI mode: GlobalLogger was already created by cmd layer with log buffer
+		// Just update the log level
+		logging.GlobalLogger.SetLevel(config.Logging.Level)
+	} else {
+		// Non-TUI mode: Need to set up stdout logging
+		// Recreate GlobalLogger to start fresh (clear any previous state from init())
+		logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
 		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !config.Logging.NoColor)
 	}
 
@@ -157,8 +166,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
-	// Update the log level of the global logger now
-	logging.GlobalLogger.SetLevel(config.Logging.Level)
+	// Update the log level of the global logger now (if it wasn't already set above)
+	// This handles the case where GlobalLogger was nil and we created it
+	if logging.GlobalLogger != nil {
+		logging.GlobalLogger.SetLevel(config.Logging.Level)
+	}
 
 	// Get the fuzzer's custom sub-logger
 	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
@@ -287,6 +299,16 @@ func (f *Fuzzer) Corpus() *corpus.Corpus {
 // Workers exposes the underlying workers for TUI and monitoring
 func (f *Fuzzer) Workers() []*FuzzerWorker {
 	return f.workers
+}
+
+// LogBuffer returns the log buffer used for TUI display (if set)
+func (f *Fuzzer) LogBuffer() interface{} {
+	return f.logBuffer
+}
+
+// SetLogBuffer sets the log buffer for TUI display
+func (f *Fuzzer) SetLogBuffer(logBuffer interface{}) {
+	f.logBuffer = logBuffer
 }
 
 // IsStopped returns true if the fuzzer has been stopped
@@ -984,6 +1006,9 @@ func (f *Fuzzer) Start() error {
 	// Start metrics loop only if TUI is not enabled (TUI will be started from cmd layer if enabled to avoid import cycle)
 	if !f.config.Fuzzing.EnableTUI {
 		go f.printMetricsLoop()
+	} else {
+		// When TUI is enabled, we still need to monitor the test limit
+		go f.monitorTestLimit()
 	}
 
 	// Publish a fuzzer starting event.
@@ -1133,6 +1158,36 @@ func (f *Fuzzer) monitorCorpusInitialization() {
 
 		// Now we can exit the goroutine
 		break
+	}
+}
+
+// monitorTestLimit monitors the test limit and stops the fuzzer when it's reached.
+// This is used when TUI is enabled, since printMetricsLoop is not running.
+func (f *Fuzzer) monitorTestLimit() {
+	// Check if test limit is configured
+	testLimit := f.config.Fuzzing.TestLimit
+	if testLimit == 0 {
+		// No test limit set, nothing to monitor
+		return
+	}
+
+	// Poll every 3 seconds (same as printMetricsLoop)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for !utils.CheckContextDone(f.ctx) {
+		select {
+		case <-ticker.C:
+			// Check if we've reached the test limit
+			callsTested := f.metrics.CallsTested()
+			if !callsTested.IsUint64() || callsTested.Uint64() >= testLimit {
+				f.logger.Info("Transaction test limit reached, halting now...")
+				f.Stop()
+				return
+			}
+		case <-f.ctx.Done():
+			return
+		}
 	}
 }
 

@@ -53,6 +53,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   Enabling coverage allows for improved code exploration.
 - **Default**: `true`
 
+### `enableTUI`
+
+- **Type**: Boolean
+- **Description**: Whether to enable the Terminal User Interface (TUI) for an interactive fuzzing experience. The TUI provides real-time visualization of fuzzing progress, worker status, test results, and interactive trace viewing. See the [--tui flag documentation](../cli/fuzz.md#--tui) for keyboard controls and features.
+- **Default**: `false`
+
 ### `pruneFrequency`
 
 - **Type**: Integer
