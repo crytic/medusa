@@ -112,6 +112,10 @@ type Fuzzer struct {
 	// and only when debug logging is enabled.
 	lastPCsLogMsg   time.Time
 	deploymentOrder []string
+
+	// deployedLibraries tracks library names to their deployed addresses from the base test chain.
+	// This is used to link contract bytecode before coverage analysis.
+	deployedLibraries map[string]common.Address
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -631,6 +635,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
+
+	// Save the deployed contract addresses (including libraries) for later use in coverage analysis
+	fuzzer.deployedLibraries = deployedContractAddr
+
 	return nil, nil
 }
 
@@ -1017,6 +1025,24 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
+
+		// Link all contracts with library dependencies before coverage analysis.
+		// This ensures that contracts deployed indirectly (e.g., via Solidity's `new` keyword)
+		// have their bytecode properly linked for coverage tracking.
+		if len(f.deployedLibraries) > 0 {
+			for i := range f.compilations {
+				for sourcePath, sourceArtifact := range f.compilations[i].SourcePathToArtifact {
+					for contractName, contract := range sourceArtifact.Contracts {
+						if len(contract.LibraryPlaceholders) > 0 {
+							contract.LinkBytecodes(contractName, f.deployedLibraries)
+							sourceArtifact.Contracts[contractName] = contract
+						}
+					}
+					f.compilations[i].SourcePathToArtifact[sourcePath] = sourceArtifact
+				}
+			}
+		}
+
 		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.config.Fuzzing.CoverageExclusions, f.logger)
 
 		if err != nil {
