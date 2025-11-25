@@ -507,20 +507,20 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *log
 		op := vm.OpCode(bytecode[pc])                                                         // Used only for checks below
 		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for checks below
 		if hit+enterCount < hit {
-			logger.Warn("WARNING: Overflow while generating coverage report, during `hit += enterCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf("WARNING: Overflow while generating coverage report, during `hit += enterCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if hit+enterCount < revertCount {
-			logger.Warn("WARNING: Underflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf("WARNING: Underflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if hit+enterCount < allLeaveCount {
-			logger.Warn("WARNING: Underflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf("WARNING: Underflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if isJumpOrReturn && hit+enterCount != allLeaveCount {
-			logger.Warn("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if allLeaveCount-revertCount > 0 && hit+enterCount != allLeaveCount {
 			// The check is allLeaveCount-revertCount > 0 rather than just allLeaveCount > 0 since reverts don't have to reset hit to 0
-			logger.Warn("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 
 		// Modify hit based on coverage for this line, and record results
@@ -530,7 +530,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *log
 		hit -= allLeaveCount
 	}
 	if hit != 0 {
-		logger.Warn("WARNING: Nonzero final hit count. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset))
+		logger.Warn(fmt.Sprintf("WARNING: Nonzero final hit count. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset)))
 	}
 
 	return successfulHits, revertedHits
