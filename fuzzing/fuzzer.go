@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"math/rand"
 	"os"
@@ -126,7 +125,7 @@ const blockGasLimit = 0x0FFFFFFFFFFFFFFF
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
-func NewFuzzer(config config.ProjectConfig, tuiLogWriter io.Writer) (*Fuzzer, error) {
+func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Disable colors if requested
 	if config.Logging.NoColor {
 		colors.DisableColor()

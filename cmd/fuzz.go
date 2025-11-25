@@ -167,7 +167,7 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create fuzzer (will use existing GlobalLogger if TUI enabled, or create new one if not)
-	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig, logBuffer)
+	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
 		// If fuzzer creation failed and TUI was enabled, we need to show the error
 		if projectConfig.Fuzzing.EnableTUI && logBuffer != nil {

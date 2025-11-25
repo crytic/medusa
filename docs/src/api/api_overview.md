@@ -78,7 +78,7 @@ After you have created a `ProjectConfig`, you can create a new `Fuzzer` with it,
 
 ```go
 	// Create our fuzzer
-	fuzzer, err := fuzzing.NewFuzzer(*projectConfig, nil)
+	fuzzer, err := fuzzing.NewFuzzer(*projectConfig)
 	if err != nil {
 		return err
 	}
