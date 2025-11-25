@@ -90,42 +90,77 @@ jobs:
             echo "needs_update=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Post PR comment
-        if: steps.check.outputs.needs_update == 'true'
+      - name: Manage PR comment
         uses: actions/github-script@v7
         env:
+          NEEDS_UPDATE: ${{ steps.check.outputs.needs_update }}
           EXISTING_HASH: ${{ steps.check.outputs.existing_hash }}
           UPDATED_HASH: ${{ steps.check.outputs.updated_hash }}
         with:
           script: |
-            const existingHash = process.env.EXISTING_HASH;
-            const updatedHash = process.env.UPDATED_HASH;
+            const needsUpdate = process.env.NEEDS_UPDATE === 'true';
+            const marker = '<!-- vendorcheck-bot -->';
 
-            const body = `## \u26a0\ufe0f vendorHash Update Required
+            // Build comment body based on status
+            let body;
+            if (needsUpdate) {
+              const existingHash = process.env.EXISTING_HASH;
+              const updatedHash = process.env.UPDATED_HASH;
+              body = `${marker}
+              ## \u26a0\ufe0f vendorHash Update Required
 
-            The Go dependencies have changed, but the \`vendorHash\` in \`flake.nix\` is out of date.
+              The Go dependencies have changed, but the \`vendorHash\` in \`flake.nix\` is out of date.
 
-            **Existing hash:**
-            \`\`\`
-            ${existingHash}
-            \`\`\`
+              **Existing hash:**
+              \`\`\`
+              ${existingHash}
+              \`\`\`
 
-            **Updated hash:**
-            \`\`\`
-            ${updatedHash}
-            \`\`\`
+              **Updated hash:**
+              \`\`\`
+              ${updatedHash}
+              \`\`\`
 
-            **To fix this:**
-            Update the vendorHash line in \`flake.nix\` with the updated hash above.
+              **To fix this:**
+              Update the vendorHash line in \`flake.nix\` with the updated hash above.
 
-            See the [Contributing Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/CONTRIBUTING.md#nix-considerations) for more information.`;
+              See the [Contributing Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/master/CONTRIBUTING.md#nix-considerations) for more information.`;
+            } else {
+              body = `${marker}
+              ## \u2705 vendorHash Matches
 
-            await github.rest.issues.createComment({
+              The \`vendorHash\` in \`flake.nix\` is now correct and matches the Go dependencies.`;
+            }
+
+            // Find existing vendorcheck comment
+            const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: body
             });
+
+            const existingComment = comments.data.find(comment =>
+              comment.body.includes(marker)
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else if (needsUpdate) {
+              // Create new comment only for warnings
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+            // If no existing comment and no update needed, do nothing (stay silent)
 
       - name: Fail if vendorHash is out of date
         if: steps.check.outputs.needs_update == 'true'
