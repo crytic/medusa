@@ -207,9 +207,10 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	if err != nil {
 		if cse.Contract.CompiledContract().Abi.HasReceive() && len(cse.Call.Data) == 0 {
 			return &cse.Contract.CompiledContract().Abi.Receive, nil
-		}
-		if cse.Contract.CompiledContract().Abi.HasFallback() {
+		} else if cse.Contract.CompiledContract().Abi.HasFallback() {
 			return &cse.Contract.CompiledContract().Abi.Fallback, nil
+		} else {
+			return nil, err
 		}
 	}
 	return method, err

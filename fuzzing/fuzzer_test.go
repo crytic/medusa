@@ -1269,3 +1269,33 @@ func TestExternalProject(t *testing.T) {
 		},
 	})
 }
+
+// TestFallbackReceiveCalling tests that the fuzzer properly calls fallback and receive functions.
+// It uses a contract where fallback() sets a boolean x to true, receive() sets boolean y to true,
+// and testFunc() asserts that both are never true at the same time. If the fuzzer properly calls
+// both functions, this assertion will eventually fail.
+func TestFallbackReceiveCalling(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_fallback_receive.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Testing.AssertionTesting.Enabled = true
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+			// Increase test limit to give fuzzer more chances to hit both fallback/receive
+			// Since probability is 1/1000 for fallback/receive, we need sufficient iterations
+			config.Fuzzing.TestLimit = 5_000_000
+			config.Fuzzing.CallSequenceLength = 100
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests - we expect the assertion to fail
+			// when both fallback and receive have been called
+			assertFailedTestsExpected(f, true)
+		},
+	})
+}
