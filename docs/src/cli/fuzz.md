@@ -203,7 +203,6 @@ The TUI provides:
 **Keyboard Controls:**
 - `↑/↓` or `j/k` - Scroll content
 - `PgUp/PgDn` - Page up/down
-- `Home/End` - Jump to top/bottom
 - `t` or `Enter` - View test failure traces
 - `l` - Toggle log viewer
 - `f` or `Tab` - Focus sections (test cases/workers)
