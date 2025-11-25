@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 
 	"github.com/crytic/medusa/cmd/exitcodes"
-	"github.com/crytic/medusa/logging/colors"
-
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/logging/colors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -150,9 +150,15 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
 	}
 
-	// Create our fuzzer
+	// Create fuzzer (handles TUI setup internally if enabled)
 	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
+		// If fuzzer creation failed and TUI was enabled, we need to show the error
+		if projectConfig.Logging.EnableTUI {
+			// Add stdout writer so errors are visible
+			logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+			cmdLogger.Error("Fuzzer initialization failed in TUI mode. See error above.")
+		}
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
 
@@ -164,8 +170,9 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
-	// Start the fuzzing process with our cancellable context.
+	// Start fuzzing (handles TUI internally if enabled)
 	fuzzErr = fuzzer.Start()
+
 	if fuzzErr != nil {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
