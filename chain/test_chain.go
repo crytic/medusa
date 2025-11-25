@@ -1,13 +1,13 @@
 package chain
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"math/big"
 
 	"github.com/crytic/medusa/chain/state"
-	"golang.org/x/net/context"
+	compilationTypes "github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa-geth/core/rawdb"
 	"github.com/crytic/medusa-geth/core/tracing"
