@@ -252,10 +252,6 @@ func (fw *FuzzerWorker) updateMethods() {
 		// Check for fallback function
 		contractAbi := contractDefinition.CompiledContract().Abi
 		if contractAbi.HasFallback() {
-			// Set Sig to "fallback()" if it's empty so it can be properly identified
-			if contractAbi.Fallback.Sig == "" {
-				contractAbi.Fallback.Sig = "fallback()"
-			}
 			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
 				Address:  contractAddress,
 				Contract: contractDefinition,
@@ -264,10 +260,6 @@ func (fw *FuzzerWorker) updateMethods() {
 		}
 		// Check for receive function
 		if contractAbi.HasReceive() {
-			// Set Sig to "receive()" if it's empty so it can be properly identified
-			if contractAbi.Receive.Sig == "" {
-				contractAbi.Receive.Sig = "receive()"
-			}
 			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
 				Address:  contractAddress,
 				Contract: contractDefinition,

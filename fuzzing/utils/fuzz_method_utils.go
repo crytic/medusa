@@ -48,24 +48,5 @@ func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPref
 			assertionTests = append(assertionTests, method)
 		}
 	}
-
-	// Include fallback function if present (fallback is always state-changing)
-	if contract.Abi.HasFallback() {
-		// Set Sig to "fallback()" if it's empty so it can be properly identified
-		if contract.Abi.Fallback.Sig == "" {
-			contract.Abi.Fallback.Sig = "fallback()"
-		}
-		assertionTests = append(assertionTests, contract.Abi.Fallback)
-	}
-
-	// Include receive function if present (receive is always state-changing)
-	if contract.Abi.HasReceive() {
-		// Set Sig to "receive()" if it's empty so it can be properly identified
-		if contract.Abi.Receive.Sig == "" {
-			contract.Abi.Receive.Sig = "receive()"
-		}
-		assertionTests = append(assertionTests, contract.Abi.Receive)
-	}
-
 	return assertionTests, propertyTests, optimizationTests
 }
