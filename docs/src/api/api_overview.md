@@ -16,7 +16,7 @@ A rudimentary description of the objects/providers and their roles are explained
 
 - `CallSequence`: This represents a list of `CallSequenceElement`s, which define a transaction to send, the suggested block number and timestamp delay to use, and stores a reference to the block/transaction/results when it is executed (for later querying in tests). They are used to generate and execute transaction sequences in the fuzzer.
 
-- `CoverageMaps` define a list of `CoverageMap` objects, which record all instruction offsets executed for a given contract address and code hash.
+- `CoverageMaps` define a list of `CoverageMap` objects, which track branch coverage (jumps, returns, reverts, and contract entrance) for a given contract address and code hash.
 
 - `TestCase` defines the interface for a test that the `Fuzzer` will track. It simply defines a name, ID, status (not started, running, passed, failed) and message for the `Fuzzer`.
 

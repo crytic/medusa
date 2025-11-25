@@ -766,7 +766,7 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 func defaultShrinkingValueMutatorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueMutator, error) {
 	// Create the shrinking value mutator for the worker.
 	shrinkingValueMutatorConfig := &valuegeneration.ShrinkingValueMutatorConfig{
-		ShrinkValueProbability: 0.1,
+		ShrinkValueProbability: 1,
 	}
 	shrinkingValueMutator := valuegeneration.NewShrinkingValueMutator(shrinkingValueMutatorConfig, valueSet, randomProvider)
 	return shrinkingValueMutator, nil
