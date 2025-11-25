@@ -1105,7 +1105,6 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 		}})
 }
 
-
 // TestInvalidTestSignatures verifies that the fuzzer logs warnings for test methods
 // with correct prefixes but invalid signatures (e.g., wrong return types, parameters)
 func TestInvalidTestSignatures(t *testing.T) {
@@ -1314,4 +1313,3 @@ func TestExternalProject(t *testing.T) {
 		},
 	})
 }
-
