@@ -24,12 +24,16 @@ func IsOptimizationTest(method abi.Method, prefixes []string) bool {
 
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
-func IsPropertyTest(method abi.Method, prefixes []string) bool {
+func IsPropertyTest(method abi.Method, prefixes []string, propertyTestReturnBool bool) bool {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
 		// The property test must simply have the right prefix and take no inputs and return a boolean
 		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+			// If returnBool is set to true, the property return a boolean, otherwise it return nothing
+			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy && propertyTestReturnBool {
+				return true
+			}
+			if len(method.Inputs) == 0 && len(method.Outputs) == 0 && !propertyTestReturnBool {
 				return true
 			}
 		}
@@ -38,9 +42,9 @@ func IsPropertyTest(method abi.Method, prefixes []string) bool {
 }
 
 // BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
-func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method) {
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool, propertyTestReturnBool bool) (assertionTests, propertyTests, optimizationTests []abi.Method) {
 	for _, method := range contract.Abi.Methods {
-		if IsPropertyTest(method, propertyTestPrefixes) {
+		if IsPropertyTest(method, propertyTestPrefixes, propertyTestReturnBool) {
 			propertyTests = append(propertyTests, method)
 		} else if IsOptimizationTest(method, optimizationTestPrefixes) {
 			optimizationTests = append(optimizationTests, method)
