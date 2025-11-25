@@ -123,10 +123,9 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 		if err != nil {
 			return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
 		}
-		out, err = exec.Command("solc-select", "use", c.SolcVersion).CombinedOutput()
-		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select use`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
-		}
+		// Set SOLC_VERSION environment variable for crytic-compile instead of using solc-select use
+		// This prevents race conditions when tests run in parallel
+		cmd.Env = append(os.Environ(), fmt.Sprintf("SOLC_VERSION=%s", c.SolcVersion))
 	}
 
 	// Run crytic-compile to compile and export our compilation artifacts.
