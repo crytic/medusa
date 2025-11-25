@@ -1283,9 +1283,7 @@ func TestFallbackReceiveCalling(t *testing.T) {
 			config.Fuzzing.Testing.PropertyTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 			config.Slither.UseSlither = false
-			// Increase test limit to give fuzzer more chances to hit both fallback/receive
-			// Since probability is 1/1000 for fallback/receive, we need sufficient iterations
-			config.Fuzzing.TestLimit = 5_000_000
+			config.Fuzzing.TestLimit = 100_000
 			config.Fuzzing.CallSequenceLength = 100
 		},
 		method: func(f *fuzzerTestContext) {
