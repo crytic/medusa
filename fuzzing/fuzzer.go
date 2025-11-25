@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crytic/medusa-geth/crypto"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
@@ -107,6 +108,11 @@ type Fuzzer struct {
 	// logger describes the Fuzzer's log object that can be used to log important events
 	logger *logging.Logger
 
+	// TUI-related fields
+	tuiEnabled bool
+	tuiModel   *FuzzerTUI
+	logBuffer  *logging.LogBufferWriter
+
 	// lastPCsLogMsg records the last time we logged total PCs hit.
 	// It takes a decent amount of time to calculate, so we only log once a minute,
 	// and only when debug logging is enabled.
@@ -131,10 +137,21 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	// Create or configure the global logger
 	// Note: GlobalLogger is initialized in logging/init.go with Disabled level and no writers
 
+	// Create fuzzer struct early so we can store TUI components
+	fuzzer := &Fuzzer{
+		config: config,
+	}
+
 	if config.Logging.EnableTUI {
-		// TUI mode: GlobalLogger was already created by cmd layer with log buffer
-		// Just update the log level
-		logging.GlobalLogger.SetLevel(config.Logging.Level)
+		// TUI mode: Create log buffer and set up logging with buffer
+		fuzzer.logBuffer = logging.NewLogBufferWriter(5000)
+
+		// Create GlobalLogger with buffer
+		logging.GlobalLogger = logging.NewLogger(config.Logging.Level)
+		logging.GlobalLogger.AddWriter(fuzzer.logBuffer, logging.UNSTRUCTURED, !config.Logging.NoColor)
+
+		// Mark TUI as enabled (will be fully initialized after fuzzer is created)
+		fuzzer.tuiEnabled = true
 	} else {
 		// Non-TUI mode: Need to set up stdout logging
 		// Recreate GlobalLogger to start fresh (clear any previous state from init())
@@ -196,25 +213,22 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	pruneEnabled := config.Fuzzing.CoverageEnabled && config.Fuzzing.PruneFrequency > 0
 	corpusPruner := corpus.NewCorpusPruner(pruneEnabled, config.Fuzzing.PruneFrequency, logger)
 
-	// Create and return our fuzzing instance.
-	fuzzer := &Fuzzer{
-		config:              config,
-		senders:             senders,
-		deployer:            deployer,
-		baseValueSet:        valuegeneration.NewValueSet(),
-		contractDefinitions: make(fuzzerTypes.Contracts, 0),
-		testCases:           make([]TestCase, 0),
-		testCasesFinished:   make(map[string]TestCase),
-		revertReporter:      revertReporter,
-		corpusPruner:        corpusPruner,
-		Hooks: FuzzerHooks{
-			NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
-			NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
-			ChainSetupFunc:                     chainSetupFromCompilations,
-			CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
-		},
-		logger: logger,
+	// Complete the fuzzer instance initialization
+	fuzzer.senders = senders
+	fuzzer.deployer = deployer
+	fuzzer.baseValueSet = valuegeneration.NewValueSet()
+	fuzzer.contractDefinitions = make(fuzzerTypes.Contracts, 0)
+	fuzzer.testCases = make([]TestCase, 0)
+	fuzzer.testCasesFinished = make(map[string]TestCase)
+	fuzzer.revertReporter = revertReporter
+	fuzzer.corpusPruner = corpusPruner
+	fuzzer.Hooks = FuzzerHooks{
+		NewCallSequenceGeneratorConfigFunc: defaultCallSequenceGeneratorConfigFunc,
+		NewShrinkingValueMutatorFunc:       defaultShrinkingValueMutatorFunc,
+		ChainSetupFunc:                     chainSetupFromCompilations,
+		CallSequenceTestFuncs:              make([]CallSequenceTestFunc, 0),
 	}
+	fuzzer.logger = logger
 
 	// Add our sender and deployer addresses to the base value set for the value generator, so they will be used as
 	// address arguments in fuzzing campaigns.
@@ -252,6 +266,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
+
+	// If TUI is enabled, create the TUI model now that fuzzer is fully initialized
+	if fuzzer.tuiEnabled {
+		fuzzer.tuiModel = NewFuzzerTUI(fuzzer)
+		fuzzer.tuiModel.SetLogBuffer(fuzzer.logBuffer)
+	}
+
 	return fuzzer, nil
 }
 
@@ -909,7 +930,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
-func (f *Fuzzer) Start() error {
+func (f *Fuzzer) startNormal() error {
 	// Define our variable to catch errors
 	var err error
 
@@ -1076,6 +1097,51 @@ func (f *Fuzzer) Start() error {
 
 	// Return any encountered error.
 	return err
+}
+
+// startWithTUI runs the fuzzer with TUI in foreground
+func (f *Fuzzer) startWithTUI() error {
+	// Create error channel for background fuzzer
+	errChan := make(chan error, 1)
+
+	// Set error channel on TUI model
+	f.tuiModel.errChan = errChan
+
+	// Start fuzzer in background
+	go func() {
+		errChan <- f.startNormal()
+	}()
+
+	// Run TUI in foreground (blocking)
+	tuiProgram := tea.NewProgram(f.tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	_, tuiErr := tuiProgram.Run()
+
+	if tuiErr != nil {
+		f.logger.Error("TUI encountered an error:", tuiErr)
+	}
+
+	// Restore stdout logging after TUI exits
+	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !f.config.Logging.NoColor)
+
+	// Retrieve fuzzer error
+	var fuzzErr error
+	select {
+	case fuzzErr = <-errChan:
+		// Got the error
+	case <-time.After(5 * time.Second):
+		// Timeout - fuzzer still running
+		f.logger.Warn("Fuzzer did not complete within timeout")
+	}
+
+	return fuzzErr
+}
+
+// Start runs the fuzzing campaign (with or without TUI)
+func (f *Fuzzer) Start() error {
+	if f.tuiEnabled {
+		return f.startWithTUI()
+	}
+	return f.startNormal()
 }
 
 // Stop attempts to stop all running operations invoked by the Start method. Note that Stop is not guaranteed to fully

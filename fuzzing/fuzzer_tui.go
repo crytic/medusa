@@ -1,4 +1,4 @@
-package tui
+package fuzzing
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/crytic/medusa/fuzzing"
+	"github.com/crytic/medusa/logging"
 )
 
 // FocusedSection represents which section has focus for independent scrolling
@@ -24,7 +24,7 @@ const (
 
 // FuzzerTUI is the bubbletea model for the fuzzer dashboard
 type FuzzerTUI struct {
-	fuzzer            *fuzzing.Fuzzer
+	fuzzer            *Fuzzer
 	startTime         time.Time
 	lastUpdate        time.Time
 	width             int
@@ -33,21 +33,21 @@ type FuzzerTUI struct {
 	updateCount       int
 	viewport          viewport.Model
 	ready             bool
-	selectedTestIdx   int              // Index of selected failed test (-1 = none)
-	showingTrace      bool             // Whether we're showing the trace view
-	showingLogs       bool             // Whether we're showing the log view
-	mouseEnabled      bool             // Whether mouse scrolling is enabled
-	focusedSection    FocusedSection   // Which section has focus for independent scrolling
-	testCasesViewport viewport.Model   // Independent viewport for test cases section
-	workersViewport   viewport.Model   // Independent viewport for workers section
-	logsViewport      viewport.Model   // Independent viewport for logs section
-	errChan           <-chan error     // Channel to receive fuzzer errors
-	fuzzErr           error            // Stores fuzzer error when it occurs
-	logBuffer         *LogBufferWriter // Buffer for capturing logs
+	selectedTestIdx   int                      // Index of selected failed test (-1 = none)
+	showingTrace      bool                     // Whether we're showing the trace view
+	showingLogs       bool                     // Whether we're showing the log view
+	mouseEnabled      bool                     // Whether mouse scrolling is enabled
+	focusedSection    FocusedSection           // Which section has focus for independent scrolling
+	testCasesViewport viewport.Model           // Independent viewport for test cases section
+	workersViewport   viewport.Model           // Independent viewport for workers section
+	logsViewport      viewport.Model           // Independent viewport for logs section
+	errChan           <-chan error             // Channel to receive fuzzer errors
+	fuzzErr           error                    // Stores fuzzer error when it occurs
+	logBuffer         *logging.LogBufferWriter // Buffer for capturing logs
 }
 
 // NewFuzzerTUI creates a new TUI for the fuzzer
-func NewFuzzerTUI(fuzzer *fuzzing.Fuzzer) *FuzzerTUI {
+func NewFuzzerTUI(fuzzer *Fuzzer) *FuzzerTUI {
 	return &FuzzerTUI{
 		fuzzer:          fuzzer,
 		startTime:       time.Now(),
@@ -69,14 +69,14 @@ func NewFuzzerTUI(fuzzer *fuzzing.Fuzzer) *FuzzerTUI {
 
 // NewFuzzerTUIWithErrChan creates a new TUI for the fuzzer with an error channel
 // The error channel allows the TUI to detect when the fuzzer stops with an error in real-time
-func NewFuzzerTUIWithErrChan(fuzzer *fuzzing.Fuzzer, errChan <-chan error) *FuzzerTUI {
+func NewFuzzerTUIWithErrChan(fuzzer *Fuzzer, errChan <-chan error) *FuzzerTUI {
 	tui := NewFuzzerTUI(fuzzer)
 	tui.errChan = errChan
 	return tui
 }
 
 // SetLogBuffer sets the log buffer for the TUI
-func (m *FuzzerTUI) SetLogBuffer(logBuffer *LogBufferWriter) {
+func (m *FuzzerTUI) SetLogBuffer(logBuffer *logging.LogBufferWriter) {
 	m.logBuffer = logBuffer
 }
 
@@ -148,7 +148,7 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			// If showing trace view, navigate between failed tests
 			if m.showingTrace {
-				failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+				failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 				if len(failedTests) > 0 {
 					m.selectedTestIdx--
 					if m.selectedTestIdx < 0 {
@@ -163,7 +163,7 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			// If showing trace view, navigate between failed tests
 			if m.showingTrace {
-				failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+				failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 				if len(failedTests) > 0 {
 					m.selectedTestIdx++
 					if m.selectedTestIdx >= len(failedTests) {
@@ -179,7 +179,7 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Let viewport handle page scrolling (falls through to viewport.Update)
 		case "enter", "t":
 			// Toggle trace view for failed tests
-			failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+			failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 			if len(failedTests) > 0 {
 				m.showingTrace = !m.showingTrace
 				if m.showingTrace && m.selectedTestIdx == -1 {
@@ -298,7 +298,7 @@ func (m FuzzerTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateLogViewContent()
 		} else if m.fuzzer.IsStopped() {
 			// Update failure screen content
-			failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+			failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 			if len(failedTests) > 0 {
 				content := m.renderFailureScreen(failedTests)
 				m.viewport.SetContent(content)
@@ -371,13 +371,13 @@ func (m FuzzerTUI) View() string {
 	// Check if fuzzing is done
 	if m.fuzzer.IsStopped() {
 		// Check if we stopped due to a test failure
-		failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+		failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 		if len(failedTests) > 0 {
 			// Content was already set by tickMsg in Update()
 			return lipgloss.JoinVertical(lipgloss.Left,
-				headerStyle.Width(m.width).Render("FUZZING STOPPED - TEST FAILURE"),
+				logging.HeaderStyle.Width(m.width).Render("FUZZING STOPPED - TEST FAILURE"),
 				m.viewport.View(),
-				footerStyle.Width(m.width).Render("↑/↓: Scroll | q: Quit (logs will print)"),
+				logging.FooterStyle.Width(m.width).Render("↑/↓: Scroll | q: Quit (logs will print)"),
 			)
 		}
 		return m.renderExitScreen()
@@ -405,9 +405,9 @@ func (m FuzzerTUI) View() string {
 	switch m.focusedSection {
 	case FocusTestCases:
 		// Render: stats (fixed) + focused test cases (scrollable) + workers (fixed)
-		focusedTestCases := focusedBoxStyle.Width(m.width - 2).Render(
+		focusedTestCases := logging.FocusedBoxStyle.Width(m.width - 2).Render(
 			lipgloss.JoinVertical(lipgloss.Left,
-				titleStyle.Render("Test Cases [FOCUSED - Press f/tab to unfocus]"),
+				logging.TitleStyle.Render("Test Cases [FOCUSED - Press f/tab to unfocus]"),
 				m.testCasesViewport.View(),
 			),
 		)
@@ -418,9 +418,9 @@ func (m FuzzerTUI) View() string {
 		)
 	case FocusWorkers:
 		// Render: stats (fixed) + test cases (fixed) + focused workers (scrollable)
-		focusedWorkers := focusedBoxStyle.Width(m.width - 2).Render(
+		focusedWorkers := logging.FocusedBoxStyle.Width(m.width - 2).Render(
 			lipgloss.JoinVertical(lipgloss.Left,
-				titleStyle.Render("Worker Status [FOCUSED - Press f/tab to unfocus]"),
+				logging.TitleStyle.Render("Worker Status [FOCUSED - Press f/tab to unfocus]"),
 				m.workersViewport.View(),
 			),
 		)
@@ -441,7 +441,7 @@ func (m FuzzerTUI) View() string {
 // renderHeader renders the dashboard header
 func (m FuzzerTUI) renderHeader() string {
 	header := "MEDUSA FUZZING DASHBOARD"
-	return headerStyle.Width(m.width).Render(header)
+	return logging.HeaderStyle.Width(m.width).Render(header)
 }
 
 // renderGlobalStats renders global fuzzing statistics
@@ -504,55 +504,55 @@ func (m FuzzerTUI) renderGlobalStats() string {
 
 	// Build stats
 	var lines []string
-	lines = append(lines, titleStyle.Render("Global Statistics"))
+	lines = append(lines, logging.TitleStyle.Render("Global Statistics"))
 	lines = append(lines, "")
 
 	// Line 1: Elapsed and Status
 	line1 := fmt.Sprintf("%s %s                    %s %s",
-		labelStyle.Render("Campaign Elapsed:"),
-		valueStyle.Render(formatDuration(elapsed)),
-		labelStyle.Render("Status:"),
-		valueStyle.Render(m.getFuzzerStatus()),
+		logging.LabelStyle.Render("Campaign Elapsed:"),
+		logging.ValueStyle.Render(logging.FormatDuration(elapsed)),
+		logging.LabelStyle.Render("Status:"),
+		logging.ValueStyle.Render(m.getFuzzerStatus()),
 	)
 	lines = append(lines, line1)
 	lines = append(lines, "")
 
 	// Line 2: Calls and Coverage
 	line2 := fmt.Sprintf("%s %s (%s)              %s %s",
-		labelStyle.Render("Total Calls:"),
-		valueStyle.Render(formatNumber(callsTested)),
-		mutedStyle.Render(formatRate(callsPerSec)),
-		labelStyle.Render("Coverage:"),
-		valueStyle.Render(fmt.Sprintf("%d branches", branches)),
+		logging.LabelStyle.Render("Total Calls:"),
+		logging.ValueStyle.Render(logging.FormatNumber(callsTested)),
+		logging.MutedStyle.Render(logging.FormatRate(callsPerSec)),
+		logging.LabelStyle.Render("Coverage:"),
+		logging.ValueStyle.Render(fmt.Sprintf("%d branches", branches)),
 	)
 	lines = append(lines, line2)
 
 	// Line 3: Sequences and Corpus
 	line3 := fmt.Sprintf("%s %s (%s)              %s %s",
-		labelStyle.Render("Sequences:"),
-		valueStyle.Render(formatNumber(sequencesTested)),
-		mutedStyle.Render(formatRate(seqPerSec)),
-		labelStyle.Render("Corpus Size:"),
-		valueStyle.Render(fmt.Sprintf("%d sequences", corpusSize)),
+		logging.LabelStyle.Render("Sequences:"),
+		logging.ValueStyle.Render(logging.FormatNumber(sequencesTested)),
+		logging.MutedStyle.Render(logging.FormatRate(seqPerSec)),
+		logging.LabelStyle.Render("Corpus Size:"),
+		logging.ValueStyle.Render(fmt.Sprintf("%d sequences", corpusSize)),
 	)
 	lines = append(lines, line3)
 
 	// Line 4: Failures and Gas
-	failurePercent := formatPercentage(failedSequences, sequencesTested)
+	failurePercent := logging.FormatPercentage(failedSequences, sequencesTested)
 	line4 := fmt.Sprintf("%s %s/%s (%s)          %s %s",
-		labelStyle.Render("Test Failures:"),
-		errorStyle.Render(formatNumber(failedSequences)),
-		mutedStyle.Render(formatNumber(sequencesTested)),
-		mutedStyle.Render(failurePercent),
-		labelStyle.Render("Gas Used:"),
-		valueStyle.Render(formatRate(gasPerSec)),
+		logging.LabelStyle.Render("Test Failures:"),
+		logging.ErrorStyle.Render(logging.FormatNumber(failedSequences)),
+		logging.MutedStyle.Render(logging.FormatNumber(sequencesTested)),
+		logging.MutedStyle.Render(failurePercent),
+		logging.LabelStyle.Render("Gas Used:"),
+		logging.ValueStyle.Render(logging.FormatRate(gasPerSec)),
 	)
 	lines = append(lines, line4)
 
 	// Line 5: Workers
 	line5 := fmt.Sprintf("%s %s",
-		labelStyle.Render("Workers:"),
-		valueStyle.Render(fmt.Sprintf("%d/%d active, %d shrinking", activeWorkers, totalWorkers, shrinkingWorkers)),
+		logging.LabelStyle.Render("Workers:"),
+		logging.ValueStyle.Render(fmt.Sprintf("%d/%d active, %d shrinking", activeWorkers, totalWorkers, shrinkingWorkers)),
 	)
 	lines = append(lines, line5)
 
@@ -561,14 +561,14 @@ func (m FuzzerTUI) renderGlobalStats() string {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
 		lines = append(lines, "")
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("Memory: %s / %s",
-			formatBytes(memStats.Alloc),
-			formatBytes(memStats.Sys))))
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("Updates: %d", m.updateCount)))
+		lines = append(lines, logging.MutedStyle.Render(fmt.Sprintf("Memory: %s / %s",
+			logging.FormatBytes(memStats.Alloc),
+			logging.FormatBytes(memStats.Sys))))
+		lines = append(lines, logging.MutedStyle.Render(fmt.Sprintf("Updates: %d", m.updateCount)))
 	}
 
 	content := strings.Join(lines, "\n")
-	return boxStyle.Width(boxWidth).Render(content)
+	return logging.BoxStyle.Width(boxWidth).Render(content)
 }
 
 // renderTestCases renders test case status
@@ -580,7 +580,7 @@ func (m FuzzerTUI) renderTestCases() string {
 	}
 
 	var lines []string
-	lines = append(lines, titleStyle.Render("Test Cases"))
+	lines = append(lines, logging.TitleStyle.Render("Test Cases"))
 	lines = append(lines, "")
 
 	// Calculate max lines based on terminal height
@@ -599,19 +599,19 @@ func (m FuzzerTUI) renderTestCases() string {
 	currentLines := 0
 
 	// Show failed tests (limited)
-	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
-	runningTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusRunning)
-	passedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusPassed)
+	failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+	runningTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusRunning)
+	passedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
 	totalTests := len(failedTests) + len(runningTests) + len(passedTests)
 
 	if len(failedTests) > 0 && currentLines < maxTestLines {
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
+		lines = append(lines, logging.ErrorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
 		currentLines++
 		for _, tc := range failedTests {
 			if currentLines >= maxTestLines {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("  %s %s", errorStyle.Render("✗"), tc.Name()))
+			lines = append(lines, fmt.Sprintf("  %s %s", logging.ErrorStyle.Render("✗"), tc.Name()))
 			currentLines++
 			totalTests--
 		}
@@ -621,13 +621,13 @@ func (m FuzzerTUI) renderTestCases() string {
 
 	// Show running tests (limited)
 	if len(runningTests) > 0 && currentLines < maxTestLines {
-		lines = append(lines, valueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
+		lines = append(lines, logging.ValueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
 		currentLines++
 		for _, tc := range runningTests {
 			if currentLines >= maxTestLines {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("  %s %s", valueStyle.Render("⚡"), tc.Name()))
+			lines = append(lines, fmt.Sprintf("  %s %s", logging.ValueStyle.Render("⚡"), tc.Name()))
 			currentLines++
 			totalTests--
 		}
@@ -637,18 +637,18 @@ func (m FuzzerTUI) renderTestCases() string {
 
 	// Show passed tests count
 	if len(passedTests) > 0 && currentLines < maxTestLines {
-		lines = append(lines, fmt.Sprintf("%s %d tests passed", valueStyle.Render("✓"), len(passedTests)))
+		lines = append(lines, fmt.Sprintf("%s %d tests passed", logging.ValueStyle.Render("✓"), len(passedTests)))
 	}
 
 	// If no test info to show, show a message
 	if len(failedTests) == 0 && len(runningTests) == 0 && len(passedTests) == 0 {
-		lines = append(lines, mutedStyle.Render("No test results yet..."))
+		lines = append(lines, logging.MutedStyle.Render("No test results yet..."))
 	} else if currentLines >= maxTestLines {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  ... and %d more (press f to focus)", totalTests)))
+		lines = append(lines, logging.MutedStyle.Render(fmt.Sprintf("  ... and %d more (press f to focus)", totalTests)))
 	}
 
 	content := strings.Join(lines, "\n")
-	return boxStyle.Width(boxWidth).Render(content)
+	return logging.BoxStyle.Width(boxWidth).Render(content)
 }
 
 // renderWorkerStatus renders individual worker status
@@ -662,7 +662,7 @@ func (m FuzzerTUI) renderWorkerStatus() string {
 	workers := m.fuzzer.Workers()
 
 	var lines []string
-	lines = append(lines, titleStyle.Render("Worker Status"))
+	lines = append(lines, logging.TitleStyle.Render("Worker Status"))
 	lines = append(lines, "")
 
 	// Determine workers per row based on terminal width
@@ -717,11 +717,11 @@ func (m FuzzerTUI) renderWorkerStatus() string {
 	if totalRows > maxRows {
 		remainingWorkers := len(workers) - (displayRows * workersPerRow)
 		lines = append(lines, "")
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("... and %d more workers (press f to focus)", remainingWorkers)))
+		lines = append(lines, logging.MutedStyle.Render(fmt.Sprintf("... and %d more workers (press f to focus)", remainingWorkers)))
 	}
 
 	content := strings.Join(lines, "\n")
-	return boxStyle.Width(boxWidth).Render(content)
+	return logging.BoxStyle.Width(boxWidth).Render(content)
 }
 
 // renderTestCasesContent returns just the content for test cases (no box wrapper)
@@ -730,34 +730,34 @@ func (m FuzzerTUI) renderTestCasesContent() string {
 	var lines []string
 
 	// Show failed tests (no limit - scrolling allows viewing all)
-	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 	if len(failedTests) > 0 {
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
+		lines = append(lines, logging.ErrorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
 		for _, tc := range failedTests {
-			lines = append(lines, fmt.Sprintf("  %s %s", errorStyle.Render("✗"), tc.Name()))
+			lines = append(lines, fmt.Sprintf("  %s %s", logging.ErrorStyle.Render("✗"), tc.Name()))
 		}
 		lines = append(lines, "")
 	}
 
 	// Show running tests (no limit - scrolling allows viewing all)
-	runningTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusRunning)
+	runningTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusRunning)
 	if len(runningTests) > 0 {
-		lines = append(lines, valueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
+		lines = append(lines, logging.ValueStyle.Render(fmt.Sprintf("Running Tests (%d):", len(runningTests))))
 		for _, tc := range runningTests {
-			lines = append(lines, fmt.Sprintf("  %s %s", valueStyle.Render("⚡"), tc.Name()))
+			lines = append(lines, fmt.Sprintf("  %s %s", logging.ValueStyle.Render("⚡"), tc.Name()))
 		}
 		lines = append(lines, "")
 	}
 
 	// Show passed tests count
-	passedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusPassed)
+	passedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
 	if len(passedTests) > 0 {
-		lines = append(lines, fmt.Sprintf("%s %d tests passed", valueStyle.Render("✓"), len(passedTests)))
+		lines = append(lines, fmt.Sprintf("%s %d tests passed", logging.ValueStyle.Render("✓"), len(passedTests)))
 	}
 
 	// If no test info to show, show a message
 	if len(failedTests) == 0 && len(runningTests) == 0 && len(passedTests) == 0 {
-		lines = append(lines, mutedStyle.Render("No test results yet..."))
+		lines = append(lines, logging.MutedStyle.Render("No test results yet..."))
 	}
 
 	return strings.Join(lines, "\n")
@@ -797,14 +797,14 @@ func (m FuzzerTUI) renderWorkerStatusContent() string {
 }
 
 // renderWorkerBox renders a single worker's status box
-func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker, width int) string {
+func (m FuzzerTUI) renderWorkerBox(index int, worker *FuzzerWorker, width int) string {
 	// Get worker activity snapshot
 	activity := worker.Activity().Snapshot()
 
 	// Get state style and icon
 	stateStr := activity.State.String()
-	icon := getStateIcon(stateStr)
-	stateStyle := getStateStyle(stateStr)
+	icon := logging.GetStateIcon(stateStr)
+	stateStyle := logging.GetStateStyle(stateStr)
 
 	// Get worker metrics
 	calls := worker.WorkerMetrics().CallsTested().Uint64()
@@ -821,29 +821,29 @@ func (m FuzzerTUI) renderWorkerBox(index int, worker *fuzzing.FuzzerWorker, widt
 	if activity.State.String() == "Shrinking" && activity.ShrinkLimit > 0 {
 		// Show progress bar for shrinking
 		progress := activity.ShrinkProgress()
-		line2 = renderProgressBar(progress, progressBarWidth)
+		line2 = logging.RenderProgressBar(progress, progressBarWidth)
 	} else if activity.Strategy != "" {
-		line2 = truncateString(activity.Strategy, width-4)
+		line2 = logging.TruncateString(activity.Strategy, width-4)
 	} else {
 		line2 = ""
 	}
 
-	line3 := fmt.Sprintf("Calls: %s", formatNumber(big.NewInt(int64(calls))))
-	line4 := fmt.Sprintf("Seqs: %s", formatNumber(big.NewInt(int64(sequences))))
+	line3 := fmt.Sprintf("Calls: %s", logging.FormatNumber(big.NewInt(int64(calls))))
+	line4 := fmt.Sprintf("Seqs: %s", logging.FormatNumber(big.NewInt(int64(sequences))))
 
 	// Join lines
 	var contentLines []string
 	contentLines = append(contentLines, line1)
 	if line2 != "" {
-		contentLines = append(contentLines, mutedStyle.Render(line2))
+		contentLines = append(contentLines, logging.MutedStyle.Render(line2))
 	}
-	contentLines = append(contentLines, mutedStyle.Render(line3))
-	contentLines = append(contentLines, mutedStyle.Render(line4))
+	contentLines = append(contentLines, logging.MutedStyle.Render(line3))
+	contentLines = append(contentLines, logging.MutedStyle.Render(line4))
 
 	content := strings.Join(contentLines, "\n")
 
 	// Create responsive worker box style
-	responsiveWorkerBoxStyle := workerBoxStyle.Width(width)
+	responsiveWorkerBoxStyle := logging.WorkerBoxStyle.Width(width)
 	return responsiveWorkerBoxStyle.Render(content)
 }
 
@@ -882,7 +882,7 @@ func (m FuzzerTUI) renderFooter() string {
 		helpText = fmt.Sprintf("↑/↓: Scroll Logs | Esc/l: Exit Logs | m: Mouse | q: Quit%s%s", scrollInfo, mouseInfo)
 	} else {
 		// Normal controls
-		failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+		failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 		logControls := ""
 		if m.logBuffer != nil {
 			logControls = " | l: Logs"
@@ -894,19 +894,19 @@ func (m FuzzerTUI) renderFooter() string {
 		}
 	}
 
-	return footerStyle.Width(m.width).Render(helpText)
+	return logging.FooterStyle.Width(m.width).Render(helpText)
 }
 
 // renderFailureScreen renders the failure summary when tests fail
-func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
+func (m FuzzerTUI) renderFailureScreen(failedTests []TestCase) string {
 	var lines []string
 
 	// Show failed test information with full traces
-	lines = append(lines, errorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
+	lines = append(lines, logging.ErrorStyle.Render(fmt.Sprintf("Failed Tests (%d):", len(failedTests))))
 	lines = append(lines, "")
 
 	for i, tc := range failedTests {
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("✗ %s", tc.Name())))
+		lines = append(lines, logging.ErrorStyle.Render(fmt.Sprintf("✗ %s", tc.Name())))
 		lines = append(lines, "")
 
 		// Show full message which includes call sequence and execution trace
@@ -940,7 +940,7 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 			if separatorWidth < 20 {
 				separatorWidth = 20
 			}
-			lines = append(lines, mutedStyle.Render(strings.Repeat("─", separatorWidth)))
+			lines = append(lines, logging.MutedStyle.Render(strings.Repeat("─", separatorWidth)))
 			lines = append(lines, "")
 		}
 	}
@@ -955,11 +955,11 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, titleStyle.Render("Campaign Statistics:"))
+	lines = append(lines, logging.TitleStyle.Render("Campaign Statistics:"))
 	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("  Total Time: %s", formatDuration(elapsed)))
-	lines = append(lines, fmt.Sprintf("  Calls Tested: %s", formatNumber(callsTested)))
-	lines = append(lines, fmt.Sprintf("  Sequences Tested: %s", formatNumber(sequencesTested)))
+	lines = append(lines, fmt.Sprintf("  Total Time: %s", logging.FormatDuration(elapsed)))
+	lines = append(lines, fmt.Sprintf("  Calls Tested: %s", logging.FormatNumber(callsTested)))
+	lines = append(lines, fmt.Sprintf("  Sequences Tested: %s", logging.FormatNumber(sequencesTested)))
 
 	return strings.Join(lines, "\n")
 }
@@ -968,7 +968,7 @@ func (m FuzzerTUI) renderFailureScreen(failedTests []fuzzing.TestCase) string {
 // updateTraceViewContent updates the viewport content for trace view
 // This should be called from Update() when content changes, not from View()
 func (m *FuzzerTUI) updateTraceViewContent() {
-	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 	if len(failedTests) == 0 {
 		m.viewport.SetContent("No failed tests to display")
 		return
@@ -1008,7 +1008,7 @@ func (m *FuzzerTUI) updateTraceViewContent() {
 }
 
 func (m FuzzerTUI) renderTraceView() string {
-	failedTests := m.fuzzer.TestCasesWithStatus(fuzzing.TestCaseStatusFailed)
+	failedTests := m.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 	if len(failedTests) == 0 {
 		return "No failed tests to display"
 	}
@@ -1021,7 +1021,7 @@ func (m FuzzerTUI) renderTraceView() string {
 	selectedTest := failedTests[m.selectedTestIdx]
 
 	// Build header showing which test we're viewing
-	header := headerStyle.Width(m.width).Render(
+	header := logging.HeaderStyle.Width(m.width).Render(
 		fmt.Sprintf("TEST TRACE (%d/%d): %s", m.selectedTestIdx+1, len(failedTests), selectedTest.Name()),
 	)
 
@@ -1041,7 +1041,7 @@ func (m FuzzerTUI) renderTraceView() string {
 func (m FuzzerTUI) renderExitScreen() string {
 	var lines []string
 
-	lines = append(lines, headerStyle.Width(m.width).Render("FUZZING STOPPED"))
+	lines = append(lines, logging.HeaderStyle.Width(m.width).Render("FUZZING STOPPED"))
 	lines = append(lines, "")
 
 	// Final statistics
@@ -1063,15 +1063,15 @@ func (m FuzzerTUI) renderExitScreen() string {
 		}
 	}
 
-	lines = append(lines, titleStyle.Render("Final Statistics:"))
+	lines = append(lines, logging.TitleStyle.Render("Final Statistics:"))
 	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("  Total Time: %s", formatDuration(elapsed)))
-	lines = append(lines, fmt.Sprintf("  Calls Tested: %s", formatNumber(callsTested)))
-	lines = append(lines, fmt.Sprintf("  Sequences Tested: %s", formatNumber(sequencesTested)))
+	lines = append(lines, fmt.Sprintf("  Total Time: %s", logging.FormatDuration(elapsed)))
+	lines = append(lines, fmt.Sprintf("  Calls Tested: %s", logging.FormatNumber(callsTested)))
+	lines = append(lines, fmt.Sprintf("  Sequences Tested: %s", logging.FormatNumber(sequencesTested)))
 	lines = append(lines, fmt.Sprintf("  Branches Hit: %d", branches))
-	lines = append(lines, fmt.Sprintf("  Test Failures: %s", formatNumber(failedSequences)))
+	lines = append(lines, fmt.Sprintf("  Test Failures: %s", logging.FormatNumber(failedSequences)))
 	lines = append(lines, "")
-	lines = append(lines, mutedStyle.Render("Check the logs for detailed test results."))
+	lines = append(lines, logging.MutedStyle.Render("Check the logs for detailed test results."))
 
 	return strings.Join(lines, "\n")
 }
@@ -1101,7 +1101,7 @@ func (m *FuzzerTUI) updateLogViewContent() {
 		message := strings.TrimRight(entry.Message, "\n")
 
 		// Format: [timestamp] message
-		line := fmt.Sprintf("[%s] %s", mutedStyle.Render(timestamp), message)
+		line := fmt.Sprintf("[%s] %s", logging.MutedStyle.Render(timestamp), message)
 		lines = append(lines, line)
 	}
 
@@ -1117,7 +1117,7 @@ func (m FuzzerTUI) renderLogView() string {
 
 	// Build header showing log count
 	logCount := m.logBuffer.Count()
-	header := headerStyle.Width(m.width).Render(
+	header := logging.HeaderStyle.Width(m.width).Render(
 		fmt.Sprintf("LOGS (%d entries)", logCount),
 	)
 
@@ -1135,11 +1135,11 @@ func (m FuzzerTUI) renderLogView() string {
 
 // renderErrorScreen renders an error screen when the fuzzer encounters a fatal error
 func (m FuzzerTUI) renderErrorScreen() string {
-	header := headerStyle.Width(m.width).Render("FUZZER ERROR")
+	header := logging.HeaderStyle.Width(m.width).Render("FUZZER ERROR")
 
 	var lines []string
 	lines = append(lines, "")
-	lines = append(lines, errorStyle.Render("The fuzzer encountered an error and has stopped:"))
+	lines = append(lines, logging.ErrorStyle.Render("The fuzzer encountered an error and has stopped:"))
 	lines = append(lines, "")
 
 	// Display the error message
@@ -1153,10 +1153,10 @@ func (m FuzzerTUI) renderErrorScreen() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, mutedStyle.Render("Press 'q' to exit. The error details will be printed to the console."))
+	lines = append(lines, logging.MutedStyle.Render("Press 'q' to exit. The error details will be printed to the console."))
 
 	content := strings.Join(lines, "\n")
-	footer := footerStyle.Width(m.width).Render("q: Quit")
+	footer := logging.FooterStyle.Width(m.width).Render("q: Quit")
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
 }
@@ -1164,7 +1164,7 @@ func (m FuzzerTUI) renderErrorScreen() string {
 // getFuzzerStatus returns the current fuzzer status string
 func (m FuzzerTUI) getFuzzerStatus() string {
 	if corpus := m.fuzzer.Corpus(); corpus != nil && corpus.InitializingCorpus() {
-		return warningStyle.Render("INITIALIZING")
+		return logging.WarningStyle.Render("INITIALIZING")
 	}
-	return valueStyle.Render("FUZZING")
+	return logging.ValueStyle.Render("FUZZING")
 }

@@ -1,4 +1,4 @@
-package tui
+package logging
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 )
 
 // formatDuration formats a duration as HH:MM:SS
-func formatDuration(d time.Duration) string {
+func FormatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
 	h := d / time.Hour
 	d -= h * time.Hour
@@ -19,7 +19,7 @@ func formatDuration(d time.Duration) string {
 }
 
 // formatNumber formats a big.Int as a human-readable string (1.2K, 3.4M, etc.)
-func formatNumber(n *big.Int) string {
+func FormatNumber(n *big.Int) string {
 	if !n.IsUint64() {
 		return n.String()
 	}
@@ -37,7 +37,7 @@ func formatNumber(n *big.Int) string {
 }
 
 // formatRate formats a rate with appropriate units
-func formatRate(value uint64) string {
+func FormatRate(value uint64) string {
 	if value < 1000 {
 		return fmt.Sprintf("%d/sec", value)
 	}
@@ -48,7 +48,7 @@ func formatRate(value uint64) string {
 }
 
 // formatPercentage formats a percentage with one decimal place
-func formatPercentage(numerator, denominator *big.Int) string {
+func FormatPercentage(numerator, denominator *big.Int) string {
 	if denominator.Cmp(big.NewInt(0)) == 0 {
 		return "0.0%"
 	}
@@ -64,7 +64,7 @@ func formatPercentage(numerator, denominator *big.Int) string {
 }
 
 // renderProgressBar renders an ASCII progress bar
-func renderProgressBar(progress float64, width int) string {
+func RenderProgressBar(progress float64, width int) string {
 	if progress < 0 {
 		progress = 0
 	}
@@ -83,7 +83,7 @@ func renderProgressBar(progress float64, width int) string {
 }
 
 // formatBytes formats bytes as human-readable string (KB, MB, GB)
-func formatBytes(bytes uint64) string {
+func FormatBytes(bytes uint64) string {
 	if bytes < 1024 {
 		return fmt.Sprintf("%d B", bytes)
 	}
@@ -97,7 +97,7 @@ func formatBytes(bytes uint64) string {
 }
 
 // truncateString truncates a string to maxLen and adds "..." if needed
-func truncateString(s string, maxLen int) string {
+func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}

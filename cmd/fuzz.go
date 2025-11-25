@@ -5,16 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
-	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/crytic/medusa/cmd/exitcodes"
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
-	"github.com/crytic/medusa/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -154,38 +150,14 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
 	}
 
-	// Create log buffer if TUI is enabled
-	var logBuffer *tui.LogBufferWriter
-	if projectConfig.Logging.EnableTUI {
-		logBuffer = tui.NewLogBufferWriter(5000) // 5000 entry capacity
-
-		// Create GlobalLogger and add log buffer BEFORE creating fuzzer
-		// This ensures NewFuzzer won't recreate the logger and lose our buffer
-		logging.GlobalLogger = logging.NewLogger(projectConfig.Logging.Level)
-		// Use colors in log buffer unless NoColor is set (same as stdout behavior)
-		logging.GlobalLogger.AddWriter(logBuffer, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
-	}
-
-	// Create fuzzer (will use existing GlobalLogger if TUI enabled, or create new one if not)
+	// Create fuzzer (handles TUI setup internally if enabled)
 	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
 		// If fuzzer creation failed and TUI was enabled, we need to show the error
-		if projectConfig.Logging.EnableTUI && logBuffer != nil {
-			// Add stdout writer
+		if projectConfig.Logging.EnableTUI {
+			// Add stdout writer so errors are visible
 			logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
-
-			// Dump all buffered logs to stdout so user can see what went wrong
-			// (e.g., compilation errors that were logged to buffer)
-			fmt.Fprintln(os.Stderr, "\nFuzzer initialization failed. Log history:")
-			fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
-			entries := logBuffer.GetAllEntries()
-			for _, entry := range entries {
-				fmt.Fprintf(os.Stderr, "[%s] %s", entry.Timestamp.Format("15:04:05"), entry.Message)
-				if !strings.HasSuffix(entry.Message, "\n") {
-					fmt.Fprintln(os.Stderr)
-				}
-			}
-			fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
+			cmdLogger.Error("Fuzzer initialization failed in TUI mode. See error above.")
 		}
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
@@ -198,47 +170,8 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
-	// Branch: TUI vs Non-TUI mode
-	if projectConfig.Logging.EnableTUI {
-		errChan := make(chan error, 1)
-		tuiModel := tui.NewFuzzerTUIWithErrChan(fuzzer, errChan)
-		tuiModel.SetLogBuffer(logBuffer)
-		tuiProgram := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
-
-		// Start fuzzer in background
-		go func() {
-			errChan <- fuzzer.Start()
-		}()
-
-		// Run TUI in foreground - it blocks until user presses 'q'
-		// When it returns, the terminal has been restored to normal mode
-		finalModel, tuiErr := tuiProgram.Run()
-
-		// Now that TUI has fully exited and terminal is restored, re-enable stdout logging
-		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
-
-		if tuiErr != nil {
-			cmdLogger.Error("TUI encountered an error:", tuiErr)
-		}
-
-		// Check if the TUI already consumed the fuzzer error
-		if tuiModel, ok := finalModel.(tui.FuzzerTUI); ok {
-			if tuiModel.FuzzErr() != nil {
-				fuzzErr = tuiModel.FuzzErr()
-			} else {
-				// TUI didn't get the error yet, read from channel with short timeout
-				select {
-				case fuzzErr = <-errChan:
-					// Got the error from the channel
-				case <-time.After(5 * time.Second):
-					// Timeout - fuzzer is taking a while to finish
-				}
-			}
-		}
-	} else {
-		// Non-TUI mode: start fuzzing normally
-		fuzzErr = fuzzer.Start()
-	}
+	// Start fuzzing (handles TUI internally if enabled)
+	fuzzErr = fuzzer.Start()
 
 	if fuzzErr != nil {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)

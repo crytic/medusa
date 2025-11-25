@@ -1,4 +1,4 @@
-package tui
+package logging
 
 import (
 	"sync"

@@ -1,4 +1,4 @@
-package tui
+package logging
 
 import "github.com/charmbracelet/lipgloss"
 
@@ -15,7 +15,7 @@ var (
 )
 
 // Header styles
-var headerStyle = lipgloss.NewStyle().
+var HeaderStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(colorWhite).
 	Background(colorPrimary).
@@ -23,14 +23,14 @@ var headerStyle = lipgloss.NewStyle().
 	MarginBottom(1)
 
 // Box styles
-var boxStyle = lipgloss.NewStyle().
+var BoxStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
 	BorderForeground(colorSecondary).
 	Padding(1, 2).
 	MarginBottom(1)
 
 // Worker box style
-var workerBoxStyle = lipgloss.NewStyle().
+var WorkerBoxStyle = lipgloss.NewStyle().
 	Border(lipgloss.NormalBorder()).
 	BorderForeground(colorBorder).
 	Padding(0, 1).
@@ -39,7 +39,7 @@ var workerBoxStyle = lipgloss.NewStyle().
 	MarginRight(1)
 
 // Focused box style (highlighted border)
-var focusedBoxStyle = lipgloss.NewStyle().
+var FocusedBoxStyle = lipgloss.NewStyle().
 	Border(lipgloss.ThickBorder()).
 	BorderForeground(colorPrimary).
 	Padding(1, 2).
@@ -47,70 +47,70 @@ var focusedBoxStyle = lipgloss.NewStyle().
 
 // Text styles
 var (
-	titleStyle = lipgloss.NewStyle().
+	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colorWhite)
 
-	labelStyle = lipgloss.NewStyle().
+	LabelStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
-	valueStyle = lipgloss.NewStyle().
+	ValueStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colorSuccess)
 
-	errorStyle = lipgloss.NewStyle().
+	ErrorStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colorError)
 
-	warningStyle = lipgloss.NewStyle().
+	WarningStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colorWarning)
 
-	mutedStyle = lipgloss.NewStyle().
+	MutedStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
 )
 
 // State-specific styles
 var (
-	stateGeneratingStyle = lipgloss.NewStyle().
+	StateGeneratingStyle = lipgloss.NewStyle().
 				Foreground(colorSuccess).
 				Bold(true)
 
-	stateReplayingStyle = lipgloss.NewStyle().
+	StateReplayingStyle = lipgloss.NewStyle().
 				Foreground(colorWarning).
 				Bold(true)
 
-	stateShrinkingStyle = lipgloss.NewStyle().
+	StateShrinkingStyle = lipgloss.NewStyle().
 				Foreground(colorError).
 				Bold(true)
 
-	stateIdleStyle = lipgloss.NewStyle().
+	StateIdleStyle = lipgloss.NewStyle().
 			Foreground(colorMuted).
 			Bold(true)
 )
 
 // Footer style
-var footerStyle = lipgloss.NewStyle().
+var FooterStyle = lipgloss.NewStyle().
 	Foreground(colorMuted).
 	Padding(0, 2).
 	MarginTop(1)
 
 // getStateStyle returns the appropriate style for a worker state
-func getStateStyle(state string) lipgloss.Style {
+func GetStateStyle(state string) lipgloss.Style {
 	switch state {
 	case "Generating":
-		return stateGeneratingStyle
+		return StateGeneratingStyle
 	case "Replaying Corpus":
-		return stateReplayingStyle
+		return StateReplayingStyle
 	case "Shrinking":
-		return stateShrinkingStyle
+		return StateShrinkingStyle
 	default:
-		return stateIdleStyle
+		return StateIdleStyle
 	}
 }
 
 // getStateIcon returns an icon for a worker state
-func getStateIcon(state string) string {
+func GetStateIcon(state string) string {
 	switch state {
 	case "Generating":
 		return "⚡"
