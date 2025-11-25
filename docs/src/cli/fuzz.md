@@ -194,6 +194,7 @@ medusa fuzz --log-level debug
 The `--tui` flag enables the Terminal User Interface (TUI) mode for an interactive fuzzing experience (equivalent to [`fuzzing.enableTUI`](../project_configuration/fuzzing_config.md#enabletui)).
 
 The TUI provides:
+
 - Real-time fuzzing statistics and worker status
 - Live test case monitoring
 - Interactive trace viewing for failed tests (press `t` or `Enter`)
@@ -201,6 +202,7 @@ The TUI provides:
 - Mouse and keyboard navigation support
 
 **Keyboard Controls:**
+
 - `↑/↓` or `j/k` - Scroll content
 - `PgUp/PgDn` - Page up/down
 - `t` or `Enter` - View test failure traces

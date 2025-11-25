@@ -12,9 +12,9 @@ import (
 	"github.com/crytic/medusa/cmd/exitcodes"
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
-	"github.com/crytic/medusa/fuzzing/tui"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
