@@ -24,26 +24,26 @@ const (
 
 // FuzzerTUI is the bubbletea model for the fuzzer dashboard
 type FuzzerTUI struct {
-	fuzzer           *fuzzing.Fuzzer
-	startTime        time.Time
-	lastUpdate       time.Time
-	width            int
-	height           int
-	showDebug        bool
-	updateCount      int
-	viewport         viewport.Model
-	ready            bool
-	selectedTestIdx  int            // Index of selected failed test (-1 = none)
-	showingTrace     bool           // Whether we're showing the trace view
-	showingLogs      bool           // Whether we're showing the log view
-	mouseEnabled     bool           // Whether mouse scrolling is enabled
-	focusedSection   FocusedSection // Which section has focus for independent scrolling
-	testCasesViewport viewport.Model // Independent viewport for test cases section
-	workersViewport   viewport.Model // Independent viewport for workers section
-	logsViewport      viewport.Model // Independent viewport for logs section
-	errChan          <-chan error   // Channel to receive fuzzer errors
-	fuzzErr          error          // Stores fuzzer error when it occurs
-	logBuffer        *LogBufferWriter // Buffer for capturing logs
+	fuzzer            *fuzzing.Fuzzer
+	startTime         time.Time
+	lastUpdate        time.Time
+	width             int
+	height            int
+	showDebug         bool
+	updateCount       int
+	viewport          viewport.Model
+	ready             bool
+	selectedTestIdx   int              // Index of selected failed test (-1 = none)
+	showingTrace      bool             // Whether we're showing the trace view
+	showingLogs       bool             // Whether we're showing the log view
+	mouseEnabled      bool             // Whether mouse scrolling is enabled
+	focusedSection    FocusedSection   // Which section has focus for independent scrolling
+	testCasesViewport viewport.Model   // Independent viewport for test cases section
+	workersViewport   viewport.Model   // Independent viewport for workers section
+	logsViewport      viewport.Model   // Independent viewport for logs section
+	errChan           <-chan error     // Channel to receive fuzzer errors
+	fuzzErr           error            // Stores fuzzer error when it occurs
+	logBuffer         *LogBufferWriter // Buffer for capturing logs
 }
 
 // NewFuzzerTUI creates a new TUI for the fuzzer
@@ -59,11 +59,11 @@ func NewFuzzerTUI(fuzzer *fuzzing.Fuzzer) *FuzzerTUI {
 		selectedTestIdx: -1,
 		showingTrace:    false,
 		showingLogs:     false,
-		mouseEnabled:    true,        // Start with mouse enabled
-		focusedSection:  FocusNone,   // No section focused initially
-		errChan:         nil,         // No error channel by default
+		mouseEnabled:    true,      // Start with mouse enabled
+		focusedSection:  FocusNone, // No section focused initially
+		errChan:         nil,       // No error channel by default
 		fuzzErr:         nil,
-		logBuffer:       nil,         // No log buffer by default
+		logBuffer:       nil, // No log buffer by default
 	}
 }
 

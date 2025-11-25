@@ -30,7 +30,7 @@ type fuzzerTestContext struct {
 // the provided test method for that context.
 func executeFuzzerTestMethodInternal(t *testing.T, config *config.ProjectConfig, method func(fc *fuzzerTestContext)) {
 	// Create a fuzzer instance with the provided config
-	fuzzer, err := NewFuzzer(*config)
+	fuzzer, err := NewFuzzer(*config, nil)
 	assert.NoError(t, err)
 
 	// Create new fuzzing context
