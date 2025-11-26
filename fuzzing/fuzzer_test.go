@@ -123,6 +123,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
 		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
 		"testdata/contracts/assertions/assert_constant_method.sol",
+		"testdata/contracts/assertions/assert_fallback_receive.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -1266,34 +1267,6 @@ func TestExternalProject(t *testing.T) {
 		method: func(ctx *fuzzerTestContext) {
 			err := ctx.fuzzer.Start()
 			assert.NoError(ctx.t, err)
-		},
-	})
-}
-
-// TestFallbackReceiveCalling tests that the fuzzer properly calls fallback and receive functions.
-// It uses a contract where fallback() sets a boolean x to true, receive() sets boolean y to true,
-// and testFunc() asserts that both are never true at the same time. If the fuzzer properly calls
-// both functions, this assertion will eventually fail.
-func TestFallbackReceiveCalling(t *testing.T) {
-	runFuzzerTest(t, &fuzzerSolcFileTest{
-		filePath: "testdata/contracts/assertions/assert_fallback_receive.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.Testing.AssertionTesting.Enabled = true
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
-			config.Fuzzing.TestLimit = 100_000
-			config.Fuzzing.CallSequenceLength = 100
-		},
-		method: func(f *fuzzerTestContext) {
-			// Start the fuzzer
-			err := f.fuzzer.Start()
-			assert.NoError(t, err)
-
-			// Check for failed assertion tests - we expect the assertion to fail
-			// when both fallback and receive have been called
-			assertFailedTestsExpected(f, true)
 		},
 	})
 }

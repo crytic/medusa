@@ -251,7 +251,14 @@ func (cse *CallSequenceElement) String() string {
 	method, err := cse.Method()
 	methodName := "<unresolved method>"
 	if err == nil && method != nil {
-		methodName = method.Sig
+		// Special handlers for fallback and receive
+		if method.Type == abi.Fallback {
+			methodName = "fallback"
+		} else if method.Type == abi.Receive {
+			methodName = "receive"
+		} else {
+			methodName = method.Sig
+		}
 	}
 
 	// Get our labels that we can use to make the string look better
@@ -259,8 +266,12 @@ func (cse *CallSequenceElement) String() string {
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	argsText := "<unable to unpack args>"
-	if method.Type == abi.Fallback || method.Type == abi.Receive {
+	// Special handlers for fallback and receive
+	if method.Type == abi.Fallback {
+		// Provide the calldata as an argument for fallback
 		argsText = fmt.Sprintf("0x%x", cse.Call.Data)
+	} else if method.Type == abi.Receive {
+		argsText = ""
 	} else if method != nil {
 		args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 		if err == nil {
