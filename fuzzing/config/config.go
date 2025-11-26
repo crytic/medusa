@@ -471,9 +471,6 @@ func (p *ProjectConfig) Validate() error {
 		}
 	}
 
-	// Note: When UseAutolink is enabled, the crytic-export/combined_solc.link file
-	// is generated during compilation, so no validation is needed here
-
 	// The coverage report format must be either "lcov" or "html"
 	if p.Fuzzing.CoverageFormats != nil {
 		for _, report := range p.Fuzzing.CoverageFormats {

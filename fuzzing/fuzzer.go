@@ -241,7 +241,6 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 					// Add the flag if not present
 					if !hasAutolinkFlag {
 						cryticConfig.Args = append(cryticConfig.Args, "--compile-autolink")
-						fuzzer.logger.Info("Added --compile-autolink flag to crytic-compile")
 					}
 
 					// Update the platform config back into the compilation config
@@ -487,16 +486,17 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	}
 
 	// If UseAutolink is enabled and a deployment order is specified, use that order
-	// for the contracts in the crytic-export/combined_solc.link file
+	// for the contracts in the combined_solc.link file
 	var autolinkDeploymentOrder []string
 	if f.config.Fuzzing.UseAutolink {
-		autolinkConfig, readErr := config.ReadAutolinkConfig("crytic-export/combined_solc.link")
-		if readErr != nil {
-			f.logger.Warn("Failed to read autolink config during initialization", readErr)
-		} else if len(autolinkConfig.DeploymentOrder) > 0 {
-			autolinkDeploymentOrder = autolinkConfig.DeploymentOrder
-			// Add these to predeploys so they're included in the deployment order calculation
-			predeploys = append(predeploys, autolinkConfig.DeploymentOrder...)
+		autolinkFilePath := f.getAutolinkFilePath()
+		if autolinkFilePath != "" {
+			autolinkConfig, readErr := config.ReadAutolinkConfig(autolinkFilePath)
+			if readErr != nil {
+				f.logger.Warn("Failed to read autolink config during initialization", readErr)
+			} else if len(autolinkConfig.DeploymentOrder) > 0 {
+				autolinkDeploymentOrder = autolinkConfig.DeploymentOrder
+			}
 		}
 	}
 
@@ -511,6 +511,32 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	if len(autolinkDeploymentOrder) > 0 {
 		f.deploymentOrder = mergeAutolinkOrder(f.deploymentOrder, autolinkDeploymentOrder)
 	}
+}
+
+// getAutolinkFilePath returns the path to the combined_solc.link file based on the compilation config.
+// Returns an empty string if the compilation config is not set or not using crytic-compile.
+func (f *Fuzzer) getAutolinkFilePath() string {
+	if f.config.Compilation == nil {
+		return ""
+	}
+
+	platformConfig, err := f.config.Compilation.GetPlatformConfig()
+	if err != nil {
+		return ""
+	}
+
+	// Only crytic-compile supports autolink
+	if platformConfig.Platform() != "crytic-compile" {
+		return ""
+	}
+
+	// Type assert to get the export directory
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		exportDir := cryticConfig.GetExportDirectory()
+		return filepath.Join(exportDir, "combined_solc.link")
+	}
+
+	return ""
 }
 
 // mergeAutolinkOrder merges a computed deployment order with an autolink deployment order.
@@ -582,9 +608,14 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		}
 	}
 
-	// If UseAutolink is enabled, read addresses from crytic-export/combined_solc.link and add them to overrides
+	// If UseAutolink is enabled, read addresses from the combined_solc.link file and add them to overrides
 	if f.config.Fuzzing.UseAutolink {
-		autolinkConfig, err := config.ReadAutolinkConfig("crytic-export/combined_solc.link")
+		autolinkFilePath := f.getAutolinkFilePath()
+		if autolinkFilePath == "" {
+			return nil, fmt.Errorf("autolink is enabled but could not determine autolink file path")
+		}
+
+		autolinkConfig, err := config.ReadAutolinkConfig(autolinkFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read autolink config: %w", err)
 		}
