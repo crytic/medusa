@@ -124,6 +124,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
 		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
 		"testdata/contracts/assertions/assert_constant_method.sol",
+		"testdata/contracts/assertions/assert_fallback_receive.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{

@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"os"
 	"sync"
 
 	"github.com/crytic/medusa-geth/common"
@@ -72,6 +73,18 @@ func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 	return true
 }
 
+// A bit of a hack, but a pretty harmless one.
+// Some builds produce multiple contracts with identical cbor metadatas.
+// This results in getContractCoverageMapHash returning the same result for different contracts,
+// which cause problems when generating coverage reports.
+// Those people should set USE_FULL_BYTECODE=1, which causes getContractCoverageMapHash calculation
+// to look at the full bytecode, not just the metadata.
+// We don't want to use this option universally because it gets screwed up when immutables are involved,
+// and is probably slower.
+var useFullBytecode func() bool = sync.OnceValue(func() bool {
+	return os.Getenv("USE_FULL_BYTECODE") != ""
+})
+
 // getContractCoverageMapHash obtain the hash used to look up a given contract's ContractCoverageMap.
 // If this is init bytecode, metadata and abi arguments will attempt to be stripped, then a hash is computed.
 // If this is runtime bytecode, the metadata ipfs/swarm hash will be used if available, otherwise the bytecode
@@ -79,7 +92,7 @@ func (cm *CoverageMaps) Equal(b *CoverageMaps) bool {
 // Returns the resulting lookup hash.
 func getContractCoverageMapHash(bytecode []byte, init bool) common.Hash {
 	// If available, the metadata code hash should be unique and reliable to use above all (for runtime bytecode).
-	if !init {
+	if !init && !useFullBytecode() {
 		metadata := compilationTypes.ExtractContractMetadata(bytecode)
 		if metadata != nil {
 			metadataHash := metadata.ExtractBytecodeHash()

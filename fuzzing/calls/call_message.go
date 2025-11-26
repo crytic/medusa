@@ -176,9 +176,13 @@ func (m *CallMessage) FillFromTestChainProperties(chain *chain.TestChain) {
 // Clone creates a copy of the given message and its underlying components, or an error if one occurs.
 func (m *CallMessage) Clone() (*CallMessage, error) {
 	// Clone our underlying ABI values data if we have any.
-	clonedAbiValues, err := m.DataAbiValues.Clone()
-	if err != nil {
-		return nil, err
+	var clonedAbiValues *CallMessageDataAbiValues
+	var err error
+	if m.DataAbiValues != nil {
+		clonedAbiValues, err = m.DataAbiValues.Clone()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a message with the same data copied over.

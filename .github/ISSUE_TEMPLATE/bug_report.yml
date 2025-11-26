@@ -1,0 +1,71 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Medusa
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below to help us investigate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug and what you expected to happen.
+      placeholder: Describe the issue you encountered...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: How can we reproduce this issue? If possible, provide a link to a GitHub repository that demonstrates the bug.
+      placeholder: |
+        1. Run medusa with config...
+        2. Observe that...
+
+        Or: GitHub repo link: https://github.com/...
+    validations:
+      required: true
+
+  - type: input
+    id: medusa-version
+    attributes:
+      label: Medusa Version
+      description: What version of Medusa are you using? Run `medusa version` or provide the commit hash.
+      placeholder: e.g., v0.1.8 or commit c8a990d
+    validations:
+      required: true
+
+  - type: input
+    id: slither-version
+    attributes:
+      label: Slither Version
+      description: If applicable, what version of Slither are you using? Run `slither --version` to find out.
+      placeholder: e.g., 0.10.0
+    validations:
+      required: false
+
+  - type: input
+    id: crytic-compile-version
+    attributes:
+      label: Crytic-Compile Version
+      description: If applicable, what version of crytic-compile are you using? Run `crytic-compile --version` to find out.
+      placeholder: e.g., 0.3.5
+    validations:
+      required: false
+
+  - type: textarea
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system and version are you using? Include OS name and version number.
+      placeholder: |
+        e.g.,
+        - Ubuntu 22.04
+        - macOS 14.1 (Sonoma)
+        - Windows 11 (Build 22621)
+    validations:
+      required: false
