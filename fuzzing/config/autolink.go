@@ -9,14 +9,14 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
-// PredeterminedAddresses represents the mapping from contract names to their predetermined deployment addresses
-// along with an optional deployment order.
-type PredeterminedAddresses struct {
+// AutolinkConfig represents the mapping from contract names to their autolinked deployment addresses
+// along with an optional deployment order. This is read from the crytic-export/combined_solc.link file.
+type AutolinkConfig struct {
 	// DeploymentOrder specifies the order in which contracts should be deployed.
 	// If empty, no specific order is enforced.
 	DeploymentOrder []string `json:"deployment_order"`
 
-	// LibraryAddresses maps contract/library names to their predetermined deployment addresses.
+	// LibraryAddresses maps contract/library names to their autolinked deployment addresses.
 	LibraryAddresses map[string]common.Address `json:"library_addresses"`
 }
 
@@ -26,8 +26,8 @@ type combinedSolcLinkFormat struct {
 	LibraryAddresses map[string]string `json:"library_addresses"`
 }
 
-// ReadPredeterminedAddresses reads the predetermined addresses from a JSON file.
-// The expected format is crytic-export/combined_solc.link format:
+// ReadAutolinkConfig reads the autolink configuration from the crytic-export/combined_solc.link file.
+// The expected format is:
 //
 //	{
 //	  "deployment_order": ["Library1", "Library2", "Library3"],
@@ -38,19 +38,19 @@ type combinedSolcLinkFormat struct {
 //	  }
 //	}
 //
-// Returns a PredeterminedAddresses struct or an error if reading or parsing fails.
-func ReadPredeterminedAddresses(filePath string) (*PredeterminedAddresses, error) {
+// Returns an AutolinkConfig struct or an error if reading or parsing fails.
+func ReadAutolinkConfig(filePath string) (*AutolinkConfig, error) {
 	// Read the file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read predetermined addresses file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to read autolink config file %s: %w", filePath, err)
 	}
 
 	// Parse the JSON into the combined_solc.link format
 	var linkFormat combinedSolcLinkFormat
 	err = json.Unmarshal(data, &linkFormat)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse predetermined addresses JSON from %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to parse autolink config JSON from %s: %w", filePath, err)
 	}
 
 	// Convert string addresses to common.Address
@@ -63,7 +63,7 @@ func ReadPredeterminedAddresses(filePath string) (*PredeterminedAddresses, error
 		addresses[contractName] = addr
 	}
 
-	return &PredeterminedAddresses{
+	return &AutolinkConfig{
 		DeploymentOrder:  linkFormat.DeploymentOrder,
 		LibraryAddresses: addresses,
 	}, nil

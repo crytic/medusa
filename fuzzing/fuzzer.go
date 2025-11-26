@@ -218,8 +218,8 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
-		// If UsePredeterminedAddresses is enabled, add the --compile-autolink flag to crytic-compile
-		if fuzzer.config.Fuzzing.UsePredeterminedAddresses {
+		// If UseAutolink is enabled, add the --compile-autolink flag to crytic-compile
+		if fuzzer.config.Fuzzing.UseAutolink {
 			platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get platform config for autolink: %w", err)
@@ -486,17 +486,17 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		predeploys = append(predeploys, p)
 	}
 
-	// If UsePredeterminedAddresses is enabled and a deployment order is specified, use that order
-	// for the contracts in the predetermined addresses file
-	var predeterminedDeploymentOrder []string
-	if f.config.Fuzzing.UsePredeterminedAddresses {
-		predeterminedAddresses, readErr := config.ReadPredeterminedAddresses(f.config.Fuzzing.PredeterminedAddressesFile)
+	// If UseAutolink is enabled and a deployment order is specified, use that order
+	// for the contracts in the crytic-export/combined_solc.link file
+	var autolinkDeploymentOrder []string
+	if f.config.Fuzzing.UseAutolink {
+		autolinkConfig, readErr := config.ReadAutolinkConfig("crytic-export/combined_solc.link")
 		if readErr != nil {
-			f.logger.Warn("Failed to read predetermined addresses during initialization", readErr)
-		} else if len(predeterminedAddresses.DeploymentOrder) > 0 {
-			predeterminedDeploymentOrder = predeterminedAddresses.DeploymentOrder
+			f.logger.Warn("Failed to read autolink config during initialization", readErr)
+		} else if len(autolinkConfig.DeploymentOrder) > 0 {
+			autolinkDeploymentOrder = autolinkConfig.DeploymentOrder
 			// Add these to predeploys so they're included in the deployment order calculation
-			predeploys = append(predeploys, predeterminedAddresses.DeploymentOrder...)
+			predeploys = append(predeploys, autolinkConfig.DeploymentOrder...)
 		}
 	}
 
@@ -507,29 +507,29 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		f.logger.Warn("Could not get a deployment order", err)
 	}
 
-	// If we have a predetermined deployment order, ensure those contracts follow that order
-	if len(predeterminedDeploymentOrder) > 0 {
-		f.deploymentOrder = mergePredeterminedOrder(f.deploymentOrder, predeterminedDeploymentOrder)
+	// If we have an autolink deployment order, ensure those contracts follow that order
+	if len(autolinkDeploymentOrder) > 0 {
+		f.deploymentOrder = mergeAutolinkOrder(f.deploymentOrder, autolinkDeploymentOrder)
 	}
 }
 
-// mergePredeterminedOrder merges a computed deployment order with a predetermined order.
-// For contracts in the predetermined order, it preserves that order. Other contracts are placed
-// after the predetermined ones while maintaining their relative order.
-func mergePredeterminedOrder(computedOrder []string, predeterminedOrder []string) []string {
-	// Create a set of predetermined contracts for quick lookup
-	predeterminedSet := make(map[string]bool)
-	for _, name := range predeterminedOrder {
-		predeterminedSet[name] = true
+// mergeAutolinkOrder merges a computed deployment order with an autolink deployment order.
+// For contracts in the autolink order, it preserves that order. Other contracts are placed
+// after the autolink ones while maintaining their relative order.
+func mergeAutolinkOrder(computedOrder []string, autolinkOrder []string) []string {
+	// Create a set of autolink contracts for quick lookup
+	autolinkSet := make(map[string]bool)
+	for _, name := range autolinkOrder {
+		autolinkSet[name] = true
 	}
 
-	// Build the result: start with predetermined order
+	// Build the result: start with autolink order
 	result := make([]string, 0, len(computedOrder))
-	result = append(result, predeterminedOrder...)
+	result = append(result, autolinkOrder...)
 
-	// Add contracts from computed order that are not in predetermined order
+	// Add contracts from computed order that are not in autolink order
 	for _, name := range computedOrder {
-		if !predeterminedSet[name] {
+		if !autolinkSet[name] {
 			result = append(result, name)
 		}
 	}
@@ -582,21 +582,21 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		}
 	}
 
-	// If UsePredeterminedAddresses is enabled, read addresses from the file and add them to overrides
-	if f.config.Fuzzing.UsePredeterminedAddresses {
-		predeterminedAddresses, err := config.ReadPredeterminedAddresses(f.config.Fuzzing.PredeterminedAddressesFile)
+	// If UseAutolink is enabled, read addresses from crytic-export/combined_solc.link and add them to overrides
+	if f.config.Fuzzing.UseAutolink {
+		autolinkConfig, err := config.ReadAutolinkConfig("crytic-export/combined_solc.link")
 		if err != nil {
-			return nil, fmt.Errorf("failed to read predetermined addresses: %w", err)
+			return nil, fmt.Errorf("failed to read autolink config: %w", err)
 		}
 
-		// Add predetermined addresses to the contract address overrides
-		for contractName, contractAddr := range predeterminedAddresses.LibraryAddresses {
+		// Add autolink addresses to the contract address overrides
+		for contractName, contractAddr := range autolinkConfig.LibraryAddresses {
 			found := false
 			// Try to find the associated compilation artifact
 			for _, contract := range f.contractDefinitions {
 				if contract.Name() == contractName {
 					// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
-					// predetermined address
+					// autolink address
 					initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
 					contractAddressOverrides[initBytecodeHash] = contractAddr
 					found = true
@@ -604,9 +604,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 				}
 			}
 
-			// Throw an error if the contract specified in the addresses file is not found
+			// Throw an error if the contract specified in the autolink file is not found
 			if !found {
-				return nil, fmt.Errorf("%v was specified in the predetermined addresses file but was not found in the compilation artifacts", contractName)
+				return nil, fmt.Errorf("%v was specified in the autolink config file but was not found in the compilation artifacts", contractName)
 			}
 		}
 	}

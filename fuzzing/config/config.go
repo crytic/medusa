@@ -99,15 +99,11 @@ type FuzzingConfig struct {
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
 
-	// UsePredeterminedAddresses enables deploying contracts to predetermined addresses from crytic-export/combined_solc.link file.
-	// When enabled, the fuzzer will read the file and deploy contracts to the addresses specified in that file,
+	// UseAutolink enables the --compile-autolink flag for crytic-compile and deploys contracts to
+	// the addresses specified in the crytic-export/combined_solc.link file.
+	// When enabled, the fuzzer will read that file and deploy contracts to the addresses specified,
 	// following the deployment order if provided.
-	UsePredeterminedAddresses bool `json:"usePredeterminedAddresses"`
-
-	// PredeterminedAddressesFile specifies the path to the JSON file containing predetermined contract addresses.
-	// The file should be in crytic-export/combined_solc.link format with deployment_order and library_addresses.
-	// Defaults to "crytic-export/combined_solc.link" if not specified.
-	PredeterminedAddressesFile string `json:"predeterminedAddressesFile"`
+	UseAutolink bool `json:"useAutolink"`
 
 	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
 	// compared to the previous.
@@ -475,13 +471,8 @@ func (p *ProjectConfig) Validate() error {
 		}
 	}
 
-	// Verify that the predetermined addresses file path is specified if the feature is enabled
-	// Note: We don't check file existence here because the file is generated during compilation
-	if p.Fuzzing.UsePredeterminedAddresses {
-		if p.Fuzzing.PredeterminedAddressesFile == "" {
-			return errors.New("project configuration must specify a predetermined addresses file path when usePredeterminedAddresses is enabled")
-		}
-	}
+	// Note: When UseAutolink is enabled, the crytic-export/combined_solc.link file
+	// is generated during compilation, so no validation is needed here
 
 	// The coverage report format must be either "lcov" or "html"
 	if p.Fuzzing.CoverageFormats != nil {
