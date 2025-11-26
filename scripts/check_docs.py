@@ -251,7 +251,11 @@ class DocChecker:
                 if not go_field_name[0].isupper():
                     continue
 
-                # Strip JSON tag modifiers like ,omitempty, ,omitzero, etc.
+                # Skip fields with omitempty (optional/internal fields not required in user docs)
+                if ',omitempty' in json_field_name:
+                    continue
+
+                # Strip other JSON tag modifiers like ,omitzero, etc.
                 json_field_name = json_field_name.split(',')[0]
 
                 # Skip nested struct fields (fields whose type is another config struct)
