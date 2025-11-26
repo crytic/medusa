@@ -5,6 +5,7 @@
 **Related Issues:** <!-- Closes #XXX -->
 
 **Type of Change:**
+
 - [ ] Bug Fix
 - [ ] New Feature
 - [ ] Refactoring
