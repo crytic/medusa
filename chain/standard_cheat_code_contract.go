@@ -92,6 +92,26 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
+	// cheatCodePanicData creates cheatCodeRawReturnData with a Solidity panic code.
+	// Panic codes are encoded as: Panic(uint256) selector + 32-byte panic code.
+	cheatCodePanicData := func(panicCode uint64) *cheatCodeRawReturnData {
+		// Create the Panic(uint256) ABI method to get the selector
+		panicMethod := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false,
+			abi.Arguments{{Type: typeUint256}}, abi.Arguments{})
+
+		// Encode the panic code as uint256
+		panicCodeBig := new(big.Int).SetUint64(panicCode)
+		returnData, _ := panicMethod.Inputs.Pack(panicCodeBig)
+
+		// Prepend the selector
+		fullReturnData := append(panicMethod.ID, returnData...)
+
+		return &cheatCodeRawReturnData{
+			ReturnData: fullReturnData,
+			Err:        vm.ErrExecutionReverted,
+		}
+	}
+
 	// Warp: Sets VM timestamp. Note that this _permanently_ updates the block timestamp for the remainder of the
 	// chain's lifecycle.
 	contract.addMethod(
@@ -807,6 +827,268 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 
 			// Return the bytecode
 			return []any{bytecode}, nil
+		},
+	)
+
+	// assertTrue: Assert that a boolean condition is true
+	contract.addMethod("assertTrue", abi.Arguments{{Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			condition := inputs[0].(bool)
+			if !condition {
+				return nil, cheatCodePanicData(0x01) // PanicCodeAssertFailed
+			}
+			return nil, nil
+		},
+	)
+
+	// assertFalse: Assert that a boolean condition is false
+	contract.addMethod("assertFalse", abi.Arguments{{Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			condition := inputs[0].(bool)
+			if condition {
+				return nil, cheatCodePanicData(0x01) // PanicCodeAssertFailed
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(bool,bool): Assert that two booleans are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeBool}, {Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(bool)
+			b := inputs[1].(bool)
+			if a != b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(uint256,uint256): Assert that two uint256 values are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) != 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(int256,int256): Assert that two int256 values are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) != 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(address,address): Assert that two addresses are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(common.Address)
+			b := inputs[1].(common.Address)
+			if a != b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(bytes32,bytes32): Assert that two bytes32 values are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeBytes32}, {Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].([32]byte)
+			b := inputs[1].([32]byte)
+			if a != b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertEq(string,string): Assert that two strings are equal
+	contract.addMethod("assertEq", abi.Arguments{{Type: typeString}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(string)
+			b := inputs[1].(string)
+			if a != b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(bool,bool): Assert that two booleans are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeBool}, {Type: typeBool}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(bool)
+			b := inputs[1].(bool)
+			if a == b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(uint256,uint256): Assert that two uint256 values are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) == 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(int256,int256): Assert that two int256 values are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) == 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(address,address): Assert that two addresses are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeAddress}, {Type: typeAddress}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(common.Address)
+			b := inputs[1].(common.Address)
+			if a == b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(bytes32,bytes32): Assert that two bytes32 values are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeBytes32}, {Type: typeBytes32}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].([32]byte)
+			b := inputs[1].([32]byte)
+			if a == b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertNotEq(string,string): Assert that two strings are not equal
+	contract.addMethod("assertNotEq", abi.Arguments{{Type: typeString}, {Type: typeString}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(string)
+			b := inputs[1].(string)
+			if a == b {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertLt(uint256,uint256): Assert that a < b for unsigned integers
+	contract.addMethod("assertLt", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) >= 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertLt(int256,int256): Assert that a < b for signed integers
+	contract.addMethod("assertLt", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) >= 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertLe(uint256,uint256): Assert that a <= b for unsigned integers
+	contract.addMethod("assertLe", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) > 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertLe(int256,int256): Assert that a <= b for signed integers
+	contract.addMethod("assertLe", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) > 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertGt(uint256,uint256): Assert that a > b for unsigned integers
+	contract.addMethod("assertGt", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) <= 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertGt(int256,int256): Assert that a > b for signed integers
+	contract.addMethod("assertGt", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) <= 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertGe(uint256,uint256): Assert that a >= b for unsigned integers
+	contract.addMethod("assertGe", abi.Arguments{{Type: typeUint256}, {Type: typeUint256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) < 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
+		},
+	)
+
+	// assertGe(int256,int256): Assert that a >= b for signed integers
+	contract.addMethod("assertGe", abi.Arguments{{Type: typeInt256}, {Type: typeInt256}}, abi.Arguments{},
+		func(tracer *cheatCodeTracer, inputs []any) ([]any, *cheatCodeRawReturnData) {
+			a := inputs[0].(*big.Int)
+			b := inputs[1].(*big.Int)
+			if a.Cmp(b) < 0 {
+				return nil, cheatCodePanicData(0x01)
+			}
+			return nil, nil
 		},
 	)
 

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/utils"
 
 	"github.com/crytic/medusa-geth/common"
@@ -325,6 +326,127 @@ func TestCheatCodes(t *testing.T) {
 
 				// Check for failed assertion tests.
 				assertFailedTestsExpected(f, false)
+			},
+		})
+	}
+}
+
+// TestAssertCheatCodes runs tests to ensure that assert* vm extensions ("cheat codes") are working as intended.
+func TestAssertCheatCodesPass(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/cheat_codes/assert/assert_cheatcodes.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+
+				// some tests require full sequence + revert to test fully
+				config.Fuzzing.Workers = 3
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
+
+				// enable assertion testing only
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = false
+				config.Slither.UseSlither = false
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, false)
+			},
+		})
+	}
+}
+
+// TestAssertCheatCodes runs tests to ensure that assert* vm extensions ("cheat codes") are working as intended.
+func TestAssertCheatCodesFail(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/cheat_codes/assert/assert_true_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_false_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_bool_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_int256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_address_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_bytes32_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_eq_string_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_bool_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_int256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_address_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_bytes32_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_not_eq_string_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_lt_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_lt_int256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_le_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_le_int256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_gt_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_gt_int256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_ge_uint256_fails.sol",
+		"testdata/contracts/cheat_codes/assert/assert_ge_int256_fails.sol",
+	}
+
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+
+				// some tests require full sequence + revert to test fully
+				config.Fuzzing.Workers = 3
+				config.Fuzzing.TestLimit = uint64(config.Fuzzing.CallSequenceLength*config.Fuzzing.Workers) * 3
+
+				// enable assertion testing only
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
+				config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = false
+				config.Slither.UseSlither = false
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				assertFailedTestsExpected(f, true)
+
+				// Verify that the failure was due to panic code 0x01 (PanicCodeAssertFailed)
+				failedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTests, "expected at least one failed test")
+
+				for _, test := range failedTests {
+					assertionTest, ok := test.(*AssertionTestCase)
+					assert.True(t, ok, "expected test to be an AssertionTestCase")
+					assert.NotNil(t, assertionTest.callSequence, "expected call sequence to exist")
+
+					// Get the last call in the sequence (the one that triggered the assertion failure)
+					lastCall := (*assertionTest.callSequence)[len(*assertionTest.callSequence)-1]
+					assert.NotNil(t, lastCall.ExecutionTrace, "expected execution trace to exist")
+
+					// Extract the panic code from the top-level call frame
+					topFrame := lastCall.ExecutionTrace.TopLevelCallFrame
+					panicCode := abiutils.GetSolidityPanicCode(
+						topFrame.ReturnError,
+						topFrame.ReturnData,
+						true,
+					)
+
+					// Verify that we got panic code 0x01 (assertion failed)
+					assert.NotNil(t, panicCode, "expected panic code to be extracted from failed assertion")
+					assert.Equal(t, uint64(0x01), panicCode.Uint64(), "expected panic code 0x01 (PanicCodeAssertFailed)")
+				}
 			},
 		})
 	}
