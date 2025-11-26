@@ -61,14 +61,15 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 					}
 				}
 			}
-			// Throw error if for any reason libPath becomes empty
-			if libPath == "" {
-				panic("libPath is empty, could not determine the library path")
-			}
+
 			// Check each contract in the source
 			for contractName, contract := range sourceArtifact.Contracts {
 				// Check if this is a library
 				if contract.Kind == types.ContractKindLibrary {
+					// Throw an error if for any reason libPath becomes empty. We need an absolute path.
+					if libPath == "" {
+						panic(fmt.Sprintf("cannot resolve fully qualified path for library %s", contractName))
+					}
 					fullName := libPath + ":" + contractName
 					// Short name is just the contract name
 					shortName := contractName
