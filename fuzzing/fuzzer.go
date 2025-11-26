@@ -31,6 +31,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -217,6 +218,41 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
+		// If UsePredeterminedAddresses is enabled, add the --compile-autolink flag to crytic-compile
+		if fuzzer.config.Fuzzing.UsePredeterminedAddresses {
+			platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get platform config for autolink: %w", err)
+			}
+
+			// Check if this is a crytic-compile platform config
+			if platformConfig.Platform() == "crytic-compile" {
+				// Type assert to CryticCompilationConfig
+				if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+					// Check if --compile-autolink is not already in the args
+					hasAutolinkFlag := false
+					for _, arg := range cryticConfig.Args {
+						if arg == "--compile-autolink" {
+							hasAutolinkFlag = true
+							break
+						}
+					}
+
+					// Add the flag if not present
+					if !hasAutolinkFlag {
+						cryticConfig.Args = append(cryticConfig.Args, "--compile-autolink")
+						fuzzer.logger.Info("Added --compile-autolink flag to crytic-compile")
+					}
+
+					// Update the platform config back into the compilation config
+					err = fuzzer.config.Compilation.SetPlatformConfig(cryticConfig)
+					if err != nil {
+						return nil, fmt.Errorf("failed to update platform config with autolink flag: %w", err)
+					}
+				}
+			}
+		}
+
 		// Compile the targets specified in the compilation config
 		fuzzer.logger.Info("Compiling targets with ", colors.Bold, fuzzer.config.Compilation.Platform, colors.Reset)
 		start := time.Now()
@@ -450,12 +486,55 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		predeploys = append(predeploys, p)
 	}
 
+	// If UsePredeterminedAddresses is enabled and a deployment order is specified, use that order
+	// for the contracts in the predetermined addresses file
+	var predeterminedDeploymentOrder []string
+	if f.config.Fuzzing.UsePredeterminedAddresses {
+		predeterminedAddresses, readErr := config.ReadPredeterminedAddresses(f.config.Fuzzing.PredeterminedAddressesFile)
+		if readErr != nil {
+			f.logger.Warn("Failed to read predetermined addresses during initialization", readErr)
+		} else if len(predeterminedAddresses.DeploymentOrder) > 0 {
+			predeterminedDeploymentOrder = predeterminedAddresses.DeploymentOrder
+			// Add these to predeploys so they're included in the deployment order calculation
+			predeploys = append(predeploys, predeterminedAddresses.DeploymentOrder...)
+		}
+	}
+
 	// Generate a topologically sorted deployment order based on library dependencies
 	// This ensures that libraries are deployed before contracts that depend on them
 	f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, predeploys, f.config.Fuzzing.TargetContracts)
 	if err != nil {
 		f.logger.Warn("Could not get a deployment order", err)
 	}
+
+	// If we have a predetermined deployment order, ensure those contracts follow that order
+	if len(predeterminedDeploymentOrder) > 0 {
+		f.deploymentOrder = mergePredeterminedOrder(f.deploymentOrder, predeterminedDeploymentOrder)
+	}
+}
+
+// mergePredeterminedOrder merges a computed deployment order with a predetermined order.
+// For contracts in the predetermined order, it preserves that order. Other contracts are placed
+// after the predetermined ones while maintaining their relative order.
+func mergePredeterminedOrder(computedOrder []string, predeterminedOrder []string) []string {
+	// Create a set of predetermined contracts for quick lookup
+	predeterminedSet := make(map[string]bool)
+	for _, name := range predeterminedOrder {
+		predeterminedSet[name] = true
+	}
+
+	// Build the result: start with predetermined order
+	result := make([]string, 0, len(computedOrder))
+	result = append(result, predeterminedOrder...)
+
+	// Add contracts from computed order that are not in predetermined order
+	for _, name := range computedOrder {
+		if !predeterminedSet[name] {
+			result = append(result, name)
+		}
+	}
+
+	return result
 }
 
 // createTestChain creates a test chain with the account balance allocations specified by the config.
@@ -500,6 +579,35 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		// Throw an error if the contract specified in the config is not found
 		if !found {
 			return nil, fmt.Errorf("%v was specified in the predeployed contracts but was not found in the compilation artifacts", contractName)
+		}
+	}
+
+	// If UsePredeterminedAddresses is enabled, read addresses from the file and add them to overrides
+	if f.config.Fuzzing.UsePredeterminedAddresses {
+		predeterminedAddresses, err := config.ReadPredeterminedAddresses(f.config.Fuzzing.PredeterminedAddressesFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read predetermined addresses: %w", err)
+		}
+
+		// Add predetermined addresses to the contract address overrides
+		for contractName, contractAddr := range predeterminedAddresses.LibraryAddresses {
+			found := false
+			// Try to find the associated compilation artifact
+			for _, contract := range f.contractDefinitions {
+				if contract.Name() == contractName {
+					// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
+					// predetermined address
+					initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
+					contractAddressOverrides[initBytecodeHash] = contractAddr
+					found = true
+					break
+				}
+			}
+
+			// Throw an error if the contract specified in the addresses file is not found
+			if !found {
+				return nil, fmt.Errorf("%v was specified in the predetermined addresses file but was not found in the compilation artifacts", contractName)
+			}
 		}
 	}
 

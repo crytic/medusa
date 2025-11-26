@@ -99,6 +99,16 @@ type FuzzingConfig struct {
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
 
+	// UsePredeterminedAddresses enables deploying contracts to predetermined addresses from crytic-export/combined_solc.link file.
+	// When enabled, the fuzzer will read the file and deploy contracts to the addresses specified in that file,
+	// following the deployment order if provided.
+	UsePredeterminedAddresses bool `json:"usePredeterminedAddresses"`
+
+	// PredeterminedAddressesFile specifies the path to the JSON file containing predetermined contract addresses.
+	// The file should be in crytic-export/combined_solc.link format with deployment_order and library_addresses.
+	// Defaults to "crytic-export/combined_solc.link" if not specified.
+	PredeterminedAddressesFile string `json:"predeterminedAddressesFile"`
+
 	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
 	// compared to the previous.
 	MaxBlockNumberDelay uint64 `json:"blockNumberDelayMax"`
@@ -462,6 +472,14 @@ func (p *ProjectConfig) Validate() error {
 	for _, addr := range p.Fuzzing.PredeployedContracts {
 		if _, err := utils.HexStringToAddress(addr); err != nil {
 			return errors.New("project configuration must specify only well-formed predeployed contract address(es)")
+		}
+	}
+
+	// Verify that the predetermined addresses file path is specified if the feature is enabled
+	// Note: We don't check file existence here because the file is generated during compilation
+	if p.Fuzzing.UsePredeterminedAddresses {
+		if p.Fuzzing.PredeterminedAddressesFile == "" {
+			return errors.New("project configuration must specify a predetermined addresses file path when usePredeterminedAddresses is enabled")
 		}
 	}
 
