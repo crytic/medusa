@@ -215,9 +215,23 @@ jobs:
       - name: Test
         run: go test ./...
 
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Check documentation sync
+        run: python3 scripts/check_docs.py
+
   all-checks:
     if: always()
-    needs: [lint, test, build, release]
+    needs: [lint, test, build, release, docs-check]
 
     runs-on: ubuntu-latest
 
