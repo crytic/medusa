@@ -211,6 +211,7 @@ jobs:
       - name: Install solc
         run: |
           solc-select use 0.8.28 --always-install
+          # see DEFAULT_TEST_SOLC_VERSION in medusa
 
       - name: Test
         run: go test ./...
