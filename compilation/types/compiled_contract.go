@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/crytic/medusa-geth/common"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
-	"golang.org/x/exp/slices"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // CompiledContract represents a single contract unit from a smart contract compilation.

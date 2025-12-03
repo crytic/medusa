@@ -1,21 +1,20 @@
 package executiontracer
 
 import (
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core"
 	"github.com/crytic/medusa-geth/core/tracing"
 	coretypes "github.com/crytic/medusa-geth/core/types"
-	"github.com/crytic/medusa/chain"
-	"github.com/crytic/medusa/chain/types"
-	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
-	"golang.org/x/exp/slices"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
