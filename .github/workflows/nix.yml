@@ -91,7 +91,7 @@ jobs:
           fi
 
       - name: Manage PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           NEEDS_UPDATE: ${{ steps.check.outputs.needs_update }}
           EXISTING_HASH: ${{ steps.check.outputs.existing_hash }}
