@@ -31,6 +31,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -217,6 +218,40 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 	// If we have a compilation config
 	if fuzzer.config.Compilation != nil {
+		// If UseAutolink is enabled, add the --compile-autolink flag to crytic-compile
+		if fuzzer.config.Fuzzing.UseAutolink {
+			platformConfig, err := fuzzer.config.Compilation.GetPlatformConfig()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get platform config for autolink: %w", err)
+			}
+
+			// Check if this is a crytic-compile platform config
+			if platformConfig.Platform() == "crytic-compile" {
+				// Type assert to CryticCompilationConfig
+				if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+					// Check if --compile-autolink is not already in the args
+					hasAutolinkFlag := false
+					for _, arg := range cryticConfig.Args {
+						if arg == "--compile-autolink" {
+							hasAutolinkFlag = true
+							break
+						}
+					}
+
+					// Add the flag if not present
+					if !hasAutolinkFlag {
+						cryticConfig.Args = append(cryticConfig.Args, "--compile-autolink")
+					}
+
+					// Update the platform config back into the compilation config
+					err = fuzzer.config.Compilation.SetPlatformConfig(cryticConfig)
+					if err != nil {
+						return nil, fmt.Errorf("failed to update platform config with autolink flag: %w", err)
+					}
+				}
+			}
+		}
+
 		// Compile the targets specified in the compilation config
 		fuzzer.logger.Info("Compiling targets with ", colors.Bold, fuzzer.config.Compilation.Platform, colors.Reset)
 		start := time.Now()
@@ -450,12 +485,82 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		predeploys = append(predeploys, p)
 	}
 
+	// If UseAutolink is enabled and a deployment order is specified, use that order
+	// for the contracts in the combined_solc.link file
+	var autolinkDeploymentOrder []string
+	if f.config.Fuzzing.UseAutolink {
+		autolinkFilePath := f.getAutolinkFilePath()
+		if autolinkFilePath != "" {
+			autolinkConfig, readErr := config.ReadAutolinkConfig(autolinkFilePath)
+			if readErr != nil {
+				f.logger.Warn("Failed to read autolink config during initialization", readErr)
+			} else if len(autolinkConfig.DeploymentOrder) > 0 {
+				autolinkDeploymentOrder = autolinkConfig.DeploymentOrder
+			}
+		}
+	}
+
 	// Generate a topologically sorted deployment order based on library dependencies
 	// This ensures that libraries are deployed before contracts that depend on them
 	f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, predeploys, f.config.Fuzzing.TargetContracts)
 	if err != nil {
 		f.logger.Warn("Could not get a deployment order", err)
 	}
+
+	// If we have an autolink deployment order, ensure those contracts follow that order
+	if len(autolinkDeploymentOrder) > 0 {
+		f.deploymentOrder = mergeAutolinkOrder(f.deploymentOrder, autolinkDeploymentOrder)
+	}
+}
+
+// getAutolinkFilePath returns the path to the combined_solc.link file based on the compilation config.
+// Returns an empty string if the compilation config is not set or not using crytic-compile.
+func (f *Fuzzer) getAutolinkFilePath() string {
+	if f.config.Compilation == nil {
+		return ""
+	}
+
+	platformConfig, err := f.config.Compilation.GetPlatformConfig()
+	if err != nil {
+		return ""
+	}
+
+	// Only crytic-compile supports autolink
+	if platformConfig.Platform() != "crytic-compile" {
+		return ""
+	}
+
+	// Type assert to get the export directory
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		exportDir := cryticConfig.GetExportDirectory()
+		return filepath.Join(exportDir, "combined_solc.link")
+	}
+
+	return ""
+}
+
+// mergeAutolinkOrder merges a computed deployment order with an autolink deployment order.
+// For contracts in the autolink order, it preserves that order. Other contracts are placed
+// after the autolink ones while maintaining their relative order.
+func mergeAutolinkOrder(computedOrder []string, autolinkOrder []string) []string {
+	// Create a set of autolink contracts for quick lookup
+	autolinkSet := make(map[string]bool)
+	for _, name := range autolinkOrder {
+		autolinkSet[name] = true
+	}
+
+	// Build the result: start with autolink order
+	result := make([]string, 0, len(computedOrder))
+	result = append(result, autolinkOrder...)
+
+	// Add contracts from computed order that are not in autolink order
+	for _, name := range computedOrder {
+		if !autolinkSet[name] {
+			result = append(result, name)
+		}
+	}
+
+	return result
 }
 
 // createTestChain creates a test chain with the account balance allocations specified by the config.
@@ -500,6 +605,40 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		// Throw an error if the contract specified in the config is not found
 		if !found {
 			return nil, fmt.Errorf("%v was specified in the predeployed contracts but was not found in the compilation artifacts", contractName)
+		}
+	}
+
+	// If UseAutolink is enabled, read addresses from the combined_solc.link file and add them to overrides
+	if f.config.Fuzzing.UseAutolink {
+		autolinkFilePath := f.getAutolinkFilePath()
+		if autolinkFilePath == "" {
+			return nil, fmt.Errorf("autolink is enabled but could not determine autolink file path")
+		}
+
+		autolinkConfig, err := config.ReadAutolinkConfig(autolinkFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read autolink config: %w", err)
+		}
+
+		// Add autolink addresses to the contract address overrides
+		for contractName, contractAddr := range autolinkConfig.LibraryAddresses {
+			found := false
+			// Try to find the associated compilation artifact
+			for _, contract := range f.contractDefinitions {
+				if contract.Name() == contractName {
+					// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
+					// autolink address
+					initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
+					contractAddressOverrides[initBytecodeHash] = contractAddr
+					found = true
+					break
+				}
+			}
+
+			// Throw an error if the contract specified in the autolink file is not found
+			if !found {
+				return nil, fmt.Errorf("%v was specified in the autolink config file but was not found in the compilation artifacts", contractName)
+			}
 		}
 	}
 
