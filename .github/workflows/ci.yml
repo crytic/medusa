@@ -82,7 +82,7 @@ jobs:
 
       - name: Sign artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/gh-action-sigstore-python@7b8cfcba45e769065eb4bf410ccf1dcb13b8b24f
+        uses: sigstore/gh-action-sigstore-python@cd06a1783504a0c8e550f0d0cd47d3bbae8d71bd
         with:
           inputs: ./medusa-*.tar.gz
 
