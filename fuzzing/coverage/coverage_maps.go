@@ -272,7 +272,7 @@ func newContractCoverageMap() *ContractCoverageMap {
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
 	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
-	//  it may make sense to just check that both of them are greater than zero
+	// It may make sense to just check that both of them are greater than zero
 
 	for marker, hitcount := range cm.executedMarkers {
 		if b.executedMarkers[marker] != hitcount {

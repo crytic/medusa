@@ -131,7 +131,7 @@ The `TestChain` maintains event emitters for the following events under `TestCha
 
 - `PendingBlockCreatedEvent`: This indicates a new block is being created but has not yet been committed to the chain. The block is empty at this point but will likely be populated. It provides a reference to the `Block` and `TestChain`.
 
-- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been commited to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
+- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been committed to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
 
 - `PendingBlockCommittedEvent`: This indicates a pending block was committed to chain as the new head. It provides a reference to the `Block` and `TestChain`.
 
