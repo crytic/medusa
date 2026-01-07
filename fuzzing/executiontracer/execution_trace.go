@@ -4,22 +4,21 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/config"
 	"regexp"
 	"strings"
 
-	"github.com/crytic/medusa-geth/common"
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
 	coreTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/abiutils"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/utils"
 )
 
 // ExecutionTrace contains information recorded by an ExecutionTracer. It contains information about each call

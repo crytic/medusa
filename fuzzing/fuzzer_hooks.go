@@ -1,13 +1,12 @@
 package fuzzing
 
 import (
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/rand"
-
-	"github.com/crytic/medusa/fuzzing/executiontracer"
 
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 )
 

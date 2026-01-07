@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/crytic/medusa-geth/common"
 	"regexp"
 	"strings"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
 	"golang.org/x/exp/slices"
 )
 

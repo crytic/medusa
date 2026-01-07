@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/crytic/medusa-geth/crypto"
 	"github.com/crytic/medusa/compilation/types"
 )

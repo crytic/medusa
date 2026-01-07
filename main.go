@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/crytic/medusa/cmd"
 	"github.com/crytic/medusa/cmd/exitcodes"
-	"os"
 )
 
 func main() {

@@ -2,9 +2,9 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/crytic/medusa-geth/accounts/abi"
 	"math/big"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"

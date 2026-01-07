@@ -1,13 +1,13 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/cache"
 	"testing"
 
 	"github.com/crytic/medusa-geth/common"
 	gethstate "github.com/crytic/medusa-geth/core/state"
 	"github.com/crytic/medusa-geth/core/tracing"
 	"github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa/chain/state/cache"
 	types2 "github.com/crytic/medusa/chain/types"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"

@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slices"
 )
 
 // generalComDesc describes the long description for the completion command
