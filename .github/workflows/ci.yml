@@ -172,7 +172,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
-          version: latest
+          version: v1.64.8
           args: --timeout 5m0s
   test:
     strategy:
@@ -190,7 +190,7 @@ jobs:
       - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
         with:
           enable-cache: true
-          python-version: "3.10"
+          python-version: "3.13"
 
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
@@ -226,16 +226,18 @@ jobs:
 
       - name: Install dependencies (parallel)
         run: |
-          # Start Python deps in background
-          uv pip install --system solc-select slither-analyzer &
-          UV_PID=$!
+          # Start Python tool installs in background
+          uv tool install solc-select &
+          UV_PID1=$!
+          uv tool install slither-analyzer &
+          UV_PID2=$!
 
           # Install Node deps in parallel
           npm install hardhat &
           NPM_PID=$!
 
-          # Wait for both
-          wait $UV_PID $NPM_PID
+          # Wait for all
+          wait $UV_PID1 $UV_PID2 $NPM_PID
 
       - name: Install solc
         run: |
