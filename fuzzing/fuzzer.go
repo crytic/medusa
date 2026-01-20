@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,9 +30,9 @@ import (
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/utils/randomutils"
 
-	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -39,7 +40,6 @@ import (
 	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/slices"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -113,6 +113,10 @@ type Fuzzer struct {
 	// and only when debug logging is enabled.
 	lastPCsLogMsg   time.Time
 	deploymentOrder []string
+
+	// deployedLibraries tracks library names to their deployed addresses from the base test chain.
+	// This is used to link contract bytecode before coverage analysis.
+	deployedLibraries map[string]common.Address
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -349,8 +353,14 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	// Retrieve the compilation target for slither
 	target := platformConfig.GetTarget()
 
+	// Extract solc version if using crytic-compile platform
+	var solcVersion string
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		solcVersion = cryticConfig.SolcVersion
+	}
+
 	// Run slither and handle errors
-	slitherResults, err := f.config.Slither.RunSlither(target)
+	slitherResults, err := f.config.Slither.RunSlither(target, solcVersion)
 	if err != nil || slitherResults == nil {
 		if err != nil {
 			f.logger.Warn("Failed to run slither", err)
@@ -408,13 +418,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods, warnings := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.TestViewMethods)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
+
+				// Log any validation warnings for methods with test prefixes but invalid signatures
+				for _, warning := range warnings {
+					f.logger.Warn(fmt.Sprintf("Contract '%s': %s", contractName, warning))
+				}
 
 				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
 				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {
@@ -456,17 +471,17 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(types.GenesisAlloc)
 
-	// Fund all of our sender addresses in the genesis block
-	initBalance := new(big.Int).Div(abi.MaxInt256, big.NewInt(2)) // TODO: make this configurable
+	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
-			Balance: initBalance,
+			Balance: new(big.Int).Set(initBalance),
 		}
 	}
 
 	// Fund our deployer address in the genesis block
 	genesisAlloc[f.deployer] = types.Account{
-		Balance: initBalance,
+		Balance: new(big.Int).Set(initBalance),
 	}
 
 	// Identify which contracts need to be predeployed to a deterministic address by iterating across the mapping
@@ -783,6 +798,9 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 		}
 	}
 
+	// Save the deployed contract addresses (including libraries) for later use in coverage analysis
+	fuzzer.deployedLibraries = deployedContractAddr
+
 	return nil, nil
 }
 
@@ -915,7 +933,7 @@ func defaultCallSequenceGeneratorConfigFunc(fuzzer *Fuzzer, valueSet *valuegener
 func defaultShrinkingValueMutatorFunc(fuzzer *Fuzzer, valueSet *valuegeneration.ValueSet, randomProvider *rand.Rand) (valuegeneration.ValueMutator, error) {
 	// Create the shrinking value mutator for the worker.
 	shrinkingValueMutatorConfig := &valuegeneration.ShrinkingValueMutatorConfig{
-		ShrinkValueProbability: 0.1,
+		ShrinkValueProbability: 1,
 	}
 	shrinkingValueMutator := valuegeneration.NewShrinkingValueMutator(shrinkingValueMutatorConfig, valueSet, randomProvider)
 	return shrinkingValueMutator, nil
@@ -1169,6 +1187,24 @@ func (f *Fuzzer) Start() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
+
+		// Link all contracts with library dependencies before coverage analysis.
+		// This ensures that contracts deployed indirectly (e.g., via Solidity's `new` keyword)
+		// have their bytecode properly linked for coverage tracking.
+		if len(f.deployedLibraries) > 0 {
+			for i := range f.compilations {
+				for sourcePath, sourceArtifact := range f.compilations[i].SourcePathToArtifact {
+					for contractName, contract := range sourceArtifact.Contracts {
+						if len(contract.LibraryPlaceholders) > 0 {
+							contract.LinkBytecodes(contractName, f.deployedLibraries)
+							sourceArtifact.Contracts[contractName] = contract
+						}
+					}
+					f.compilations[i].SourcePathToArtifact[sourcePath] = sourceArtifact
+				}
+			}
+		}
+
 		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.config.Fuzzing.CoverageExclusions, f.logger)
 
 		if err != nil {

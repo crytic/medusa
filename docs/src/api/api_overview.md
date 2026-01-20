@@ -16,7 +16,7 @@ A rudimentary description of the objects/providers and their roles are explained
 
 - `CallSequence`: This represents a list of `CallSequenceElement`s, which define a transaction to send, the suggested block number and timestamp delay to use, and stores a reference to the block/transaction/results when it is executed (for later querying in tests). They are used to generate and execute transaction sequences in the fuzzer.
 
-- `CoverageMaps` define a list of `CoverageMap` objects, which record all instruction offsets executed for a given contract address and code hash.
+- `CoverageMaps` define a list of `CoverageMap` objects, which track branch coverage (jumps, returns, reverts, and contract entrance) for a given contract address and code hash.
 
 - `TestCase` defines the interface for a test that the `Fuzzer` will track. It simply defines a name, ID, status (not started, running, passed, failed) and message for the `Fuzzer`.
 
@@ -131,7 +131,7 @@ The `TestChain` maintains event emitters for the following events under `TestCha
 
 - `PendingBlockCreatedEvent`: This indicates a new block is being created but has not yet been committed to the chain. The block is empty at this point but will likely be populated. It provides a reference to the `Block` and `TestChain`.
 
-- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been commited to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
+- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been committed to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
 
 - `PendingBlockCommittedEvent`: This indicates a pending block was committed to chain as the new head. It provides a reference to the `Block` and `TestChain`.
 

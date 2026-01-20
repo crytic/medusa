@@ -1,9 +1,8 @@
 package contracts
 
 import (
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/compilation/types"

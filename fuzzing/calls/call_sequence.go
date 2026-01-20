@@ -202,7 +202,17 @@ func (cse *CallSequenceElement) Method() (*abi.Method, error) {
 	}
 
 	// Try to resolve the method by ID from the call data.
+	// If resolution fails, this is likely a fallback/receive function call, so return nil method without error.
 	method, err := cse.Contract.CompiledContract().Abi.MethodById(cse.Call.Data)
+	if err != nil {
+		if cse.Contract.CompiledContract().Abi.HasReceive() && len(cse.Call.Data) == 0 {
+			return &cse.Contract.CompiledContract().Abi.Receive, nil
+		} else if cse.Contract.CompiledContract().Abi.HasFallback() {
+			return &cse.Contract.CompiledContract().Abi.Fallback, nil
+		} else {
+			return nil, err
+		}
+	}
 	return method, err
 }
 
@@ -241,19 +251,34 @@ func (cse *CallSequenceElement) String() string {
 	method, err := cse.Method()
 	methodName := "<unresolved method>"
 	if err == nil && method != nil {
-		methodName = method.Sig
+		// Special handlers for fallback and receive
+		if method.Type == abi.Fallback {
+			methodName = "fallback"
+		} else if method.Type == abi.Receive {
+			methodName = "receive"
+		} else {
+			methodName = method.Sig
+		}
 	}
 
 	// Get our labels that we can use to make the string look better
 	labels := chain.GetLabels(cse.ChainReference.MessageResults())
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
-	args, err := method.Inputs.Unpack(cse.Call.Data[4:])
 	argsText := "<unable to unpack args>"
-	if err == nil {
-		argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, labels)
-		if err != nil {
-			argsText = "<unresolved args>"
+	// Special handlers for fallback and receive
+	if method.Type == abi.Fallback {
+		// Provide the calldata as an argument for fallback
+		argsText = fmt.Sprintf("0x%x", cse.Call.Data)
+	} else if method.Type == abi.Receive {
+		argsText = ""
+	} else if method != nil {
+		args, err := method.Inputs.Unpack(cse.Call.Data[4:])
+		if err == nil {
+			argsText, err = valuegeneration.EncodeABIArgumentsToString(method.Inputs, args, labels)
+			if err != nil {
+				argsText = "<unresolved args>"
+			}
 		}
 	}
 

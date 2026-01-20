@@ -2,9 +2,11 @@
   description = "Medusa smart-contract fuzzer";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     utils.url = "github:numtide/flake-utils";
     crytic.url = "github:crytic/crytic.nix";
+    crytic.inputs.nixpkgs.follows = "nixpkgs";
+    crytic.inputs.utils.follows = "utils";
   };
 
   outputs = inputs: with inputs;
@@ -15,9 +17,9 @@
       packages = {
         medusa = pkgs.buildGoModule {
           pname = "medusa";
-          version = "1.3.1";
+          version = "1.4.1";
           src = ./.;
-          vendorHash = "sha256-Tt7ZoEjurGSEmkqEsM04s3Nsny7YSH+DLwProdvwASY=";
+          vendorHash = "sha256-JaYAZX/u8cArVnQChmotpTbxja6XY0OaPr/RPd7rVXc=";
           nativeBuildInputs = [
             crytic.packages.${system}.crytic-compile
             crytic.packages.${system}.slither

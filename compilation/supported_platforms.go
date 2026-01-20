@@ -2,6 +2,7 @@ package compilation
 
 import (
 	"fmt"
+
 	"github.com/crytic/medusa/compilation/platforms"
 	"github.com/crytic/medusa/logging"
 )
