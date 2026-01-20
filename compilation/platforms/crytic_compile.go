@@ -117,15 +117,20 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	cmd := exec.Command("crytic-compile", args...)
 	logging.GlobalLogger.Info("Running command:\n", cmd.String())
 
-	// Install a specific `solc` version if requested in the config
+	// Ensure a specific `solc` version is installed if requested in the config
 	if c.SolcVersion != "" {
-		out, err := exec.Command("solc-select", "install", c.SolcVersion).CombinedOutput()
-		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
-		}
-		out, err = exec.Command("solc-select", "use", c.SolcVersion).CombinedOutput()
-		if err != nil {
-			return nil, "", fmt.Errorf("error while executing `solc-select use`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		// Set SOLC_VERSION environment variable for crytic-compile instead of using solc-select use
+		// This prevents race conditions when tests run in parallel
+		cmd.Env = append(os.Environ(), fmt.Sprintf("SOLC_VERSION=%s", c.SolcVersion))
+
+		solc := exec.Command("solc", "--version")
+		solc.Env = cmd.Env
+		if solc.Run() != nil {
+			// the solc version was not installed
+			out, err := exec.Command("solc-select", "install", c.SolcVersion).CombinedOutput()
+			if err != nil {
+				return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+			}
 		}
 	}
 

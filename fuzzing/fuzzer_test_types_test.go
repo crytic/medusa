@@ -41,6 +41,9 @@ type fuzzerSolcFileTest struct {
 	method func(fc *fuzzerTestContext)
 }
 
+// Default solc version used in tests
+const DEFAULT_TEST_SOLC_VERSION string = "0.8.28"
+
 // run implements fuzzerTest.run for a single Solidity test file described by the fuzzerSolcFileTest.
 func (c *fuzzerSolcFileTest) run(t *testing.T) {
 	t.Run(c.filePath, func(t *testing.T) {
@@ -56,7 +59,11 @@ func (c *fuzzerSolcFileTest) run(t *testing.T) {
 		testutils.ExecuteInDirectory(t, contractTestPath, func() {
 			// Create a default solc platform config
 			solcPlatformConfig := platforms.NewCryticCompilationConfig(contractTestPath)
-			solcPlatformConfig.SolcVersion = c.solcVersion
+			if c.solcVersion != "" {
+				solcPlatformConfig.SolcVersion = c.solcVersion
+			} else {
+				solcPlatformConfig.SolcVersion = DEFAULT_TEST_SOLC_VERSION
+			}
 
 			// Wrap the platform config in a compilation config
 			compilationConfig, err := compilation.NewCompilationConfigFromPlatformConfig(solcPlatformConfig)
