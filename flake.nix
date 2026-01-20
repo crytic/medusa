@@ -19,7 +19,7 @@
           pname = "medusa";
           version = "1.4.1";
           src = ./.;
-          vendorHash = "sha256-YIK+9TkK7ZtvTZUFtlVqedK2i8HHniMdzgDhvmZZZ0g=";
+          vendorHash = "sha256-JaYAZX/u8cArVnQChmotpTbxja6XY0OaPr/RPd7rVXc=";
           nativeBuildInputs = [
             crytic.packages.${system}.crytic-compile
             crytic.packages.${system}.slither
