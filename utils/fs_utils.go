@@ -2,10 +2,11 @@ package utils
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 // CreateFile will create a file at the given path and file name combination. If the path is the empty string, the

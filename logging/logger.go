@@ -2,10 +2,11 @@ package logging
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging/colors"
-	"github.com/rs/zerolog"
 	"io"
 	"strings"
+
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
 )
 
 // GlobalLogger describes a Logger that is disabled by default and is instantiated when the fuzzer is created. Each module/package

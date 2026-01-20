@@ -1,8 +1,9 @@
 package events
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestEventPublishingAndSubscribing creates EventEmitter objects, subscribes EventHandler callbacks to them, and
