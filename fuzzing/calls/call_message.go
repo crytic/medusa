@@ -2,6 +2,7 @@ package calls
 
 import (
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/common/hexutil"
@@ -9,7 +10,6 @@ import (
 	coreTypes "github.com/crytic/medusa-geth/core/types"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/logging"
-	"golang.org/x/exp/slices"
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
@@ -176,9 +176,13 @@ func (m *CallMessage) FillFromTestChainProperties(chain *chain.TestChain) {
 // Clone creates a copy of the given message and its underlying components, or an error if one occurs.
 func (m *CallMessage) Clone() (*CallMessage, error) {
 	// Clone our underlying ABI values data if we have any.
-	clonedAbiValues, err := m.DataAbiValues.Clone()
-	if err != nil {
-		return nil, err
+	var clonedAbiValues *CallMessageDataAbiValues
+	var err error
+	if m.DataAbiValues != nil {
+		clonedAbiValues, err = m.DataAbiValues.Clone()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a message with the same data copied over.

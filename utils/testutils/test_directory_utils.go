@@ -1,11 +1,12 @@
 package testutils
 
 import (
-	"github.com/crytic/medusa/utils"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/crytic/medusa/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 // CopyToTestDirectory copies files or directories from the provided filePath (relative to ./tests/contracts/) to an

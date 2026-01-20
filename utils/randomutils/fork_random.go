@@ -2,8 +2,9 @@ package randomutils
 
 import (
 	"encoding/binary"
-	"github.com/crytic/medusa/logging"
 	"math/rand"
+
+	"github.com/crytic/medusa/logging"
 )
 
 // ForkRandomProvider creates a child random provider from the current random provider by using its random data as

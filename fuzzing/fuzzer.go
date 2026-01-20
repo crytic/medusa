@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
@@ -39,7 +41,6 @@ import (
 	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/slices"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -118,6 +119,10 @@ type Fuzzer struct {
 	// and only when debug logging is enabled.
 	lastPCsLogMsg   time.Time
 	deploymentOrder []string
+
+	// deployedLibraries tracks library names to their deployed addresses from the base test chain.
+	// This is used to link contract bytecode before coverage analysis.
+	deployedLibraries map[string]common.Address
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -313,9 +318,17 @@ func (f *Fuzzer) Corpus() *corpus.Corpus {
 	return f.corpus
 }
 
-// Workers exposes the underlying workers for TUI and monitoring
+// Workers exposes the underlying workers for TUI and monitoring.
+// Returns a copy of the workers slice to avoid race conditions with concurrent modifications.
 func (f *Fuzzer) Workers() []*FuzzerWorker {
-	return f.workers
+	workers := f.workers
+	if workers == nil {
+		return nil
+	}
+	// Return a copy to avoid race conditions
+	result := make([]*FuzzerWorker, len(workers))
+	copy(result, workers)
+	return result
 }
 
 // IsStopped returns true if the fuzzer has been stopped
@@ -401,8 +414,14 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	// Retrieve the compilation target for slither
 	target := platformConfig.GetTarget()
 
+	// Extract solc version if using crytic-compile platform
+	var solcVersion string
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		solcVersion = cryticConfig.SolcVersion
+	}
+
 	// Run slither and handle errors
-	slitherResults, err := f.config.Slither.RunSlither(target)
+	slitherResults, err := f.config.Slither.RunSlither(target, solcVersion)
 	if err != nil || slitherResults == nil {
 		if err != nil {
 			f.logger.Warn("Failed to run slither", err)
@@ -460,13 +479,18 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods := fuzzingutils.BinTestByType(&contract,
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods, warnings := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.TestViewMethods)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
+
+				// Log any validation warnings for methods with test prefixes but invalid signatures
+				for _, warning := range warnings {
+					f.logger.Warn(fmt.Sprintf("Contract '%s': %s", contractName, warning))
+				}
 
 				// Filter and record methods available for assertion testing. Property and optimization tests are always run.
 				if len(f.config.Fuzzing.Testing.TargetFunctionSignatures) > 0 {
@@ -679,6 +703,10 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			return nil, fmt.Errorf("%v was specified in the target contracts but was not found in the compilation artifacts", contractName)
 		}
 	}
+
+	// Save the deployed contract addresses (including libraries) for later use in coverage analysis
+	fuzzer.deployedLibraries = deployedContractAddr
+
 	return nil, nil
 }
 
@@ -1065,6 +1093,24 @@ func (f *Fuzzer) startNormal() error {
 		if f.config.Fuzzing.CorpusDirectory != "" {
 			coverageReportDir = filepath.Join(f.config.Fuzzing.CorpusDirectory, "coverage")
 		}
+
+		// Link all contracts with library dependencies before coverage analysis.
+		// This ensures that contracts deployed indirectly (e.g., via Solidity's `new` keyword)
+		// have their bytecode properly linked for coverage tracking.
+		if len(f.deployedLibraries) > 0 {
+			for i := range f.compilations {
+				for sourcePath, sourceArtifact := range f.compilations[i].SourcePathToArtifact {
+					for contractName, contract := range sourceArtifact.Contracts {
+						if len(contract.LibraryPlaceholders) > 0 {
+							contract.LinkBytecodes(contractName, f.deployedLibraries)
+							sourceArtifact.Contracts[contractName] = contract
+						}
+					}
+					f.compilations[i].SourcePathToArtifact[sourcePath] = sourceArtifact
+				}
+			}
+		}
+
 		sourceAnalysis, err := coverage.AnalyzeSourceCoverage(f.compilations, f.corpus.CoverageMaps(), f.config.Fuzzing.CoverageExclusions, f.logger)
 
 		if err != nil {
@@ -1101,6 +1147,11 @@ func (f *Fuzzer) startNormal() error {
 
 // startWithTUI runs the fuzzer with TUI in foreground
 func (f *Fuzzer) startWithTUI() error {
+	// Verify TUI model is initialized
+	if f.tuiModel == nil {
+		return fmt.Errorf("TUI model not initialized")
+	}
+
 	// Create error channel for background fuzzer
 	errChan := make(chan error, 1)
 
@@ -1109,7 +1160,16 @@ func (f *Fuzzer) startWithTUI() error {
 
 	// Start fuzzer in background
 	go func() {
-		errChan <- f.startNormal()
+		err := f.startNormal()
+		// Non-blocking send to avoid goroutine leak if TUI exits early
+		select {
+		case errChan <- err:
+		default:
+			// TUI already exited and read from channel, log error if any
+			if err != nil {
+				f.logger.Error("Fuzzer error after TUI exit: ", err)
+			}
+		}
 	}()
 
 	// Run TUI in foreground (blocking)
@@ -1123,14 +1183,16 @@ func (f *Fuzzer) startWithTUI() error {
 	// Restore stdout logging after TUI exits
 	logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !f.config.Logging.NoColor)
 
-	// Retrieve fuzzer error
+	// Retrieve fuzzer error with timeout
 	var fuzzErr error
 	select {
 	case fuzzErr = <-errChan:
-		// Got the error
+		// Got the error from fuzzer
 	case <-time.After(5 * time.Second):
-		// Timeout - fuzzer still running
-		f.logger.Warn("Fuzzer did not complete within timeout")
+		// Timeout - fuzzer still running, force stop
+		f.logger.Warn("Fuzzer did not complete within timeout, stopping...")
+		f.Stop()
+		fuzzErr = fmt.Errorf("fuzzer did not shut down cleanly within timeout")
 	}
 
 	return fuzzErr

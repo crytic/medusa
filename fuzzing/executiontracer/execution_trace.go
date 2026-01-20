@@ -4,9 +4,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/config"
 	"regexp"
 	"strings"
+
+	"github.com/crytic/medusa/fuzzing/config"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/utils"

@@ -141,7 +141,7 @@ The `--fail-fast` flag enables fast failure (equivalent to
 medusa fuzz --fail-fast
 ```
 
-### `-v`, `-vv`, `-vvv`
+### `-v`, `-vv`, `-vvv` / `--verbosity`
 
 The verbosity flags control the level of detail shown in execution traces (equivalent to [`testing.verbosity`](../project_configuration/testing_config.md#verbosity)):
 
@@ -214,4 +214,22 @@ The TUI provides:
 ```shell
 # Enable TUI mode
 medusa fuzz --tui
+```
+
+### `--rpc-url`
+
+The `--rpc-url` flag enables fork mode and sets the RPC endpoint URL to fetch contracts from. When provided, medusa will fork the blockchain state from the specified network (equivalent to [`chainConfig.forkConfig.rpcUrl`](../project_configuration/chain_config.md#rpcurl)).
+
+```shell
+# Fork from Ethereum mainnet
+medusa fuzz --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR-API-KEY
+```
+
+### `--rpc-block`
+
+The `--rpc-block` flag sets the block number to use when fetching contracts over RPC in fork mode (equivalent to [`chainConfig.forkConfig.rpcBlock`](../project_configuration/chain_config.md#rpcblock)). Must be used together with `--rpc-url`.
+
+```shell
+# Fork from a specific block
+medusa fuzz --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR-API-KEY --rpc-block 18000000
 ```

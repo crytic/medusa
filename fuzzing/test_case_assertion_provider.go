@@ -2,14 +2,13 @@ package fuzzing
 
 import (
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-
-	"golang.org/x/exp/slices"
 )
 
 // AssertionTestCaseProvider is an AssertionTestCase provider which spawns test cases for every contract method and

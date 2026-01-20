@@ -57,6 +57,9 @@ interface IStdCheats {
     // Sets an address' code
     function etch(address who, bytes calldata code) external;
 
+    // Sets a label for an address (for debugging purposes)
+    function label(address account, string calldata label) external;
+
     // Signs data
     function sign(uint256 privateKey, bytes32 digest)
         external

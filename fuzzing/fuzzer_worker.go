@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
 	"math/rand"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/maps"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -44,6 +44,9 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
+
+	// fallbackMethods is a list of fallback/receive functions in deployed contracts.
+	fallbackMethods []fuzzerTypes.DeployedContractMethod
 
 	// shrinkCallSequenceRequests is a list of ShrinkCallSequenceRequest that will be handled in the next iteration of
 	// the fuzzing loop. In the future we can generalize this to any type of "request" that must be handled immediately
@@ -97,6 +100,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		deployedContracts:          make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods:       make([]fuzzerTypes.DeployedContractMethod, 0),
 		pureMethods:                make([]fuzzerTypes.DeployedContractMethod, 0),
+		fallbackMethods:            make([]fuzzerTypes.DeployedContractMethod, 0),
 		shrinkCallSequenceRequests: make([]ShrinkCallSequenceRequest, 0),
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
@@ -255,9 +259,28 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Clear our list of methods
 	fw.stateChangingMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 	fw.pureMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
+	fw.fallbackMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
+		// Check for fallback function
+		contractAbi := contractDefinition.CompiledContract().Abi
+		if contractAbi.HasFallback() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Fallback,
+			})
+		}
+		// Check for receive function
+		if contractAbi.HasReceive() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Receive,
+			})
+		}
+
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
@@ -604,6 +627,14 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 
 				// Loop for each argument in the currently indexed call to mutate it.
 				abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
+
+				// fallback and receive have nil DataAbiValues
+				if abiValuesMsgData == nil {
+					// If this is the only call we want to avoid an infinite loop
+					shrinkIteration++
+					continue
+				}
+
 				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 					if err != nil {

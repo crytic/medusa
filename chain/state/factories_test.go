@@ -1,8 +1,9 @@
 package state
 
 import (
-	"github.com/crytic/medusa/chain/state/cache"
 	"testing"
+
+	"github.com/crytic/medusa/chain/state/cache"
 
 	"github.com/crytic/medusa-geth/common"
 	gethstate "github.com/crytic/medusa-geth/core/state"
