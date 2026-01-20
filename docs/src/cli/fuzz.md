@@ -79,6 +79,24 @@ The `--target-contracts` flag allows you to update the target contracts for fuzz
 medusa fuzz --target-contracts "TestMyContract, TestMyOtherContract"
 ```
 
+### `--use-init-fns`
+
+The `--use-init-fns` flag enables the execution of initialization functions specified in the project configuration after contract deployment (equivalent to [`fuzzing.useInitFunctions`](../project_configuration/fuzzing_config.md#useinitfunctions)). The actual initialization functions to call must be specified via [`fuzzing.targetContractsInitFunctions`](../project_configuration/fuzzing_config.md#targetcontractsinitfunctions) in the config file.
+
+```shell
+# Enable initialization functions
+medusa fuzz --use-init-fns
+```
+
+### `--enable-foundry-setup`
+
+The `--enable-foundry-setup` flag enables Foundry-style `setUp()` function execution on all target contracts that implement it. This is a convenience flag that sets [`fuzzing.useInitFunctions`](../project_configuration/fuzzing_config.md#useinitfunctions) to `true` and [`fuzzing.targetContractsInitFunctions`](../project_configuration/fuzzing_config.md#targetcontractsinitfunctions) to `["setUp"]`.
+
+```shell
+# Run setUp() on all contracts that have it
+medusa fuzz --enable-foundry-setup
+```
+
 ### `--corpus-dir`
 
 The `--corpus-dir` flag allows you to set the path for the corpus directory (equivalent to
