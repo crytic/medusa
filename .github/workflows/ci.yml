@@ -24,10 +24,10 @@ permissions:
 
 jobs:
   build:
-    needs: [lint, test]
+    needs: [lint]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-26, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -137,10 +137,23 @@ jobs:
         with:
           go-version: "^1.22"
 
+      - name: Cache actionlint
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/go/bin/actionlint
+          key: actionlint-${{ runner.os }}
+
       - name: Actionlint
         run: |
-          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          if [ ! -f ~/go/bin/actionlint ]; then
+            go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          fi
           actionlint
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 20
+          cache: "npm"
 
       - name: Prettier
         run: |
@@ -158,13 +171,14 @@ jobs:
           git diff --exit-code
 
       - name: Lint
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run --timeout 5m0s
+        uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
+        with:
+          version: latest
+          args: --timeout 5m0s
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-15-intel, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-26, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
@@ -174,9 +188,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+      - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
         with:
-          python-version: "3.10"
+          enable-cache: true
 
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
@@ -210,12 +224,18 @@ jobs:
         with:
           node-version: 18.15
 
-      - name: Install Node dependencies
-        run: npm install hardhat
-
-      - name: Install Python dependencies
+      - name: Install dependencies (parallel)
         run: |
-          pip3 install --no-cache-dir solc-select slither-analyzer
+          # Start Python deps in background
+          uv pip install --system solc-select slither-analyzer &
+          UV_PID=$!
+
+          # Install Node deps in parallel
+          npm install hardhat &
+          NPM_PID=$!
+
+          # Wait for both
+          wait $UV_PID $NPM_PID
 
       - name: Install solc
         run: |
