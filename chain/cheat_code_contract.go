@@ -3,10 +3,11 @@ package chain
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/logging"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // CheatCodeContract defines a struct which represents a pre-compiled contract with various methods that is
@@ -50,7 +51,8 @@ type cheatCodeRawReturnData struct {
 	// solidity, but it may be any data in practice.
 	ReturnData []byte
 
-	// Err represents an optional error which is to be returned to the caller. This may be vm.
+	// Err represents an optional error which is to be returned to the caller. This may be vm.ErrExecutionReverted
+	// or any other error that should be returned to the caller.
 	Err error
 }
 

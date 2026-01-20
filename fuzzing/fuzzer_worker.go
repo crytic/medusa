@@ -2,17 +2,19 @@ package fuzzing
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
 	"math/rand"
 
+	"github.com/crytic/medusa/logging/colors"
+
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/fuzzing/calls"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/maps"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -28,9 +30,9 @@ type FuzzerWorker struct {
 	// coverageTracer describes the tracer used to collect coverage maps during fuzzing campaigns.
 	coverageTracer *coverage.CoverageTracer
 
-	// testingBaseBlockNumber refers to the block number at which all contracts for testing have been deployed, prior
-	// to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
-	testingBaseBlockNumber uint64
+	// testingBaseBlockIndex refers to the block index within the test chain at which all contracts for testing have been deployed,
+	// prior to any fuzzing activity. This block number is reverted to after testing each call sequence to reset state.
+	testingBaseBlockIndex uint64
 
 	// deployedContracts describes a mapping of deployed contractDefinitions and the addresses they were deployed to.
 	deployedContracts map[common.Address]*fuzzerTypes.Contract
@@ -42,6 +44,14 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
+
+	// fallbackMethods is a list of fallback/receive functions in deployed contracts.
+	fallbackMethods []fuzzerTypes.DeployedContractMethod
+
+	// shrinkCallSequenceRequests is a list of ShrinkCallSequenceRequest that will be handled in the next iteration of
+	// the fuzzing loop. In the future we can generalize this to any type of "request" that must be handled immediately
+	// before the execution of the next call sequence.
+	shrinkCallSequenceRequests []ShrinkCallSequenceRequest
 
 	// randomProvider provides random data as inputs to decisions throughout the worker.
 	randomProvider *rand.Rand
@@ -82,14 +92,16 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 
 	// Create a new worker with the data provided.
 	worker := &FuzzerWorker{
-		workerIndex:          workerIndex,
-		fuzzer:               fuzzer,
-		deployedContracts:    make(map[common.Address]*fuzzerTypes.Contract),
-		stateChangingMethods: make([]fuzzerTypes.DeployedContractMethod, 0),
-		pureMethods:          make([]fuzzerTypes.DeployedContractMethod, 0),
-		coverageTracer:       nil,
-		randomProvider:       randomProvider,
-		valueSet:             valueSet,
+		workerIndex:                workerIndex,
+		fuzzer:                     fuzzer,
+		deployedContracts:          make(map[common.Address]*fuzzerTypes.Contract),
+		stateChangingMethods:       make([]fuzzerTypes.DeployedContractMethod, 0),
+		pureMethods:                make([]fuzzerTypes.DeployedContractMethod, 0),
+		fallbackMethods:            make([]fuzzerTypes.DeployedContractMethod, 0),
+		shrinkCallSequenceRequests: make([]ShrinkCallSequenceRequest, 0),
+		coverageTracer:             nil,
+		randomProvider:             randomProvider,
+		valueSet:                   valueSet,
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -233,15 +245,34 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Clear our list of methods
 	fw.stateChangingMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 	fw.pureMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
+	fw.fallbackMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
+		// Check for fallback function
+		contractAbi := contractDefinition.CompiledContract().Abi
+		if contractAbi.HasFallback() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Fallback,
+			})
+		}
+		// Check for receive function
+		if contractAbi.HasReceive() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Receive,
+			})
+		}
+
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
 			if method.IsConstant() {
 				// Only track the pure/view method if testing view methods is enabled
-				if fw.fuzzer.config.Fuzzing.Testing.AssertionTesting.TestViewMethods {
+				if fw.fuzzer.config.Fuzzing.Testing.TestViewMethods {
 					fw.pureMethods = append(fw.pureMethods, fuzzerTypes.DeployedContractMethod{Address: contractAddress, Contract: contractDefinition, Method: method})
 				}
 			} else {
@@ -251,17 +282,58 @@ func (fw *FuzzerWorker) updateMethods() {
 	}
 }
 
+// bindCorpusElement ensures that the de-serialized corpus element is ready for runtime use.
+// The index for the element is provided and the base sequence used for execution is updated in-place.
+// It resolves the contract definition and ABI metadata needed for runtime execution. If the function
+// returns an error, the call sequence/corpus item is marked as invalid and will not be used for mutations.
+func (fw *FuzzerWorker) bindCorpusElement(currentIndex int) error {
+	// Guard clause
+	if currentIndex >= len(fw.sequenceGenerator.baseSequence) {
+		return nil
+	}
+
+	// Obtain the corpus element
+	element := fw.sequenceGenerator.baseSequence[currentIndex]
+
+	// If it is a contract creation, there is nothing to do.
+	if element.Call.To == nil {
+		return nil
+	}
+
+	contractDefinition, ok := fw.deployedContracts[*element.Call.To]
+	if !ok {
+		return fmt.Errorf("contract at address %v could not be resolved", element.Call.To.String())
+	}
+	element.Contract = contractDefinition
+
+	// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
+	// sufficient for runtime use, until we use it to resolve runtime references.
+	if abiValues := element.Call.DataAbiValues; abiValues != nil {
+		// Resolve the ABI values.
+		if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
+			return fmt.Errorf("error resolving method in contract '%v': %v", element.Contract.Name(), err)
+		}
+	}
+
+	return nil
+}
+
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
-// deployed in the Chain.
-// Returns the length of the call sequence tested, any requests for call sequence shrinking, or an error if one occurs.
-func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCallSequenceRequest, error) {
+// deployed in the Chain. Note that this function also replays the corpus call sequences before entering the main fuzzing loop.
+// Returns any requests for call sequence shrinking or an error if one occurs.
+func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, error) {
+	// We will make a copy of the worker's base value set so that we can rollback to it at the end of the call sequence
+	originalValueSet := fw.valueSet.Clone()
+
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
 	var err error
 	defer func() {
+		// Reset the value set back to the original
+		fw.valueSet = originalValueSet
 		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+			err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 		}
 	}()
 
@@ -269,7 +341,7 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	var isNewSequence bool
 	isNewSequence, err = fw.sequenceGenerator.InitializeNextSequence()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Define our shrink requests we'll collect during execution.
@@ -277,16 +349,37 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		// We need to prepare the corpus element for runtime execution if we are replaying a corpus sequence
+		if !isNewSequence {
+			err := fw.bindCorpusElement(currentIndex)
+
+			// We will separately capture the error and log that the corpus element is disabled
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Now, we are ready to fetch the next element from the sequence generator
 		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
 	// Our "post execution check function" method will check coverage and call all testing functions. If one returns a
 	// request for a shrunk call sequence, we exit our call sequence execution immediately to go fulfill the shrink
-	// request.
+	// request. Additionally, the execution check function will also attempt to add any return data to the value set for
+	// this call sequence. Note that the value set is reset after each call sequence (see the defer section above)
 	executionCheckFunc := func(currentlyExecutedSequence calls.CallSequence) (bool, error) {
+		// Get the last call sequence element that was executed
+		latestCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
+		// Get the decoded return values and add it to the base value set
+		// Don't throw an error since we care more about coverage than adding the return values to the base value set
+		decodedReturnValues, err := latestCallSequenceElement.DecodedReturnValues()
+		if decodedReturnValues != nil && err == nil {
+			fw.valueSet.Add(decodedReturnValues)
+		}
+
 		// Check for updates to coverage and corpus.
 		// If we detect coverage changes, add this sequence with weight as 1 + sequences tested (to avoid zero weights)
-		err := fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
+		err = fw.fuzzer.corpus.CheckSequenceCoverageAndUpdate(currentlyExecutedSequence, fw.getNewCorpusCallSequenceWeight(), true)
 		if err != nil {
 			return true, err
 		}
@@ -305,8 +398,9 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 		fw.workerMetrics().callsTested.Add(fw.workerMetrics().callsTested, big.NewInt(1))
 		lastCallSequenceElement := currentlyExecutedSequence[len(currentlyExecutedSequence)-1]
 		fw.workerMetrics().gasUsed.Add(fw.workerMetrics().gasUsed, new(big.Int).SetUint64(lastCallSequenceElement.ChainReference.Block.MessageResults[lastCallSequenceElement.ChainReference.TransactionIndex].Receipt.GasUsed))
+		fw.workerMetrics().updateRevertMetrics(lastCallSequenceElement)
 
-		// If our fuzzer context is done, exit out immediately without results.
+		// If our fuzzer context or the emergency context is cancelled, exit out immediately without results.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
 			return true, nil
 		}
@@ -316,27 +410,43 @@ func (fw *FuzzerWorker) testNextCallSequence() (calls.CallSequence, []ShrinkCall
 	}
 
 	// Execute our call sequence.
-	testedCallSequence, err := calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+	var executedSequence calls.CallSequence
+	executedSequence, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
-		return nil, nil, err
+		// If a corpus element fails to execute, log it (in debug mode) and exit the function early
+		if !isNewSequence {
+			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] corpus element has been disabled due to an error:", err)
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	// If our fuzzer context is done, exit out immediately without results.
 	if utils.CheckContextDone(fw.fuzzer.ctx) {
-		return nil, nil, nil
+		return nil, nil
 	}
 
-	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
+	// We successfully executed a corpus element
 	if !isNewSequence {
-		for i := 0; i < len(shrinkCallSequenceRequests); i++ {
+		fw.fuzzer.corpus.IncrementValid()
+		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
+		if len(shrinkCallSequenceRequests) == 0 {
+			// We don't really want an error here to stop fuzzing, so we ignore it.
+			_ = fw.fuzzer.corpus.MarkCallSequenceForMutation(executedSequence, big.NewInt(1))
+		}
+	}
+
+	// We don't want to save shrink results from corpus sequences since we already did.
+	if !isNewSequence {
+		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
 		}
 	}
 
 	// Return our results accordingly.
-	return testedCallSequence, shrinkCallSequenceRequests, nil
+	return shrinkCallSequenceRequests, nil
 }
 
 // testShrunkenCallSequence tests a provided shrunken call sequence to verify it continues to satisfy the provided
@@ -347,7 +457,7 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 	var err error
 	defer func() {
 		if err == nil {
-			err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+			err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 		}
 	}()
 
@@ -373,8 +483,10 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 			return true, seqErr
 		}
 
-		// If our fuzzer context is done, exit out immediately without results.
-		if utils.CheckContextDone(fw.fuzzer.ctx) {
+		// If the emergency context is cancelled, we exit out immediately without results.
+		// We ignore the cancellation of the main context since, in some cases, we want to still shrink after the
+		// main context is called.
+		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 			return true, nil
 		}
 
@@ -387,8 +499,10 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 		return false, err
 	}
 
-	// If our fuzzer context is done, exit out immediately without results.
-	if utils.CheckContextDone(fw.fuzzer.ctx) {
+	// If the emergency context is cancelled, we exit out immediately without results.
+	// We ignore the cancellation of the main context since, in some cases, we want to still shrink after the
+	// main context is called.
+	if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
 		return false, nil
 	}
 
@@ -412,15 +526,15 @@ func (fw *FuzzerWorker) testShrunkenCallSequence(possibleShrunkSequence calls.Ca
 //
 // Returns a call sequence that was optimized to include as little calls as possible to trigger the
 // expected conditions, or an error if one occurred.
-func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
+func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceRequest) (calls.CallSequence, error) {
 	// Define a variable to track our most optimized sequence across all optimization iterations.
-	optimizedSequence := callSequence
+	optimizedSequence := shrinkRequest.CallSequenceToShrink
 
 	// Obtain our shrink limits and begin shrinking.
 	shrinkIteration := uint64(0)
 	shrinkLimit := fw.fuzzer.config.Fuzzing.ShrinkLimit
 	shrinkingEnded := func() bool {
-		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.ctx)
+		return shrinkIteration >= shrinkLimit || utils.CheckContextDone(fw.fuzzer.emergencyCtx)
 	}
 	if shrinkLimit > 0 {
 		// The first pass of shrinking is greedy towards trying to remove any unnecessary calls.
@@ -429,7 +543,8 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
 		// At worst, this costs `2 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
-		fw.fuzzer.logger.Info(fmt.Sprintf("[Worker %d] Shrinking call sequence with %d call(s)", fw.workerIndex, len(callSequence)))
+		fw.fuzzer.logger.Info("[Worker ", fw.workerIndex, "] Shrinking call sequence for ", colors.GreenBold,
+			shrinkRequest.TestName, colors.Bold, " with ", len(shrinkRequest.CallSequenceToShrink), " call(s)")
 
 		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
@@ -475,6 +590,14 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 
 				// Loop for each argument in the currently indexed call to mutate it.
 				abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
+
+				// fallback and receive have nil DataAbiValues
+				if abiValuesMsgData == nil {
+					// If this is the only call we want to avoid an infinite loop
+					shrinkIteration++
+					continue
+				}
+
 				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 					if err != nil {
@@ -511,7 +634,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	}
 
 	// Reset our state before running tracing in FinishedCallback.
-	err := fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber)
+	err := fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -519,21 +642,22 @@ func (fw *FuzzerWorker) shrinkCallSequence(callSequence calls.CallSequence, shri
 	// Shrinking is complete. If our config specified we want all result sequences to have execution traces attached,
 	// attach them now to each element in the sequence. Otherwise, call sequences will only have traces that the
 	// test providers choose to attach themselves.
-	err = shrinkRequest.FinishedCallback(fw, optimizedSequence, fw.fuzzer.config.Fuzzing.Testing.TraceAll)
+	err = shrinkRequest.FinishedCallback(fw, optimizedSequence, fw.fuzzer.config.Fuzzing.Testing.Verbosity)
 	if err != nil {
 		return nil, err
 	}
 
 	// After testing the sequence, we'll want to rollback changes to reset our testing state.
-	if err = fw.chain.RevertToBlockNumber(fw.testingBaseBlockNumber); err != nil {
+	if err = fw.chain.RevertToBlockIndex(fw.testingBaseBlockIndex); err != nil {
 		return nil, err
 	}
 	return optimizedSequence, err
 }
 
 // run takes a base Chain in a setup state ready for testing, clones it, and begins executing fuzzed transaction calls
-// and asserting properties are upheld. This runs until Fuzzer.ctx cancels the operation.
-// Returns a boolean indicating whether Fuzzer.ctx has indicated we cancel the operation, and an error if one occurred.
+// and asserting properties are upheld. This runs until Fuzzer.ctx or Fuzzer.emergencyCtx cancels the operation.
+// Returns a boolean indicating whether Fuzzer.ctx or Fuzzer.emergencyCtx has indicated we cancel the operation, and an
+// error if one occurred.
 func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Clone our chain, attaching our necessary components for fuzzing post-genesis, prior to all blocks being copied.
 	// This means any tracers added or events subscribed to within this inner function are done so prior to chain
@@ -544,11 +668,6 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		initializedChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(fw.onChainContractDeploymentAddedEvent)
 		initializedChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(fw.onChainContractDeploymentRemovedEvent)
 
-		// Emit an event indicating the worker has created its chain.
-		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
-			Worker: fw,
-			Chain:  initializedChain,
-		})
 		if err != nil {
 			return fmt.Errorf("error returned by an event handler when emitting a worker chain created event: %v", err)
 		}
@@ -558,8 +677,25 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 			fw.coverageTracer = coverage.NewCoverageTracer()
 			initializedChain.AddTracer(fw.coverageTracer.NativeTracer(), true, false)
 		}
+
+		// Copy the labels from the base chain to the worker's chain
+		initializedChain.Labels = maps.Clone(baseTestChain.Labels)
+
+		// Emit an event indicating the worker has created its chain.
+		err = fw.Events.FuzzerWorkerChainCreated.Publish(FuzzerWorkerChainCreatedEvent{
+			Worker: fw,
+			Chain:  initializedChain,
+		})
 		return nil
 	})
+
+	// Freeze a set of `fw.deployedContracts`'s keys so that we have a set of addresses present in baseTestChain.
+	// Feed this set to the coverage tracer.
+	initialContractsSet := make(map[common.Address]struct{}, len(fw.deployedContracts))
+	for addr := range fw.deployedContracts {
+		initialContractsSet[addr] = struct{}{}
+	}
+	fw.coverageTracer.SetInitialContractsSet(&initialContractsSet)
 
 	// If we encountered an error during cloning, return it.
 	if err != nil {
@@ -569,7 +705,7 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Defer the closing of the test chain object
 	defer fw.chain.Close()
 
-	// Emit an event indicating the worker has setup its chain.
+	// Emit an event indicating the worker has set up its chain.
 	err = fw.Events.FuzzerWorkerChainSetup.Publish(FuzzerWorkerChainSetupEvent{
 		Worker: fw,
 		Chain:  fw.chain,
@@ -581,17 +717,54 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 	// Increase our generation metric as we successfully generated a test node
 	fw.workerMetrics().workerStartupCount.Add(fw.workerMetrics().workerStartupCount, big.NewInt(1))
 
-	// Save the current block number as all contracts have been deployed at this point, and we'll want to revert
+	// Save the current block index as all contracts have been deployed at this point, and we'll want to revert
 	// to this state between testing.
-	fw.testingBaseBlockNumber = fw.chain.HeadBlockNumber()
+	fw.testingBaseBlockIndex = uint64(len(fw.chain.CommittedBlocks()))
 
-	// Enter the main fuzzing loop, restricting our memory database size based on our config variable.
-	// When the limit is reached, we exit this method gracefully, which will cause the fuzzing to recreate
-	// this worker with a fresh memory database.
+	// Enter the main fuzzing loop. In the main fuzzing loop, we will always handle shrink requests first.
+	// While there are no shrink requests, we will execute call sequence restricted by our memory database size based
+	// on our config variable. When the limit is reached, we exit this method gracefully, which will cause the fuzzer
+	// to recreate this worker with a fresh memory database. Note that if fuzzing is cancelled/complete, we will
+	// execute any outstanding shrink requests and then exit.
 	sequencesTested := 0
+	fuzzingComplete := false
 	for sequencesTested <= fw.fuzzer.config.Fuzzing.WorkerResetLimit {
-		// If our context signalled to close the operation, exit our testing loop accordingly, otherwise continue.
+		// Immediately exit if the emergency context is triggered
+		if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
+			return true, nil
+		}
+
+		// If our main context signaled to close the operation, we will emit an event notifying any subscribers that
+		// this fuzzer worker is going to be shut down. This allows any subscriber (e.g. the optimization provider)
+		// one last opportunity to shrink a call sequence if necessary. This is why we do not return here if the
+		// main context says fuzzing is complete.
 		if utils.CheckContextDone(fw.fuzzer.ctx) {
+			fuzzingComplete = true
+			err = fw.Events.TestingComplete.Publish(FuzzerWorkerTestingCompleteEvent{
+				Worker: fw,
+			})
+			if err != nil {
+				return true, fmt.Errorf("error returned by an event handler when a worker emitted an event indicating testing is complete: %v", err)
+			}
+		}
+
+		// Run all shrink requests
+		for _, shrinkCallSequenceRequest := range fw.shrinkCallSequenceRequests {
+			// Immediately exit if we are shutting down
+			if utils.CheckContextDone(fw.fuzzer.emergencyCtx) {
+				return true, nil
+			}
+			_, err = fw.shrinkCallSequence(shrinkCallSequenceRequest)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		// Clean up the shrink requests
+		fw.shrinkCallSequenceRequests = nil
+
+		// If we have cancelled fuzzing, return now
+		if fuzzingComplete {
 			return true, nil
 		}
 
@@ -604,20 +777,15 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		}
 
 		// Test a new sequence
-		callSequence, shrinkVerifiers, err := fw.testNextCallSequence()
+		shrinkRequests, err := fw.testNextCallSequence()
 		if err != nil {
 			return false, err
 		}
 
-		// If we have any requests to shrink call sequences, do so now.
-		for _, shrinkVerifier := range shrinkVerifiers {
-			_, err = fw.shrinkCallSequence(callSequence, shrinkVerifier)
-			if err != nil {
-				return false, err
-			}
-		}
+		// Add any new shrink requests to our list
+		fw.shrinkCallSequenceRequests = append(fw.shrinkCallSequenceRequests, shrinkRequests...)
 
-		// Emit an event indicating the worker is about to test a new call sequence.
+		// Emit an event indicating the worker finished testing a new call sequence.
 		err = fw.Events.CallSequenceTested.Publish(FuzzerWorkerCallSequenceTestedEvent{
 			Worker: fw,
 		})

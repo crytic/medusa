@@ -19,12 +19,15 @@ defaults:
   run:
     shell: bash
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    needs: [lint, test]
+    needs: [lint]
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-26, windows-latest]
     permissions:
       contents: read
       id-token: write
@@ -33,7 +36,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
       - name: Speed up Go (Windows)
         if: runner.os == 'Windows'
@@ -49,7 +54,7 @@ jobs:
           printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version: "^1.22"
           # disable caching during release (tag) builds
@@ -82,12 +87,12 @@ jobs:
 
       - name: Sign artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        uses: sigstore/gh-action-sigstore-python@58a28ad10e7fcfad2f2585485cd010873f6d2a86
         with:
           inputs: ./medusa-*.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: medusa-${{ runner.os }}-${{ runner.arch }}
           path: |
@@ -105,13 +110,13 @@ jobs:
 
     steps:
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: medusa-*
           merge-multiple: true
 
       - name: Create GitHub release and upload binaries
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           draft: true
           name: "${{ github.ref_name }}"
@@ -124,16 +129,30 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version: "^1.22"
 
+      - name: Cache actionlint
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/go/bin/actionlint
+          key: actionlint-${{ runner.os }}
+
       - name: Actionlint
         run: |
-          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          if [ ! -f ~/go/bin/actionlint ]; then
+            go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          fi
           actionlint
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 20
 
       - name: Prettier
         run: |
@@ -151,31 +170,27 @@ jobs:
           git diff --exit-code
 
       - name: Lint
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run --timeout 5m0s
-
-      - name: Gencodec
-        run: |
-          go get github.com/fjl/gencodec 
-          pushd fuzzing/config
-          go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
-          git diff --exit-code -- .
-          popd
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        with:
+          version: v1.64.8
+          args: --timeout 5m0s
   test:
     strategy:
       matrix:
-        environment: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        environment: [ubuntu-latest, macos-26, windows-latest]
 
     runs-on: ${{ matrix.environment }}
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
-          python-version: "3.10"
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
 
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
@@ -192,40 +207,68 @@ jobs:
           printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
           echo "::endgroup::"
-          echo "::group::Python"
-          python3 -m venv venv
-          printf '%s\\venv\\Scripts\n' "$DIR" | tee -a "$GITHUB_PATH"
-          printf 'VIRTUAL_ENV=%s\\venv\n' "$DIR" | tee -a "$GITHUB_ENV"
-          echo "::endgroup::"
           echo "::group::Node"
           npm config set cache "$DIR\\npm-cache" --global
           echo "::endgroup::"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version: "^1.22"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 18.15
 
-      - name: Install Node dependencies
-        run: npm install hardhat
-
-      - name: Install Python dependencies
+      - name: Install dependencies (parallel)
         run: |
-          pip3 install --no-cache-dir solc-select slither-analyzer
+          # Start Python tool installs in background
+          uv tool install solc-select &
+          UV_PID1=$!
+          uv tool install crytic-compile &
+          UV_PID2=$!
+          uv tool install slither-analyzer &
+          UV_PID3=$!
+
+          # Install Node deps in parallel
+          npm install hardhat &
+          NPM_PID=$!
+
+          # Wait for all
+          wait $UV_PID1 $UV_PID2 $UV_PID3 $NPM_PID
+
+      - name: Cache solc
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.solc-select/artifacts
+          key: solc-0.8.28-${{ runner.os }}
 
       - name: Install solc
         run: |
-          solc-select use 0.8.17 --always-install
+          solc-select use 0.8.28 --always-install
+          # see DEFAULT_TEST_SOLC_VERSION in medusa
 
       - name: Test
         run: go test ./...
 
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: "3.10"
+
+      - name: Check documentation sync
+        run: python3 scripts/check_docs.py
+
   all-checks:
     if: always()
-    needs: [lint, test, build, release]
+    needs: [lint, test, build, release, docs-check]
 
     runs-on: ubuntu-latest
 

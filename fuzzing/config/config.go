@@ -4,22 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crytic/medusa/compilation/types"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
+
+	"github.com/crytic/medusa/compilation/types"
 
 	"github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/rs/zerolog"
 )
-
-// The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
-// templates defined below. They should be preserved for re-use in case we change our structures.
-//go:generate go get github.com/fjl/gencodec
-//go:generate go run github.com/fjl/gencodec -type FuzzingConfig -field-override fuzzingConfigMarshaling -out gen_fuzzing_config.go
 
 type ProjectConfig struct {
 	// Fuzzing describes the configuration used in fuzzing campaigns.
@@ -58,8 +55,13 @@ type FuzzingConfig struct {
 	// CallSequenceLength describes the maximum length a transaction sequence can be generated as.
 	CallSequenceLength int `json:"callSequenceLength"`
 
+	// PruneFrequency determines how often, in minutes, the corpus should be pruned to remove unnecessary members.
+	// Setting PruneFrequency to 0 disables pruning.
+	// PruneFrequency only matters if CoverageEnabled is set to true; otherwise, no pruning will occur.
+	PruneFrequency uint64 `json:"pruneFrequency"`
+
 	// CorpusDirectory describes the name for the folder that will hold the corpus and the coverage files. If empty,
-	// the in-memory corpus will be used, but not flush to disk.
+	// the in-memory corpus will be used, but will not be flushed to disk.
 	CorpusDirectory string `json:"corpusDirectory"`
 
 	// CoverageEnabled describes whether to use coverage-guided fuzzing
@@ -67,6 +69,13 @@ type FuzzingConfig struct {
 
 	// CoverageFormats indicate which reports to generate: "lcov" and "html" are supported.
 	CoverageFormats []string `json:"coverageFormats"`
+
+	// CoverageExclusions defines file/directory patterns to exclude from coverage reports.
+	// Supports glob patterns like "lib/**", "test/helpers/**", "*.generated.sol"
+	CoverageExclusions []string `json:"coverageExclusions"`
+
+	// RevertReporterEnabled determines whether revert metrics should be collected and reported.
+	RevertReporterEnabled bool `json:"revertReporterEnabled"`
 
 	// TargetContracts are the target contracts for fuzz testing
 	TargetContracts []string `json:"targetContracts"`
@@ -77,7 +86,7 @@ type FuzzingConfig struct {
 
 	// TargetContractsBalances holds the amount of wei that should be sent during deployment for one or more contracts in
 	// TargetContracts
-	TargetContractsBalances []*big.Int `json:"targetContractsBalances"`
+	TargetContractsBalances []*ContractBalance `json:"targetContractsBalances"`
 
 	// ConstructorArgs holds the constructor arguments for TargetContracts deployments. It is available via the project
 	// configuration
@@ -98,10 +107,6 @@ type FuzzingConfig struct {
 	// compared to the previous.
 	MaxBlockTimestampDelay uint64 `json:"blockTimestampDelayMax"`
 
-	// BlockGasLimit describes the maximum amount of gas that can be used in a block by transactions. This defines
-	// limits for how many transactions can be included per block.
-	BlockGasLimit uint64 `json:"blockGasLimit"`
-
 	// TransactionGasLimit describes the maximum amount of gas that will be used by the fuzzer generated transactions.
 	TransactionGasLimit uint64 `json:"transactionGasLimit"`
 
@@ -112,12 +117,74 @@ type FuzzingConfig struct {
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
 }
 
-// fuzzingConfigMarshaling is a structure that overrides field types during JSON marshaling. It allows FuzzingConfig to
-// have its custom marshaling methods auto-generated and will handle type conversions for serialization purposes.
-// For example, this enables serialization of big.Int but specifying a different field type to control serialization.
-type fuzzingConfigMarshaling struct {
-	TargetContractsBalances []*hexutil.Big
+// ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling
+// for contract balance values in different numeric formats
+type ContractBalance struct {
+	big.Int
 }
+
+// UnmarshalJSON parses JSON data into big.Int from empty strings, hex ("0x"),
+// scientific notation (e/E), and base-10 formats
+func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	// Empty string handling
+	if s == "" {
+		cb.Int.SetInt64(0)
+		return nil
+	}
+
+	// Hex notation handling
+	if strings.HasPrefix(strings.ToLower(s), "0x") {
+		if _, ok := cb.Int.SetString(s[2:], 16); !ok {
+			return fmt.Errorf("invalid hex string provided while unmarshaling contract balance: %s", s)
+		}
+		return nil
+	}
+
+	// Scientific notation handling
+	if strings.ContainsAny(s, "eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return fmt.Errorf("error parsing scientific notation while unmarshaling contract balance: %w", err)
+		}
+		plainStr := strconv.FormatFloat(f, 'f', 0, 64)
+		if _, ok := cb.Int.SetString(plainStr, 10); !ok {
+			return fmt.Errorf("invalid format for contract balance (scientific notation) while unmarshaling contract balance: %s", s)
+		}
+		return nil
+	}
+
+	// Base-10 string handling
+	if _, ok := cb.Int.SetString(s, 10); !ok {
+		return fmt.Errorf("invalid base-10 string provided while unmarshaling contract balance: %s", s)
+	}
+	return nil
+}
+
+// MarshalJSON marshals a ContractBalance to JSON.
+func (cb ContractBalance) MarshalJSON() ([]byte, error) {
+	return json.Marshal(cb.Int.String())
+}
+
+// VerbosityLevel defines different verbosity levels
+type VerbosityLevel int
+
+const (
+	// Verbose corresponds to (-v) - Only top-level transactions in the execution trace
+	// Only events in the top-level call frame and return data are handled
+	Verbose VerbosityLevel = 0
+
+	// VeryVerbose corresponds to (-vv) - Default behavior, current level of detail
+	VeryVerbose VerbosityLevel = 1
+
+	// VeryVeryVerbose corresponds to (-vvv) - Maximum verbosity
+	// Every call sequence element in the call sequence has a trace
+	VeryVeryVerbose VerbosityLevel = 2
+)
 
 // TestingConfig describes the configuration options used for testing
 type TestingConfig struct {
@@ -136,10 +203,15 @@ type TestingConfig struct {
 	// than just the contracts specified in the project configuration's deployment order.
 	TestAllContracts bool `json:"testAllContracts"`
 
-	// TraceAll describes whether a trace should be attached to each element of a finalized shrunken call sequence,
-	// e.g. when a call sequence triggers a test failure. Test providers may attach execution traces by default,
-	// even if this option is not enabled.
-	TraceAll bool `json:"traceAll"`
+	// TestViewMethods dictates whether constant/pure/view methods should be called and tested.
+	TestViewMethods bool `json:"testViewMethods"`
+
+	// Verbosity controls the level of detail in execution traces:
+	// - Verbose (0): Only shows top-level transactions; hides nested calls
+	// - VeryVerbose (1): Shows nested calls with standard detail (default)
+	// - VeryVeryVerbose (2): Shows all call sequence elements with maximum detail
+	// CLI flags: -v, -vv, -vvv set levels 0, 1, 2 respectively
+	Verbosity VerbosityLevel `json:"verbosity"`
 
 	// AssertionTesting describes the configuration used for assertion testing.
 	AssertionTesting AssertionTestingConfig `json:"assertionTesting"`
@@ -150,7 +222,7 @@ type TestingConfig struct {
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 
-	// TargetFunctionSignatures is a list function signatures call the fuzzer should exclusively target by omitting calls to other signatures.
+	// TargetFunctionSignatures is a list of function signatures the fuzzer should exclusively target by omitting calls to other signatures.
 	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
 
@@ -197,9 +269,6 @@ func (testCfg *TestingConfig) Validate() error {
 type AssertionTestingConfig struct {
 	// Enabled describes whether testing is enabled.
 	Enabled bool `json:"enabled"`
-
-	// TestViewMethods dictates whether constant/pure/view methods should be tested.
-	TestViewMethods bool `json:"testViewMethods"`
 
 	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
 	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`
@@ -361,12 +430,9 @@ func (p *ProjectConfig) Validate() error {
 		return errors.New("project configuration must specify a positive number for the timeout")
 	}
 
-	// Verify gas limits are appropriate
-	if p.Fuzzing.BlockGasLimit < p.Fuzzing.TransactionGasLimit {
-		return errors.New("project configuration must specify a block gas limit which is not less than the transaction gas limit")
-	}
-	if p.Fuzzing.BlockGasLimit == 0 || p.Fuzzing.TransactionGasLimit == 0 {
-		return errors.New("project configuration must specify a block and transaction gas limit which are non-zero")
+	// Verify gas limit is appropriate
+	if p.Fuzzing.TransactionGasLimit == 0 {
+		return errors.New("project configuration must specify a transaction gas limit which is non-zero")
 	}
 
 	// Log warning if max block delay is zero

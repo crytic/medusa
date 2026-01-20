@@ -1,6 +1,6 @@
 # API Overview (WIP)
 
-`medusa` offers a lower level API to hook into various parts of the fuzzer, its workers, and underlying chains. Although assertion and property testing are two built-in testing providers, they are implementing using events and hooks offered throughout the `Fuzzer`, `FuzzerWorker`(s), and underlying `TestChain`. These same hooks can be used by external developers wishing to implement their own customing testing methodology. In the sections below, we explore some of the relevant components throughout `medusa`, their events/hooks, an example of creating custom testing methodology with it.
+`medusa` offers a lower level API to hook into various parts of the fuzzer, its workers, and underlying chains. Although assertion and property testing are two built-in testing providers, they are implemented using events and hooks offered throughout the `Fuzzer`, `FuzzerWorker`(s), and underlying `TestChain`. These same hooks can be used by external developers wishing to implement their own custom testing methodology. In the sections below, we explore some of the relevant components throughout `medusa`, their events/hooks, an example of creating custom testing methodology with it.
 
 ## Component overview
 
@@ -16,23 +16,21 @@ A rudimentary description of the objects/providers and their roles are explained
 
 - `CallSequence`: This represents a list of `CallSequenceElement`s, which define a transaction to send, the suggested block number and timestamp delay to use, and stores a reference to the block/transaction/results when it is executed (for later querying in tests). They are used to generate and execute transaction sequences in the fuzzer.
 
-- `CoverageMaps` define a list of `CoverageMap` objects, which record all instruction offsets executed for a given contract address and code hash.
+- `CoverageMaps` define a list of `CoverageMap` objects, which track branch coverage (jumps, returns, reverts, and contract entrance) for a given contract address and code hash.
 
 - `TestCase` defines the interface for a test that the `Fuzzer` will track. It simply defines a name, ID, status (not started, running, passed, failed) and message for the `Fuzzer`.
 
 ### Providers
 
-- `ValueGenerator`: This is an object that provides methods to generate values of different kinds for transactions. Examples include the `RandomValueGenerator` and superceding `MutationalValueGenerator`. They are provided a `ValueSet` by their worker, which they may use in generation operations.
+- `ValueGenerator`: This is an object that provides methods to generate values of different kinds for transactions. Examples include the `RandomValueGenerator` and superseding `MutationalValueGenerator`. They are provided a `ValueSet` by their worker, which they may use in generation operations.
 
 - `TestChain`: This is a fake chain that operates on fake block structures created for the purpose of testing. Rather than operating on `types.Transaction` (which requires signing), it operates on `core.Message`s, which are derived from transactions and simply allow you to set the `sender` field. It is responsible for:
-
   - Maintaining state of the chain (blocks, transactions in them, results/receipts)
   - Providing methods to create blocks, add transactions to them, commit them to chain, revert to previous block numbers.
-  - Allowing spoofing of block number and timestamp (commiting block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
+  - Allowing spoofing of block number and timestamp (committing block number 1, then 50, jumping 49 blocks ahead), while simulating the existence of intermediate blocks.
   - Provides methods to add tracers such as `evm.Logger` (standard go-ethereum tracers) or extend them with an additional interface (`TestChainTracer`) to also store any captured traced information in the execution results. This allows you to trace EVM execution for certain conditions, store results, and query them at a later time for testing.
 
 - `Fuzzer`: This is the main provider for the fuzzing process. It takes a `ProjectConfig` and is responsible for:
-
   - Housing data shared between the `FuzzerWorker`s such as contract definitions, a `ValueSet` derived from compilation to use in value generation, the reference to `Corpus`, the `CoverageMaps` representing all coverage achieved, as well as maintaining `TestCase`s registered to it and printing their results.
   - Compiling the targets defined by the project config and setting up state.
   - Provides methods to start/stop the fuzzing process, add additional compilation targets, access the initial value set prior to fuzzing start, access corpus, config, register new test cases and report them finished.
@@ -55,7 +53,7 @@ A rudimentary description of the objects/providers and their roles are explained
 
 `medusa` is config-driven. To begin a fuzzing campaign on an API level, you must first define a project configuration so the fuzzer knows what contracts to compile, deploy, and how it should operate.
 
-When using `medusa` over command-line, it operates a project config similarly (see [docs](https://github.com/trailofbits/medusa/wiki/Project-Configuration) or [example](https://github.com/trailofbits/medusa/wiki/Example-Project-Configuration-File)). Similarly, interfacing with a `Fuzzer` requires a `ProjectConfig` object. After importing `medusa` into your Go project, you can create one like this:
+When using `medusa` over command-line, it operates a project config similarly (see [docs](../project_configuration/overview.md)). Similarly, interfacing with a `Fuzzer` requires a `ProjectConfig` object. After importing `medusa` into your Go project, you can create one like this:
 
 ```go
 // Initialize a default project config with using crytic-compile as a compilation platform, and set the target it should compile.
@@ -104,7 +102,7 @@ After you have created a `ProjectConfig`, you can create a new `Fuzzer` with it,
 
 Now it may be the case that you wish to hook the `Fuzzer`, `FuzzerWorker`, or `TestChain` to provide your own functionality. You can add your own testing methodology, and even power it with your own low-level EVM execution tracers to store and query results about each call.
 
-There are a few events/hooks that may be useful of the bat:
+There are a few events/hooks that may be useful off the bat:
 
 The `Fuzzer` maintains event emitters for the following events under `Fuzzer.Events.*`:
 
@@ -115,7 +113,7 @@ The `Fuzzer` maintains event emitters for the following events under `Fuzzer.Eve
 - `FuzzerWorkerCreatedEvent`: Indicates a `FuzzerWorker` was created by a `Fuzzer`. It provides a reference to the `FuzzerWorker` spawned. The parent `Fuzzer` can be accessed through `FuzzerWorker.Fuzzer()`.
 - `FuzzerWorkerDestroyedEvent`: Indicates a `FuzzerWorker` was destroyed. This can happen either due to hitting the config-defined worker reset limit or the fuzzing operation stopping. It provides a reference to the destroyed worker (for reference, though this should not be stored, to allow memory to free).
 
-The `FuzzerWorker` maintains event emiters for the following events under `FuzzerWorker.Events.*`:
+The `FuzzerWorker` maintains event emitters for the following events under `FuzzerWorker.Events.*`:
 
 - `FuzzerWorkerChainCreatedEvent`: This indicates the `FuzzerWorker` is about to begin working and has created its chain (but not yet copied data from the "base" `TestChain` the `Fuzzer` provided). This offers an opportunity to attach tracers for calls made during chain setup. It provides a reference to the `FuzzerWorker` and its underlying `TestChain`.
 
@@ -133,7 +131,7 @@ The `TestChain` maintains event emitters for the following events under `TestCha
 
 - `PendingBlockCreatedEvent`: This indicates a new block is being created but has not yet been committed to the chain. The block is empty at this point but will likely be populated. It provides a reference to the `Block` and `TestChain`.
 
-- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been commited to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
+- `PendingBlockAddedTxEvent`: This indicates a pending block which has not yet been committed to chain has added a transaction to it, as it is being constructed. It provides a reference to the `Block`, `TestChain`, and index of the transaction in the `Block`.
 
 - `PendingBlockCommittedEvent`: This indicates a pending block was committed to chain as the new head. It provides a reference to the `Block` and `TestChain`.
 
@@ -152,7 +150,6 @@ The `Fuzzer` maintains hooks for some of its functionality under `Fuzzer.Hooks.*
 - `NewValueGeneratorFunc`: This method is used to create a `ValueGenerator` for each `FuzzerWorker`. By default, this uses a `MutationalValueGenerator` constructed with the provided `ValueSet`. It can be replaced to provide a custom `ValueGenerator`.
 
 - `TestChainSetupFunc`: This method is used to set up a chain's initial state before fuzzing. By default, this method deploys all contracts compiled and marked for deployment in the `ProjectConfig` provided to the `Fuzzer`. It only deploys contracts if they have no constructor arguments. This can be replaced with your own method to do custom deployments.
-
   - **Note**: We do not recommend replacing this for now, as the `Contract` definitions may not be known to the `Fuzzer`. Additionally, `SenderAddresses` and `DeployerAddress` are the only addresses funded at genesis. This will be updated at a later time.
 
 - `CallSequenceTestFuncs`: This is a list of functions which are called after each `FuzzerWorker` executed another call in its current `CallSequence`. It takes the `FuzzerWorker` and `CallSequence` as input, and is expected to return a list of `ShinkRequest`s if some interesting result was found and we wish for the `FuzzerWorker` to shrink the sequence. You can add a function here as part of custom post-call testing methodology to check if some property was violated, then request a shrunken sequence for it with arbitrary criteria to verify the shrunk sequence satisfies your requirements (e.g. violating the same property again).
@@ -163,7 +160,7 @@ Although we will build out guidance on how you can solve different challenges or
 
 To ensure testing methodology was agnostic and extensible in `medusa`, we note that both assertion and property testing is implemented through the abovementioned events and hooks. When a higher level API is introduced, we intend to migrate these test case providers to that API.
 
-For now, the built-in `AssertionTestCaseProvider` (found [here](https://github.com/trailofbits/medusa/blob/8036697794481b7bf9fa78c922ec7fa6a8a3005c/fuzzing/test_case_assertion_provider.go)) and its test cases (found [here](https://github.com/trailofbits/medusa/blob/8036697794481b7bf9fa78c922ec7fa6a8a3005c/fuzzing/test_case_assertion.go)) are an example of code that _could_ exist externally outside of `medusa`, but plug into it to offer extended testing methodology. Although it makes use of some private variables, they can be replaced with public getter functions that are available. As such, if assertion testing didn't exist in `medusa` natively, you could've implemented it yourself externally!
+For now, the built-in `AssertionTestCaseProvider` (found [here](https://github.com/crytic/medusa/blob/8036697794481b7bf9fa78c922ec7fa6a8a3005c/fuzzing/test_case_assertion_provider.go)) and its test cases (found [here](https://github.com/crytic/medusa/blob/8036697794481b7bf9fa78c922ec7fa6a8a3005c/fuzzing/test_case_assertion.go)) are an example of code that _could_ exist externally outside of `medusa`, but plug into it to offer extended testing methodology. Although it makes use of some private variables, they can be replaced with public getter functions that are available. As such, if assertion testing didn't exist in `medusa` natively, you could've implemented it yourself externally!
 
 In the end, using it would look something like this:
 

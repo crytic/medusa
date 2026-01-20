@@ -16,7 +16,7 @@ current working directory.
 
 ```shell
 # Set config file path
-medusa fuzz --out myConfig.json
+medusa fuzz --config myConfig.json
 ```
 
 ### `--compilation-target`
@@ -26,7 +26,7 @@ warning [here](../project_configuration/compilation_config.md#target) about chan
 
 ```shell
 # Set compilation target
-medusa fuzz --target TestMyContract.sol
+medusa fuzz --compilation-target TestMyContract.sol
 ```
 
 ### `--workers`
@@ -109,6 +109,28 @@ The `--deployer` flag allows you to update `medusa`'s contract deployer (equival
 medusa fuzz --deployer "0x40000"
 ```
 
+### `--use-slither`
+
+The `--use-slither` flag allows you to run Slither on the codebase to extract valuable constants for mutation testing.
+Equivalent to [`slither.useSlither`](../project_configuration/slither_config.md#useslither). Note
+that if there are cached results (via [`slither.CachePath`](../project_configuration/slither_config.md#cachepath)) then
+the cache will be used.
+
+```shell
+# Run slither and attempt to use cache, if available
+medusa fuzz --use-slither
+```
+
+### `--use-slither-force`
+
+The `--use-slither-force` flag is similar to `--use-slither` except the cache at `slither.CachePath` will be
+overwritten.
+
+```shell
+# Run slither and overwrite the cache
+medusa fuzz --use-slither-force
+```
+
 ### `--fail-fast`
 
 The `--fail-fast` flag enables fast failure (equivalent to
@@ -119,15 +141,23 @@ The `--fail-fast` flag enables fast failure (equivalent to
 medusa fuzz --fail-fast
 ```
 
-### `--trace-all`
+### `-v`, `-vv`, `-vvv` / `--verbosity`
 
-The `--trace-all` flag allows you to retrieve an execution trace for each element of a call sequence that triggered a test
-failure (equivalent to
-[`testing.traceAll`](../project_configuration/testing_config.md#traceall)
+The verbosity flags control the level of detail shown in execution traces (equivalent to [`testing.verbosity`](../project_configuration/testing_config.md#verbosity)):
+
+- `-v`: Shows only top-level transactions in the execution trace. Only events in the top-level call frame and return data are included (Verbose level).
+- `-vv`: Shows nested calls with standard detail - this is the default behavior (VeryVerbose level).
+- `-vvv`: Shows all call sequence elements with maximum detail, attaching traces to every call in the sequence (VeryVeryVerbose level).
 
 ```shell
-# Trace each call
-medusa fuzz --trace-all
+# Set verbosity to top-level only
+medusa fuzz -v
+
+# Set verbosity to nested calls (default)
+medusa fuzz -vv
+
+# Set verbosity to maximum detail
+medusa fuzz -vvv
 ```
 
 ### `--no-color`
@@ -142,9 +172,37 @@ medusa fuzz --no-color
 
 ### `--explore`
 
-The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests) fields to `false` and turns off assertion, property, and optimization testing.
+The `--explore` flag enables exploration mode. This sets the [`StopOnFailedTest`](../project_configuration/testing_config.md#stoponfailedtest) and [`StopOnNoTests`](../project_configuration/testing_config.md#stoponnotests)
+fields to `false` and turns off assertion, property, and optimization testing.
 
 ```shell
 # Enable exploration mode
 medusa fuzz --explore
+```
+
+### `--log-level`
+
+The `--log-level` flag sets which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info).
+
+```shell
+# Enable debug log messages
+medusa fuzz --log-level debug
+```
+
+### `--rpc-url`
+
+The `--rpc-url` flag enables fork mode and sets the RPC endpoint URL to fetch contracts from. When provided, medusa will fork the blockchain state from the specified network (equivalent to [`chainConfig.forkConfig.rpcUrl`](../project_configuration/chain_config.md#rpcurl)).
+
+```shell
+# Fork from Ethereum mainnet
+medusa fuzz --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR-API-KEY
+```
+
+### `--rpc-block`
+
+The `--rpc-block` flag sets the block number to use when fetching contracts over RPC in fork mode (equivalent to [`chainConfig.forkConfig.rpcBlock`](../project_configuration/chain_config.md#rpcblock)). Must be used together with `--rpc-url`.
+
+```shell
+# Fork from a specific block
+medusa fuzz --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR-API-KEY --rpc-block 18000000
 ```

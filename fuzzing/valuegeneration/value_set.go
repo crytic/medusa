@@ -3,11 +3,14 @@ package valuegeneration
 import (
 	"encoding/hex"
 	"hash"
+	"maps"
 	"math/big"
+	"reflect"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/crytic/medusa/utils/reflectionutils"
+
+	"github.com/crytic/medusa-geth/common"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/maps"
 )
 
 // ValueSet represents potential values of significance within the source code to be used in fuzz tests.
@@ -171,4 +174,53 @@ func (vs *ValueSet) RemoveBytes(b []byte) {
 	vs.hashProvider.Reset()
 
 	delete(vs.bytes, hashStr)
+}
+
+// Add adds one or more values. Note the values must be a primitive type (signed/unsigned integer, address, string,
+// bytes, fixed bytes)
+func (vs *ValueSet) Add(values []any) {
+	// Iterate across each value and assert on its type
+	for _, value := range values {
+		switch v := value.(type) {
+		case uint8:
+			vs.AddInteger(new(big.Int).SetUint64(uint64(v)))
+		case uint16:
+			vs.AddInteger(new(big.Int).SetUint64(uint64(v)))
+		case uint32:
+			vs.AddInteger(new(big.Int).SetUint64(uint64(v)))
+		case uint64:
+			vs.AddInteger(new(big.Int).SetUint64(v))
+		case int8:
+			vs.AddInteger(new(big.Int).SetInt64(int64(v)))
+		case int16:
+			vs.AddInteger(new(big.Int).SetInt64(int64(v)))
+		case int32:
+			vs.AddInteger(new(big.Int).SetInt64(int64(v)))
+		case int64:
+			vs.AddInteger(new(big.Int).SetInt64(v))
+		case *big.Int:
+			vs.AddInteger(v)
+		case common.Address:
+			vs.AddAddress(v)
+		case bool:
+			if value == true {
+				vs.AddInteger(new(big.Int).SetUint64(1))
+			} else {
+				vs.AddInteger(new(big.Int).SetUint64(0))
+			}
+		case string:
+			vs.AddString(v)
+		case []byte:
+			vs.AddBytes(v)
+		default:
+			// We need to be able to capture fixed bytes. Unfortunately, the only way to do so is using reflection
+			r := reflect.TypeOf(value)
+			// If we have a fixed array of uint8 (aka byte), then we will convert it into a slice and add to value set
+			if r.Kind() == reflect.Array && r.Elem().Kind() == reflect.Uint8 {
+				b := reflectionutils.ArrayToSlice(reflect.ValueOf(value)).([]byte)
+				vs.AddBytes(b)
+			}
+			continue
+		}
+	}
 }

@@ -1,11 +1,9 @@
 package config
 
 import (
-	"github.com/crytic/medusa/compilation/types"
-	"math/big"
-
 	testChainConfig "github.com/crytic/medusa/chain/config"
 	"github.com/crytic/medusa/compilation"
+	"github.com/crytic/medusa/compilation/types"
 	"github.com/rs/zerolog"
 )
 
@@ -47,13 +45,15 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			TestLimit:               0,
 			ShrinkLimit:             5_000,
 			CallSequenceLength:      100,
+			PruneFrequency:          5,
 			TargetContracts:         []string{},
-			TargetContractsBalances: []*big.Int{},
+			TargetContractsBalances: []*ContractBalance{},
 			PredeployedContracts:    map[string]string{},
 			ConstructorArgs:         map[string]map[string]any{},
 			CorpusDirectory:         "",
 			CoverageEnabled:         true,
 			CoverageFormats:         []string{"html", "lcov"},
+			CoverageExclusions:      []string{},
 			SenderAddresses: []string{
 				"0x10000",
 				"0x20000",
@@ -62,19 +62,19 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			DeployerAddress:        "0x30000",
 			MaxBlockNumberDelay:    60480,
 			MaxBlockTimestampDelay: 604800,
-			BlockGasLimit:          125_000_000,
 			TransactionGasLimit:    12_500_000,
+			RevertReporterEnabled:  false,
 			Testing: TestingConfig{
 				StopOnFailedTest:             true,
 				StopOnFailedContractMatching: false,
 				StopOnNoTests:                true,
+				TestViewMethods:              true,
 				TestAllContracts:             false,
-				TraceAll:                     false,
+				Verbosity:                    1,
 				TargetFunctionSignatures:     []string{},
 				ExcludeFunctionSignatures:    []string{},
 				AssertionTesting: AssertionTestingConfig{
-					Enabled:         true,
-					TestViewMethods: false,
+					Enabled: true,
 					PanicCodeConfig: PanicCodeConfig{
 						FailOnAssertion: true,
 					},

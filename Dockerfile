@@ -1,5 +1,5 @@
 ## medusa build process
-FROM golang:1.22 AS medusa
+FROM golang:1.24 AS medusa
 
 WORKDIR /src
 COPY . /src/medusa/

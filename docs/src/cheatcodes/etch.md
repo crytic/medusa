@@ -8,7 +8,7 @@ The `etch` cheatcode will set the `who` address's bytecode to `code`.
 
 ```solidity
 // Obtain our cheat code contract reference.
-IStdCheats cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
 // Obtain our original code hash for an account.
 address acc = address(777);

@@ -4,17 +4,18 @@ import (
 	"encoding/hex"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 
-	"github.com/crytic/medusa/fuzzing/executiontracer"
+	"github.com/crytic/medusa/utils"
 
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/events"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/executiontracer"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
-	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
@@ -122,6 +123,7 @@ func TestAssertionMode(t *testing.T) {
 		"testdata/contracts/assertions/assert_allocate_too_much_memory.sol",
 		"testdata/contracts/assertions/assert_call_uninitialized_variable.sol",
 		"testdata/contracts/assertions/assert_constant_method.sol",
+		"testdata/contracts/assertions/assert_fallback_receive.sol",
 	}
 	for _, filePath := range filePaths {
 		runFuzzerTest(t, &fuzzerSolcFileTest{
@@ -137,8 +139,8 @@ func TestAssertionMode(t *testing.T) {
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnIncorrectStorageAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnOutOfBoundsArrayAccess = true
 				config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig.FailOnPopEmptyArray = true
-				config.Fuzzing.Testing.AssertionTesting.TestViewMethods = true
 				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.TestViewMethods = true
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
 				config.Slither.UseSlither = false
 			},
@@ -267,15 +269,23 @@ func TestCheatCodes(t *testing.T) {
 		"testdata/contracts/cheat_codes/utils/parse.sol",
 		"testdata/contracts/cheat_codes/vm/snapshot_and_revert_to.sol",
 		"testdata/contracts/cheat_codes/vm/coinbase.sol",
+		"testdata/contracts/cheat_codes/vm/coinbase_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/chain_id.sol",
 		"testdata/contracts/cheat_codes/vm/deal.sol",
 		"testdata/contracts/cheat_codes/vm/difficulty.sol",
 		"testdata/contracts/cheat_codes/vm/etch.sol",
 		"testdata/contracts/cheat_codes/vm/fee.sol",
+		"testdata/contracts/cheat_codes/vm/fee_permanent.sol",
 		"testdata/contracts/cheat_codes/vm/prank.sol",
 		"testdata/contracts/cheat_codes/vm/roll.sol",
+		"testdata/contracts/cheat_codes/vm/roll_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/start_prank.sol",
+		//"testdata/contracts/cheat_codes/vm/start_prank_delegate.sol", // TODO: Enable when startPrank `delegateCall` flag supported.
 		"testdata/contracts/cheat_codes/vm/store_load.sol",
 		"testdata/contracts/cheat_codes/vm/warp.sol",
+		"testdata/contracts/cheat_codes/vm/warp_permanent.sol",
+		"testdata/contracts/cheat_codes/vm/prevrandao.sol",
+		"testdata/contracts/cheat_codes/vm/get_code.sol",
 	}
 
 	// FFI test will fail on Windows because "echo" is a shell command, not a system command, so we diverge these
@@ -457,14 +467,14 @@ func TestDeploymentsInternalLibrary(t *testing.T) {
 func TestDeploymentsWithPredeploy(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/predeploy_contract.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"TestContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(1)}
-			config.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
-			config.Fuzzing.Testing.PropertyTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
-			config.Slither.UseSlither = false
+		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.Fuzzing.TargetContracts = []string{"TestContract"}
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{{Int: *big.NewInt(1)}}
+			pkgConfig.Fuzzing.TestLimit = 1000 // this test should expose a failure immediately
+			pkgConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			pkgConfig.Fuzzing.PredeployedContracts = map[string]string{"PredeployContract": "0x1234"}
+			pkgConfig.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -478,17 +488,21 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 	})
 }
 
-// TestDeploymentsWithPayableConstructor runs a test to ensure that we can send ether to payable constructors
+// TestDeploymentsWithPayableConstructors runs a test to ensure that we can send ether to payable constructors
 func TestDeploymentsWithPayableConstructors(t *testing.T) {
 	runFuzzerTest(t, &fuzzerSolcFileTest{
 		filePath: "testdata/contracts/deployments/deploy_payable_constructors.sol",
-		configUpdates: func(config *config.ProjectConfig) {
-			config.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract"}
-			config.Fuzzing.TargetContractsBalances = []*big.Int{big.NewInt(0), big.NewInt(1e18)}
-			config.Fuzzing.TestLimit = 1 // this should happen immediately
-			config.Fuzzing.Testing.AssertionTesting.Enabled = false
-			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+		configUpdates: func(pkgConfig *config.ProjectConfig) {
+			pkgConfig.Fuzzing.TargetContracts = []string{"FirstContract", "SecondContract", "ThirdContract"}
+			pkgConfig.Fuzzing.TargetContractsBalances = []*config.ContractBalance{
+				{Int: *big.NewInt(0)},
+				{Int: *big.NewInt(1e18)},
+				{Int: *big.NewInt(0x1234)},
+			}
+			pkgConfig.Fuzzing.TestLimit = 1 // this should happen immediately
+			pkgConfig.Fuzzing.Testing.AssertionTesting.Enabled = false
+			pkgConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			pkgConfig.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
 			// Start the fuzzer
@@ -598,6 +612,56 @@ func TestExecutionTraces(t *testing.T) {
 	}
 }
 
+// TestLabelCheatCode tests the vm.label cheatcode.
+func TestLabelCheatCode(t *testing.T) {
+	// These are the expected messages in the execution trace
+	expectedTraceMessages := []string{
+		"ProxyContract.testVMLabel()()",
+		"addr=ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66]",
+		"sender=MySender [0x10000]",
+		"ProxyContract -> ImplementationContract.emitEvent(address)(ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])",
+		"code=ImplementationContract [0x54919A19522Ce7c842E25735a9cFEcef1c0a06dA]",
+		"[event] TestEvent(RandomAddress [0x20000])",
+		"[return (ProxyContract [0xA647ff3c36cFab592509E13860ab8c4F28781a66])]",
+	}
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/cheat_codes/utils/label.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			// Only allow for one sender for proper testing of this unit test
+			config.Fuzzing.SenderAddresses = []string{"0x10000"}
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+			// Verify it contains all expected strings
+			for _, expectedTraceMessage := range expectedTraceMessages {
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+			}
+		},
+	})
+}
+
 // TestTestingScope runs tests to ensure dynamically deployed contracts are tested when the "test all contracts"
 // config option is specified. It also runs the fuzzer without the option enabled to ensure they are not tested.
 func TestTestingScope(t *testing.T) {
@@ -696,16 +760,12 @@ func TestValueGenerationGenerateAllTypes(t *testing.T) {
 
 // TestValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
 func TestValueGenerationSolving(t *testing.T) {
-	// TODO: match_ints_xy is slower than match_uints_xy in the value generator because AST doesn't retain negative
-	//  numbers, improve our logic to solve it faster, then re-enable this.
 	filePaths := []string{
 		"testdata/contracts/value_generation/match_addr_contract.sol",
 		"testdata/contracts/value_generation/match_addr_exact.sol",
 		"testdata/contracts/value_generation/match_addr_sender.sol",
 		"testdata/contracts/value_generation/match_string_exact.sol",
 		"testdata/contracts/value_generation/match_structs_xy.sol",
-		//"testdata/contracts/value_generation/match_ints_xy.sol",
-		"testdata/contracts/value_generation/match_uints_xy.sol",
 		"testdata/contracts/value_generation/match_payable_xy.sol",
 	}
 	for _, filePath := range filePaths {
@@ -715,7 +775,37 @@ func TestValueGenerationSolving(t *testing.T) {
 				config.Fuzzing.TargetContracts = []string{"TestContract"}
 				config.Fuzzing.Testing.AssertionTesting.Enabled = false
 				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-				config.Slither.UseSlither = false
+				config.Slither.UseSlither = true
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for any failed tests and verify coverage was captured
+				assertFailedTestsExpected(f, true)
+				assertCorpusCallSequencesCollected(f, true)
+			},
+		})
+	}
+}
+
+// TestComplexValueGenerationSolving runs a series of tests to test the value generator can solve expected problems.
+// Specifically, this test provides a much larger test limit since some of these tests fail to get solved in the CI fast enough.
+func TestComplexValueGenerationSolving(t *testing.T) {
+	filePaths := []string{
+		"testdata/contracts/value_generation/match_ints_xy.sol",
+		"testdata/contracts/value_generation/match_uints_xy.sol",
+	}
+	for _, filePath := range filePaths {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.Testing.AssertionTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Fuzzing.TestLimit = 15_000_000
+				config.Slither.UseSlither = true
 			},
 			method: func(f *fuzzerTestContext) {
 				// Start the fuzzer
@@ -910,14 +1000,12 @@ func TestCorpusReplayability(t *testing.T) {
 			newCoverage := f.fuzzer.corpus.CoverageMaps()
 
 			// Check to see if original and new coverage are the same (disregarding hit count)
-			successCovIncreased, revertCovIncreased, err := originalCoverage.Update(newCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err := originalCoverage.Update(newCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
-			successCovIncreased, revertCovIncreased, err = newCoverage.Update(originalCoverage)
-			assert.False(t, successCovIncreased)
-			assert.False(t, revertCovIncreased)
+			covIncreased, err = newCoverage.Update(originalCoverage)
+			assert.False(t, covIncreased)
 			assert.NoError(t, err)
 
 			// Verify that the fuzzer finished after fewer sequences than there are in the corpus
@@ -936,7 +1024,7 @@ func TestDeploymentOrderWithCoverage(t *testing.T) {
 			config.Fuzzing.TargetContracts = []string{"InheritedFirstContract", "InheritedSecondContract"}
 			config.Fuzzing.Testing.AssertionTesting.Enabled = false
 			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
-			config.Slither.UseSlither = false
+			config.Slither.UseSlither = true
 		},
 		method: func(f *fuzzerTestContext) {
 			// Setup checks for event emissions
@@ -1016,4 +1104,169 @@ func TestExcludeFunctionSignatures(t *testing.T) {
 				reflect.DeepEqual(contract.OptimizationTestMethods, []string{"TestContract.optimize_b()"})
 			}
 		}})
+}
+
+// TestVerbosityLevels tests that the verbosity configuration is properly applied
+// and affects the execution traces appropriately
+func TestVerbosityLevels(t *testing.T) {
+	// Map to store trace messages for each verbosity level
+	executedTraceMessages := map[int][]string{
+		0: { // Verbose level - should only contain top-level calls
+			"[call] TestContract.setYValue(uint256)",
+			"[event] settingUpY",
+		},
+		1: { // VeryVerbose level - should contain nested calls
+			"[call] HelperContract.setY(uint256)",
+			"[event] setUpY",
+			"[return (true)]",
+		},
+		2: { // VeryVeryVerbose level - should contain all calls with full detail
+			"[call] TestContract.setXValue(uint256)",
+			"[call] HelperContract.setX(uint256)",
+			"[event] setUpX",
+			"[return (true)]",
+			"[return ()]",
+		},
+	}
+	verbosityTests := []config.VerbosityLevel{config.Verbose, config.VeryVerbose, config.VeryVeryVerbose}
+	// Test each verbosity level
+	for verbosityLevel := range verbosityTests {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/execution_tracing/verbosity_levels.sol",
+			configUpdates: func(projectConfig *config.ProjectConfig) {
+				projectConfig.Fuzzing.TargetContracts = []string{"TestContract", "HelperContract"}
+				projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+				projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+				projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				projectConfig.Slither.UseSlither = false
+				// Start with a default verbosity
+				projectConfig.Fuzzing.Testing.Verbosity = config.VerbosityLevel(verbosityLevel)
+			},
+			method: func(f *fuzzerTestContext) {
+
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check for failed assertion tests.
+				failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+				// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+				failingSequence := *failedTestCase[0].CallSequence()
+				assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+				// Test for verbosity levels Verbose and VeryVerbose
+				if verbosityLevel <= int(config.VeryVerbose) {
+					for _, call := range failingSequence[:len(failingSequence)-1] {
+						assert.Empty(t, call.ExecutionTrace)
+					}
+					// Obtain the last call
+					lastCall := failingSequence[len(failingSequence)-1]
+					assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+					// Get the execution trace message
+					executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				} else { // Test for Verbosity Level VeryVeryVerbose
+					executionTraceMsg := ""
+					for _, sequence := range failingSequence {
+						executionTraceMsg = executionTraceMsg + sequence.ExecutionTrace.Log().String()
+					}
+					// Verify it contains all expected strings
+					for _, expectedTraceMessage := range executedTraceMessages[verbosityLevel] {
+						assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+					}
+				}
+			},
+		})
+	}
+}
+
+func TestExternalLibraryDependency(t *testing.T) {
+	// These are the expected messages in the execution trace
+	expectedTraceMessages := []string{
+		"TestExternalLibrary.fuzz_me()()",
+		"[proxy call] TestExternalLibrary -> Library3.getLibrary()()",
+		"[proxy call] TestExternalLibrary -> Library2.getLibrary()()",
+		"[proxy call] TestExternalLibrary -> Library1.getLibrary()()",
+		"[return (\"Library\")]",
+		"[return (\"Library\")]",
+		"[proxy call] TestExternalLibrary -> Library1.getLibrary()()",
+		"[return (\"Library\")]",
+	}
+
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/external_library/external_library.sol",
+		configUpdates: func(projectConfig *config.ProjectConfig) {
+			projectConfig.Fuzzing.TargetContracts = []string{"TestExternalLibrary"}
+			projectConfig.Fuzzing.Testing.AssertionTesting.Enabled = true
+			projectConfig.Fuzzing.Testing.PropertyTesting.Enabled = false
+			projectConfig.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			projectConfig.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests.
+			failedTestCase := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+			assert.NotEmpty(t, failedTestCase, "expected to have failed test cases")
+
+			// Obtain our first failed test case, get the message, and verify it contains our assertion failed.
+			failingSequence := *failedTestCase[0].CallSequence()
+			assert.NotEmpty(t, failingSequence, "expected to have calls in the call sequence failing an assertion test")
+
+			// Obtain the last call
+			lastCall := failingSequence[len(failingSequence)-1]
+			assert.NotNilf(t, lastCall.ExecutionTrace, "expected to have an execution trace attached to call sequence for this test")
+
+			// Get the execution trace message
+			executionTraceMsg := lastCall.ExecutionTrace.Log().String()
+
+			// Verify it contains all expected strings
+			for _, expectedTraceMessage := range expectedTraceMessages {
+				assert.Contains(t, executionTraceMsg, expectedTraceMessage)
+			}
+		},
+	})
+}
+
+// TestExternalProject allows you to debug Medusa on a full external project with Go debugging tools.
+//
+// Usage:
+//  1. Create a medusa.json in your external project directory (or use existing config)
+//  2. Set MEDUSA_DEBUG_PROJECT in your IDE's test configuration (GoLand: Run → Edit Configurations → Environment variables)
+//  3. Set breakpoints anywhere in Medusa code (e.g., fuzzer.go, coverage_maps.go, fuzzer_worker.go, etc.)
+//  4. Debug this test function
+//
+// The test will:
+//   - Load the project's medusa.json configuration
+//   - Compile the project using crytic-compile (runs in project directory)
+//   - Deploy contracts and start fuzzing
+//   - Stop at your breakpoints for inspection
+//
+// This eliminates the need for print statements and recompilation when debugging issues
+// that only reproduce on larger projects.
+func TestExternalProject(t *testing.T) {
+	projectPath := os.Getenv("MEDUSA_DEBUG_PROJECT")
+	if projectPath == "" {
+		t.Skip("Skipping external project test. Set MEDUSA_DEBUG_PROJECT=/path/to/project to enable.")
+	}
+
+	runFuzzerTest(t, &fuzzerProjectTest{
+		projectPath: projectPath,
+		configUpdates: func(config *config.ProjectConfig) {
+			// Optional: Add any config updates here to override settings from medusa.json
+			// Example: config.Fuzzing.TestLimit = 1000
+		},
+		method: func(ctx *fuzzerTestContext) {
+			err := ctx.fuzzer.Start()
+			assert.NoError(ctx.t, err)
+		},
+	})
 }

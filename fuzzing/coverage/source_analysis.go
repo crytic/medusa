@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
+	"github.com/bmatcuk/doublestar/v4"
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/types"
+	"github.com/crytic/medusa/logging"
 	"golang.org/x/exp/maps"
 )
 
@@ -56,6 +61,52 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 	return count
 }
 
+// shouldExcludeFile checks if a file path matches any of the exclusion patterns
+func shouldExcludeFile(filePath string, exclusionPatterns []string) bool {
+	for _, pattern := range exclusionPatterns {
+		if matched, err := doublestar.Match(pattern, filePath); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// filterExcludedFiles removes files matching exclusion patterns from the source analysis.
+// Pattern matching is performed on relative paths (relative to current working directory)
+// to match the behavior of the coverage report display.
+func (s *SourceAnalysis) filterExcludedFiles(exclusionPatterns []string) {
+	if len(exclusionPatterns) == 0 {
+		return
+	}
+
+	// Get current working directory to convert absolute paths to relative paths
+	// This ensures pattern matching works on the same relative paths shown in reports
+	cwd, err := os.Getwd()
+	if err != nil {
+		// If we can't get the working directory, skip filtering to avoid issues
+		return
+	}
+
+	// Create a new map without excluded files
+	filteredFiles := make(map[string]*SourceFileAnalysis)
+
+	for filePath, fileAnalysis := range s.Files {
+		// Convert to relative path for pattern matching (same logic as in report template)
+		relativePath := filePath
+		if relPath, err := filepath.Rel(cwd, filePath); err == nil {
+			relativePath = relPath
+		}
+
+		// Keep the file if it doesn't match any exclusion pattern
+		if !shouldExcludeFile(relativePath, exclusionPatterns) {
+			filteredFiles[filePath] = fileAnalysis
+		}
+	}
+
+	// Replace the original files map with filtered results
+	s.Files = filteredFiles
+}
+
 // GenerateLCOVReport generates an LCOV report from the source analysis.
 // The spec of the format is here https://github.com/linux-test-project/lcov/blob/07a1127c2b4390abf4a516e9763fb28a956a9ce4/man/geninfo.1#L989
 func (s *SourceAnalysis) GenerateLCOVReport() string {
@@ -93,7 +144,7 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 			// We are treating any line hit in the definition as a hit for the function.
 			hit := 0
 			for i := startLine; i < endLine; i++ {
-				// index iz zero based, line numbers are 1 based
+				// index is zero based, line numbers are 1 based
 				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
 					hit = 1
 				}
@@ -170,19 +221,52 @@ type SourceLineAnalysis struct {
 	IsCovered bool
 
 	// SuccessHitCount describes how many times this line was executed successfully
-	SuccessHitCount uint
+	SuccessHitCount uint64
 
 	// RevertHitCount describes how many times this line reverted during execution
-	RevertHitCount uint
+	RevertHitCount uint64
 
 	// IsCoveredReverted indicates whether the source line has been executed before reverting.
 	IsCoveredReverted bool
 }
 
-// AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
-// to determine source coverage information.
+// GetUniquePCsCount returns the number of PCs in all contracts hit by our tests.
+func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageMaps, logger *logging.Logger) (int, error) {
+	uniquePCs := 0
+
+	// Loop through all sources in all compilations to process coverage information.
+	for _, compilation := range compilations {
+		for _, source := range compilation.SourcePathToArtifact {
+			// Loop for each contract in this source
+			for _, contract := range source.Contracts {
+				// Skip interfaces.
+				if contract.Kind == types.ContractKindInterface {
+					continue
+				}
+				// Obtain coverage map data for this contract.
+				initCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.InitBytecode, true)
+				if err != nil {
+					return 0, fmt.Errorf("could not perform source code analysis due to error fetching init coverage map data: %v", err)
+				}
+				runtimeCoverageMapData, err := coverageMaps.GetContractCoverageMap(contract.RuntimeBytecode, false)
+				if err != nil {
+					return 0, fmt.Errorf("could not perform source code analysis due to error fetching runtime coverage map data: %v", err)
+				}
+
+				coverageMaps.updateLock.Lock()
+				uniquePCs += getContractPCsHit(contract.InitBytecode, initCoverageMapData, logger)
+				uniquePCs += getContractPCsHit(contract.RuntimeBytecode, runtimeCoverageMapData, logger)
+				coverageMaps.updateLock.Unlock()
+			}
+		}
+	}
+	return uniquePCs, nil
+}
+
+// AnalyzeSourceCoverage takes a list of compilations, coverage maps, and exclusion patterns, then performs source analysis
+// to determine source coverage information. Files matching the exclusion patterns will be filtered out from the results.
 // Returns a SourceAnalysis object, or an error if one occurs.
-func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps) (*SourceAnalysis, error) {
+func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, exclusionPatterns []string, logger *logging.Logger) (*SourceAnalysis, error) {
 	// Create a new source analysis object
 	sourceAnalysis := &SourceAnalysis{
 		Files: make(map[string]*SourceFileAnalysis),
@@ -272,40 +356,60 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 					return nil, fmt.Errorf("could not perform source code analysis due to error fetching runtime source map: %v", err)
 				}
 
-				// Parse our instruction index to offset lookups
-				initInstructionOffsetLookup, err := initSourceMap.GetInstructionIndexToOffsetLookup(contract.InitBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing init byte code: %v", err)
-				}
-				runtimeInstructionOffsetLookup, err := runtimeSourceMap.GetInstructionIndexToOffsetLookup(contract.RuntimeBytecode)
-				if err != nil {
-					return nil, fmt.Errorf("could not perform source code analysis due to error parsing runtime byte code: %v", err)
-				}
-
 				// Filter our source maps
 				initSourceMap = filterSourceMaps(compilation, initSourceMap)
 				runtimeSourceMap = filterSourceMaps(compilation, runtimeSourceMap)
 
 				// Analyze both init and runtime coverage for our source lines.
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, initInstructionOffsetLookup, initCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData, logger)
 				if err != nil {
 					return nil, err
 				}
-				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, runtimeInstructionOffsetLookup, runtimeCoverageMapData)
+				err = analyzeContractSourceCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData, logger)
 				if err != nil {
 					return nil, err
 				}
 			}
 		}
 	}
+
+	// Apply exclusion filtering if patterns are provided
+	sourceAnalysis.filterExcludedFiles(exclusionPatterns)
+
 	return sourceAnalysis, nil
+}
+
+// getContractPCsHit returns the number of PCs in this contract hit by our tests.
+func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMap, logger *logging.Logger) int {
+	if len(bytecode) == 0 || contractCoverageData == nil {
+		return 0
+	}
+	succHitCounts, revertHitCounts := determineLinesCovered(contractCoverageData, bytecode, logger)
+	if succHitCounts == nil || revertHitCounts == nil {
+		return 0
+	}
+	pcsHit := 0
+	for i, ct := range succHitCounts {
+		if ct > 0 || revertHitCounts[i] > 0 {
+			pcsHit++
+		}
+	}
+	return pcsHit
 }
 
 // analyzeContractSourceCoverage takes a compilation, a SourceAnalysis, the source map they were derived from,
 // a lookup of instruction index->offset, and coverage map data. It updates the coverage source line mapping with
 // coverage data, after analyzing the coverage data for the given file in the given compilation.
 // Returns an error if one occurs.
-func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, instructionOffsetLookup []int, contractCoverageData *ContractCoverageMap) error {
+func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis *SourceAnalysis, sourceMap types.SourceMap, bytecode []byte, contractCoverageData *ContractCoverageMap, logger *logging.Logger) error {
+	var succHitCounts, revertHitCounts []uint64
+	if len(bytecode) > 0 && contractCoverageData != nil {
+		succHitCounts, revertHitCounts = determineLinesCovered(contractCoverageData, bytecode, logger)
+	} else { // Probably because we didn't hit this contract at all...
+		succHitCounts = nil
+		revertHitCounts = nil
+	}
+
 	// Loop through each source map element
 	for _, sourceMapElement := range sourceMap {
 		// If this source map element doesn't map to any file (compiler generated inline code), it will have no
@@ -324,11 +428,16 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 		}
 
 		// Capture the hit count of the source map element.
-		succHitCount := uint(0)
-		revertHitCount := uint(0)
-		if contractCoverageData != nil {
-			succHitCount = contractCoverageData.successfulCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
-			revertHitCount = contractCoverageData.revertedCoverage.HitCount(instructionOffsetLookup[sourceMapElement.Index])
+		var succHitCount, revertHitCount uint64
+		if succHitCounts != nil {
+			succHitCount = succHitCounts[sourceMapElement.Index]
+		} else {
+			succHitCount = 0
+		}
+		if revertHitCounts != nil {
+			revertHitCount = revertHitCounts[sourceMapElement.Index]
+		} else {
+			revertHitCount = 0
 		}
 
 		// Obtain the source file this element maps to.
@@ -340,7 +449,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				return sourceFile.CumulativeOffsetByLine[i] > start
 			})
 
-			// index iz zero based, line numbers are 1 based
+			// index is zero based, line numbers are 1 based
 			sourceLine := sourceFile.Lines[startLine-1]
 
 			// Check if the line is within range
@@ -349,8 +458,12 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				sourceLine.IsActive = true
 
 				// Set its coverage state and increment hit counts
-				sourceLine.SuccessHitCount += succHitCount
-				sourceLine.RevertHitCount += revertHitCount
+				if succHitCount > sourceLine.SuccessHitCount {
+					// We do max rather than += because if we did += then lines with multiple instructions
+					// would be weighted higher than lines with single instructions
+					sourceLine.SuccessHitCount = succHitCount
+				}
+				sourceLine.RevertHitCount += revertHitCount // On the other hand, reverts from multiple instructions add as expected
 				sourceLine.IsCovered = sourceLine.IsCovered || sourceLine.SuccessHitCount > 0
 				sourceLine.IsCoveredReverted = sourceLine.IsCoveredReverted || sourceLine.RevertHitCount > 0
 
@@ -361,6 +474,119 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 
 	}
 	return nil
+}
+
+// determineLinesCovered takes a ContractCoverageMap and a contract's bytecode, and determines which program counters were hit.
+// Returns two slices: one for successful hits and one for reverts. These slices are indexed by instruction index (not program counter),
+// and their values are the number of hits (0 if the PC was not hit).
+func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *logging.Logger) ([]uint64, []uint64) {
+	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
+
+	// executedMakers as src -> dst -> hit count, and dst -> src -> hit count
+	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(cm.executedMarkers)
+
+	successfulHits := make([]uint64, len(indexToOffset))
+	revertedHits := make([]uint64, len(indexToOffset))
+
+	// Traverse the instructions from top to bottom, keeping track of hit count as we go
+	hit := uint64(0)
+	for idx, pc := range indexToOffset {
+		enterCount := uint64(0)    // count of jumpdest + contract initial enter (ENTER_MARKER_XOR)
+		revertCount := uint64(0)   // count of revert (REVERT_MARKER_XOR)
+		allLeaveCount := uint64(0) // count of jump + return (RETURN_MAKRER_XOR) + revert (REVERT_MARKER_XOR)
+
+		for _, hitHere := range execMarkersDstSrc[uint64(pc)] {
+			enterCount += hitHere
+		}
+		revertCount = execMarkersSrcDst[uint64(pc)][REVERT_MARKER_XOR]
+		for _, hitHere := range execMarkersSrcDst[uint64(pc)] {
+			allLeaveCount += hitHere
+		}
+
+		// Test some conditions that should always hold...
+		op := vm.OpCode(bytecode[pc])                                                         // Used only for checks below
+		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for checks below
+		warningMsgFormat := "WARNING: %s. The coverage report will be inaccurate. Try setting USE_FULL_BYTECODE=1 in your environment and rerunning medusa. If that doesn't make this message go away, you found a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %v, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n"
+		if hit+enterCount < hit {
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Overflow while generating coverage report, during `hit += enterCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
+		}
+		if hit+enterCount < revertCount {
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Underflow while generating coverage report, during `hit - revertCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
+		}
+		if hit+enterCount < allLeaveCount {
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Underflow while generating coverage report, during `hit -= allLeaveCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
+		}
+		if isJumpOrReturn && hit+enterCount != allLeaveCount {
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Unexpected condition while generating coverage report: return or jump does not reset hit count to 0", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
+		}
+		if allLeaveCount-revertCount > 0 && hit+enterCount != allLeaveCount {
+			// The check is allLeaveCount-revertCount > 0 rather than just allLeaveCount > 0 since reverts don't have to reset hit to 0
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
+		}
+
+		// Modify hit based on coverage for this line, and record results
+		hit += enterCount
+		successfulHits[idx] = hit - revertCount
+		revertedHits[idx] = revertCount
+		hit -= allLeaveCount
+	}
+	if hit != 0 {
+		logger.Warn(fmt.Sprintf("WARNING: Nonzero final hit count. The coverage report will be inaccurate. Try setting USE_FULL_BYTECODE=1 in your environment and rerunning medusa. If that doesn't make this message go away, you found a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset)))
+	}
+
+	return successfulHits, revertedHits
+}
+
+// GetInstructionIndexToOffsetLookup obtains a slice where each index of the slice corresponds to an instruction index,
+// and the element of the slice represents the instruction offset.
+func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
+	// Create our resulting lookup
+	indexToOffsetLookup := make([]int, 0, len(bytecode))
+
+	// Loop through all byte code
+	currentOffset := 0
+	for currentOffset < len(bytecode) {
+		// Obtain the indexed instruction and add the current offset to our lookup at this index.
+		op := vm.OpCode(bytecode[currentOffset])
+		indexToOffsetLookup = append(indexToOffsetLookup, currentOffset)
+
+		// Next, calculate the length of data that follows this instruction.
+		operandCount := 0
+		if op.IsPush() {
+			if op == vm.PUSH0 {
+				operandCount = 0
+			} else {
+				operandCount = int(op) - int(vm.PUSH1) + 1
+			}
+		}
+
+		// Advance the offset past this instruction and its operands.
+		currentOffset += operandCount + 1
+	}
+	return indexToOffsetLookup
+}
+
+// getExecMarkersMapping takes a set of executed markers, and sorts it into a map from src -> dst -> hit count, and a map of dst -> src -> hit count.
+// This is a helper function used by determineLinesCovered.
+func getExecMarkersMapping(execMarkers map[uint64]uint64) (map[uint64]map[uint64]uint64, map[uint64]map[uint64]uint64) {
+	execMarkersSrcDst := make(map[uint64]map[uint64]uint64)
+	execMarkersDstSrc := make(map[uint64]map[uint64]uint64)
+
+	for marker, hitCount := range execMarkers {
+		// Lower, upper 32 bits
+		dst := marker & 0xFFFFFFFF
+		src := marker >> 32
+		if _, ok := execMarkersSrcDst[src]; !ok {
+			execMarkersSrcDst[src] = make(map[uint64]uint64, 1)
+		}
+		if _, ok := execMarkersDstSrc[dst]; !ok {
+			execMarkersDstSrc[dst] = make(map[uint64]uint64, 1)
+		}
+		execMarkersSrcDst[src][dst] = hitCount
+		execMarkersDstSrc[dst][src] = hitCount
+	}
+
+	return execMarkersSrcDst, execMarkersDstSrc
 }
 
 // filterSourceMaps takes a given source map and filters it so overlapping (superset) source map elements are removed.

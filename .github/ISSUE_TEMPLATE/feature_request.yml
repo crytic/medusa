@@ -1,0 +1,27 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Medusa
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the information below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: What feature or capability should be added to Medusa?
+      placeholder: Describe the feature you'd like to see...
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Problem / Use Case
+      description: What problem does this feature solve? How would you use it?
+      placeholder: Explain the use case or problem this feature addresses...
+    validations:
+      required: true

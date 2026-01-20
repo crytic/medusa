@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/crytic/medusa-geth/accounts/abi"
+	"github.com/crytic/medusa-geth/core/vm"
 )
 
 // An enum is defined below providing all `Panic(uint)` error codes returned in return data when the VM encounters
@@ -131,7 +131,7 @@ func GetPanicReason(panicCode uint64) string {
 	case PanicCodeOutOfBoundsArrayAccess:
 		return "panic: out of bounds array access"
 	case PanicCodeAllocateTooMuchMemory:
-		return "panic; overallocation of memory"
+		return "panic: overallocation of memory"
 	case PanicCodeCallUninitializedVariable:
 		return "panic: call on uninitialized variable"
 	default:

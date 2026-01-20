@@ -1,11 +1,11 @@
 package contracts
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 	"strings"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/compilation/types"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 // Contracts describes an array of contracts

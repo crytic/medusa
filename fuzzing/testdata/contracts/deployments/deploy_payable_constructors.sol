@@ -23,3 +23,16 @@ contract SecondContract {
     function dummy() public {}
 
 }
+
+
+contract ThirdContract {
+    constructor() payable {}
+
+    function property_contract_has_balance() public returns(bool) {
+        return address(this).balance == 0.00000000000000466 ether;
+    }
+
+    // This exists so the fuzzer knows there are state changing methods to target, instead of quitting early.
+    function dummy() public {}
+
+}

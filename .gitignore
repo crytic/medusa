@@ -24,5 +24,8 @@ medusa
 # Medusa docs
 docs/book
 
+# direnv cache
+.direnv/
+
 # Build results
 result

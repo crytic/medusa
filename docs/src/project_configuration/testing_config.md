@@ -49,6 +49,12 @@ contract MyContract {
   the [`timeout`](./fuzzing_config.md#timeout) is hit, or the user manually stops execution.
 - **Default**: `true`
 
+### `testViewMethods`
+
+- **Type**: Boolean
+- **Description**: Whether `pure` / `view` functions should be called and tested.
+- **Default**: `true`
+
 ### `testAllContracts`
 
 - **Type**: Boolean
@@ -56,12 +62,15 @@ contract MyContract {
   just the contracts specified in the project configuration's [`fuzzing.targetContracts`](./fuzzing_config.md#targetcontracts).
 - **Default**: `false`
 
-### `traceAll`:
+### `verbosity`:
 
-- **Type**: Boolean
-- **Description**: Determines whether an `execution trace` should be attached to each element of a call sequence
-  that triggered a test failure.
-- **Default**: `false`
+- **Type**: Enum (VerbosityLevel)
+- **Description**: Controls the level of detail in execution traces:
+  - **Verbose (0)**: Only shows top-level transactions in the execution trace. Only events in the top-level call frame and return data are included.
+  - **VeryVerbose (1)**: Shows nested calls with standard detail (default behavior).
+  - **VeryVeryVerbose (2)**: Shows all call sequence elements with maximum detail, attaching traces to every call in the sequence.
+- **CLI flags**: Use `-v`, `-vv`, or `-vvv` to set verbosity levels 0, 1, or 2 respectively.
+- **Default**: `VeryVerbose (1)`
 
 ### `targetFunctionSignatures`:
 
@@ -84,12 +93,6 @@ contract MyContract {
 - **Type**: Boolean
 - **Description**: Enable or disable assertion testing
 - **Default**: `true`
-
-### `testViewMethods`
-
-- **Type**: Boolean
-- **Description**: Whether `pure` / `view` functions should be tested for assertion failures.
-- **Default**: `false`
 
 ### `panicCodeConfig`
 

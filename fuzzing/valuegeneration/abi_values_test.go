@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -319,7 +319,7 @@ func TestEncodeABIArgumentToString(t *testing.T) {
 			value := GenerateAbiValue(valueGenerator, &arg.Type)
 
 			// Encode the generated value for this argument and ensure no error occurred.
-			_, err := encodeABIArgumentToString(&arg.Type, value)
+			_, err := encodeABIArgumentToString(&arg.Type, value, nil)
 			assert.NoError(t, err)
 		}
 	}

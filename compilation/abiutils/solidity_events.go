@@ -1,8 +1,8 @@
 package abiutils
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	coreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/crytic/medusa-geth/accounts/abi"
+	coreTypes "github.com/crytic/medusa-geth/core/types"
 )
 
 // UnpackEventAndValues takes a given contract ABI, and an emitted event log from VM, and attempts to find an
@@ -52,7 +52,7 @@ func UnpackEventAndValues(contractAbi *abi.ABI, eventLog *coreTypes.Log) (*abi.E
 		indexedInputData = append(indexedInputData, eventLog.Topics[i+1].Bytes()...)
 	}
 
-	// Unpacked our un-indexed values.
+	// Unpack our un-indexed values.
 	unindexedInputValues, err := unindexedInputArguments.Unpack(eventLog.Data)
 	if err != nil {
 		return nil, nil

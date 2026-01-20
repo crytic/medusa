@@ -1,15 +1,17 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
 // addFuzzFlags adds the various flags for the fuzz command
 func addFuzzFlags() error {
-	// Get the default project config and throw an error if we cant
+	// Get the default project config and throw an error if we can't
 	defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
 		return err
@@ -56,10 +58,6 @@ func addFuzzFlags() error {
 	fuzzCmd.Flags().String("deployer", "",
 		"account address used to deploy contracts")
 
-	// Trace all
-	fuzzCmd.Flags().Bool("trace-all", false,
-		fmt.Sprintf("print the execution trace for every element in a shrunken call sequence instead of only the last element (unless a config file is provided, default is %t)", defaultConfig.Fuzzing.Testing.TraceAll))
-
 	// Logging color
 	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
@@ -69,8 +67,23 @@ func addFuzzFlags() error {
 	// Exploration mode
 	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
 
-	// Run slither on-the-fly
-	fuzzCmd.Flags().Bool("use-slither", false, "runs slither")
+	// Run slither while still trying to use the cache
+	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+
+	// Run slither and overwrite the cache
+	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
+
+	// RPC url
+	fuzzCmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
+
+	// RPC block
+	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
+
+	// Verbosity levels (-v, -vv, -vvv)
+	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
+
+	// Log level
+	fuzzCmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
 	return nil
 }
 
@@ -85,7 +98,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		if err != nil {
 			return err
 		}
-
 		err = projectConfig.Compilation.SetTarget(newTarget)
 		if err != nil {
 			return err
@@ -156,14 +168,6 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update trace all enablement
-	if cmd.Flags().Changed("trace-all") {
-		projectConfig.Fuzzing.Testing.TraceAll, err = cmd.Flags().GetBool("trace-all")
-		if err != nil {
-			return err
-		}
-	}
-
 	// Update logging color mode
 	if cmd.Flags().Changed("no-color") {
 		projectConfig.Logging.NoColor, err = cmd.Flags().GetBool("no-color")
@@ -174,11 +178,10 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 
 	// Update stop on failed test feature
 	if cmd.Flags().Changed("fail-fast") {
-		failFast, err := cmd.Flags().GetBool("fail-fast")
+		projectConfig.Fuzzing.Testing.StopOnFailedTest, err = cmd.Flags().GetBool("fail-fast")
 		if err != nil {
 			return err
 		}
-		projectConfig.Fuzzing.Testing.StopOnFailedTest = failFast
 	}
 
 	// Update configuration to exploration mode
@@ -196,15 +199,80 @@ func updateProjectConfigWithFuzzFlags(cmd *cobra.Command, projectConfig *config.
 		}
 	}
 
-	// Update configuration to run slither
+	// Update configuration to run slither while using current cache
 	if cmd.Flags().Changed("use-slither") {
-		useSlither, err := cmd.Flags().GetBool("use-slither")
+		projectConfig.Slither.UseSlither, err = cmd.Flags().GetBool("use-slither")
 		if err != nil {
 			return err
 		}
-		if useSlither {
-			projectConfig.Slither.UseSlither = true
+	}
+
+	// Update configuration to run slither and overwrite the current cache
+	if cmd.Flags().Changed("use-slither-force") {
+		useSlitherForce, err := cmd.Flags().GetBool("use-slither-force")
+		if err != nil {
+			return err
 		}
+		if useSlitherForce {
+			projectConfig.Slither.UseSlither = true
+			projectConfig.Slither.OverwriteCache = true
+		}
+	}
+
+	// Update RPC url
+	if cmd.Flags().Changed("rpc-url") {
+		rpcUrl, err := cmd.Flags().GetString("rpc-url")
+		if err != nil {
+			return err
+		}
+
+		// Enable on-chain fuzzing with the given URL
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.ForkModeEnabled = true
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcUrl = rpcUrl
+	}
+
+	// Update RPC block
+	if cmd.Flags().Changed("rpc-block") {
+		projectConfig.Fuzzing.TestChainConfig.ForkConfig.RpcBlock, err = cmd.Flags().GetUint64("rpc-block")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update the verbosity levels
+	if cmd.Flags().Changed("verbosity") || cmd.Flags().Changed("v") {
+		verbosityCount, err := cmd.Flags().GetCount("verbosity")
+		if err != nil {
+			return err
+		}
+
+		// Map verbosity count to VerbosityLevel enum
+		// -v = Verbose (0)
+		// -vv = VeryVerbose (1)
+		// -vvv = VeryVeryVerbose (2)
+		switch {
+		case verbosityCount == 1:
+			projectConfig.Fuzzing.Testing.Verbosity = config.Verbose
+		case verbosityCount == 2:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVerbose
+		case verbosityCount >= 3:
+			projectConfig.Fuzzing.Testing.Verbosity = config.VeryVeryVerbose
+		}
+	}
+
+	// Update log level
+	if cmd.Flags().Changed("log-level") {
+		levelStr, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			return err
+		}
+
+		level, err := zerolog.ParseLevel(levelStr)
+		if err != nil || level == zerolog.FatalLevel {
+			return errors.New("invalid log level (expected trace, debug, info, warn, error, or panic)")
+		}
+
+		projectConfig.Logging.Level = level
 	}
 
 	return nil

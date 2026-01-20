@@ -2,17 +2,18 @@ package corpus
 
 import (
 	"encoding/json"
-	"github.com/crytic/medusa/fuzzing/calls"
-	"github.com/crytic/medusa/utils/testutils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"math/rand"
 	"path/filepath"
 	"testing"
+
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/utils/testutils"
+	"github.com/stretchr/testify/assert"
 )
 
-// getMockSimpleCorpus creates a mock corpus with numEntries callSequencesByFilePath for testing
+// getMockSimpleCorpus creates a mock corpus with numEntries callSequenceFiles for testing
 func getMockSimpleCorpus(minSequences int, maxSequences, minBlocks int, maxBlocks int) (*Corpus, error) {
 	// Create a new corpus
 	corpus, err := NewCorpus("corpus")
@@ -68,7 +69,7 @@ func getMockCallSequenceElementCall() *calls.CallMessage {
 	return &txn
 }
 
-// testCorpusCallSequencesAreEqual tests whether two CorpusCallSequence objects are equal to each other
+// testCorpusCallSequencesEqual tests whether two CorpusCallSequence objects are equal to each other
 func testCorpusCallSequencesEqual(t *testing.T, expected calls.CallSequence, actual calls.CallSequence) {
 	// Ensure the lengths of both sequences are the same
 	assert.EqualValues(t, len(expected), len(actual), "Different number of calls in sequences")
@@ -79,7 +80,7 @@ func testCorpusCallSequencesEqual(t *testing.T, expected calls.CallSequence, act
 	}
 }
 
-// testCorpusBlockHeadersAreEqual tests whether two CorpusBlockHeader objects are equal to each other
+// testCorpusCallSequenceElementsEqual tests whether two CorpusBlockHeader objects are equal to each other
 func testCorpusCallSequenceElementsEqual(t *testing.T, expected calls.CallSequenceElement, actual calls.CallSequenceElement) {
 	// Make sure the call is equal
 	assert.EqualValues(t, *expected.Call, *actual.Call)

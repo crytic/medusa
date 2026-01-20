@@ -1,13 +1,14 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/crytic/medusa/logging"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"os"
 )
 
-const version = "0.1.8"
+const version = "1.4.1"
 
 // rootCmd represents the root CLI command object which all other commands stem from.
 var rootCmd = &cobra.Command{

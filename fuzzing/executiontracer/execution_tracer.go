@@ -2,27 +2,27 @@ package executiontracer
 
 import (
 	"math/big"
+	"slices"
 
+	"github.com/crytic/medusa-geth/common"
+	"github.com/crytic/medusa-geth/core"
+	"github.com/crytic/medusa-geth/core/tracing"
+	coretypes "github.com/crytic/medusa-geth/core/types"
+	"github.com/crytic/medusa-geth/core/vm"
+	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	coretypes "github.com/ethereum/go-ethereum/core/types"
-
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"golang.org/x/exp/slices"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
 // provided. If a nil state is provided, the current chain state will be used.
 // Returns the ExecutionTrace for the call or an error if one occurs.
-func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state *state.StateDB) (*core.ExecutionResult, *ExecutionTrace, error) {
+func CallWithExecutionTrace(testChain *chain.TestChain, contractDefinitions contracts.Contracts, msg *core.Message, state types.MedusaStateDB, verbosity config.VerbosityLevel) (*core.ExecutionResult, *ExecutionTrace, error) {
 	// Create an execution tracer
-	executionTracer := NewExecutionTracer(contractDefinitions, testChain.CheatCodeContracts())
+	executionTracer := NewExecutionTracer(contractDefinitions, testChain, verbosity)
 	defer executionTracer.Close()
 
 	// Call the contract on our chain with the provided state.
@@ -48,6 +48,11 @@ type ExecutionTracer struct {
 	// trace represents the current execution trace captured by this tracer.
 	trace *ExecutionTrace
 
+	// testChain represents the underlying chain that the execution tracer runs on
+	testChain *chain.TestChain
+
+	// traceMap describes a mapping that allows someone to retrieve the execution trace for a common transaction
+	// hash.
 	traceMap map[common.Hash]*ExecutionTrace
 
 	// currentCallFrame references the current call frame being traced.
@@ -56,24 +61,29 @@ type ExecutionTracer struct {
 	// contractDefinitions represents the contract definitions to match for execution traces.
 	contractDefinitions contracts.Contracts
 
-	// cheatCodeContracts  represents the cheat code contract definitions to match for execution traces.
-	cheatCodeContracts map[common.Address]*chain.CheatCodeContract
-
 	// onNextCaptureState refers to methods which should be executed the next time OnOpcode executes.
 	// OnOpcode is called prior to execution of an instruction. This allows actions to be performed
 	// after some state is captured, on the next state capture (e.g. detecting a log instruction, but
 	// using this structure to execute code later once the log is committed).
 	onNextCaptureState []func()
 
+	// nativeTracer is the underlying tracer interface that the execution tracer follows
 	nativeTracer *chain.TestChainTracer
+
+	// verbosity describes the verbosity level that will be used for the execution trace
+	verbosity config.VerbosityLevel
+
+	// currentTxHash stores the hash of the current transaction being traced
+	currentTxHash common.Hash
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
-func NewExecutionTracer(contractDefinitions contracts.Contracts, cheatCodeContracts map[common.Address]*chain.CheatCodeContract) *ExecutionTracer {
+func NewExecutionTracer(contractDefinitions contracts.Contracts, testChain *chain.TestChain, verbosity config.VerbosityLevel) *ExecutionTracer {
 	tracer := &ExecutionTracer{
 		contractDefinitions: contractDefinitions,
-		cheatCodeContracts:  cheatCodeContracts,
+		testChain:           testChain,
 		traceMap:            make(map[common.Hash]*ExecutionTrace),
+		verbosity:           verbosity,
 	}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -95,7 +105,7 @@ func (t *ExecutionTracer) NativeTracer() *chain.TestChainTracer {
 
 }
 
-// Close sets the traceMap to nil and should be called after the execution tracer is finish being used.
+// Close sets the traceMap to nil and should be called after the execution tracer is finished being used.
 func (t *ExecutionTracer) Close() {
 	t.traceMap = nil
 }
@@ -122,13 +132,15 @@ func (t *ExecutionTracer) OnTxEnd(receipt *coretypes.Receipt, err error) {
 // OnTxStart is called upon the start of transaction execution, as defined by tracers.Tracer.
 func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transaction, from common.Address) {
 	// Reset our capture state
-	t.trace = newExecutionTrace(t.contractDefinitions)
+	t.trace = newExecutionTrace(t.contractDefinitions, t.testChain.Labels, t.verbosity)
 	t.currentCallFrame = nil
 	t.onNextCaptureState = nil
-	t.traceMap = make(map[common.Hash]*ExecutionTrace)
 
 	// Store our evm reference
 	t.evmContext = vm
+
+	// Store the current transaction hash
+	t.currentTxHash = tx.Hash()
 }
 
 // resolveCallFrameConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
@@ -151,7 +163,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 	// Try to resolve contract definitions for "to" address
 	if callFrame.ToContractAbi == nil {
 		// Try to resolve definitions from cheat code contracts
-		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.ToAddress]; ok {
+		if cheatCodeContract, ok := t.testChain.CheatCodeContracts()[callFrame.ToAddress]; ok {
 			callFrame.ToContractName = cheatCodeContract.Name()
 			callFrame.ToContractAbi = cheatCodeContract.Abi()
 			callFrame.ExecutedCode = true
@@ -175,7 +187,7 @@ func (t *ExecutionTracer) resolveCallFrameContractDefinitions(callFrame *CallFra
 	// Try to resolve contract definitions for "code" address
 	if callFrame.CodeContractAbi == nil {
 		// Try to resolve definitions from cheat code contracts
-		if cheatCodeContract, ok := t.cheatCodeContracts[callFrame.CodeAddress]; ok {
+		if cheatCodeContract, ok := t.testChain.CheatCodeContracts()[callFrame.CodeAddress]; ok {
 			callFrame.CodeContractName = cheatCodeContract.Name()
 			callFrame.CodeContractAbi = cheatCodeContract.Abi()
 			callFrame.ExecutedCode = true
@@ -302,7 +314,9 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	// TODO: Move this to OnLog
 	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evmContext.StateDB.(*state.StateDB).Logs()
+			blockNumber := t.evmContext.BlockNumber.Uint64()
+			blockHash, _ := t.testChain.BlockHashFromNumber(blockNumber)
+			logs := t.evmContext.StateDB.(types.MedusaStateDB).GetLogs(t.currentTxHash, blockNumber, blockHash)
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
 			}

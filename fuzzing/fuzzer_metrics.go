@@ -1,6 +1,11 @@
 package fuzzing
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/reverts"
+)
 
 // FuzzerMetrics represents a struct tracking metrics for a Fuzzer run.
 type FuzzerMetrics struct {
@@ -20,6 +25,10 @@ type fuzzerWorkerMetrics struct {
 	// callsTested is the amount of transactions/calls the fuzzer executed and ran tests against.
 	callsTested *big.Int
 
+	// revertMetricsChan is the channel for sending revert metrics updates to the revert reporter.
+	// Note that the channel can be nil here if revert metrics are not enabled
+	revertMetricsChan chan reverts.RevertMetricsUpdate
+
 	// gasUsed is the amount of gas the fuzzer executed and ran tests against.
 	gasUsed *big.Int
 
@@ -31,8 +40,9 @@ type fuzzerWorkerMetrics struct {
 }
 
 // newFuzzerMetrics obtains a new FuzzerMetrics struct for a given number of workers specified by workerCount.
+// An optional channel for sending revert metrics updates to the revert reporter is also provided.
 // Returns the new FuzzerMetrics object.
-func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
+func newFuzzerMetrics(workerCount int, revertMetricsCh chan reverts.RevertMetricsUpdate) *FuzzerMetrics {
 	// Create a new metrics struct and return it with as many slots as required.
 	metrics := FuzzerMetrics{
 		workerMetrics: make([]fuzzerWorkerMetrics, workerCount),
@@ -43,6 +53,8 @@ func newFuzzerMetrics(workerCount int) *FuzzerMetrics {
 		metrics.workerMetrics[i].callsTested = big.NewInt(0)
 		metrics.workerMetrics[i].workerStartupCount = big.NewInt(0)
 		metrics.workerMetrics[i].gasUsed = big.NewInt(0)
+		metrics.workerMetrics[i].revertMetricsChan = revertMetricsCh
+
 	}
 	return &metrics
 }
@@ -101,4 +113,19 @@ func (m *FuzzerMetrics) WorkersShrinkingCount() uint64 {
 		}
 	}
 	return shrinkingCount
+}
+
+// updateRevertMetrics updates the revert metrics for the fuzzer worker based on the call sequence element.
+func (m *fuzzerWorkerMetrics) updateRevertMetrics(callSequenceElement *calls.CallSequenceElement) {
+	// The channel will be nil if revert metrics are not enabled
+	if callSequenceElement == nil || m.revertMetricsChan == nil {
+		return
+	}
+
+	// Send the revert metrics update to the revert reporter
+	m.revertMetricsChan <- reverts.RevertMetricsUpdate{
+		ContractName:    callSequenceElement.Contract.Name(),
+		FunctionName:    callSequenceElement.Call.DataAbiValues.Method.Name,
+		ExecutionResult: callSequenceElement.ChainReference.MessageResults().ExecutionResult,
+	}
 }

@@ -1,8 +1,9 @@
 package events
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestEventPublishingAndSubscribing creates EventEmitter objects, subscribes EventHandler callbacks to them, and
@@ -18,7 +19,7 @@ func TestEventPublishingAndSubscribing(t *testing.T) {
 	eventBEmitter1 := EventEmitter[TestEventB]{}
 	eventBEmitter2 := EventEmitter[TestEventB]{}
 
-	// Create a dictionary to track event callback
+	// Create a dictionary to track event callbacks
 	var eventAEmitter1PublishCount,
 		eventAEmitter2PublishCount,
 		eventBEmitter1PublishCount,
