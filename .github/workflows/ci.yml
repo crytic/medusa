@@ -207,11 +207,6 @@ jobs:
           printf 'TEMP=%s\\tmpdir\n' "$DIR" | tee -a "$GITHUB_ENV"
           go env
           echo "::endgroup::"
-          echo "::group::Python"
-          python3 -m venv venv
-          printf '%s\\venv\\Scripts\n' "$DIR" | tee -a "$GITHUB_PATH"
-          printf 'VIRTUAL_ENV=%s\\venv\n' "$DIR" | tee -a "$GITHUB_ENV"
-          echo "::endgroup::"
           echo "::group::Node"
           npm config set cache "$DIR\\npm-cache" --global
           echo "::endgroup::"
@@ -240,6 +235,12 @@ jobs:
 
           # Wait for all
           wait $UV_PID1 $UV_PID2 $UV_PID3 $NPM_PID
+
+      - name: Cache solc
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.solc-select/artifacts
+          key: solc-0.8.28-${{ runner.os }}
 
       - name: Install solc
         run: |
