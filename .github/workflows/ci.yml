@@ -231,13 +231,15 @@ jobs:
           UV_PID1=$!
           uv tool install crytic-compile &
           UV_PID2=$!
+          uv tool install slither-analyzer &
+          UV_PID3=$!
 
           # Install Node deps in parallel
           npm install hardhat &
           NPM_PID=$!
 
           # Wait for all
-          wait $UV_PID1 $UV_PID2 $NPM_PID
+          wait $UV_PID1 $UV_PID2 $UV_PID3 $NPM_PID
 
       - name: Install solc
         run: |
