@@ -153,7 +153,6 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 20
-          cache: "npm"
 
       - name: Prettier
         run: |
@@ -191,6 +190,7 @@ jobs:
       - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
         with:
           enable-cache: true
+          python-version: "3.10"
 
       - name: Speed up Go, Python, Node (Windows)
         if: runner.os == 'Windows'
