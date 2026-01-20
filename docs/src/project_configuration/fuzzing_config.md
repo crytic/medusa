@@ -117,6 +117,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   then `A` will have a starting balance of `1,234 wei`, `B` will have `4,660 wei (0x1234 in decimal)`, and `C` will have `1.2 ETH (1.2 × 10^18 wei)`.
 - **Default**: `[]`
 
+### `useInitFunctions`
+
+- **Type**: Boolean
+- **Description**: Enables the execution of initialization functions after contract deployment. When set to `true`, medusa will call the functions specified in `targetContractsInitFunctions` on the corresponding contracts after they are deployed. This is useful for running setup logic like Foundry's `setUp()` function.
+- **Default**: `false`
+
 ### `targetContractsInitFunctions`
 
 - **Type**: [String] (e.g. `["setUp", "initialize", ""]`)

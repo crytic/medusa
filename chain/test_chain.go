@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math/big"
 
-	compilationTypes "github.com/crytic/medusa/compilation/types"
-
 	"github.com/crytic/medusa/chain/state"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 

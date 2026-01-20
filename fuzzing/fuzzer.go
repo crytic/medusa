@@ -684,15 +684,15 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				// Get the initialization function name if exists and feature is enabled
 				if fuzzer.config.Fuzzing.UseInitFunctions && i < len(initFunctions) && initFunctions[i] != "" {
 					initFunction := initFunctions[i]
-					fuzzer.logger.Info(fmt.Sprintf("Checking if init function %s on %s exists", initFunction, contractName))
+					fuzzer.logger.Debug("Checking if init function ", initFunction, " on ", contractName, " exists")
 
 					// Check if the initialization function exists
 					contractABI := contract.CompiledContract().Abi
 					if method, exists := contractABI.Methods[initFunction]; !exists {
-						fuzzer.logger.Info(fmt.Sprintf("Init function %s not found on %s, skipping", initFunction, contractName))
+						fuzzer.logger.Info("Init function ", initFunction, " not found on ", contractName, ", skipping")
 					} else {
 						// Initialization function exists, proceed with calling it
-						fuzzer.logger.Info(fmt.Sprintf("Found init function %s with %d inputs", initFunction, len(method.Inputs)))
+						fuzzer.logger.Debug("Found init function ", initFunction, " with ", len(method.Inputs), " inputs")
 
 						// Check if the init function accepts parameters and process them if needed
 						var args []any
@@ -710,8 +710,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 								continue
 							}
 
-							// Debug what args we found
-							fuzzer.logger.Info(fmt.Sprintf("Found args for %s: %+v", contractName, jsonArgs))
+							fuzzer.logger.Debug("Found initialization args for ", contractName)
 
 							// Decode the arguments
 							decoded, err := valuegeneration.DecodeJSONArgumentsFromMap(method.Inputs,
@@ -723,13 +722,8 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 							}
 
 							args = decoded
-							fuzzer.logger.Info(fmt.Sprintf("Decoded %d args for %s function %s",
-								len(args), contractName, initFunction))
+							fuzzer.logger.Debug("Decoded ", len(args), " args for ", contractName, " function ", initFunction)
 						}
-
-						// Log before packing
-						fuzzer.logger.Info(fmt.Sprintf("About to call initialization function %s on contract %s with %d args",
-							initFunction, contractName, len(args)))
 
 						// Pack the function call data with arguments
 						callData, err := contractABI.Pack(initFunction, args...)
@@ -743,9 +737,6 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 						msg := calls.NewCallMessage(fuzzer.deployer, &destAddr, 0, big.NewInt(0),
 							blockGasLimit, nil, nil, nil, callData)
 						msg.FillFromTestChainProperties(testChain)
-
-						// Debug log after creating the message
-						fuzzer.logger.Info(fmt.Sprintf("Created message for init function call to %s", initFunction))
 
 						// Create and commit a block with the transaction
 						block, err := testChain.PendingBlockCreate()
