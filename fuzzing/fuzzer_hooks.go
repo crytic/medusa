@@ -1,8 +1,9 @@
 package fuzzing
 
 import (
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/rand"
+
+	"github.com/crytic/medusa/fuzzing/config"
 
 	"github.com/crytic/medusa/fuzzing/executiontracer"
 
