@@ -170,7 +170,7 @@ jobs:
           git diff --exit-code
 
       - name: Lint
-        uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:
           version: v1.64.8
           args: --timeout 5m0s
@@ -229,7 +229,7 @@ jobs:
           # Start Python tool installs in background
           uv tool install solc-select &
           UV_PID1=$!
-          uv tool install slither-analyzer &
+          uv tool install crytic-compile &
           UV_PID2=$!
 
           # Install Node deps in parallel
