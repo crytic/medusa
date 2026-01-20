@@ -154,6 +154,20 @@ func NewCallSequenceGenerator(worker *FuzzerWorker, config *CallSequenceGenerato
 			},
 			new(big.Int).SetUint64(config.AppendAndMutate),
 		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: spliceCorpus,
+				Mutate:                    true,
+			},
+			new(big.Int).SetUint64(config.SpliceAndMutate),
+		),
+		randomutils.NewWeightedRandomChoice(
+			CallSequenceGeneratorMutationStrategy{
+				CallSequenceGeneratorFunc: interleaveCorpus,
+				Mutate:                    true,
+			},
+			new(big.Int).SetUint64(config.InterleaveAndMutate),
+		),
 	)
 
 	return generator
@@ -548,19 +562,31 @@ func swapRandList[T any](provider *rand.Rand, xs []*T) []*T {
 	if len(xs) == 0 {
 		return xs
 	}
-	i, j := rand.Intn(len(xs)), rand.Intn(len(xs))
+	i, j := provider.Intn(len(xs)), provider.Intn(len(xs))
 	return swapAt(xs, utils.Min(i, j), utils.Max(i, j))
 }
 
 // spliceAtRandom splices two lists at random positions.
 func spliceAtRandom[T any](provider *rand.Rand, xs1, xs2 []*T) []*T {
-	idx1, idx2 := rand.Intn(len(xs1)), rand.Intn(len(xs2))
+	if len(xs1) == 0 {
+		return xs2
+	}
+	if len(xs2) == 0 {
+		return xs1
+	}
+	idx1, idx2 := provider.Intn(len(xs1)), provider.Intn(len(xs2))
 	return append(xs1[:idx1], xs2[idx2:]...)
 }
 
 // interleaveAtRandom interleaves two lists at random positions.
 func interleaveAtRandom[T any](provider *rand.Rand, xs1, xs2 []*T) []*T {
-	idx1, idx2 := rand.Intn(len(xs1)), rand.Intn(len(xs2))
+	if len(xs1) == 0 {
+		return xs2
+	}
+	if len(xs2) == 0 {
+		return xs1
+	}
+	idx1, idx2 := provider.Intn(len(xs1)), provider.Intn(len(xs2))
 	return interleaveLL(xs1[:idx1], xs2[:idx2])
 }
 

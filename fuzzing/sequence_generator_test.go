@@ -1,18 +1,16 @@
 package fuzzing
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
-
 	"testing"
 
+	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/fuzzing/calls"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
 
-// getMockSimpleCorpusEntry creates a mock CorpusCallSequence with numBlocks blocks for testing
+// getMockCallSequence creates a mock CallSequence with the given size and data value for testing.
 func getMockCallSequence(size, data int) calls.CallSequence {
 	cs := make(calls.CallSequence, size)
 	for i := 0; i < size; i++ {
@@ -21,9 +19,8 @@ func getMockCallSequence(size, data int) calls.CallSequence {
 	return cs
 }
 
-// getMockSimpleBlockBlock creates a mock CorpusBlock with numTransactions transactions and receipts for testing
+// getMockCallSequenceElement creates a mock CallSequenceElement for testing.
 func getMockCallSequenceElement(data int) *calls.CallSequenceElement {
-
 	return &calls.CallSequenceElement{
 		Contract:            nil,
 		Call:                getMockCallSequenceElementCall(data),
@@ -33,7 +30,7 @@ func getMockCallSequenceElement(data int) *calls.CallSequenceElement {
 	}
 }
 
-// getMockCallSequenceElementCall creates a mock CallMessage for testing
+// getMockCallSequenceElementCall creates a mock CallMessage for testing.
 func getMockCallSequenceElementCall(data int) *calls.CallMessage {
 	to := common.BigToAddress(big.NewInt(rand.Int63()))
 	txn := calls.CallMessage{
@@ -50,69 +47,66 @@ func getMockCallSequenceElementCall(data int) *calls.CallMessage {
 	return &txn
 }
 
-func TestSplice(t *testing.T) {
+func TestSequenceGenerationStrategies(t *testing.T) {
 	strategies := map[string]func(rand *rand.Rand, sequenceGenerator func() (calls.CallSequence, error), sequence calls.CallSequence) error{
 		"interleave": interleaveCorpus,
 		"splice":     spliceCorpus,
 		"prepend":    prependFromCorpus,
 		"append":     appendFromCorpus,
 	}
-	// Seed the PRNG to make the randomness deterministic
 
-	// Prepare a destination sequence (with the expected size)
-	// expectedSize := 8 // Adjust based on the expected interleave size in your scenario
-
-	// Prepare a source sequence (with the expected size)
 	for name, strategyFn := range strategies {
-		// Call the function under test
-		sourceSequence := []calls.CallSequence{getMockCallSequence(4, 1), getMockCallSequence(4, 5)}
-		i := 0
-		sequence := getMockCallSequence(4, 7)
-		sequence = append(sequence, getMockCallSequence(4, 9)...)
-		mockSequenceGenerator := func() (calls.CallSequence, error) {
-
-			// Return the source sequence
-			s := sourceSequence[i]
-			i++
-			return s, nil
-		}
-		fmt.Println("Before:")
-		for _, s := range sequence {
-			if s == nil {
-				fmt.Println("nil")
-				continue
+		t.Run(name, func(t *testing.T) {
+			sourceSequence := []calls.CallSequence{getMockCallSequence(4, 1), getMockCallSequence(4, 5)}
+			i := 0
+			sequence := getMockCallSequence(4, 7)
+			sequence = append(sequence, getMockCallSequence(4, 9)...)
+			mockSequenceGenerator := func() (calls.CallSequence, error) {
+				s := sourceSequence[i]
+				i++
+				return s, nil
 			}
-			fmt.Println(s.Call.Data)
-		}
-		// fmt.Println("Source sequence 1:")
-		// fmt.Println(sourceSequence[0][0].Call.Data)
-		// fmt.Println(sourceSequence[0][1].Call.Data)
-		// fmt.Println(sourceSequence[0][2].Call.Data)
-		// fmt.Println(sourceSequence[0][3].Call.Data)
-		// fmt.Println("Source sequence 2:")
-		// fmt.Println(sourceSequence[1][0].Call.Data)
-		// fmt.Println(sourceSequence[1][1].Call.Data)
-		// fmt.Println(sourceSequence[1][2].Call.Data)
-		// fmt.Println(sourceSequence[1][3].Call.Data)
 
-		err := strategyFn(rand.New(rand.NewSource(0)), mockSequenceGenerator, sequence)
+			err := strategyFn(rand.New(rand.NewSource(0)), mockSequenceGenerator, sequence)
 
-		// Ensure no error
-		assert.NoError(t, err)
-
-		// Check if the interleaved sequence has the correct size and contents
-		assert.NotNil(t, sequence)
-		// assert.Len(t, sequence, expectedSize)
-
-		// Check that the elements in the sequence are correctly interleaved
-		// You can further check for specific fields if necessary
-		fmt.Printf("Interleaved sequence using %s:\n", name)
-		for _, s := range sequence {
-			if s == nil {
-				fmt.Println("nil")
-				continue
-			}
-			fmt.Println(s.Call.Data)
-		}
+			assert.NoError(t, err)
+			assert.NotNil(t, sequence)
+		})
 	}
+}
+
+func TestSpliceAtRandomEmptySlices(t *testing.T) {
+	provider := rand.New(rand.NewSource(0))
+
+	// Test with empty first slice
+	result := spliceAtRandom(provider, []*int{}, []*int{new(int)})
+	assert.Len(t, result, 1)
+
+	// Test with empty second slice
+	val := 42
+	result = spliceAtRandom(provider, []*int{&val}, []*int{})
+	assert.Len(t, result, 1)
+	assert.Equal(t, 42, *result[0])
+
+	// Test with both empty
+	result = spliceAtRandom(provider, []*int{}, []*int{})
+	assert.Len(t, result, 0)
+}
+
+func TestInterleaveAtRandomEmptySlices(t *testing.T) {
+	provider := rand.New(rand.NewSource(0))
+
+	// Test with empty first slice
+	result := interleaveAtRandom(provider, []*int{}, []*int{new(int)})
+	assert.Len(t, result, 1)
+
+	// Test with empty second slice
+	val := 42
+	result = interleaveAtRandom(provider, []*int{&val}, []*int{})
+	assert.Len(t, result, 1)
+	assert.Equal(t, 42, *result[0])
+
+	// Test with both empty
+	result = interleaveAtRandom(provider, []*int{}, []*int{})
+	assert.Len(t, result, 0)
 }
