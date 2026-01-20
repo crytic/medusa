@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
 	"math/rand"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/maps"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
