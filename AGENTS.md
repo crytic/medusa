@@ -23,15 +23,21 @@ Medusa is a cross-platform smart contract fuzzer written in Go, built on go-ethe
 
 ### Lint & Format
 
+- `goimports -w .` - Format imports and code (groups stdlib, external, local)
 - `go fmt ./...` - Format Go code (required before commits)
 - `golangci-lint run --timeout 5m` - Run comprehensive lint checks (mirrors CI)
-- `prettier '**/*.md' '**/*.yml' '**/*.json' -w` - Format markdown, YAML, and JSON files
+- `dprint fmt` - Format markdown, YAML, and JSON files
 - `actionlint` - Lint GitHub Actions workflow files
 
 ### Run
 
 - `go run . --config path/to/config.yaml` - Compile and run the fuzzer
 - `nix develop` - Enter the pinned Nix development shell with all dependencies
+
+### Git Hooks
+
+- `prek install` - Install pre-commit hooks (run once after cloning)
+- `prek run` - Manually run all pre-commit checks (use within `nix develop` shell)
 
 ## Architecture & Code Structure
 
@@ -162,8 +168,15 @@ Explicitly ask the user if these scripts should be run. In more cases than not, 
 
 ### Pre-Commit Checklist
 
-1. `go fmt ./...` - Format Go code
-2. `golangci-lint run --timeout 5m` - Run linter
-3. `go test -v ./...` - Run all tests
-4. `prettier '**/*.md' '**/*.yml' '**/*.json' -w` - Format markdown/JSON/YAML
-5. Verify changes work on target platforms
+The following checks run automatically via pre-commit hooks (install with `prek install`):
+
+1. `goimports` - Format imports (hook verifies no changes)
+2. `go fmt ./...` - Format Go code (hook verifies no changes)
+3. `golangci-lint run --timeout 5m` - Run linter
+4. `dprint check` - Verify markdown/YAML/JSON formatting
+5. `actionlint` - Lint GitHub Actions workflows
+
+Manual checks before submitting PRs:
+
+6. `go test -v ./...` - Run all tests (too slow for pre-commit)
+7. Verify changes work on target platforms
