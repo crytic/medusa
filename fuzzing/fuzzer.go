@@ -34,7 +34,7 @@ import (
 	"github.com/crytic/medusa/chain"
 	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
-	"github.com/crytic/medusa/fuzzing/config"
+	fuzzingconfig "github.com/crytic/medusa/fuzzing/config"
 	fuzzerTypes "github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/corpus"
 	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
@@ -57,7 +57,7 @@ type Fuzzer struct {
 	emergencyCtxCancelFunc context.CancelFunc
 
 	// config describes the project configuration which the fuzzing is targeting.
-	config config.ProjectConfig
+	config fuzzingconfig.ProjectConfig
 	// senders describes a set of account addresses used to send state changing calls in fuzzing campaigns.
 	senders []common.Address
 	// deployer describes an account address used to deploy contracts in fuzzing campaigns.
@@ -117,6 +117,10 @@ type Fuzzer struct {
 	// deployedLibraries tracks library names to their deployed addresses from the base test chain.
 	// This is used to link contract bytecode before coverage analysis.
 	deployedLibraries map[string]common.Address
+
+	// autolinkConfig holds the autolink configuration read from crytic-export/combined_solc.link.
+	// This maps contract/library names to their deterministic deployment addresses.
+	autolinkConfig *fuzzingconfig.AutolinkConfig
 }
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
@@ -127,7 +131,7 @@ const blockGasLimit = 0x0FFFFFFFFFFFFFFF
 
 // NewFuzzer returns an instance of a new Fuzzer provided a project configuration, or an error if one is encountered
 // while initializing the code.
-func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
+func NewFuzzer(config fuzzingconfig.ProjectConfig) (*Fuzzer, error) {
 	// Disable colors if requested
 	if config.Logging.NoColor {
 		colors.DisableColor()
@@ -264,6 +268,20 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
+
+		// If UseAutolink is enabled, read the autolink config once and store it on the fuzzer.
+		// This avoids duplicate reads and ensures consistent address handling.
+		if fuzzer.config.Fuzzing.UseAutolink {
+			autolinkFilePath := fuzzer.getAutolinkFilePath()
+			if autolinkFilePath != "" {
+				autolinkConfig, autolinkErr := fuzzingconfig.ReadAutolinkConfig(autolinkFilePath)
+				if autolinkErr != nil {
+					fuzzer.logger.Warn("Failed to read autolink config", autolinkErr)
+				} else {
+					fuzzer.autolinkConfig = autolinkConfig
+				}
+			}
+		}
 	}
 
 	// Provide any custom errors in the compiled artifacts' ABIs to the revert reporter now
@@ -288,7 +306,7 @@ func (f *Fuzzer) ContractDefinitions() fuzzerTypes.Contracts {
 }
 
 // Config exposes the underlying project configuration provided to the Fuzzer.
-func (f *Fuzzer) Config() config.ProjectConfig {
+func (f *Fuzzer) Config() fuzzingconfig.ProjectConfig {
 	return f.config
 }
 
@@ -491,31 +509,13 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 		predeploys = append(predeploys, p)
 	}
 
-	// If UseAutolink is enabled and a deployment order is specified, use that order
-	// for the contracts in the combined_solc.link file
-	var autolinkDeploymentOrder []string
-	if f.config.Fuzzing.UseAutolink {
-		autolinkFilePath := f.getAutolinkFilePath()
-		if autolinkFilePath != "" {
-			autolinkConfig, readErr := config.ReadAutolinkConfig(autolinkFilePath)
-			if readErr != nil {
-				f.logger.Warn("Failed to read autolink config during initialization", readErr)
-			} else if len(autolinkConfig.DeploymentOrder) > 0 {
-				autolinkDeploymentOrder = autolinkConfig.DeploymentOrder
-			}
-		}
-	}
-
-	// Generate a topologically sorted deployment order based on library dependencies
-	// This ensures that libraries are deployed before contracts that depend on them
+	// Generate a topologically sorted deployment order based on library dependencies.
+	// This ensures that libraries are deployed before contracts that depend on them.
+	// Note: When autolink is enabled, the deployment order from the autolink file is ignored
+	// because the topological sort already handles library dependencies correctly.
 	f.deploymentOrder, err = fuzzingutils.GetDeploymentOrder(libraryDependencies, predeploys, f.config.Fuzzing.TargetContracts)
 	if err != nil {
 		f.logger.Warn("Could not get a deployment order", err)
-	}
-
-	// If we have an autolink deployment order, ensure those contracts follow that order
-	if len(autolinkDeploymentOrder) > 0 {
-		f.deploymentOrder = mergeAutolinkOrder(f.deploymentOrder, autolinkDeploymentOrder)
 	}
 }
 
@@ -543,30 +543,6 @@ func (f *Fuzzer) getAutolinkFilePath() string {
 	}
 
 	return ""
-}
-
-// mergeAutolinkOrder merges a computed deployment order with an autolink deployment order.
-// For contracts in the autolink order, it preserves that order. Other contracts are placed
-// after the autolink ones while maintaining their relative order.
-func mergeAutolinkOrder(computedOrder []string, autolinkOrder []string) []string {
-	// Create a set of autolink contracts for quick lookup
-	autolinkSet := make(map[string]bool)
-	for _, name := range autolinkOrder {
-		autolinkSet[name] = true
-	}
-
-	// Build the result: start with autolink order
-	result := make([]string, 0, len(computedOrder))
-	result = append(result, autolinkOrder...)
-
-	// Add contracts from computed order that are not in autolink order
-	for _, name := range computedOrder {
-		if !autolinkSet[name] {
-			result = append(result, name)
-		}
-	}
-
-	return result
 }
 
 // createTestChain creates a test chain with the account balance allocations specified by the config.
@@ -614,39 +590,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		}
 	}
 
-	// If UseAutolink is enabled, read addresses from the combined_solc.link file and add them to overrides
-	if f.config.Fuzzing.UseAutolink {
-		autolinkFilePath := f.getAutolinkFilePath()
-		if autolinkFilePath == "" {
-			return nil, fmt.Errorf("autolink is enabled but could not determine autolink file path")
-		}
-
-		autolinkConfig, err := config.ReadAutolinkConfig(autolinkFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read autolink config: %w", err)
-		}
-
-		// Add autolink addresses to the contract address overrides
-		for contractName, contractAddr := range autolinkConfig.LibraryAddresses {
-			found := false
-			// Try to find the associated compilation artifact
-			for _, contract := range f.contractDefinitions {
-				if contract.Name() == contractName {
-					// Hash the init bytecode (so that it can be easily identified in the EVM) and map it to the
-					// autolink address
-					initBytecodeHash := crypto.Keccak256Hash(contract.CompiledContract().InitBytecode)
-					contractAddressOverrides[initBytecodeHash] = contractAddr
-					found = true
-					break
-				}
-			}
-
-			// Throw an error if the contract specified in the autolink file is not found
-			if !found {
-				return nil, fmt.Errorf("%v was specified in the autolink config file but was not found in the compilation artifacts", contractName)
-			}
-		}
-	}
+	// Note: Autolink address overrides are NOT added here. They are handled in deployContract()
+	// after bytecode linking, because the hash must be computed on linked bytecode to match
+	// the actual deployed bytecode.
 
 	// Update the test chain config with the contract address overrides
 	f.config.Fuzzing.TestChainConfig.ContractAddressOverrides = contractAddressOverrides
@@ -689,12 +635,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	// Ordering is important here (predeploys _then_ targets) so that you can have the same contract in both lists
 	// while still being able to use the contract address overrides
 	contractsToDeploy := make([]string, 0)
-	balances := make([]*config.ContractBalance, 0)
+	balances := make([]*fuzzingconfig.ContractBalance, 0)
 
 	if len(fuzzer.deploymentOrder) > 0 {
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
-		targetContractBalances := make(map[string]*config.ContractBalance)
+		targetContractBalances := make(map[string]*fuzzingconfig.ContractBalance)
 
 		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
 			targetContracts[name] = true
@@ -711,7 +657,7 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				if balance, ok := targetContractBalances[name]; ok {
 					balances = append(balances, balance)
 				} else {
-					balances = append(balances, &config.ContractBalance{Int: *big.NewInt(0)})
+					balances = append(balances, &fuzzingconfig.ContractBalance{Int: *big.NewInt(0)})
 				}
 			}
 		}
@@ -807,6 +753,16 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 		return nil, fmt.Errorf("initial contract deployment failed for contract \"%v\", error: %v", contractName, err)
 	}
 
+	// If autolink is enabled and this contract has an autolink address, add the override now.
+	// We compute the hash on the LINKED bytecode (msgData) so it matches what the EVM will see.
+	// This must happen after LinkBytecodes and GetDeploymentMessageData, but before deployment.
+	if f.autolinkConfig != nil {
+		if autolinkAddr, hasAutolink := f.autolinkConfig.LibraryAddresses[contractName]; hasAutolink {
+			initBytecodeHash := crypto.Keccak256Hash(msgData)
+			f.config.Fuzzing.TestChainConfig.ContractAddressOverrides[initBytecodeHash] = autolinkAddr
+		}
+	}
+
 	// Create a message to represent our contract deployment (we let deployments consume the whole block
 	// gas limit rather than use tx gas limit)
 	msg := calls.NewCallMessage(f.deployer, nil, 0, contractBalance, blockGasLimit, nil, nil, nil, msgData)
@@ -846,7 +802,7 @@ func (f *Fuzzer) deployContract(testChain *chain.TestChain, contract *fuzzerType
 		if err != nil {
 			return nil, fmt.Errorf("failed to reset to genesis block: %v", err)
 		} else {
-			_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, f.contractDefinitions, []*calls.CallSequenceElement{cse}, config.VeryVeryVerbose)
+			_, err = calls.ExecuteCallSequenceWithExecutionTracer(testChain, f.contractDefinitions, []*calls.CallSequenceElement{cse}, fuzzingconfig.VeryVeryVerbose)
 			if err != nil {
 				return nil, fmt.Errorf("deploying %s returned a failed status: %v", contractName, block.MessageResults[0].ExecutionResult.Err)
 			}
