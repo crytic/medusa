@@ -17,9 +17,9 @@
       packages = {
         medusa = pkgs.buildGoModule {
           pname = "medusa";
-          version = "1.3.1";
+          version = "1.4.1";
           src = ./.;
-          vendorHash = "sha256-4CZqAMbrXZ1kCG8oKrJ2Odq9rnRWsMXCvYGKp8T1QAs=";
+          vendorHash = "sha256-JaYAZX/u8cArVnQChmotpTbxja6XY0OaPr/RPd7rVXc=";
           nativeBuildInputs = [
             crytic.packages.${system}.crytic-compile
             crytic.packages.${system}.slither
@@ -59,6 +59,10 @@
             gocode-gomod
             godef
             golint
+            golangci-lint
+            # formatting and linting
+            dprint
+            actionlint
           ];
         };
       };

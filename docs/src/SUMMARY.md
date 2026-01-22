@@ -49,6 +49,7 @@
   - [store](./cheatcodes/store.md)
   - [load](./cheatcodes/load.md)
   - [etch](./cheatcodes/etch.md)
+  - [label](./cheatcodes/label.md)
   - [deal](./cheatcodes/deal.md)
   - [snapshot](./cheatcodes/snapshot.md)
   - [getNonce](./cheatcodes/get_nonce.md)

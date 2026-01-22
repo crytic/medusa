@@ -92,16 +92,16 @@ You need to have Docker installed. Installation instructions for Docker can be f
 
 ### Using the Docker image
 
-Pull the latest Docker image:
+Pull the latest Docker image from GitHub Container Registry:
 
 ```shell
-docker pull crytic/medusa
+docker pull ghcr.io/crytic/medusa
 ```
 
 Run medusa in a container:
 
 ```shell
-docker run -it --rm -v $(pwd):/src crytic/medusa <command>
+docker run -it --rm -v $(pwd):/src ghcr.io/crytic/medusa <command>
 ```
 
 This will mount your current directory to `/src` in the container and run the specified medusa command.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/crytic/medusa-geth/accounts/abi"
+
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
@@ -291,8 +293,12 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 
 	// Select a random method
 	// There is a 1/1000 chance that a pure method will be invoked or if there are only pure functions that are callable
+	// There is a 1/1000 chance that a fallback/receive function will be invoked (if available)
 	var selectedMethod *contracts.DeployedContractMethod
-	if (len(g.worker.pureMethods) > 0 && g.worker.randomProvider.Intn(1000) == 0) || callOnlyPureFunctions {
+	randomValue := g.worker.randomProvider.Intn(1000)
+	if len(g.worker.fallbackMethods) > 0 && randomValue == 0 {
+		selectedMethod = &g.worker.fallbackMethods[g.worker.randomProvider.Intn(len(g.worker.fallbackMethods))]
+	} else if (len(g.worker.pureMethods) > 0 && randomValue == 1) || callOnlyPureFunctions {
 		selectedMethod = &g.worker.pureMethods[g.worker.randomProvider.Intn(len(g.worker.pureMethods))]
 	} else {
 		selectedMethod = &g.worker.stateChangingMethods[g.worker.randomProvider.Intn(len(g.worker.stateChangingMethods))]
@@ -300,6 +306,13 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 
 	// Select a random sender
 	selectedSender := g.worker.fuzzer.senders[g.worker.randomProvider.Intn(len(g.worker.fuzzer.senders))]
+
+	// Generate call message based on the method type
+	value := big.NewInt(0)
+	// If this is a payable function, generate value to send
+	if selectedMethod.Method.StateMutability == "payable" {
+		value = g.config.ValueGenerator.GenerateInteger(false, 64)
+	}
 
 	// Generate fuzzed parameters for the function call
 	args := make([]any, len(selectedMethod.Method.Inputs))
@@ -309,20 +322,23 @@ func (g *CallSequenceGenerator) generateNewElement() (*calls.CallSequenceElement
 		args[i] = valuegeneration.GenerateAbiValue(g.config.ValueGenerator, &input.Type)
 	}
 
-	// If this is a payable function, generate value to send
-	var value *big.Int
-	value = big.NewInt(0)
-	if selectedMethod.Method.StateMutability == "payable" {
-		value = g.config.ValueGenerator.GenerateInteger(false, 64)
-	}
+	var msg *calls.CallMessage
+	// If we are calling the fallback function, generate a bunch of random bytes
+	if selectedMethod.Method.Type == abi.Fallback {
+		// Generate random call data (1-256 bytes)
+		randomData := make([]byte, g.worker.randomProvider.Intn(255)+1)
+		g.worker.randomProvider.Read(randomData)
 
-	// Create our message using the provided parameters.
-	// We fill out some fields and populate the rest from our TestChain properties.
-	// TODO: We likely want to make gasPrice fluctuate within some sensible range here.
-	msg := calls.NewCallMessageWithAbiValueData(selectedSender, &selectedMethod.Address, 0, value, g.worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, &calls.CallMessageDataAbiValues{
-		Method:      &selectedMethod.Method,
-		InputValues: args,
-	})
+		msg = calls.NewCallMessage(selectedSender, &selectedMethod.Address, 0, value, g.worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, randomData)
+	} else {
+		// Otherwise, create our message using the provided parameters.
+		// We fill out some fields and populate the rest from our TestChain properties.
+		// TODO: We likely want to make gasPrice fluctuate within some sensible range here.
+		msg = calls.NewCallMessageWithAbiValueData(selectedSender, &selectedMethod.Address, 0, value, g.worker.fuzzer.config.Fuzzing.TransactionGasLimit, nil, nil, nil, &calls.CallMessageDataAbiValues{
+			Method:      &selectedMethod.Method,
+			InputValues: args,
+		})
+	}
 
 	// Disable nonce and EOA checks if requested by config
 	if g.worker.fuzzer.config.Fuzzing.TestChainConfig.SkipAccountChecks {

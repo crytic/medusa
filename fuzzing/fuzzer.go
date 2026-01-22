@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,7 +40,6 @@ import (
 	fuzzingutils "github.com/crytic/medusa/fuzzing/utils"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/slices"
 )
 
 // Fuzzer represents an Ethereum smart contract fuzzing provider.
@@ -387,8 +387,14 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 	// Retrieve the compilation target for slither
 	target := platformConfig.GetTarget()
 
+	// Extract solc version if using crytic-compile platform
+	var solcVersion string
+	if cryticConfig, ok := platformConfig.(*platforms.CryticCompilationConfig); ok {
+		solcVersion = cryticConfig.SolcVersion
+	}
+
 	// Run slither and handle errors
-	slitherResults, err := f.config.Slither.RunSlither(target)
+	slitherResults, err := f.config.Slither.RunSlither(target, solcVersion)
 	if err != nil || slitherResults == nil {
 		if err != nil {
 			f.logger.Warn("Failed to run slither", err)

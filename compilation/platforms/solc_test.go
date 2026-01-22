@@ -1,10 +1,11 @@
 package platforms
 
 import (
-	"github.com/crytic/medusa/utils/testutils"
-	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
+
+	"github.com/crytic/medusa/utils/testutils"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestSolcVersion ensures that a version of solc could be obtained and is installed
