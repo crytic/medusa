@@ -93,6 +93,34 @@ func (cd *corpusDirectory[T]) removeFile(fileName string) bool {
 	return false
 }
 
+// removeFileFromDisk removes a given file from the file list and deletes it from disk.
+// Returns a boolean indicating if the file was found and removed, and an error if the disk
+// deletion failed.
+func (cd *corpusDirectory[T]) removeFileFromDisk(fileName string) (bool, error) {
+	// Lock to avoid concurrency issues when accessing the files list
+	cd.filesLock.Lock()
+	defer cd.filesLock.Unlock()
+
+	// If we find the filename, remove it from our list and delete from disk.
+	lowerFileName := strings.ToLower(fileName)
+	for i := 0; i < len(cd.files); i++ {
+		if lowerFileName == strings.ToLower(cd.files[i].fileName) {
+			// Remove from in-memory list
+			cd.files = append(cd.files[:i], cd.files[i+1:]...)
+
+			// Delete from disk if path is set
+			if cd.path != "" {
+				filePath := filepath.Join(cd.path, fileName)
+				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+					return true, fmt.Errorf("failed to delete file %s: %w", filePath, err)
+				}
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // readFiles takes a provided glob pattern representing files to parse within the corpusDirectory.path.
 // It parses any matching file into a corpusFile and adds it to the corpusDirectory.
 // Returns an error, if one occurred.

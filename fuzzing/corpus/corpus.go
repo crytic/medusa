@@ -574,3 +574,135 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 	c.mutationTargetSequenceChooser.RemoveChoices(toRemove)
 	return len(toRemove), nil
 }
+
+// CleanInvalidSequencesResult contains the results of cleaning invalid sequences from the corpus.
+type CleanInvalidSequencesResult struct {
+	// TotalSequences is the total number of sequences in the corpus before cleaning.
+	TotalSequences int
+	// ValidSequences is the number of sequences that were successfully executed.
+	ValidSequences int
+	// InvalidSequences is the list of filenames that were invalid and removed (or would be removed
+	// in dry-run mode).
+	InvalidSequences []string
+}
+
+// CleanInvalidSequences validates each call sequence in the corpus by attempting to execute it on
+// the provided test chain. Sequences that fail to execute (due to contract resolution failures,
+// ABI mismatches, or execution errors) are considered invalid and removed from disk.
+//
+// The deployedContracts map should contain the contracts deployed on the test chain, mapping
+// addresses to their contract definitions.
+//
+// If dryRun is true, invalid sequences are identified but not deleted from disk.
+//
+// Returns a CleanInvalidSequencesResult containing statistics about the cleaning operation, or an
+// error if one occurs.
+func (c *Corpus) CleanInvalidSequences(
+	ctx context.Context,
+	testChain *chain.TestChain,
+	deployedContracts map[common.Address]*contracts.Contract,
+	dryRun bool,
+) (*CleanInvalidSequencesResult, error) {
+	result := &CleanInvalidSequencesResult{
+		InvalidSequences: make([]string, 0),
+	}
+
+	// Get the chain's testing base index for reverting
+	chainOriginalIndex := uint64(len(testChain.CommittedBlocks()))
+
+	// Process call sequence files
+	c.callSequencesLock.Lock()
+	sequenceFiles := make([]*corpusFile[calls.CallSequence], len(c.callSequenceFiles.files))
+	copy(sequenceFiles, c.callSequenceFiles.files)
+	c.callSequencesLock.Unlock()
+
+	result.TotalSequences = len(sequenceFiles)
+
+	for _, seqFile := range sequenceFiles {
+		if utils.CheckContextDone(ctx) {
+			return result, nil
+		}
+
+		// Clone the sequence for validation
+		seq, err := seqFile.data.Clone()
+		if err != nil {
+			result.InvalidSequences = append(result.InvalidSequences, seqFile.fileName)
+			if !dryRun {
+				if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
+					c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
+				}
+			}
+			continue
+		}
+
+		// Try to bind and execute each element in the sequence
+		valid := true
+		for i, element := range seq {
+			// Skip contract creation calls or elements with nil Call
+			if element.Call == nil || element.Call.To == nil {
+				continue
+			}
+
+			// Try to resolve the contract
+			contractDef, ok := deployedContracts[*element.Call.To]
+			if !ok {
+				valid = false
+				break
+			}
+			element.Contract = contractDef
+
+			// Try to resolve ABI values if present
+			if abiValues := element.Call.DataAbiValues; abiValues != nil {
+				if err := abiValues.Resolve(contractDef.CompiledContract().Abi); err != nil {
+					valid = false
+					break
+				}
+			}
+
+			// Update the sequence with the bound element
+			seq[i] = element
+		}
+
+		// If binding succeeded, try to execute the sequence
+		if valid {
+			fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+				if currentIndex >= len(seq) {
+					return nil, nil
+				}
+				return seq[currentIndex], nil
+			}
+
+			// Execute without checking results - we just want to know if it runs without error
+			executionCheckFunc := func(_ calls.CallSequence) (bool, error) {
+				return false, nil
+			}
+
+			_, execErr := calls.ExecuteCallSequenceIteratively(
+				testChain,
+				fetchElementFunc,
+				executionCheckFunc,
+			)
+			if execErr != nil {
+				valid = false
+			}
+
+			// Revert chain state
+			if revertErr := testChain.RevertToBlockIndex(chainOriginalIndex); revertErr != nil {
+				return result, fmt.Errorf("failed to revert chain state: %w", revertErr)
+			}
+		}
+
+		if valid {
+			result.ValidSequences++
+		} else {
+			result.InvalidSequences = append(result.InvalidSequences, seqFile.fileName)
+			if !dryRun {
+				if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
+					c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
