@@ -541,13 +541,28 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 		// For each call in the sequence, the following removal strategies are used:
 		// 1) Plain removal (lower block/time gap between surrounding blocks, maintain properties of max delay)
 		// 2) Add block/time delay to previous call (retain original block/time, possibly exceed max delays)
-		// At worst, this costs `2 * len(callSequence)` shrink iterations.
+		// 3) Remove reverting non-cheatcode calls while preserving cheatcode calls (for vm.roll, vm.warp, etc.)
+		// At worst, this costs `3 * len(callSequence)` shrink iterations.
 		fw.workerMetrics().shrinking = true
 		fw.fuzzer.logger.Info("[Worker ", fw.workerIndex, "] Shrinking call sequence for ", colors.GreenBold,
 			shrinkRequest.TestName, colors.Bold, " with ", len(shrinkRequest.CallSequenceToShrink), " call(s)")
 
-		for removalStrategy := 0; removalStrategy < 2 && !shrinkingEnded(); removalStrategy++ {
+		for removalStrategy := 0; removalStrategy < 3 && !shrinkingEnded(); removalStrategy++ {
 			for i := len(optimizedSequence) - 1; i >= 0 && !shrinkingEnded(); i-- {
+				// For strategy 3 (remove reverting non-cheatcode calls), skip if the call is a cheatcode
+				// or if it didn't revert. This strategy specifically targets reverting calls that don't
+				// contribute to the failure, while preserving cheatcode calls that set up chain state.
+				if removalStrategy == 2 {
+					// Skip cheatcode calls - they may set important chain state (block number, timestamp, etc.)
+					if optimizedSequence[i].IsCheatCodeCall() {
+						continue
+					}
+					// Skip non-reverting calls - they may contribute state changes needed for the failure
+					if !optimizedSequence[i].Reverted() {
+						continue
+					}
+				}
+
 				// Recreate our current optimized sequence without the item at this index
 				possibleShrunkSequence, err := optimizedSequence.Clone()
 				removedCall := possibleShrunkSequence[i]
@@ -566,6 +581,7 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 						possibleShrunkSequence[i-1].BlockTimestampDelay += removedCall.BlockTimestampDelay
 					}
 				}
+				// Case 3: Plain removal of reverting non-cheatcode calls (handled by the skip logic above)
 
 				// Test the shrunken sequence.
 				validShrunkSequence, err := fw.testShrunkenCallSequence(possibleShrunkSequence, shrinkRequest)

@@ -323,3 +323,26 @@ type CallSequenceElementChainReference struct {
 func (cr *CallSequenceElementChainReference) MessageResults() *chainTypes.MessageResults {
 	return cr.Block.MessageResults[cr.TransactionIndex]
 }
+
+// IsCheatCodeCall returns true if this call targets the standard cheatcode contract address.
+// This is useful during shrinking to identify calls that modify chain state (block number, timestamp, etc.)
+// rather than contract state.
+func (cse *CallSequenceElement) IsCheatCodeCall() bool {
+	if cse.Call == nil || cse.Call.To == nil {
+		return false
+	}
+	return *cse.Call.To == chain.StandardCheatcodeContractAddress
+}
+
+// Reverted returns true if this call's execution reverted.
+// A call is considered reverted if it has a chain reference and the execution result indicates failure.
+func (cse *CallSequenceElement) Reverted() bool {
+	if cse.ChainReference == nil {
+		return false
+	}
+	result := cse.ChainReference.MessageResults()
+	if result == nil || result.ExecutionResult == nil {
+		return false
+	}
+	return result.ExecutionResult.Failed()
+}
