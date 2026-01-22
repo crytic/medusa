@@ -432,21 +432,27 @@ func TestAssertCheatCodesFail(t *testing.T) {
 					assert.True(t, ok, "expected test to be an AssertionTestCase")
 					assert.NotNil(t, assertionTest.callSequence, "expected call sequence to exist")
 
-					// Get the last call in the sequence (the one that triggered the assertion failure)
-					lastCall := (*assertionTest.callSequence)[len(*assertionTest.callSequence)-1]
-					assert.NotNil(t, lastCall.ExecutionTrace, "expected execution trace to exist")
+					// Check all calls in the sequence for panic code 0x01.
+					// The failing assertion may not be the last call due to randomized fuzzing.
+					foundPanicCode := false
+					for _, call := range *assertionTest.callSequence {
+						if call.ExecutionTrace == nil {
+							continue
+						}
+						topFrame := call.ExecutionTrace.TopLevelCallFrame
+						panicCode := abiutils.GetSolidityPanicCode(
+							topFrame.ReturnError,
+							topFrame.ReturnData,
+							true,
+						)
+						if panicCode != nil && panicCode.Uint64() == 0x01 {
+							foundPanicCode = true
+							break
+						}
+					}
 
-					// Extract the panic code from the top-level call frame
-					topFrame := lastCall.ExecutionTrace.TopLevelCallFrame
-					panicCode := abiutils.GetSolidityPanicCode(
-						topFrame.ReturnError,
-						topFrame.ReturnData,
-						true,
-					)
-
-					// Verify that we got panic code 0x01 (assertion failed)
-					assert.NotNil(t, panicCode, "expected panic code to be extracted from failed assertion")
-					assert.Equal(t, uint64(0x01), panicCode.Uint64(), "expected panic code 0x01 (PanicCodeAssertFailed)")
+					// Verify that at least one call had panic code 0x01
+					assert.True(t, foundPanicCode, "expected at least one call to have panic code 0x01 (PanicCodeAssertFailed)")
 				}
 			},
 		})

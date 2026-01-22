@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/logging"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa-geth/common"
@@ -92,18 +93,23 @@ func getStandardCheatCodeContract(tracer *cheatCodeTracer) (*CheatCodeContract, 
 		return nil, err
 	}
 
+	// Create the Panic(uint256) ABI method once for reuse by all assert cheatcodes.
+	// This avoids recreating the method on every assertion failure.
+	panicMethod := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false,
+		abi.Arguments{{Type: typeUint256}}, abi.Arguments{})
+
 	// cheatCodePanicData creates cheatCodeRawReturnData with a Solidity panic code.
 	// Panic codes are encoded as: Panic(uint256) selector + 32-byte panic code.
+	// This follows Solidity's standard panic encoding used for assert failures (0x01),
+	// arithmetic overflow (0x11), division by zero (0x12), etc.
+	// See: https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require
 	cheatCodePanicData := func(panicCode uint64) *cheatCodeRawReturnData {
-		// Create the Panic(uint256) ABI method to get the selector
-		panicMethod := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false,
-			abi.Arguments{{Type: typeUint256}}, abi.Arguments{})
-
-		// Encode the panic code as uint256
 		panicCodeBig := new(big.Int).SetUint64(panicCode)
-		returnData, _ := panicMethod.Inputs.Pack(panicCodeBig)
+		returnData, err := panicMethod.Inputs.Pack(panicCodeBig)
+		if err != nil {
+			logging.GlobalLogger.Panic("Failed to pack panic code for assertion cheatcode", err)
+		}
 
-		// Prepend the selector
 		fullReturnData := append(panicMethod.ID, returnData...)
 
 		return &cheatCodeRawReturnData{
