@@ -2,6 +2,7 @@ package fuzzing
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
 	"math/rand"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/crytic/medusa/fuzzing/coverage"
 	"github.com/crytic/medusa/fuzzing/valuegeneration"
 	"github.com/crytic/medusa/utils"
-	"golang.org/x/exp/maps"
 )
 
 // FuzzerWorker describes a single thread worker utilizing its own go-ethereum test node to run property tests against
@@ -44,6 +44,9 @@ type FuzzerWorker struct {
 
 	// pureMethods is a list of contract functions which are side-effect free with respect to the EVM (view and/or pure in terms of Solidity mutability).
 	pureMethods []fuzzerTypes.DeployedContractMethod
+
+	// fallbackMethods is a list of fallback/receive functions in deployed contracts.
+	fallbackMethods []fuzzerTypes.DeployedContractMethod
 
 	// shrinkCallSequenceRequests is a list of ShrinkCallSequenceRequest that will be handled in the next iteration of
 	// the fuzzing loop. In the future we can generalize this to any type of "request" that must be handled immediately
@@ -94,6 +97,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		deployedContracts:          make(map[common.Address]*fuzzerTypes.Contract),
 		stateChangingMethods:       make([]fuzzerTypes.DeployedContractMethod, 0),
 		pureMethods:                make([]fuzzerTypes.DeployedContractMethod, 0),
+		fallbackMethods:            make([]fuzzerTypes.DeployedContractMethod, 0),
 		shrinkCallSequenceRequests: make([]ShrinkCallSequenceRequest, 0),
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
@@ -241,9 +245,28 @@ func (fw *FuzzerWorker) updateMethods() {
 	// Clear our list of methods
 	fw.stateChangingMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 	fw.pureMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
+	fw.fallbackMethods = make([]fuzzerTypes.DeployedContractMethod, 0)
 
 	// Loop through each deployed contract
 	for contractAddress, contractDefinition := range fw.deployedContracts {
+		// Check for fallback function
+		contractAbi := contractDefinition.CompiledContract().Abi
+		if contractAbi.HasFallback() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Fallback,
+			})
+		}
+		// Check for receive function
+		if contractAbi.HasReceive() {
+			fw.fallbackMethods = append(fw.fallbackMethods, fuzzerTypes.DeployedContractMethod{
+				Address:  contractAddress,
+				Contract: contractDefinition,
+				Method:   contractAbi.Receive,
+			})
+		}
+
 		// If we deployed the contract, also enumerate property tests and state changing methods.
 		for _, method := range contractDefinition.AssertionTestMethods {
 			// Any non-constant method should be tracked as a state changing method.
@@ -259,10 +282,46 @@ func (fw *FuzzerWorker) updateMethods() {
 	}
 }
 
+// bindCorpusElement ensures that the de-serialized corpus element is ready for runtime use.
+// The index for the element is provided and the base sequence used for execution is updated in-place.
+// It resolves the contract definition and ABI metadata needed for runtime execution. If the function
+// returns an error, the call sequence/corpus item is marked as invalid and will not be used for mutations.
+func (fw *FuzzerWorker) bindCorpusElement(currentIndex int) error {
+	// Guard clause
+	if currentIndex >= len(fw.sequenceGenerator.baseSequence) {
+		return nil
+	}
+
+	// Obtain the corpus element
+	element := fw.sequenceGenerator.baseSequence[currentIndex]
+
+	// If it is a contract creation, there is nothing to do.
+	if element.Call.To == nil {
+		return nil
+	}
+
+	contractDefinition, ok := fw.deployedContracts[*element.Call.To]
+	if !ok {
+		return fmt.Errorf("contract at address %v could not be resolved", element.Call.To.String())
+	}
+	element.Contract = contractDefinition
+
+	// Next, if our sequence element uses ABI values to produce call data, our deserialized data is not yet
+	// sufficient for runtime use, until we use it to resolve runtime references.
+	if abiValues := element.Call.DataAbiValues; abiValues != nil {
+		// Resolve the ABI values.
+		if err := abiValues.Resolve(contractDefinition.CompiledContract().Abi); err != nil {
+			return fmt.Errorf("error resolving method in contract '%v': %v", element.Contract.Name(), err)
+		}
+	}
+
+	return nil
+}
+
 // testNextCallSequence tests a call message sequence against the underlying FuzzerWorker's Chain and calls every
 // CallSequenceTestFunc registered with the parent Fuzzer to update any test results. If any call message in the
 // sequence is nil, a call message will be created in its place, targeting a state changing method of a contract
-// deployed in the Chain.
+// deployed in the Chain. Note that this function also replays the corpus call sequences before entering the main fuzzing loop.
 // Returns any requests for call sequence shrinking or an error if one occurs.
 func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, error) {
 	// We will make a copy of the worker's base value set so that we can rollback to it at the end of the call sequence
@@ -290,6 +349,17 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 
 	// Our "fetch next call" method will generate new calls as needed, if we are generating a new sequence.
 	fetchElementFunc := func(currentIndex int) (*calls.CallSequenceElement, error) {
+		// We need to prepare the corpus element for runtime execution if we are replaying a corpus sequence
+		if !isNewSequence {
+			err := fw.bindCorpusElement(currentIndex)
+
+			// We will separately capture the error and log that the corpus element is disabled
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Now, we are ready to fetch the next element from the sequence generator
 		return fw.sequenceGenerator.PopSequenceElement()
 	}
 
@@ -340,10 +410,16 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 	}
 
 	// Execute our call sequence.
-	_, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
+	var executedSequence calls.CallSequence
+	executedSequence, err = calls.ExecuteCallSequenceIteratively(fw.chain, fetchElementFunc, executionCheckFunc)
 
 	// If we encountered an error, report it.
 	if err != nil {
+		// If a corpus element fails to execute, log it (in debug mode) and exit the function early
+		if !isNewSequence {
+			fw.fuzzer.logger.Debug("[Worker ", fw.workerIndex, "] corpus element has been disabled due to an error:", err)
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -352,7 +428,17 @@ func (fw *FuzzerWorker) testNextCallSequence() ([]ShrinkCallSequenceRequest, err
 		return nil, nil
 	}
 
-	// If this was not a new call sequence, indicate not to save the shrunken result to the corpus again.
+	// We successfully executed a corpus element
+	if !isNewSequence {
+		fw.fuzzer.corpus.IncrementValid()
+		// If there are no shrink requests that means this is not a test result call sequence, so we can mark it for mutation.
+		if len(shrinkCallSequenceRequests) == 0 {
+			// We don't really want an error here to stop fuzzing, so we ignore it.
+			_ = fw.fuzzer.corpus.MarkCallSequenceForMutation(executedSequence, big.NewInt(1))
+		}
+	}
+
+	// We don't want to save shrink results from corpus sequences since we already did.
 	if !isNewSequence {
 		for i := 0; i < len(fw.shrinkCallSequenceRequests); i++ {
 			shrinkCallSequenceRequests[i].RecordResultInCorpus = false
@@ -504,6 +590,14 @@ func (fw *FuzzerWorker) shrinkCallSequence(shrinkRequest ShrinkCallSequenceReque
 
 				// Loop for each argument in the currently indexed call to mutate it.
 				abiValuesMsgData := possibleShrunkSequence[i].Call.DataAbiValues
+
+				// fallback and receive have nil DataAbiValues
+				if abiValuesMsgData == nil {
+					// If this is the only call we want to avoid an infinite loop
+					shrinkIteration++
+					continue
+				}
+
 				for j := 0; j < len(abiValuesMsgData.InputValues); j++ {
 					mutatedInput, err := valuegeneration.MutateAbiValue(fw.sequenceGenerator.config.ValueGenerator, fw.shrinkingValueMutator, &abiValuesMsgData.Method.Inputs[j].Type, abiValuesMsgData.InputValues[j])
 					if err != nil {

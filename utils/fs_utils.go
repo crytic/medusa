@@ -2,10 +2,11 @@ package utils
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 // CreateFile will create a file at the given path and file name combination. If the path is the empty string, the
@@ -79,7 +80,7 @@ func CopyFile(sourcePath string, targetPath string) error {
 	return os.Chmod(targetPath, sourceInfo.Mode())
 }
 
-// MoveFile will move a given file from the source path to the target path. Returns an error if one occured.
+// MoveFile will move a given file from the source path to the target path. Returns an error if one occurred.
 func MoveFile(sourcePath string, targetPath string) error {
 	// Obtain file info for the source file
 	sourceInfo, err := os.Stat(sourcePath)

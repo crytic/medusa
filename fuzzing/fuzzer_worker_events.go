@@ -65,8 +65,8 @@ type FuzzerWorkerContractDeletedEvent struct {
 	ContractDefinition *contracts.Contract
 }
 
-// FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker is created its underlying chain.
-// This is an opportune to attach tracers to capture chain setup information.
+// FuzzerWorkerChainCreatedEvent describes an event where a fuzzing.FuzzerWorker creates its underlying chain.
+// This is an opportune time to attach tracers to capture chain setup information.
 type FuzzerWorkerChainCreatedEvent struct {
 	// Worker represents the instance of the fuzzing.FuzzerWorker for which the event occurred.
 	Worker *FuzzerWorker

@@ -2,15 +2,15 @@ package fuzzing
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/crytic/medusa-geth/core"
 	"github.com/crytic/medusa/fuzzing/calls"
+	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
 	"github.com/crytic/medusa/fuzzing/executiontracer"
-	"golang.org/x/exp/slices"
 )
 
 // MIN_INT is the minimum value for an int256 in hexadecimal
@@ -31,7 +31,7 @@ type OptimizationTestCaseProvider struct {
 	// shrinkingRequestedLock is used for thread-synchronization with reading and updating shrinkingRequested
 	shrinkingRequestedLock sync.Mutex
 
-	// testCases is a map of contract-method IDs to optimization test cases.GetContractMethodID
+	// testCases is a map of contract-method IDs to optimization test cases.
 	testCases map[contracts.ContractMethodID]*OptimizationTestCase
 
 	// testCasesLock is used for thread-synchronization when updating testCases

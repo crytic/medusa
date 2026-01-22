@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"container/heap"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/crytic/medusa-geth/crypto"
 	"github.com/crytic/medusa/compilation/types"
 )
@@ -60,14 +62,15 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 					}
 				}
 			}
-			// Throw error if for any reason libPath becomes empty
-			if libPath == "" {
-				panic("libPath is empty, could not determine the library path")
-			}
+
 			// Check each contract in the source
 			for contractName, contract := range sourceArtifact.Contracts {
 				// Check if this is a library
 				if contract.Kind == types.ContractKindLibrary {
+					// Throw an error if for any reason libPath becomes empty. We need an absolute path.
+					if libPath == "" {
+						panic(fmt.Sprintf("cannot resolve fully qualified path for library %s", contractName))
+					}
 					fullName := libPath + ":" + contractName
 					// Short name is just the contract name
 					shortName := contractName
@@ -79,94 +82,123 @@ func BuildLibraryNameMapping(compilations []types.Compilation) map[string]string
 	return libraryMap
 }
 
+// Priority queue storing contract names.
+// Sorted by: predeploys first, then targetContracts, then the rest.
+// We'll use heap.Push and heap.Pop on this queue.
+type deploymentOrderPriorityQueue struct {
+	items      []string
+	priorities map[string]int
+}
+
+// In order to use heap.Push and heap.Pop on this queue, we need to implement heap.Interface.
+// All these implementations should be fairly self explanatory...
+
+func (pq deploymentOrderPriorityQueue) Len() int {
+	return len(pq.items)
+}
+
+func (pq deploymentOrderPriorityQueue) Less(i, j int) bool {
+	return pq.priorities[pq.items[i]] < pq.priorities[pq.items[j]]
+}
+
+func (pq deploymentOrderPriorityQueue) Swap(i, j int) {
+	t := pq.items[i]
+	pq.items[i] = pq.items[j]
+	pq.items[j] = t
+}
+
+func (pq *deploymentOrderPriorityQueue) Push(x any) {
+	pq.items = append(pq.items, x.(string))
+}
+
+func (pq *deploymentOrderPriorityQueue) Pop() any {
+	lastIdx := len(pq.items) - 1
+	item := pq.items[lastIdx]
+	pq.items = pq.items[:lastIdx]
+	return item
+}
+
 // GetDeploymentOrder returns a topologically sorted list of libraries/contracts
 // based on their dependencies. This ensures libraries are deployed before contracts
 // that depend on them.
 //
 // The function uses a modified Kahn's algorithm for topological sorting, with
 // special handling for target contracts:
-//  1. Nodes with no dependencies (in-degree = 0) from targetContracts are prioritized
+//  1. Nodes with no dependencies (in-degree = 0) from predeploys are prioritized
 //     in their original order
-//  2. When multiple nodes become available for processing at the same time, nodes in
+//  2. Nodes with no dependencies (in-degree = 0) from targetContracts are prioritized
+//     in their original order
+//  3. When multiple nodes become available for processing at the same time, nodes in
+//     predeploys are ordered according to their position in that list
+//  4. When multiple nodes become available for processing at the same time, nodes in
 //     targetContracts are ordered according to their position in that list
 //
 // This way the deployment order respects both dependency constraints (libraries first)
-// and preserves the desired order of target contracts when possible.
-func GetDeploymentOrder(dependencies map[string][]string, targetContracts []string) ([]string, error) {
-	// Calculate in-degree for each node (number of dependencies)
-	inDegree := make(map[string]int)
-	// Count incoming edges (dependencies)
+// and preserves the desired order of predeploys and target contracts when possible.
+func GetDeploymentOrder(dependencies map[string][]string, predeploys []string, targetContracts []string) ([]string, error) {
+	// Make the priority rankings for our priority queue. First predeploys (in the order they appear),
+	// then targetContracts (in the order they appear), then dependencies (in the order that `range` gives us).
+	priorities := make(map[string]int, len(dependencies))
+	highestPriority := 0
+	for _, c := range predeploys {
+		if _, ok := priorities[c]; ok {
+			continue
+		}
+		highestPriority++
+		priorities[c] = highestPriority
+	}
+	for _, c := range targetContracts {
+		if _, ok := priorities[c]; ok {
+			continue
+		}
+		highestPriority++
+		priorities[c] = highestPriority
+	}
+	for c := range dependencies {
+		if _, ok := priorities[c]; ok {
+			continue
+		}
+		highestPriority++
+		priorities[c] = highestPriority
+	}
+
+	// Priority queue holding nodes with no dependencies (in-degree = 0)
+	queue := &deploymentOrderPriorityQueue{
+		items:      make([]string, 0, len(dependencies)),
+		priorities: priorities,
+	}
+
+	// Map holding the in-degree for each node (number of dependencies)
+	inDegree := make(map[string]int, len(dependencies))
+	// Map that tracks, for each node, the nodes that depend on it.
+	// This is the transpose graph of `dependencies`.
+	dependenciesFrom := make(map[string][]string, len(dependencies))
+	// Calculate inDegree, dependenciesFrom, and populate queue
 	for node, deps := range dependencies {
 		// Each node's in-degree is initially the number of its dependencies
 		inDegree[node] = len(deps)
-		// Make sure all dependencies exist in the inDegree map
+		// If a node has no dependencies, add to queue
+		if len(deps) == 0 {
+			heap.Push(queue, node)
+		}
+		// Add dependenciesFrom entries
 		for _, dep := range deps {
-			if _, exists := inDegree[dep]; !exists {
-				inDegree[dep] = 0
-			}
-		}
-	}
-
-	// Find nodes with no dependencies (in-degree = 0)
-	var queue []string
-	// Create a map to track if a contract is in targetContracts for fast lookup
-	targetContractsMap := make(map[string]int)
-	for i, contract := range targetContracts {
-		targetContractsMap[contract] = i
-	}
-	// First, add zero-degree nodes from targetContracts list in their original order
-	for _, contract := range targetContracts {
-		if degree, exists := inDegree[contract]; exists && degree == 0 {
-			queue = append(queue, contract)
-		}
-	}
-	// Then add remaining zero-degree nodes that aren't in targetContracts
-	for node, degree := range inDegree {
-		if degree == 0 {
-			if _, inTargets := targetContractsMap[node]; !inTargets {
-				queue = append(queue, node)
-			}
+			dependenciesFrom[dep] = append(dependenciesFrom[dep], node)
 		}
 	}
 
 	// Process nodes in topological order
-	var result []string
-	for len(queue) > 0 {
+	result := make([]string, 0, len(dependencies))
+	for queue.Len() > 0 {
 		// Remove a node from the queue
-		current := queue[0]
-		queue = queue[1:]
+		current := heap.Pop(queue).(string)
 		result = append(result, current)
-		delete(inDegree, current)
 		// For each node that depends on this one, decrease its in-degree
-		for node, deps := range dependencies {
-			for _, dep := range deps {
-				if dep == current {
-					inDegree[node]--
-					if inDegree[node] == 0 {
-						// When a node's degree becomes zero, check if it's in targetContracts
-						// If it is, prioritize it based on its position in targetContracts
-						if idx, inTargets := targetContractsMap[node]; inTargets {
-							// Insert at the appropriate position based on target order
-							inserted := false
-							for i, queuedNode := range queue {
-								if queuedIdx, queuedInTargets := targetContractsMap[queuedNode]; queuedInTargets && idx < queuedIdx {
-									// Insert before this node (proper slice insertion)
-									queue = append(queue, "")    // Add empty space
-									copy(queue[i+1:], queue[i:]) // Shift elements right
-									queue[i] = node              // Insert new element
-									inserted = true
-									break
-								}
-							}
-							if !inserted {
-								queue = append(queue, node)
-							}
-						} else {
-							// For non-targeted contracts, just append them
-							queue = append(queue, node)
-						}
-					}
-				}
+		for _, node := range dependenciesFrom[current] {
+			inDegree[node]--
+			if inDegree[node] == 0 {
+				// When a node's degree becomes zero, add it to the priority queue
+				heap.Push(queue, node)
 			}
 		}
 	}

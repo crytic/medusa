@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/crytic/medusa-geth/common"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
-	"golang.org/x/exp/slices"
+	"github.com/crytic/medusa-geth/common"
 )
 
 // CompiledContract represents a single contract unit from a smart contract compilation.
@@ -180,6 +180,9 @@ func (c *CompiledContract) LinkBytecodes(contractName string, deployedLibraries 
 	}
 	c.InitBytecode = initBytecode
 	c.RuntimeBytecode = runtimeBytecode
+
+	// Clear the library placeholders map since they've been linked
+	c.LibraryPlaceholders = make(map[string]any)
 }
 
 // ParseBytecodeForPlaceholders analyzes the given bytecode string to identify and extract

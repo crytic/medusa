@@ -21,7 +21,7 @@ const (
 	CYAN
 	// WHITE is the ANSI code for white
 	WHITE
-	// BOLD is the ANSI code for bold tet
+	// BOLD is the ANSI code for bold text
 	BOLD = 1
 	// DARK_GRAY is the ANSI code for dark gray
 	DARK_GRAY = 90

@@ -165,7 +165,7 @@ func (m *RevertMetrics) Update(update *RevertMetricsUpdate, errorIDs map[string]
 		}
 	}
 
-	// Finally, we will try to decide an error string (e.g. `require("this is an error")`)
+	// Finally, we will try to decode an error string (e.g. `require("this is an error")`)
 	if revertReason == "unknown" {
 		revertReasonPtr := abiutils.GetSolidityRevertErrorString(executionResult.Err, executionResult.ReturnData)
 		if revertReasonPtr != nil {

@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/logging"
@@ -58,6 +61,52 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 	return count
 }
 
+// shouldExcludeFile checks if a file path matches any of the exclusion patterns
+func shouldExcludeFile(filePath string, exclusionPatterns []string) bool {
+	for _, pattern := range exclusionPatterns {
+		if matched, err := doublestar.Match(pattern, filePath); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// filterExcludedFiles removes files matching exclusion patterns from the source analysis.
+// Pattern matching is performed on relative paths (relative to current working directory)
+// to match the behavior of the coverage report display.
+func (s *SourceAnalysis) filterExcludedFiles(exclusionPatterns []string) {
+	if len(exclusionPatterns) == 0 {
+		return
+	}
+
+	// Get current working directory to convert absolute paths to relative paths
+	// This ensures pattern matching works on the same relative paths shown in reports
+	cwd, err := os.Getwd()
+	if err != nil {
+		// If we can't get the working directory, skip filtering to avoid issues
+		return
+	}
+
+	// Create a new map without excluded files
+	filteredFiles := make(map[string]*SourceFileAnalysis)
+
+	for filePath, fileAnalysis := range s.Files {
+		// Convert to relative path for pattern matching (same logic as in report template)
+		relativePath := filePath
+		if relPath, err := filepath.Rel(cwd, filePath); err == nil {
+			relativePath = relPath
+		}
+
+		// Keep the file if it doesn't match any exclusion pattern
+		if !shouldExcludeFile(relativePath, exclusionPatterns) {
+			filteredFiles[filePath] = fileAnalysis
+		}
+	}
+
+	// Replace the original files map with filtered results
+	s.Files = filteredFiles
+}
+
 // GenerateLCOVReport generates an LCOV report from the source analysis.
 // The spec of the format is here https://github.com/linux-test-project/lcov/blob/07a1127c2b4390abf4a516e9763fb28a956a9ce4/man/geninfo.1#L989
 func (s *SourceAnalysis) GenerateLCOVReport() string {
@@ -95,7 +144,7 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 			// We are treating any line hit in the definition as a hit for the function.
 			hit := 0
 			for i := startLine; i < endLine; i++ {
-				// index iz zero based, line numbers are 1 based
+				// index is zero based, line numbers are 1 based
 				if file.Lines[i-1].IsActive && file.Lines[i-1].IsCovered {
 					hit = 1
 				}
@@ -214,10 +263,10 @@ func GetUniquePCsCount(compilations []types.Compilation, coverageMaps *CoverageM
 	return uniquePCs, nil
 }
 
-// AnalyzeSourceCoverage takes a list of compilations and a set of coverage maps, and performs source analysis
-// to determine source coverage information.
+// AnalyzeSourceCoverage takes a list of compilations, coverage maps, and exclusion patterns, then performs source analysis
+// to determine source coverage information. Files matching the exclusion patterns will be filtered out from the results.
 // Returns a SourceAnalysis object, or an error if one occurs.
-func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, logger *logging.Logger) (*SourceAnalysis, error) {
+func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *CoverageMaps, exclusionPatterns []string, logger *logging.Logger) (*SourceAnalysis, error) {
 	// Create a new source analysis object
 	sourceAnalysis := &SourceAnalysis{
 		Files: make(map[string]*SourceFileAnalysis),
@@ -323,6 +372,10 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 			}
 		}
 	}
+
+	// Apply exclusion filtering if patterns are provided
+	sourceAnalysis.filterExcludedFiles(exclusionPatterns)
+
 	return sourceAnalysis, nil
 }
 
@@ -396,7 +449,7 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 				return sourceFile.CumulativeOffsetByLine[i] > start
 			})
 
-			// index iz zero based, line numbers are 1 based
+			// index is zero based, line numbers are 1 based
 			sourceLine := sourceFile.Lines[startLine-1]
 
 			// Check if the line is within range
@@ -453,21 +506,22 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *log
 		// Test some conditions that should always hold...
 		op := vm.OpCode(bytecode[pc])                                                         // Used only for checks below
 		isJumpOrReturn := op == vm.JUMP || op == vm.JUMPI || op == vm.RETURN || op == vm.STOP // Used only for checks below
+		warningMsgFormat := "WARNING: %s. The coverage report will be inaccurate. Try setting USE_FULL_BYTECODE=1 in your environment and rerunning medusa. If that doesn't make this message go away, you found a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %v, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n"
 		if hit+enterCount < hit {
-			logger.Warn("WARNING: Overflow while generating coverage report, during `hit += enterCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Overflow while generating coverage report, during `hit += enterCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if hit+enterCount < revertCount {
-			logger.Warn("WARNING: Underflow while generating coverage report, during `hit - revertCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Underflow while generating coverage report, during `hit - revertCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if hit+enterCount < allLeaveCount {
-			logger.Warn("WARNING: Underflow while generating coverage report, during `hit -= allLeaveCount` calculation. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Underflow while generating coverage report, during `hit -= allLeaveCount` calculation", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if isJumpOrReturn && hit+enterCount != allLeaveCount {
-			logger.Warn("WARNING: Unexpected condition while generating coverage report: return or jump does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Unexpected condition while generating coverage report: return or jump does not reset hit count to 0", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 		if allLeaveCount-revertCount > 0 && hit+enterCount != allLeaveCount {
 			// The check is allLeaveCount-revertCount > 0 rather than just allLeaveCount > 0 since reverts don't have to reset hit to 0
-			logger.Warn("WARNING: Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, enterCount: %d, revertCount: %d, allLeaveCount: %d, idx: %d, pc: %d, op: %d, isJumpOrReturn: %t, len(bytecode): %d, len(indexToOffset): %d.\n", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset))
+			logger.Warn(fmt.Sprintf(warningMsgFormat, "Unexpected condition while generating coverage report: positive allLeaveCount does not reset hit count to 0", hit, enterCount, revertCount, allLeaveCount, idx, pc, op, isJumpOrReturn, len(bytecode), len(indexToOffset)))
 		}
 
 		// Modify hit based on coverage for this line, and record results
@@ -477,7 +531,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *log
 		hit -= allLeaveCount
 	}
 	if hit != 0 {
-		logger.Warn("WARNING: Nonzero final hit count. The coverage report will be inaccurate. This is a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset))
+		logger.Warn(fmt.Sprintf("WARNING: Nonzero final hit count. The coverage report will be inaccurate. Try setting USE_FULL_BYTECODE=1 in your environment and rerunning medusa. If that doesn't make this message go away, you found a bug; please report it at https://github.com/crytic/medusa/issues. Debug info: hit: %d, len(bytecode): %d, len(indexToOffset): %d.\n", hit, len(bytecode), len(indexToOffset)))
 	}
 
 	return successfulHits, revertedHits

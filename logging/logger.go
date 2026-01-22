@@ -2,10 +2,11 @@ package logging
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging/colors"
-	"github.com/rs/zerolog"
 	"io"
 	"strings"
+
+	"github.com/crytic/medusa/logging/colors"
+	"github.com/rs/zerolog"
 )
 
 // GlobalLogger describes a Logger that is disabled by default and is instantiated when the fuzzer is created. Each module/package
@@ -43,7 +44,7 @@ type LogFormat string
 const (
 	// STRUCTURED describes that logging should be done in structured JSON format
 	STRUCTURED LogFormat = "structured"
-	// UNSTRUCTRED describes that logging should be done in an unstructured format
+	// UNSTRUCTURED describes that logging should be done in an unstructured format
 	UNSTRUCTURED LogFormat = "unstructured"
 )
 

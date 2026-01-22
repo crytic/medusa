@@ -78,6 +78,12 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   `corpusDirectory` if configured.
 - **Default**: `["lcov", "html"]`
 
+### `coverageExclusions`
+
+- **Type**: [String] (e.g. `["lib/**", "*.test.sol"]`)
+- **Description**: Glob patterns to exclude files from coverage reporting. Useful for excluding libraries, test files, or other contracts that should not be included in coverage metrics.
+- **Default**: `[]`
+
 ### `revertReporterEnabled`
 
 - **Type**: Boolean
@@ -146,7 +152,7 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
 - **Type**: Integer
 - **Description**: The number of the maximum block timestamp jump the fuzzer should make between test transactions.
   The fuzzer will use this value to make the next block's `block.timestamp` between `[1, blockTimestampDelayMax]` more
-  than that of the previous block. Jumping `block.timestamp`time allows `medusa` to enter code paths that require a given amount of time to pass.
+  than that of the previous block. Jumping `block.timestamp` allows `medusa` to enter code paths that require a given amount of time to pass.
 - **Default**: `604_800`
 
 ### `transactionGasLimit`

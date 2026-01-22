@@ -1,6 +1,6 @@
 package utils
 
-import "golang.org/x/net/context"
+import "context"
 
 // CheckContextDone checks if a provided context has indicated it is done, and returns a boolean indicating if it is.
 func CheckContextDone(ctx context.Context) bool {

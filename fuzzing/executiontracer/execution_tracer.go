@@ -1,21 +1,20 @@
 package executiontracer
 
 import (
-	"github.com/crytic/medusa/fuzzing/config"
 	"math/big"
+	"slices"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core"
 	"github.com/crytic/medusa-geth/core/tracing"
 	coretypes "github.com/crytic/medusa-geth/core/types"
-	"github.com/crytic/medusa/chain"
-	"github.com/crytic/medusa/chain/types"
-	"github.com/crytic/medusa/fuzzing/contracts"
-	"github.com/crytic/medusa/utils"
-
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
-	"golang.org/x/exp/slices"
+	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/chain/types"
+	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/utils"
 )
 
 // CallWithExecutionTrace obtains an execution trace for a given call, on the provided chain, using the state
@@ -73,6 +72,9 @@ type ExecutionTracer struct {
 
 	// verbosity describes the verbosity level that will be used for the execution trace
 	verbosity config.VerbosityLevel
+
+	// currentTxHash stores the hash of the current transaction being traced
+	currentTxHash common.Hash
 }
 
 // NewExecutionTracer creates a ExecutionTracer and returns it.
@@ -103,7 +105,7 @@ func (t *ExecutionTracer) NativeTracer() *chain.TestChainTracer {
 
 }
 
-// Close sets the traceMap to nil and should be called after the execution tracer is finish being used.
+// Close sets the traceMap to nil and should be called after the execution tracer is finished being used.
 func (t *ExecutionTracer) Close() {
 	t.traceMap = nil
 }
@@ -136,6 +138,9 @@ func (t *ExecutionTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 
 	// Store our evm reference
 	t.evmContext = vm
+
+	// Store the current transaction hash
+	t.currentTxHash = tx.Hash()
 }
 
 // resolveCallFrameConstructorArgs resolves previously unresolved constructor argument ABI data from the call data, if
@@ -309,7 +314,9 @@ func (t *ExecutionTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	// TODO: Move this to OnLog
 	if op == byte(vm.LOG0) || op == byte(vm.LOG1) || op == byte(vm.LOG2) || op == byte(vm.LOG3) || op == byte(vm.LOG4) {
 		t.onNextCaptureState = append(t.onNextCaptureState, func() {
-			logs := t.evmContext.StateDB.(types.MedusaStateDB).Logs()
+			blockNumber := t.evmContext.BlockNumber.Uint64()
+			blockHash, _ := t.testChain.BlockHashFromNumber(blockNumber)
+			logs := t.evmContext.StateDB.(types.MedusaStateDB).GetLogs(t.currentTxHash, blockNumber, blockHash)
 			if len(logs) > 0 {
 				t.currentCallFrame.Operations = append(t.currentCallFrame.Operations, logs[len(logs)-1])
 			}

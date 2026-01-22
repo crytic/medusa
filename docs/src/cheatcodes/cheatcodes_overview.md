@@ -7,11 +7,11 @@ The cheatcode contract is deployed at `0x7109709ECfa91a80626fF3989D68f67F5b1DD12
 
 The following interface must be added to your Solidity project if you wish to use cheatcodes. Note that if you use Foundry
 as your compilation platform that the cheatcode interface is already provided [here](https://book.getfoundry.sh/reference/forge-std/#forge-stds-test).
-However, it is important to note that medusa does not support all the cheatcodes provided out-of-box
+However, it is important to note that medusa does not support all the cheatcodes provided out-of-the-box
 by Foundry (see below for supported cheatcodes).
 
 ```solidity
-interface StdCheats {
+interface IStdCheats {
     // Set block.timestamp
     function warp(uint256) external;
 
@@ -57,6 +57,9 @@ interface StdCheats {
     // Sets an address' code
     function etch(address who, bytes calldata code) external;
 
+    // Sets a label for an address (for debugging purposes)
+    function label(address account, string calldata label) external;
+
     // Signs data
     function sign(uint256 privateKey, bytes32 digest)
         external
@@ -96,7 +99,7 @@ interface StdCheats {
     function parseBytes(string memory) external returns(bytes memory);
     function parseBytes32(string memory) external returns(bytes32);
     function parseAddress(string memory) external returns(address);
-    function parseUint(string memory)external returns(uint256);
+    function parseUint(string memory) external returns(uint256);
     function parseInt(string memory) external returns(int256);
     function parseBool(string memory) external returns(bool);
 }
@@ -116,9 +119,9 @@ contract MyContract {
     IStdCheats cheats = IStdCheats(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
     // This is a test function that will set the msg.sender's nonce to the provided input argument
-    function testFunc(uint256 _x) public {
+    function testFunc(uint256 x) public {
         // Ensure that the input argument is greater than msg.sender's current nonce
-        require(_x > cheats.getNonce(msg.sender));
+        require(x > cheats.getNonce(msg.sender));
 
         // Set sender's nonce
         cheats.setNonce(msg.sender, x);

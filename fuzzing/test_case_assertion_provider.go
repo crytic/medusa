@@ -2,17 +2,16 @@ package fuzzing
 
 import (
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/fuzzing/contracts"
-
-	"golang.org/x/exp/slices"
 )
 
-// AssertionTestCaseProvider is am AssertionTestCase provider which spawns test cases for every contract method and
+// AssertionTestCaseProvider is an AssertionTestCase provider which spawns test cases for every contract method and
 // ensures that none of them result in a failed assertion (e.g. use of the solidity `assert(...)` statement, or special
 // events indicating a failed assertion).
 type AssertionTestCaseProvider struct {
@@ -60,7 +59,7 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	methodId := contracts.GetContractMethodID(lastCall.Contract, lastCallMethod)
 
 	// Check if we encountered an enabled panic code.
-	// Try to unpack our error and return data for a panic code and verify that that panic code should be treated as a failing case.
+	// Try to unpack our error and return data for a panic code and verify that panic code should be treated as a failing case.
 	// Solidity >0.8.0 introduced asserts failing as reverts but with special return data. But we indicate we also
 	// want to be backwards compatible with older Solidity which simply hit an invalid opcode and did not actually
 	// have a panic code.

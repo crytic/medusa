@@ -1,0 +1,36 @@
+repos:
+  - repo: local
+    hooks:
+      - id: goimports
+        name: goimports
+        entry: bash -c 'goimports -w $(find . -name "*.go" -not -path "./vendor/*") && git diff --exit-code'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-fmt
+        name: go fmt
+        entry: bash -c 'go fmt ./... && git diff --exit-code'
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --timeout 5m
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: dprint
+        name: dprint
+        entry: dprint check
+        language: system
+        types_or: [markdown, yaml, json]
+
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+        pass_filenames: false

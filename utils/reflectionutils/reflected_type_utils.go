@@ -2,8 +2,9 @@ package reflectionutils
 
 import (
 	"fmt"
-	"github.com/crytic/medusa/logging"
 	"reflect"
+
+	"github.com/crytic/medusa/logging"
 )
 
 // ArrayToSlice converts a reflected array into a slice.

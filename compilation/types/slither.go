@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -35,7 +36,7 @@ func NewDefaultSlitherConfig() (*SlitherConfig, error) {
 	}, nil
 }
 
-// SlitherResults describes a data structures that holds the interesting constants returned from slither
+// SlitherResults describes a data structure that holds the interesting constants returned from slither
 type SlitherResults struct {
 	// Constants holds the constants extracted by slither
 	Constants []Constant `json:"constantsUsed"`
@@ -80,7 +81,8 @@ func (s *SlitherConfig) getArgs(target string) ([]string, error) {
 
 // RunSlither on the provided compilation target. RunSlither will use cached results if they exist and write to the
 // cache if we have not written to the cache already. A SlitherResults data structure is returned.
-func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
+// The solcVersion parameter, if non-empty, sets the SOLC_VERSION environment variable to prevent race conditions.
+func (s *SlitherConfig) RunSlither(target string, solcVersion string) (*SlitherResults, error) {
 	// Return early if we do not want to run slither
 	if !s.UseSlither {
 		return nil, nil
@@ -123,6 +125,11 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 		cmd := exec.Command("slither", args...)
 		logging.GlobalLogger.Info("Running Slither:\n", cmd.String())
 
+		// Set SOLC_VERSION environment variable if provided
+		if solcVersion != "" {
+			cmd.Env = append(os.Environ(), fmt.Sprintf("SOLC_VERSION=%s", solcVersion))
+		}
+
 		// Run slither
 		start := time.Now()
 		out, err = cmd.CombinedOutput()
@@ -159,7 +166,7 @@ func (s *SlitherConfig) RunSlither(target string) (*SlitherResults, error) {
 	return &slitherResults, nil
 }
 
-// UnmarshalJSON unmarshals the slither output into a Slither type
+// UnmarshalJSON unmarshals the slither output into a SlitherResults type
 func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 	// Extract the top-level JSON object
 	var obj map[string]json.RawMessage
