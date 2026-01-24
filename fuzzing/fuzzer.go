@@ -32,6 +32,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -227,6 +228,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			return nil, err
 		}
 		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
+
+		// Notify user about artifact hash status (new vs unchanged artifacts)
+		cacheDir := fuzzer.config.Fuzzing.CorpusDirectory
+		if cacheDir == "" {
+			cacheDir = "."
+		}
+		compilation.NotifyArtifactHashStatus(compilations, cacheDir, fuzzer.logger)
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
