@@ -40,7 +40,8 @@
       },
       "propertyTesting": {
         "enabled": true,
-        "testPrefixes": ["property_"]
+        "testPrefixes": ["property_"],
+        "returnBool": true
       },
       "optimizationTesting": {
         "enabled": true,
