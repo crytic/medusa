@@ -102,6 +102,30 @@ interface IStdCheats {
     function parseUint(string memory) external returns(uint256);
     function parseInt(string memory) external returns(int256);
     function parseBool(string memory) external returns(bool);
+
+    // Assertion cheatcodes - revert with panic code 0x01 on failure
+    function assertTrue(bool) external;
+    function assertFalse(bool) external;
+    function assertEq(bool, bool) external;
+    function assertEq(uint256, uint256) external;
+    function assertEq(int256, int256) external;
+    function assertEq(address, address) external;
+    function assertEq(bytes32, bytes32) external;
+    function assertEq(string memory, string memory) external;
+    function assertNotEq(bool, bool) external;
+    function assertNotEq(uint256, uint256) external;
+    function assertNotEq(int256, int256) external;
+    function assertNotEq(address, address) external;
+    function assertNotEq(bytes32, bytes32) external;
+    function assertNotEq(string memory, string memory) external;
+    function assertLt(uint256, uint256) external;
+    function assertLt(int256, int256) external;
+    function assertLe(uint256, uint256) external;
+    function assertLe(int256, int256) external;
+    function assertGt(uint256, uint256) external;
+    function assertGt(int256, int256) external;
+    function assertGe(uint256, uint256) external;
+    function assertGe(int256, int256) external;
 }
 ```
 
