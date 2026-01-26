@@ -4,16 +4,15 @@ import (
 	"os"
 
 	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/version"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
-const version = "1.4.1"
-
 // rootCmd represents the root CLI command object which all other commands stem from.
 var rootCmd = &cobra.Command{
 	Use:     "medusa",
-	Version: version,
+	Version: version.GetInfo().Short(),
 	Short:   "A Solidity smart contract fuzzing harness",
 	Long:    "medusa is a solidity smart contract fuzzing harness",
 }
