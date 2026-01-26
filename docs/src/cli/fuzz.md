@@ -189,6 +189,33 @@ The `--log-level` flag sets which level of log messages will be displayed (trace
 medusa fuzz --log-level debug
 ```
 
+### `--tui`
+
+The `--tui` flag enables the Terminal User Interface (TUI) mode for an interactive fuzzing experience (equivalent to [`logging.enableTUI`](../project_configuration/logging_config.md#enabletui)).
+
+The TUI provides:
+
+- Real-time fuzzing statistics and worker status
+- Live test case monitoring
+- Interactive trace viewing for failed tests (press `t` or `Enter`)
+- Scrollable log viewer (press `l`)
+- Mouse and keyboard navigation support
+
+**Keyboard Controls:**
+
+- `↑/↓` or `j/k` - Scroll content
+- `PgUp/PgDn` - Page up/down
+- `t` or `Enter` - View test failure traces
+- `l` - Toggle log viewer
+- `f` or `Tab` - Focus sections (test cases/workers)
+- `m` - Toggle mouse support
+- `q` - Quit TUI
+
+```shell
+# Enable TUI mode
+medusa fuzz --tui
+```
+
 ### `--rpc-url`
 
 The `--rpc-url` flag enables fork mode and sets the RPC endpoint URL to fetch contracts from. When provided, medusa will fork the blockchain state from the specified network (equivalent to [`chainConfig.forkConfig.rpcUrl`](../project_configuration/chain_config.md#rpcurl)).
