@@ -73,6 +73,15 @@ func (c *CryticCompilationConfig) validateArgs() error {
 	return nil
 }
 
+// GetExportDirectory returns the export directory used by crytic-compile.
+// If ExportDirectory is not set, it defaults to "crytic-export".
+func (c *CryticCompilationConfig) GetExportDirectory() string {
+	if c.ExportDirectory == "" {
+		return "crytic-export"
+	}
+	return c.ExportDirectory
+}
+
 // getArgs returns the arguments to be provided to crytic-compile during compilation, or an error if one occurs.
 func (c *CryticCompilationConfig) getArgs() ([]string, error) {
 	// By default we export in solc mode.
@@ -92,10 +101,7 @@ func (c *CryticCompilationConfig) getArgs() ([]string, error) {
 // create a list of types.Compilation.
 func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	// Resolve our export directory and delete it if already exists
-	exportDirectory := c.ExportDirectory
-	if exportDirectory == "" {
-		exportDirectory = "crytic-export"
-	}
+	exportDirectory := c.GetExportDirectory()
 	err := utils.DeleteDirectory(exportDirectory)
 	if err != nil {
 		return nil, "", fmt.Errorf("could not delete crytic-compile's export directory prior to compilation, error: %v", err)
