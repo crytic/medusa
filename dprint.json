@@ -1,0 +1,9 @@
+{
+  "lineWidth": 100,
+  "excludes": ["**/node_modules", "**/vendor", "**/*-lock.json"],
+  "plugins": [
+    "https://plugins.dprint.dev/json-0.21.1.wasm",
+    "https://plugins.dprint.dev/markdown-0.20.0.wasm",
+    "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"
+  ]
+}
