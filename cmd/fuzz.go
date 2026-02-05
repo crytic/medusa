@@ -5,12 +5,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/crytic/medusa/cmd/exitcodes"
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/logging/colors"
+	"github.com/crytic/medusa/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -150,15 +152,9 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		cmdLogger.Warn("Disabling coverage may limit efficacy of fuzzing. Consider enabling coverage for better results.")
 	}
 
-	// Create fuzzer (handles TUI setup internally if enabled)
+	// Create fuzzer
 	fuzzer, fuzzErr := fuzzing.NewFuzzer(*projectConfig)
 	if fuzzErr != nil {
-		// If fuzzer creation failed and TUI was enabled, we need to show the error
-		if projectConfig.Logging.EnableTUI {
-			// Add stdout writer so errors are visible
-			logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
-			cmdLogger.Error("Fuzzer initialization failed in TUI mode. See error above.")
-		}
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
 	}
 
@@ -170,8 +166,58 @@ func cmdRunFuzz(cmd *cobra.Command, args []string) error {
 		fuzzer.Terminate()
 	}()
 
-	// Start fuzzing (handles TUI internally if enabled)
-	fuzzErr = fuzzer.Start()
+	// Start fuzzing with or without TUI
+	if projectConfig.Logging.EnableTUI {
+		// TUI mode: create log buffer and run TUI
+		logBuffer := logging.NewLogBufferWriter(5000)
+
+		// Replace GlobalLogger with one that writes to the buffer instead of stdout
+		// Save the current logger level
+		logLevel := logging.GlobalLogger.Level()
+		logging.GlobalLogger = logging.NewLogger(logLevel)
+		logging.GlobalLogger.AddWriter(logBuffer, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+
+		// Create error channel for background fuzzer
+		errChan := make(chan error, 1)
+
+		// Start fuzzer in background
+		go func() {
+			err := fuzzer.Start()
+			// Non-blocking send to avoid goroutine leak if TUI exits early
+			select {
+			case errChan <- err:
+			default:
+				// TUI already exited and read from channel, log error if any
+				if err != nil {
+					cmdLogger.Error("Fuzzer error after TUI exit: ", err)
+				}
+			}
+		}()
+
+		// Run TUI in foreground (blocking)
+		tuiErr := tui.Run(fuzzer, logBuffer, errChan)
+		if tuiErr != nil {
+			cmdLogger.Error("TUI encountered an error:", tuiErr)
+		}
+
+		// Restore stdout logging after TUI exits
+		logging.GlobalLogger = logging.NewLogger(logLevel)
+		logging.GlobalLogger.AddWriter(os.Stdout, logging.UNSTRUCTURED, !projectConfig.Logging.NoColor)
+
+		// Wait for fuzzer to finish with timeout
+		select {
+		case fuzzErr = <-errChan:
+			// Got the error from fuzzer
+		case <-time.After(5 * time.Second):
+			// Timeout - fuzzer still running, force stop
+			cmdLogger.Warn("Fuzzer did not complete within timeout, stopping...")
+			fuzzer.Stop()
+			fuzzErr = fmt.Errorf("fuzzer did not shut down cleanly within timeout")
+		}
+	} else {
+		// Non-TUI mode: run fuzzer normally
+		fuzzErr = fuzzer.Start()
+	}
 
 	if fuzzErr != nil {
 		return exitcodes.NewErrorWithExitCode(fuzzErr, exitcodes.ExitCodeHandledError)
