@@ -59,6 +59,10 @@
             gocode-gomod
             godef
             golint
+            golangci-lint
+            # formatting and linting
+            dprint
+            actionlint
           ];
         };
       };

@@ -32,6 +32,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -121,6 +122,25 @@ type Fuzzer struct {
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
 const timeBetweenPCsLogMsgs = time.Minute
+
+// formatDuration formats a duration with zero-padded components for consistent log alignment.
+// For example: 5m2s becomes 5m02s, 1h3m4s becomes 1h03m04s.
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm%02ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm%02ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
 
 // Large number used for block gas limit that should never get hit.
 const blockGasLimit = 0x0FFFFFFFFFFFFFFF
@@ -230,6 +250,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 			return nil, err
 		}
 		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
+
+		// Notify user about artifact hash status (new vs unchanged artifacts)
+		cacheDir := fuzzer.config.Fuzzing.CorpusDirectory
+		if cacheDir == "" {
+			cacheDir = "."
+		}
+		compilation.NotifyArtifactHashStatus(compilations, cacheDir, fuzzer.logger)
 
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
@@ -1218,57 +1245,63 @@ func (f *Fuzzer) printMetricsLoop() {
 				return
 			}
 
-			// Print metrics
+			// Obtain additional metrics
 			sequencesTested := f.metrics.SequencesTested()
-				gasUsed := f.metrics.GasUsed()
-				failedSequences := f.metrics.FailedSequences()
-				workerStartupCount := f.metrics.WorkerStartupCount()
-				workersShrinking := f.metrics.WorkersShrinkingCount()
+			gasUsed := f.metrics.GasUsed()
+			failedSequences := f.metrics.FailedSequences()
+			workerStartupCount := f.metrics.WorkerStartupCount()
+			workersShrinking := f.metrics.WorkersShrinkingCount()
 
-				// Calculate time elapsed since the last update
-				secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
+			// Calculate time elapsed since the last update
+			secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
-				// Obtain memory usage stats
-				var memStats runtime.MemStats
-				runtime.ReadMemStats(&memStats)
-				memoryUsedMB := memStats.Alloc / 1024 / 1024
-				memoryTotalMB := memStats.Sys / 1024 / 1024
+			// Obtain memory usage stats
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+			memoryUsedMB := memStats.Alloc / 1024 / 1024
+			memoryTotalMB := memStats.Sys / 1024 / 1024
 
-				// Print a metrics update
-				logBuffer := logging.NewLogBuffer()
-				logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
-				logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
-				logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-				logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-				logBuffer.Append(", branches hit: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
-				logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
-				logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
-				logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-				if f.logger.Level() <= zerolog.DebugLevel {
-					logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
-					logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
-					logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+			// Calculate per-second metrics
+			callsPerSec := uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64()) / secondsSinceLastUpdate)
+			seqPerSec := uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64()) / secondsSinceLastUpdate)
+			gasPerSec := uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64()) / secondsSinceLastUpdate)
 
-					if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
-						start := time.Now()
-						totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
-						// This is just for a log message. This shouldn't error but if it does we don't need to exit out
-						if err == nil {
-							end := time.Now()
-							f.lastPCsLogMsg = end
-							logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
-							logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
-						}
+			// Print a metrics update with consistent formatting for alignment
+			logBuffer := logging.NewLogBuffer()
+			logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
+			logBuffer.Append("elapsed: ", colors.Bold, fmt.Sprintf("%8s", formatDuration(time.Since(startTime))), colors.Reset)
+			logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%10d (%6d/sec)", callsTested, callsPerSec), colors.Reset)
+			logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%6d", seqPerSec), colors.Reset)
+			logBuffer.Append(", branches: ", colors.Bold, fmt.Sprintf("%6d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
+			logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%5d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+			logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
+			logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%12d", gasPerSec), colors.Reset)
+			if f.logger.Level() <= zerolog.DebugLevel {
+				resetsPerSec := uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64()) / secondsSinceLastUpdate)
+				logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%3d", workersShrinking), colors.Reset)
+				logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%4d/%4d MB", memoryUsedMB, memoryTotalMB), colors.Reset)
+				logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%4d", resetsPerSec), colors.Reset)
+
+				if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
+					start := time.Now()
+					totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
+					// This is just for a log message. This shouldn't error but if it does we don't need to exit out
+					if err == nil {
+						end := time.Now()
+						f.lastPCsLogMsg = end
+						logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
+						logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
 					}
 				}
-				f.logger.Info(logBuffer.Elements()...)
+			}
+			f.logger.Info(logBuffer.Elements()...)
 
-				// Update our delta tracking metrics
-				lastPrintedTime = time.Now()
-				lastCallsTested = callsTested
-				lastSequencesTested = sequencesTested
-				lastGasUsed = gasUsed
-				lastWorkerStartupCount = workerStartupCount
+			// Update our delta tracking metrics
+			lastPrintedTime = time.Now()
+			lastCallsTested = callsTested
+			lastSequencesTested = sequencesTested
+			lastGasUsed = gasUsed
+			lastWorkerStartupCount = workerStartupCount
 
 		case <-f.ctx.Done():
 			return
