@@ -34,3 +34,10 @@ repos:
         language: system
         files: ^\.github/workflows/.*\.ya?ml$
         pass_filenames: false
+
+      - id: docs-check
+        name: docs-check
+        entry: python3 scripts/check_docs.py
+        language: system
+        files: (\.go$|docs/src/.*\.md$)
+        pass_filenames: false
