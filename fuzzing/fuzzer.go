@@ -302,6 +302,61 @@ func (f *Fuzzer) DeployerAddress() common.Address {
 	return f.deployer
 }
 
+// CreateTestChainForCleaning creates a test chain for corpus cleaning operations.
+// This is a convenience method for CLI commands that need to set up a chain
+// without running the full fuzzing campaign.
+func (f *Fuzzer) CreateTestChainForCleaning() (*chain.TestChain, map[common.Address]*fuzzerTypes.Contract, error) {
+	// Create context if not already set
+	if f.ctx == nil {
+		f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	}
+
+	// Create base test chain
+	baseTestChain, err := f.createTestChain()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create test chain: %w", err)
+	}
+
+	// Setup chain
+	_, err = f.Hooks.ChainSetupFunc(f, baseTestChain)
+	if err != nil {
+		baseTestChain.Close()
+		return nil, nil, fmt.Errorf("failed to setup test chain: %w", err)
+	}
+
+	// Build deployed contracts map
+	deployedContracts := make(map[common.Address]*fuzzerTypes.Contract)
+	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
+		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(
+			func(event chain.ContractDeploymentsAddedEvent) error {
+				matchedContract := f.contractDefinitions.MatchBytecode(
+					event.Contract.InitBytecode,
+					event.Contract.RuntimeBytecode,
+				)
+				if matchedContract != nil {
+					deployedContracts[event.Contract.Address] = matchedContract
+				}
+				return nil
+			},
+		)
+		newChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(
+			func(event chain.ContractDeploymentsRemovedEvent) error {
+				delete(deployedContracts, event.Contract.Address)
+				return nil
+			},
+		)
+		return nil
+	})
+	if err != nil {
+		baseTestChain.Close()
+		return nil, nil, fmt.Errorf("failed to clone test chain: %w", err)
+	}
+
+	// Close base chain, return cloned chain
+	baseTestChain.Close()
+	return testChain, deployedContracts, nil
+}
+
 // isLibrary checks if a contract with the given name is a library
 func (f *Fuzzer) isLibrary(name string) bool {
 	for _, contract := range f.contractDefinitions {
