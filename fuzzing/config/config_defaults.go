@@ -100,6 +100,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 			Level:        zerolog.InfoLevel,
 			LogDirectory: "",
 			NoColor:      false,
+			EnableTUI:    false, // Disabled by default for backwards compatibility
 		},
 	}
 

@@ -67,6 +67,9 @@ type FuzzerWorker struct {
 	// FuzzerWorker. It is the value set shared with the underlying valueGenerator.
 	valueSet *valuegeneration.ValueSet
 
+	// activity tracks the current activity of this worker for monitoring and TUI display
+	activity *WorkerActivity
+
 	// Events describes the event system for the FuzzerWorker.
 	Events FuzzerWorkerEvents
 }
@@ -102,6 +105,7 @@ func newFuzzerWorker(fuzzer *Fuzzer, workerIndex int, randomProvider *rand.Rand)
 		coverageTracer:             nil,
 		randomProvider:             randomProvider,
 		valueSet:                   valueSet,
+		activity:                   NewWorkerActivity(),
 	}
 	worker.sequenceGenerator = NewCallSequenceGenerator(worker, callSequenceGenConfig)
 	worker.shrinkingValueMutator = shrinkingValueMutator
@@ -117,6 +121,16 @@ func (fw *FuzzerWorker) WorkerIndex() int {
 // workerMetrics returns the fuzzerWorkerMetrics for this specific worker.
 func (fw *FuzzerWorker) workerMetrics() *fuzzerWorkerMetrics {
 	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+}
+
+// WorkerMetrics returns the fuzzerWorkerMetrics for this specific worker (public accessor for TUI).
+func (fw *FuzzerWorker) WorkerMetrics() *fuzzerWorkerMetrics {
+	return &fw.fuzzer.metrics.workerMetrics[fw.workerIndex]
+}
+
+// Activity returns the activity tracker for this worker, used for monitoring and TUI display
+func (fw *FuzzerWorker) Activity() *WorkerActivity {
+	return fw.activity
 }
 
 // Fuzzer returns the parent Fuzzer which spawned this FuzzerWorker.

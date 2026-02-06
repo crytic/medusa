@@ -178,8 +178,11 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		return nil, err
 	}
 
-	// Update the log level of the global logger now
-	logging.GlobalLogger.SetLevel(config.Logging.Level)
+	// Update the log level of the global logger now (if it wasn't already set above)
+	// This handles the case where GlobalLogger was nil and we created it
+	if logging.GlobalLogger != nil {
+		logging.GlobalLogger.SetLevel(config.Logging.Level)
+	}
 
 	// Get the fuzzer's custom sub-logger
 	logger := logging.GlobalLogger.NewSubLogger("module", "fuzzer")
@@ -300,6 +303,34 @@ func (f *Fuzzer) SenderAddresses() []common.Address {
 // DeployerAddress exposes the account address from which contracts will be deployed by a FuzzerWorker.
 func (f *Fuzzer) DeployerAddress() common.Address {
 	return f.deployer
+}
+
+// Metrics exposes the underlying fuzzer metrics for TUI and monitoring
+func (f *Fuzzer) Metrics() *FuzzerMetrics {
+	return f.metrics
+}
+
+// Corpus exposes the underlying corpus for TUI and monitoring
+func (f *Fuzzer) Corpus() *corpus.Corpus {
+	return f.corpus
+}
+
+// Workers exposes the underlying workers for TUI and monitoring.
+// Returns a copy of the workers slice to avoid race conditions with concurrent modifications.
+func (f *Fuzzer) Workers() []*FuzzerWorker {
+	workers := f.workers
+	if workers == nil {
+		return nil
+	}
+	// Return a copy to avoid race conditions
+	result := make([]*FuzzerWorker, len(workers))
+	copy(result, workers)
+	return result
+}
+
+// IsStopped returns true if the fuzzer has been stopped
+func (f *Fuzzer) IsStopped() bool {
+	return utils.CheckContextDone(f.ctx)
 }
 
 // isLibrary checks if a contract with the given name is a library
@@ -924,7 +955,7 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
 // is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
 // Returns an error if one is encountered.
-func (f *Fuzzer) Start() error {
+func (f *Fuzzer) startNormal() error {
 	// Define our variable to catch errors
 	var err error
 
@@ -1004,7 +1035,7 @@ func (f *Fuzzer) Start() error {
 	// Log the start of our fuzzing campaign.
 	f.logger.Info("Fuzzing with ", colors.Bold, f.config.Fuzzing.Workers, colors.Reset, " workers")
 
-	// Start our printing loop now that we're about to begin fuzzing.
+	// Start metrics monitoring loop (prints metrics if TUI disabled, monitors test limit in both modes)
 	go f.printMetricsLoop()
 
 	// Publish a fuzzer starting event.
@@ -1111,6 +1142,13 @@ func (f *Fuzzer) Start() error {
 	return err
 }
 
+// Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
+// is encountered or the fuzzing operation has completed. Its execution can be cancelled using the Stop method.
+// Returns an error if one is encountered.
+func (f *Fuzzer) Start() error {
+	return f.startNormal()
+}
+
 // Stop attempts to stop all running operations invoked by the Start method. Note that Stop is not guaranteed to fully
 // terminate the operations across all threads. For example, the optimization testing provider may request a thread to
 // shrink some call sequences before the thread is torn down. Stop will not prevent those shrink requests from
@@ -1175,89 +1213,99 @@ func (f *Fuzzer) monitorCorpusInitialization() {
 	}
 }
 
-// printMetricsLoop prints metrics to the console in a loop until ctx signals a stopped operation.
+// printMetricsLoop monitors fuzzer metrics and optionally prints them to console.
+// When TUI is enabled, it only monitors the test limit without printing.
+// When TUI is disabled, it prints metrics every 3 seconds.
 func (f *Fuzzer) printMetricsLoop() {
-	// Define our start time
+	// Use ticker for consistent 3-second intervals
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	// Define our start time (for non-TUI mode metrics)
 	startTime := time.Now()
 
-	// Define cached variables for our metrics to calculate deltas.
+	// Define cached variables for our metrics to calculate deltas (for non-TUI mode)
 	lastCallsTested := big.NewInt(0)
 	lastSequencesTested := big.NewInt(0)
 	lastWorkerStartupCount := big.NewInt(0)
 	lastGasUsed := big.NewInt(0)
-
 	lastPrintedTime := time.Time{}
+
 	for !utils.CheckContextDone(f.ctx) {
-		// Obtain our metrics
-		callsTested := f.metrics.CallsTested()
-		sequencesTested := f.metrics.SequencesTested()
-		gasUsed := f.metrics.GasUsed()
-		failedSequences := f.metrics.FailedSequences()
-		workerStartupCount := f.metrics.WorkerStartupCount()
-		workersShrinking := f.metrics.WorkersShrinkingCount()
+		select {
+		case <-ticker.C:
+			// Obtain current metrics
+			callsTested := f.metrics.CallsTested()
 
-		// Calculate time elapsed since the last update
-		secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
+			// Check test limit (applies to both TUI and non-TUI mode)
+			testLimit := f.config.Fuzzing.TestLimit
+			if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
+				f.logger.Info("Transaction test limit reached, halting now...")
+				f.Stop()
+				return
+			}
 
-		// Obtain memory usage stats
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
-		memoryUsedMB := memStats.Alloc / 1024 / 1024
-		memoryTotalMB := memStats.Sys / 1024 / 1024
+			// Obtain additional metrics
+			sequencesTested := f.metrics.SequencesTested()
+			gasUsed := f.metrics.GasUsed()
+			failedSequences := f.metrics.FailedSequences()
+			workerStartupCount := f.metrics.WorkerStartupCount()
+			workersShrinking := f.metrics.WorkersShrinkingCount()
 
-		// Calculate per-second metrics
-		callsPerSec := uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64()) / secondsSinceLastUpdate)
-		seqPerSec := uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64()) / secondsSinceLastUpdate)
-		gasPerSec := uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64()) / secondsSinceLastUpdate)
+			// Calculate time elapsed since the last update
+			secondsSinceLastUpdate := time.Since(lastPrintedTime).Seconds()
 
-		// Print a metrics update with consistent formatting for alignment
-		logBuffer := logging.NewLogBuffer()
-		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
-		logBuffer.Append("elapsed: ", colors.Bold, fmt.Sprintf("%8s", formatDuration(time.Since(startTime))), colors.Reset)
-		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%10d (%6d/sec)", callsTested, callsPerSec), colors.Reset)
-		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%6d", seqPerSec), colors.Reset)
-		logBuffer.Append(", branches: ", colors.Bold, fmt.Sprintf("%6d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
-		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%5d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
-		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
-		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%12d", gasPerSec), colors.Reset)
-		if f.logger.Level() <= zerolog.DebugLevel {
-			resetsPerSec := uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64()) / secondsSinceLastUpdate)
-			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%3d", workersShrinking), colors.Reset)
-			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%4d/%4d MB", memoryUsedMB, memoryTotalMB), colors.Reset)
-			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%4d", resetsPerSec), colors.Reset)
+			// Obtain memory usage stats
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+			memoryUsedMB := memStats.Alloc / 1024 / 1024
+			memoryTotalMB := memStats.Sys / 1024 / 1024
 
-			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
-				start := time.Now()
-				totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
-				// This is just for a log message. This shouldn't error but if it does we don't need to exit out
-				if err == nil {
-					end := time.Now()
-					f.lastPCsLogMsg = end
-					logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
-					logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
+			// Calculate per-second metrics
+			callsPerSec := uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64()) / secondsSinceLastUpdate)
+			seqPerSec := uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64()) / secondsSinceLastUpdate)
+			gasPerSec := uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64()) / secondsSinceLastUpdate)
+
+			// Print a metrics update with consistent formatting for alignment
+			logBuffer := logging.NewLogBuffer()
+			logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
+			logBuffer.Append("elapsed: ", colors.Bold, fmt.Sprintf("%8s", formatDuration(time.Since(startTime))), colors.Reset)
+			logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%10d (%6d/sec)", callsTested, callsPerSec), colors.Reset)
+			logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%6d", seqPerSec), colors.Reset)
+			logBuffer.Append(", branches: ", colors.Bold, fmt.Sprintf("%6d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
+			logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%5d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+			logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
+			logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%12d", gasPerSec), colors.Reset)
+			if f.logger.Level() <= zerolog.DebugLevel {
+				resetsPerSec := uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64()) / secondsSinceLastUpdate)
+				logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%3d", workersShrinking), colors.Reset)
+				logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%4d/%4d MB", memoryUsedMB, memoryTotalMB), colors.Reset)
+				logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%4d", resetsPerSec), colors.Reset)
+
+				if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
+					start := time.Now()
+					totalPCs, err := coverage.GetUniquePCsCount(f.compilations, f.corpus.CoverageMaps(), f.logger)
+					// This is just for a log message. This shouldn't error but if it does we don't need to exit out
+					if err == nil {
+						end := time.Now()
+						f.lastPCsLogMsg = end
+						logBuffer.Append(", total PCs hit: ", colors.Bold, fmt.Sprintf("%v", totalPCs), colors.Reset)
+						logBuffer.Append(", time to calculate total PCs hit: ", colors.Bold, fmt.Sprintf("%v", end.Sub(start)), colors.Reset)
+					}
 				}
 			}
+			f.logger.Info(logBuffer.Elements()...)
+
+			// Update our delta tracking metrics
+			lastPrintedTime = time.Now()
+			lastCallsTested = callsTested
+			lastSequencesTested = sequencesTested
+			lastGasUsed = gasUsed
+			lastWorkerStartupCount = workerStartupCount
+
+		case <-f.ctx.Done():
+			return
 		}
-		f.logger.Info(logBuffer.Elements()...)
-
-		// Update our delta tracking metrics
-		lastPrintedTime = time.Now()
-		lastCallsTested = callsTested
-		lastSequencesTested = sequencesTested
-		lastGasUsed = gasUsed
-		lastWorkerStartupCount = workerStartupCount
-
-		// If we reached our transaction threshold, halt
-		// TODO: We should move this logic somewhere else because it is weird that the metrics loop halts the fuzzer
-		testLimit := f.config.Fuzzing.TestLimit
-		if testLimit > 0 && (!callsTested.IsUint64() || callsTested.Uint64() >= testLimit) {
-			f.logger.Info("Transaction test limit reached, halting now...")
-			f.Stop()
-			break
-		}
-
-		// Sleep some time between print iterations
-		time.Sleep(time.Second * 3)
 	}
 }
 
