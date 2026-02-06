@@ -38,19 +38,18 @@ func NewCorpusCleaner(corpus *Corpus, logger *logging.Logger) *CorpusCleaner {
 }
 
 // Clean validates call sequences using the provided test chain and deployed contracts.
-// Sequences that fail to execute are removed from disk (unless dryRun is true).
+// Sequences that fail to execute are removed from disk.
 // Returns the cleaning results and any error encountered.
 func (cc *CorpusCleaner) Clean(
 	ctx context.Context,
 	testChain *chain.TestChain,
 	deployedContracts map[common.Address]*contracts.Contract,
-	dryRun bool,
 ) (*CleanResult, error) {
 	// Get base block index for reverting
 	chainBaseIndex := uint64(len(testChain.CommittedBlocks()))
 
 	// Use the corpus's cleaning method
-	cleanResult, err := cc.corpus.CleanInvalidSequences(ctx, testChain, deployedContracts, dryRun)
+	cleanResult, err := cc.corpus.CleanInvalidSequences(ctx, testChain, deployedContracts)
 	if err != nil {
 		return nil, fmt.Errorf("error during corpus cleaning: %w", err)
 	}

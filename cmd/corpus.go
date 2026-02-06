@@ -6,9 +6,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/crytic/medusa/fuzzing"
 	"github.com/crytic/medusa/fuzzing/config"
+	"github.com/crytic/medusa/fuzzing/corpus"
 	"github.com/crytic/medusa/logging/colors"
 	"github.com/spf13/cobra"
 )
@@ -33,26 +35,12 @@ This command is useful after refactoring contracts when the corpus contains many
 	SilenceErrors: true,
 }
 
-// corpusCleanDryRun indicates whether to perform a dry run (report but don't delete)
-var corpusCleanDryRun bool
-
-// corpusCleanConfigPath is the path to the config file
-var corpusCleanConfigPath string
-
 func init() {
-	// Add flags to corpus clean command
-	corpusCleanCmd.Flags().BoolVar(
-		&corpusCleanDryRun,
-		"dry-run",
-		false,
-		"report invalid sequences without deleting them",
-	)
-	corpusCleanCmd.Flags().StringVar(
-		&corpusCleanConfigPath,
-		"config",
-		"",
-		"path to config file (default: medusa.json in current directory)",
-	)
+	// Add flags
+	err := addCorpusCleanFlags()
+	if err != nil {
+		cmdLogger.Panic("Failed to initialize the corpus command", err)
+	}
 
 	// Add subcommands to corpus command
 	corpusCmd.AddCommand(corpusCleanCmd)
@@ -63,9 +51,15 @@ func init() {
 
 // cmdRunCorpusClean executes the corpus clean command
 func cmdRunCorpusClean(cmd *cobra.Command, args []string) error {
-	// Determine config path
-	configPath := corpusCleanConfigPath
-	if configPath == "" {
+	// Get config path from flag
+	configFlagUsed := cmd.Flags().Changed("config")
+	configPath, err := cmd.Flags().GetString("config")
+	if err != nil {
+		cmdLogger.Error("Failed to get config flag", err)
+		return err
+	}
+
+	if !configFlagUsed {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			cmdLogger.Error("Failed to get working directory", err)
@@ -128,18 +122,39 @@ func cmdRunCorpusClean(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	if corpusCleanDryRun {
-		cmdLogger.Info("Dry run mode - invalid sequences will be reported but not deleted")
+	// Create test chain and build deployed contracts map
+	cmdLogger.Info("Setting up test chain...")
+	testChain, deployedContracts, err := fuzzer.CreateTestChainForCleaning()
+	if err != nil {
+		cmdLogger.Error("Failed to setup test chain", err)
+		return err
+	}
+	defer testChain.Close()
+
+	// Create and initialize the corpus
+	cmdLogger.Info("Creating corpus...")
+	fuzzerCorpus, err := corpus.NewCorpus(projectConfig.Fuzzing.CorpusDirectory)
+	if err != nil {
+		cmdLogger.Error("Failed to create the corpus", err)
+		return err
+	}
+	err = fuzzerCorpus.Initialize(testChain, fuzzer.ContractDefinitions())
+	if err != nil {
+		cmdLogger.Error("Failed to initialize the corpus", err)
+		return err
 	}
 
 	cmdLogger.Info("Loading and validating corpus from: ", colors.Bold, corpusDir, colors.Reset)
 
-	// Clean the corpus
-	result, err := fuzzing.CleanCorpus(ctx, fuzzer, corpusCleanDryRun, cmdLogger)
+	// Create cleaner and run
+	cleaner := corpus.NewCorpusCleaner(fuzzerCorpus, cmdLogger)
+	start := time.Now()
+	result, err := cleaner.Clean(ctx, testChain, deployedContracts)
 	if err != nil {
 		cmdLogger.Error("Error during corpus cleaning", err)
 		return err
 	}
+	cmdLogger.Info("Corpus cleaning completed in ", time.Since(start).Round(time.Second))
 
 	// Report results
 	invalidCount := len(result.InvalidSequences)
@@ -151,11 +166,7 @@ func cmdRunCorpusClean(cmd *cobra.Command, args []string) error {
 	)
 
 	if invalidCount > 0 {
-		if corpusCleanDryRun {
-			cmdLogger.Info(colors.Bold, invalidCount, colors.Reset, " sequences would be removed (dry run)")
-		} else {
-			cmdLogger.Info(colors.Bold, invalidCount, colors.Reset, " invalid sequences removed from disk")
-		}
+		cmdLogger.Info(colors.Bold, invalidCount, colors.Reset, " invalid sequences removed from disk")
 	}
 
 	return nil

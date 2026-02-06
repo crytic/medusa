@@ -593,15 +593,12 @@ type CleanInvalidSequencesResult struct {
 // The deployedContracts map should contain the contracts deployed on the test chain, mapping
 // addresses to their contract definitions.
 //
-// If dryRun is true, invalid sequences are identified but not deleted from disk.
-//
 // Returns a CleanInvalidSequencesResult containing statistics about the cleaning operation, or an
 // error if one occurs.
 func (c *Corpus) CleanInvalidSequences(
 	ctx context.Context,
 	testChain *chain.TestChain,
 	deployedContracts map[common.Address]*contracts.Contract,
-	dryRun bool,
 ) (*CleanInvalidSequencesResult, error) {
 	result := &CleanInvalidSequencesResult{
 		InvalidSequences: make([]string, 0),
@@ -627,10 +624,8 @@ func (c *Corpus) CleanInvalidSequences(
 		seq, err := seqFile.data.Clone()
 		if err != nil {
 			result.InvalidSequences = append(result.InvalidSequences, seqFile.fileName)
-			if !dryRun {
-				if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
-					c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
-				}
+			if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
+				c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
 			}
 			continue
 		}
@@ -696,10 +691,8 @@ func (c *Corpus) CleanInvalidSequences(
 			result.ValidSequences++
 		} else {
 			result.InvalidSequences = append(result.InvalidSequences, seqFile.fileName)
-			if !dryRun {
-				if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
-					c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
-				}
+			if _, removeErr := c.callSequenceFiles.removeFileFromDisk(seqFile.fileName); removeErr != nil {
+				c.logger.Warn("Failed to remove invalid sequence file: ", seqFile.fileName, " error: ", removeErr)
 			}
 		}
 	}
