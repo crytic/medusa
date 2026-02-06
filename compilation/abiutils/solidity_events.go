@@ -15,6 +15,11 @@ func UnpackEventAndValues(contractAbi *abi.ABI, eventLog *coreTypes.Log) (*abi.E
 		return nil, nil
 	}
 
+	// Ensure we have at least one topic (the event signature).
+	if len(eventLog.Topics) == 0 {
+		return nil, nil
+	}
+
 	// Obtain an event definition matching this event log's first topic.
 	event, err := contractAbi.EventByID(eventLog.Topics[0])
 	if err != nil {
@@ -44,6 +49,11 @@ func UnpackEventAndValues(contractAbi *abi.ABI, eventLog *coreTypes.Log) (*abi.E
 		} else {
 			unindexedInputArguments = append(unindexedInputArguments, arg)
 		}
+	}
+
+	// Verify we have enough topics for all indexed inputs (1 topic for signature + N for indexed args).
+	if len(eventLog.Topics) < len(indexedInputArguments)+1 {
+		return nil, nil
 	}
 
 	// Next, aggregate all topics into a single buffer, so we can treat it like data to unpack from.
