@@ -46,7 +46,10 @@ type Contract struct {
 	// OptimizationTestMethods are the methods that are optimization tests.
 	OptimizationTestMethods []abi.Method
 
-	// AssertionTestMethods are ALL other methods that are not property or optimization tests by default.
+	// SometimesTestMethods are the methods that are sometimes tests.
+	SometimesTestMethods []abi.Method
+
+	// AssertionTestMethods are ALL other methods that are not property, optimization, or sometimes tests by default.
 	// If configured, the methods will be targeted or excluded based on the targetFunctionSignatures
 	// and excludedFunctionSignatures, respectively.
 	AssertionTestMethods []abi.Method

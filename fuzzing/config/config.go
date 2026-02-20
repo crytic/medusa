@@ -222,6 +222,9 @@ type TestingConfig struct {
 	// OptimizationTesting describes the configuration used for optimization testing.
 	OptimizationTesting OptimizationTestingConfig `json:"optimizationTesting"`
 
+	// SometimesTesting describes the configuration used for sometimes testing.
+	SometimesTesting SometimesTestingConfig `json:"sometimesTesting"`
+
 	// TargetFunctionSignatures is a list of function signatures the fuzzer should exclusively target by omitting calls to other signatures.
 	// The signatures should specify the contract name and signature in the ABI format like `Contract.func(uint256,bytes32)`.
 	TargetFunctionSignatures []string `json:"targetFunctionSignatures"`
@@ -253,11 +256,39 @@ func (testCfg *TestingConfig) Validate() error {
 		}
 	}
 
+	if testCfg.SometimesTesting.Enabled {
+		// Test prefixes must be supplied if sometimes testing is enabled.
+		if len(testCfg.SometimesTesting.TestPrefixes) == 0 {
+			return errors.New("project configuration must specify test name prefixes if sometimes testing is enabled")
+		}
+		// MinSuccessRate must be between 0 and 1.
+		if testCfg.SometimesTesting.MinSuccessRate < 0 || testCfg.SometimesTesting.MinSuccessRate > 1 {
+			return errors.New("project configuration must specify minSuccessRate between 0.0 and 1.0 for sometimes testing")
+		}
+		// MinExecutionCount must be positive.
+		if testCfg.SometimesTesting.MinExecutionCount == 0 {
+			return errors.New("project configuration must specify positive minExecutionCount for sometimes testing")
+		}
+	}
+
 	// Validate that prefixes do not overlap
-	for _, prefix := range testCfg.PropertyTesting.TestPrefixes {
-		for _, prefix2 := range testCfg.OptimizationTesting.TestPrefixes {
-			if prefix == prefix2 {
-				return errors.New("project configuration must specify unique test name prefixes for property and optimization testing")
+	allPrefixes := []struct {
+		name     string
+		prefixes []string
+	}{
+		{"property", testCfg.PropertyTesting.TestPrefixes},
+		{"optimization", testCfg.OptimizationTesting.TestPrefixes},
+		{"sometimes", testCfg.SometimesTesting.TestPrefixes},
+	}
+
+	for i := 0; i < len(allPrefixes); i++ {
+		for j := i + 1; j < len(allPrefixes); j++ {
+			for _, prefix1 := range allPrefixes[i].prefixes {
+				for _, prefix2 := range allPrefixes[j].prefixes {
+					if prefix1 == prefix2 {
+						return errors.New("project configuration must specify unique test name prefixes for " + allPrefixes[i].name + " and " + allPrefixes[j].name + " testing")
+					}
+				}
 			}
 		}
 	}
@@ -323,6 +354,23 @@ type OptimizationTestingConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is an optimization test.
 	TestPrefixes []string `json:"testPrefixes"`
+}
+
+// SometimesTestingConfig describes the configuration options used for sometimes testing
+type SometimesTestingConfig struct {
+	// Enabled describes whether testing is enabled.
+	Enabled bool `json:"enabled"`
+
+	// TestPrefixes dictates what method name prefixes will determine if a contract method is a sometimes test.
+	TestPrefixes []string `json:"testPrefixes"`
+
+	// MinSuccessRate is the minimum success rate (0.0 to 1.0) required for a sometimes test to pass.
+	// For example, 0.05 means the test must succeed at least 5% of the time.
+	MinSuccessRate float64 `json:"minSuccessRate"`
+
+	// MinExecutionCount is the minimum number of times a sometimes test must be executed before
+	// evaluating its success rate. This prevents false failures from insufficient sampling.
+	MinExecutionCount uint64 `json:"minExecutionCount"`
 }
 
 // LoggingConfig describes the configuration options for logging to console and file
