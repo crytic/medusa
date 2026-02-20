@@ -1,0 +1,28 @@
+{
+  "fuzzing": {
+    "workers": 1,
+    "testLimit": 10000,
+    "timeout": 60,
+    "chainConfig": {
+      "genesisStateFile": "anvil_dump.json",
+      "genesisContractMappings": {
+        "0x5FbDB2315678afecb367f032d93F642f64180aa3": "Counter"
+      },
+      "codeSizeCheckDisabled": true,
+      "cheatCodes": {
+        "cheatCodesEnabled": true,
+        "enableFFI": false
+      }
+    },
+    "targetContracts": ["Counter"],
+    "testing": {
+      "propertyTesting": {
+        "enabled": true,
+        "testPrefixes": ["echidna_"]
+      },
+      "assertionTesting": {
+        "enabled": true
+      }
+    }
+  }
+}
