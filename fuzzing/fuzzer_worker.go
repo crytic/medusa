@@ -664,6 +664,40 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		return false, err
 	}
 
+	// Register genesis-loaded contracts with their ABIs
+	// These contracts are already deployed (loaded from genesis state) so they don't trigger deployment events
+	if len(fw.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings) > 0 {
+		for addrStr, contractName := range fw.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings {
+			// Parse address
+			addr, err := utils.HexStringToAddress(addrStr)
+			if err != nil {
+				return false, fmt.Errorf("invalid address in genesisContractMappings: %s: %w", addrStr, err)
+			}
+
+			// Find matching contract definition
+			var matchedContract *fuzzerTypes.Contract
+			for _, contract := range fw.fuzzer.contractDefinitions {
+				if contract.Name() == contractName {
+					matchedContract = contract
+					break
+				}
+			}
+
+			if matchedContract == nil {
+				return false, fmt.Errorf("contract '%s' specified in genesisContractMappings not found in compilation artifacts", contractName)
+			}
+
+			// Register the contract in this worker's deployed contracts map
+			fw.deployedContracts[addr] = matchedContract
+
+			// Add the address to the worker's value set so it can be used in fuzzing
+			fw.valueSet.AddAddress(addr)
+		}
+
+		// Update the worker's method lists to include genesis contract methods
+		fw.updateMethods()
+	}
+
 	// Defer the closing of the test chain object
 	defer fw.chain.Close()
 
