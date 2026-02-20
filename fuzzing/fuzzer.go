@@ -272,6 +272,9 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 	if fuzzer.config.Fuzzing.Testing.OptimizationTesting.Enabled {
 		attachOptimizationTestCaseProvider(fuzzer)
 	}
+	if fuzzer.config.Fuzzing.Testing.SometimesTesting.Enabled {
+		attachSometimesTestCaseProvider(fuzzer)
+	}
 	return fuzzer, nil
 }
 
@@ -500,13 +503,15 @@ func (f *Fuzzer) AddCompilationTargets(compilations []compilationTypes.Compilati
 				contractDefinition := fuzzerTypes.NewContract(contractName, sourcePath, &contract, compilation)
 
 				// Sort available methods by type
-				assertionTestMethods, propertyTestMethods, optimizationTestMethods, warnings := fuzzingutils.BinTestByType(&contract,
+				assertionTestMethods, propertyTestMethods, optimizationTestMethods, sometimesTestMethods, warnings := fuzzingutils.BinTestByType(&contract,
 					f.config.Fuzzing.Testing.PropertyTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.OptimizationTesting.TestPrefixes,
+					f.config.Fuzzing.Testing.SometimesTesting.TestPrefixes,
 					f.config.Fuzzing.Testing.TestViewMethods)
 				contractDefinition.AssertionTestMethods = assertionTestMethods
 				contractDefinition.PropertyTestMethods = propertyTestMethods
 				contractDefinition.OptimizationTestMethods = optimizationTestMethods
+				contractDefinition.SometimesTestMethods = sometimesTestMethods
 
 				// Log any validation warnings for methods with test prefixes but invalid signatures
 				for _, warning := range warnings {
