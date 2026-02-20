@@ -20,6 +20,26 @@ type TestChainConfig struct {
 	// ContractAddressOverrides describes contracts that are going to be deployed at deterministic addresses
 	ContractAddressOverrides map[common.Hash]common.Address `json:"contractAddressOverrides,omitempty"`
 
+	// GenesisStateFile specifies an optional path to a JSON file containing genesis state allocations.
+	// Supports multiple formats (automatically detected):
+	//   1. Native anvil_dumpState output (from: cast rpc anvil_dumpState > file.json) - no preprocessing required
+	//   2. Decompressed anvil wrapper JSON (with "accounts" field)
+	//   3. Plain accounts JSON (legacy format)
+	// The loaded state will be merged with fuzzer-generated accounts, with fuzzer accounts taking precedence.
+	GenesisStateFile string `json:"genesisStateFile,omitempty"`
+
+	// GenesisContractMappings maps contract addresses in the genesis state to contract names from compilation.
+	// This allows the fuzzer to associate ABIs with contracts that were deployed outside of Medusa (e.g., via
+	// Foundry scripts). Without this mapping, genesis-loaded contracts will be present but the fuzzer won't
+	// know which functions to call.
+	//
+	// Example:
+	//   {
+	//     "0x5FbDB2315678afecb367f032d93F642f64180aa3": "Counter",
+	//     "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512": "MyToken"
+	//   }
+	GenesisContractMappings map[string]string `json:"genesisContractMappings,omitempty"`
+
 	// ForkConfig indicates the RPC configuration if fuzzing using a network fork.
 	ForkConfig ForkConfig `json:"forkConfig,omitempty"`
 }
