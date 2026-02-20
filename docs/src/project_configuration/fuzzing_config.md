@@ -70,6 +70,17 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   left as an empty string (which it is by default), no corpus will be loaded from disk and stored to disk.
 - **Default**: ""
 
+### `prefillCorpus`
+
+- **Type**: Boolean
+- **Description**: Enables automatic corpus seeding by extracting call sequences from Foundry test functions. When enabled,
+  the fuzzer will analyze test contracts (contracts with "Test" in their name) and test functions (functions prefixed with
+  "test", "invariant\_", or "testfuzz") to extract external function calls. These extracted sequences are added to the corpus
+  to help bootstrap coverage-guided fuzzing with known execution paths.
+  > 🚩 Requires `corpusDirectory` to be set. Test contracts must follow Foundry naming conventions (contract name contains "Test",
+  > test function names start with "test"/"invariant\_"/"testfuzz"). Only external calls to target contracts are extracted.
+- **Default**: `false`
+
 ### `coverageFormats`
 
 - **Type**: [String] (e.g. `["lcov"]`)
