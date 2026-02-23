@@ -565,7 +565,7 @@
                         <div class="stat-value">{{.LineCount}}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-title">Coverage</div>
+                        <div class="stat-title">Line Coverage</div>
                         {{$totalLinesCovered := .CoveredLineCount}}
                         {{$totalLinesActive := .ActiveLineCount}}
                         {{$totalPercentCoverageInt := percentageInt $totalLinesCovered $totalLinesActive}}
@@ -575,6 +575,19 @@
                         </div>
                         <div style="margin-top: 0.5rem">
                             <span class="stat-badge">{{$totalLinesCovered}} / {{$totalLinesActive}} lines</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Branch Coverage</div>
+                        {{$totalBranchesCovered := .CoveredBranchCount}}
+                        {{$totalBranches := .TotalBranchCount}}
+                        {{$totalBranchPercentInt := percentageInt $totalBranchesCovered $totalBranches}}
+                        <div class="stat-value">{{percentageStr $totalBranchesCovered $totalBranches 1}}%</div>
+                        <div class="progress-container">
+                            <div class="progress-bar" style="width: {{percentageStr $totalBranchesCovered $totalBranches 0}}%; background-color: {{getCoverageColor $totalBranchPercentInt}}"></div>
+                        </div>
+                        <div style="margin-top: 0.5rem">
+                            <span class="stat-badge">{{$totalBranchesCovered}} / {{$totalBranches}} branches</span>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -595,11 +608,17 @@
                     {{$linesCovered := $sourceFile.CoveredLineCount}}
                     {{$linesActive := $sourceFile.ActiveLineCount}}
                     {{$linesCoveredPercentInt := percentageInt $linesCovered $linesActive}}
-                    <div class="source-file" id="{{$sourceFile.Path | filePathToId}}" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}">
+                    {{$branchesCovered := $sourceFile.CoveredBranches}}
+                    {{$totalBranches := $sourceFile.TotalBranches}}
+                    {{$branchesCoveredPercentInt := percentageInt $branchesCovered $totalBranches}}
+                    <div class="source-file" id="{{$sourceFile.Path | filePathToId}}" data-file-path="{{relativePath $sourceFile.Path}}" data-lines-active="{{$linesActive}}" data-lines-covered="{{$linesCovered}}" data-branches-total="{{$totalBranches}}" data-branches-covered="{{$branchesCovered}}">
                         <div class="source-file-header">
                             <div class="file-info">
-                                <span class="coverage-badge" style="background-color: {{getCoverageColorAlpha $linesCoveredPercentInt}}; color: {{getCoverageColor $linesCoveredPercentInt}}">
-                                    {{percentageStr $linesCovered $linesActive 1}}%
+                                <span class="coverage-badge" style="background-color: {{getCoverageColorAlpha $linesCoveredPercentInt}}; color: {{getCoverageColor $linesCoveredPercentInt}}" title="Line coverage">
+                                    {{percentageStr $linesCovered $linesActive 1}}% lines
+                                </span>
+                                <span class="coverage-badge" style="background-color: {{getCoverageColorAlpha $branchesCoveredPercentInt}}; color: {{getCoverageColor $branchesCoveredPercentInt}}" title="Branch coverage">
+                                    {{percentageStr $branchesCovered $totalBranches 1}}% branches
                                 </span>
                                 <span class="file-name">{{relativePath $sourceFile.Path}}</span>
                             </div>
@@ -609,7 +628,8 @@
                         </div>
                         <div class="source-file-content">
                             <div class="source-file-stats">
-                                <span>Lines covered: <strong>{{$linesCovered}} / {{$linesActive}}</strong> ({{percentageStr $linesCovered $linesActive 1}}%)</span>
+                                <span>Lines: <strong>{{$linesCovered}} / {{$linesActive}}</strong> ({{percentageStr $linesCovered $linesActive 1}}%)</span>
+                                <span style="margin-left: 1.5rem;">Branches: <strong>{{$branchesCovered}} / {{$totalBranches}}</strong> ({{percentageStr $branchesCovered $totalBranches 1}}%)</span>
                             </div>
                             <div class="code-container">
                                 <table class="code-coverage-table">
@@ -754,7 +774,9 @@
                             path: filePath,
                             element: sourceFiles[i],
                             coveredLines: parseInt(sourceFiles[i].dataset.linesCovered),
-                            activeLines: parseInt(sourceFiles[i].dataset.linesActive)
+                            activeLines: parseInt(sourceFiles[i].dataset.linesActive),
+                            coveredBranches: parseInt(sourceFiles[i].dataset.branchesCovered) || 0,
+                            totalBranches: parseInt(sourceFiles[i].dataset.branchesTotal) || 0
                         };
                     } else {
                         // This is a directory
@@ -782,29 +804,39 @@
             if (node.type === 'file') {
                 return {
                     coveredLines: node.coveredLines,
-                    activeLines: node.activeLines
+                    activeLines: node.activeLines,
+                    coveredBranches: node.coveredBranches,
+                    totalBranches: node.totalBranches
                 };
             }
-            
+
             let totalCovered = 0;
             let totalActive = 0;
-            
+            let totalCoveredBranches = 0;
+            let totalBranches = 0;
+
             for (const childName in node.children) {
                 const child = node.children[childName];
-                const { coveredLines, activeLines } = calculateDirectoryCoverage(child);
-                totalCovered += coveredLines;
-                totalActive += activeLines;
+                const stats = calculateDirectoryCoverage(child);
+                totalCovered += stats.coveredLines;
+                totalActive += stats.activeLines;
+                totalCoveredBranches += stats.coveredBranches;
+                totalBranches += stats.totalBranches;
             }
-            
+
             node.coveredLines = totalCovered;
+            node.coveredBranches = totalCoveredBranches;
+            node.totalBranches = totalBranches;
             node.activeLines = totalActive;
             
             return {
                 coveredLines: totalCovered,
-                activeLines: totalActive
+                activeLines: totalActive,
+                coveredBranches: totalCoveredBranches,
+                totalBranches: totalBranches
             };
         }
-        
+
         // Render the file tree to the DOM
         function renderFileTree(node, parentElement, isRoot = false) {
             const list = isRoot ? parentElement : document.createElement('ul');
@@ -840,12 +872,14 @@
                 itemDiv.appendChild(nameSpan);
                 
                 // Add coverage indicator
-                if (child.activeLines > 0) {
+                if (child.activeLines > 0 || child.totalBranches > 0) {
                     const coverage = document.createElement('span');
                     coverage.className = 'file-coverage';
-                    const percentage = Math.round((child.coveredLines / child.activeLines) * 100);
-                    coverage.style.backgroundColor = getCoverageColor(percentage);
-                    coverage.title = `${child.coveredLines}/${child.activeLines} lines covered (${percentage}%)`;
+                    const linePercentage = child.activeLines > 0 ? Math.round((child.coveredLines / child.activeLines) * 100) : 0;
+                    const branchPercentage = child.totalBranches > 0 ? Math.round((child.coveredBranches / child.totalBranches) * 100) : 0;
+                    // Use line coverage for the color indicator
+                    coverage.style.backgroundColor = getCoverageColor(linePercentage);
+                    coverage.title = `Lines: ${child.coveredLines}/${child.activeLines} (${linePercentage}%), Branches: ${child.coveredBranches}/${child.totalBranches} (${branchPercentage}%)`;
                     itemDiv.appendChild(coverage);
                 }
                 
