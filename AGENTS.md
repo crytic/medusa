@@ -180,3 +180,8 @@ Manual checks before submitting PRs:
 
 6. `go test -v ./...` - Run all tests (too slow for pre-commit)
 7. Verify changes work on target platforms
+
+## Documentation by topic
+
+- **Coverage tracking**: `fuzzing/coverage/README.md`
+- **Value generation**: `fuzzing/valuegeneration/README.md`
