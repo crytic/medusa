@@ -209,7 +209,6 @@ func TestChainDynamicDeployments(t *testing.T) {
 		for _, compilation := range compilations {
 			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
-					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						// Listen for contract changes
 						deployedContracts := 0
@@ -332,7 +331,6 @@ func TestChainDeploymentWithArgs(t *testing.T) {
 		for _, compilation := range compilations {
 			for _, source := range compilation.SourcePathToArtifact {
 				for contractName, contract := range source.Contracts {
-					contract := contract
 
 					// Listen for contract changes
 					deployedContracts := 0
@@ -454,7 +452,6 @@ func TestChainCloning(t *testing.T) {
 		for _, compilation := range compilations {
 			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
-					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
 							// Deploy the currently indexed contract next
@@ -551,7 +548,6 @@ func TestChainCallSequenceReplayMatchSimple(t *testing.T) {
 		for _, compilation := range compilations {
 			for _, source := range compilation.SourcePathToArtifact {
 				for _, contract := range source.Contracts {
-					contract := contract
 					if len(contract.Abi.Constructor.Inputs) == 0 {
 						for i := 0; i < 10; i++ {
 							// Create a message to represent our contract deployment.

@@ -123,8 +123,6 @@ func getTestABIArguments() abi.Arguments {
 
 	// Add arguments that are arrays of each basic type
 	for _, basicArg := range basicArgs {
-		// Alias our arg so when we get a pointer to it, we don't cause a memory leak in this loop
-		basicArg := basicArg
 
 		// Define our array arguments.
 		arrayArgs := abi.Arguments{
@@ -161,7 +159,6 @@ func getTestABIArguments() abi.Arguments {
 
 		// Now for those slices/arrays, we create nested ones
 		for _, arrayArg := range arrayArgs {
-			arrayArg := arrayArg
 
 			// Add nested slice/arrays.
 			args = append(args,
