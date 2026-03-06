@@ -553,8 +553,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(types.GenesisAlloc)
 
-	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
-	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
+	// Fund all of our sender addresses in the genesis block with 2^128-1 ETH equivalent.
+	// This should both prevent us from running out of gas and prevent us from overflowing above 2^256 eth.
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
 			Balance: new(big.Int).Set(initBalance),
