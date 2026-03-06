@@ -52,7 +52,7 @@ ExecuteRequestBlocking makes a blocking RPC request and stores the result in the
 If there is an existing request on the wire with the same method/args, the calling thread will be blocked until it has
 completed.
 */
-func (c *ClientPool) ExecuteRequestBlocking(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+func (c *ClientPool) ExecuteRequestBlocking(ctx context.Context, result any, method string, args ...any) error {
 	pending, err := c.ExecuteRequestAsync(ctx, method, args...)
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ ExecuteRequestAsync makes a non-blocking RPC request whose result may be obtaine
 If there is an existing request on the wire with the same method/args, this function will return a PendingResult linked
 to that request.
 */
-func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, args ...interface{}) (*PendingResult, error) {
+func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, args ...any) (*PendingResult, error) {
 	key, err := makeRequestKey(method, args...)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (c *ClientPool) launchRequest(
 	client *rpc.Client,
 	request *inflightRequest,
 	method string,
-	args ...interface{}) {
+	args ...any) {
 	defer close(request.Done)
 
 	var err error
