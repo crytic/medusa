@@ -149,6 +149,7 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 // ExecuteCallSequence executes a provided CallSequence on the provided chain.
 // It returns the slice of the call sequence which was tested, and an error if one occurred.
 // If no error occurred, it can be expected that the returned call sequence contains all elements originally provided.
+// TODO: currently unused
 func ExecuteCallSequence(chain *chain.TestChain, callSequence CallSequence) (CallSequence, error) {
 	// Execute our sequence with a simple fetch operation provided to obtain each element.
 	fetchElementFunc := func(currentIndex int) (*CallSequenceElement, error) {

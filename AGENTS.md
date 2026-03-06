@@ -24,7 +24,7 @@ Medusa is a cross-platform smart contract fuzzer written in Go, built on go-ethe
 ### Lint & Format
 
 - `goimports -w .` - Format imports and code (groups stdlib, external, local)
-- `go fmt ./...` - Format Go code (required before commits)
+- `go fmt ./...` - Format Go code (REQUIRED before commits)
 - `golangci-lint run --timeout 5m` - Run comprehensive lint checks (mirrors CI)
 - `dprint fmt` - Format markdown, YAML, and JSON files
 - `actionlint` - Lint GitHub Actions workflow files
@@ -38,6 +38,11 @@ Medusa is a cross-platform smart contract fuzzer written in Go, built on go-ethe
 
 - `prek install` - Install pre-commit hooks (run once after cloning)
 - `prek run` - Manually run all pre-commit checks (use within `nix develop` shell)
+
+### Docs
+
+- Use `go doc` first when you want to get information about a type or function. For example `go doc github.com/crytic/medusa/fuzzing FuzzerEvents`
+
 
 ## Architecture & Code Structure
 
