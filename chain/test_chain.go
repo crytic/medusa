@@ -482,6 +482,14 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 		}
 	}
 
+	// Dereference old state roots so the trieDB can free dirty
+	// nodes that are no longer reachable from any live state.
+	for _, removedBlock := range removedBlocks {
+		if err := t.stateDatabase.TrieDB().Dereference(removedBlock.Header.Root); err != nil {
+			return err
+		}
+	}
+
 	// Reload our state from our database using the block number at the index we're reverting to.
 	t.state, err = t.StateAfterBlockNumber(t.blocks[index-1].Header.Number.Uint64())
 	if err != nil {
@@ -808,6 +816,12 @@ func (t *TestChain) PendingBlockCommit() error {
 	// Otherwise, methods such as FillFromTestChainProperties will not work correctly.
 	t.state, err = t.stateFactory.New(root, t.stateDatabase)
 	if err != nil {
+		return err
+	}
+
+	// Cap the trieDB dirty node cache to prevent unbounded growth
+	// between reverts. 16 MB is a reasonable upper bound per chain.
+	if err := t.stateDatabase.TrieDB().Cap(16 * 1024 * 1024); err != nil {
 		return err
 	}
 
