@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	"sync"
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
@@ -21,25 +20,8 @@ type SometimesTestCaseProvider struct {
 	fuzzer *Fuzzer
 
 	// testCases is a map of contract-method IDs to sometimes test cases.
+	// It is written only in onFuzzerStarting (before workers run) and read-only thereafter.
 	testCases map[contracts.ContractMethodID]*SometimesTestCase
-
-	// testCasesLock is used for thread-synchronization when updating testCases
-	testCasesLock sync.Mutex
-
-	// workerStates is a slice where each element stores state for a given worker index.
-	workerStates []sometimesTestCaseProviderWorkerState
-}
-
-// sometimesTestCaseProviderWorkerState represents the state for an individual worker maintained by
-// SometimesTestCaseProvider.
-type sometimesTestCaseProviderWorkerState struct {
-	// sometimesTestMethods a mapping from contract-method ID to deployed contract-method descriptors.
-	// Each deployed contract-method represents a sometimes test method to call for evaluation. Sometimes tests
-	// should take no input parameters and should succeed (not revert) at least some minimum percentage of executions.
-	sometimesTestMethods map[contracts.ContractMethodID]contracts.DeployedContractMethod
-
-	// sometimesTestMethodsLock is used for thread-synchronization when updating sometimesTestMethods
-	sometimesTestMethodsLock sync.Mutex
 }
 
 // attachSometimesTestCaseProvider attaches a new SometimesTestCaseProvider to the Fuzzer and returns it.
@@ -57,7 +39,6 @@ func attachSometimesTestCaseProvider(fuzzer *Fuzzer) *SometimesTestCaseProvider 
 	// Subscribe the provider to relevant events the fuzzer emits.
 	fuzzer.Events.FuzzerStarting.Subscribe(t.onFuzzerStarting)
 	fuzzer.Events.FuzzerStopping.Subscribe(t.onFuzzerStopping)
-	fuzzer.Events.WorkerCreated.Subscribe(t.onWorkerCreated)
 
 	// Add the provider's call sequence test function to the fuzzer.
 	fuzzer.Hooks.CallSequenceTestFuncs = append(fuzzer.Hooks.CallSequenceTestFuncs, t.callSequencePostCallTest)
@@ -95,7 +76,6 @@ func (t *SometimesTestCaseProvider) executeSometimesTest(worker *FuzzerWorker, s
 func (t *SometimesTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
 	t.testCases = make(map[contracts.ContractMethodID]*SometimesTestCase)
-	t.workerStates = make([]sometimesTestCaseProviderWorkerState, t.fuzzer.Config().Fuzzing.Workers)
 
 	// Create a test case for every sometimes test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
@@ -130,12 +110,8 @@ func (t *SometimesTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 }
 
 // onFuzzerStopping is the event handler triggered when the Fuzzer is stopping the fuzzing campaign and all workers
-// have been destroyed. It clears state tracked for each FuzzerWorker and evaluates test cases to determine
-// if they passed or failed based on their success rates.
+// have been destroyed. It evaluates test cases to determine if they passed or failed based on their success rates.
 func (t *SometimesTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
-	// Clear our sometimes test methods
-	t.workerStates = nil
-
 	// Loop through each test case and evaluate success rates
 	for _, testCase := range t.testCases {
 		// Only evaluate tests that are running and have enough executions
@@ -160,126 +136,51 @@ func (t *SometimesTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) 
 	return nil
 }
 
-// onWorkerCreated is the event handler triggered when a FuzzerWorker is created by the Fuzzer. It ensures state tracked
-// for that worker index is refreshed and subscribes to relevant worker events.
-func (t *SometimesTestCaseProvider) onWorkerCreated(event FuzzerWorkerCreatedEvent) error {
-	// Create a new state for this worker.
-	t.workerStates[event.Worker.WorkerIndex()] = sometimesTestCaseProviderWorkerState{
-		sometimesTestMethods:     make(map[contracts.ContractMethodID]contracts.DeployedContractMethod),
-		sometimesTestMethodsLock: sync.Mutex{},
-	}
-
-	// Subscribe to relevant worker events.
-	event.Worker.Events.ContractAdded.Subscribe(t.onWorkerDeployedContractAdded)
-	event.Worker.Events.ContractDeleted.Subscribe(t.onWorkerDeployedContractDeleted)
-	return nil
-}
-
-// onWorkerDeployedContractAdded is the event handler triggered when a FuzzerWorker detects a new contract deployment
-// on its underlying chain. It ensures any sometimes test methods which the deployed contract contains are tracked by the
-// provider for testing. Any test cases previously made for these methods which are in a "not started" state are put
-// into a "running" state, as they are now potentially reachable for testing.
-func (t *SometimesTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWorkerContractAddedEvent) error {
-	// If we don't have a contract definition, we can't run sometimes tests against the contract.
-	if event.ContractDefinition == nil {
-		return nil
-	}
-
-	// Loop through all methods and find ones for which we have tests
-	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
-		// Obtain an identifier for this pair
-		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
-
-		// If we have a test case targeting this contract/method that has not failed, track this deployed method in
-		// our map for this worker. If we have any tests in a not-started state, we can signal a running state now.
-		t.testCasesLock.Lock()
-		sometimesTestCase, sometimesTestCaseExists := t.testCases[methodId]
-		t.testCasesLock.Unlock()
-
-		if sometimesTestCaseExists {
-			if sometimesTestCase.Status() == TestCaseStatusNotStarted {
-				sometimesTestCase.status = TestCaseStatusRunning
-			}
-			if sometimesTestCase.Status() != TestCaseStatusFailed {
-				// Create our sometimes test method reference.
-				workerState := &t.workerStates[event.Worker.WorkerIndex()]
-				workerState.sometimesTestMethodsLock.Lock()
-				workerState.sometimesTestMethods[methodId] = contracts.DeployedContractMethod{
-					Address:  event.ContractAddress,
-					Contract: event.ContractDefinition,
-					Method:   method,
-				}
-				workerState.sometimesTestMethodsLock.Unlock()
-			}
-		}
-	}
-	return nil
-}
-
-// onWorkerDeployedContractDeleted is the event handler triggered when a FuzzerWorker detects that a previously deployed
-// contract no longer exists on its underlying chain. It ensures any sometimes test methods which the deployed contract
-// contained are no longer tracked by the provider for testing.
-func (t *SometimesTestCaseProvider) onWorkerDeployedContractDeleted(event FuzzerWorkerContractDeletedEvent) error {
-	// If we don't have a contract definition, there's nothing to do.
-	if event.ContractDefinition == nil {
-		return nil
-	}
-
-	// Loop through all methods and find ones for which we have tests
-	for _, method := range event.ContractDefinition.CompiledContract().Abi.Methods {
-		// Obtain an identifier for this pair
-		methodId := contracts.GetContractMethodID(event.ContractDefinition, &method)
-
-		// If this identifier is in our test cases map, then we remove it from our sometimes test method lookup for
-		// this worker index.
-		t.testCasesLock.Lock()
-		_, isSometimesTestMethod := t.testCases[methodId]
-		t.testCasesLock.Unlock()
-
-		if isSometimesTestMethod {
-			// Delete our sometimes test method reference.
-			workerState := &t.workerStates[event.Worker.WorkerIndex()]
-			workerState.sometimesTestMethodsLock.Lock()
-			delete(workerState.sometimesTestMethods, methodId)
-			workerState.sometimesTestMethodsLock.Unlock()
-		}
-	}
-	return nil
-}
-
 // callSequencePostCallTest is a CallSequenceTestFunc that performs post-call testing logic for the attached Fuzzer
 // and any underlying FuzzerWorker. It is called after every call made in a call sequence. It executes sometimes
 // test methods and tracks their success/failure rates.
 func (t *SometimesTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorker, callSequence calls.CallSequence) ([]ShrinkCallSequenceRequest, error) {
-	// Obtain the test provider state for this worker
-	workerState := &t.workerStates[worker.WorkerIndex()]
+	// Loop through all deployed contracts and test any sometimes test methods.
+	for addr, contractDef := range worker.DeployedContracts() {
+		for _, method := range contractDef.SometimesTestMethods {
+			method := method
+			methodId := contracts.GetContractMethodID(contractDef, &method)
 
-	// Loop through all sometimes test methods and test them.
-	for sometimesTestMethodId, workerSometimesTestMethod := range workerState.sometimesTestMethods {
-		// Obtain the test case for this sometimes test method
-		t.testCasesLock.Lock()
-		testCase := t.testCases[sometimesTestMethodId]
-		t.testCasesLock.Unlock()
+			// t.testCases is read-only during fuzzing (written only in onFuzzerStarting).
+			testCase, exists := t.testCases[methodId]
+			if !exists {
+				continue
+			}
 
-		// If the test case already failed, skip it
-		if testCase.Status() == TestCaseStatusFailed {
-			continue
+			testCase.lock.Lock()
+			done := testCase.status == TestCaseStatusFailed || testCase.status == TestCaseStatusPassed
+			testCase.lock.Unlock()
+			if done {
+				continue
+			}
+
+			addr := addr
+			succeeded, err := t.executeSometimesTest(worker, &contracts.DeployedContractMethod{
+				Address:  addr,
+				Contract: contractDef,
+				Method:   method,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			testCase.lock.Lock()
+			if testCase.status != TestCaseStatusFailed && testCase.status != TestCaseStatusPassed {
+				if testCase.status == TestCaseStatusNotStarted {
+					testCase.status = TestCaseStatusRunning
+				}
+				testCase.executionCount++
+				if succeeded {
+					testCase.successCount++
+				}
+			}
+			testCase.lock.Unlock()
 		}
-
-		// Test our sometimes test method (create a local copy to avoid loop overwriting the method)
-		workerSometimesTestMethod := workerSometimesTestMethod
-		succeeded, err := t.executeSometimesTest(worker, &workerSometimesTestMethod)
-		if err != nil {
-			return nil, err
-		}
-
-		// Update statistics (thread-safe)
-		t.testCasesLock.Lock()
-		testCase.executionCount++
-		if succeeded {
-			testCase.successCount++
-		}
-		t.testCasesLock.Unlock()
 	}
 
 	// Sometimes tests never trigger shrinking, as there's no single failing sequence

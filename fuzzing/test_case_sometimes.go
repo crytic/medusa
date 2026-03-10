@@ -3,6 +3,7 @@ package fuzzing
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -13,6 +14,8 @@ import (
 
 // SometimesTestCase describes a test being run by a SometimesTestCaseProvider.
 type SometimesTestCase struct {
+	// lock is used for thread-synchronization when reading or updating test case fields.
+	lock sync.Mutex
 	// status describes the status of the test case
 	status TestCaseStatus
 	// targetContract describes the target contract where the test case was found
