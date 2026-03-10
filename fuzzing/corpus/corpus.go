@@ -560,6 +560,18 @@ func (c *Corpus) PruneSequences(ctx context.Context, chain *chain.TestChain) (in
 			return 0, err
 		}
 
+		// Remove coverage data from all elements to prevent retention
+		// via ChainReference.Block pointers until the next iteration.
+		for _, elem := range seq {
+			if elem.ChainReference == nil {
+				continue
+			}
+			mr := elem.ChainReference.MessageResults()
+			if mr != nil {
+				coverage.RemoveCoverageTracerResults(mr)
+			}
+		}
+
 		if !coverageUpdated {
 			// No new coverage was added. We can remove this from the corpus.
 			toRemove[i] = true
