@@ -3,6 +3,7 @@ package chain
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa-geth/common"
@@ -104,6 +105,20 @@ func newCheatCodeContract(tracer *cheatCodeTracer, address common.Address, name 
 func cheatCodeRevertData(returnData []byte) *cheatCodeRawReturnData {
 	return &cheatCodeRawReturnData{
 		ReturnData: returnData,
+		Err:        vm.ErrExecutionReverted,
+	}
+}
+
+// cheatCodeAssertionPanic creates cheatCodeRawReturnData that mimics a Solidity assert() failure: a revert with
+// Panic(uint256(0x01)) return data, so the assertion test case provider detects it as an assertion failure.
+func cheatCodeAssertionPanic() *cheatCodeRawReturnData {
+	uintType, _ := abi.NewType("uint256", "", nil)
+	panicAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, abi.Arguments{
+		{Name: "", Type: uintType, Indexed: false},
+	}, abi.Arguments{})
+	encoded, _ := panicAbi.Inputs.Pack(big.NewInt(0x01))
+	return &cheatCodeRawReturnData{
+		ReturnData: append(panicAbi.ID, encoded...),
 		Err:        vm.ErrExecutionReverted,
 	}
 }
