@@ -13,6 +13,8 @@ import (
 	"github.com/crytic/medusa-geth/common"
 )
 
+var abiArraySuffixExpression = regexp.MustCompile(`(\[[0-9]*\])+$`)
+
 // CompiledContract represents a single contract unit from a smart contract compilation.
 type CompiledContract struct {
 	// Abi describes a contract's application binary interface, a structure used to describe information needed
@@ -98,29 +100,115 @@ func (c *CompiledContract) IsMatch(initBytecode []byte, runtimeBytecode []byte) 
 
 // ParseABIFromInterface parses a generic object into an abi.ABI and returns it, or an error if one occurs.
 func ParseABIFromInterface(i any) (*abi.ABI, error) {
-	var (
-		result abi.ABI
-		err    error
-	)
+	abiDefinition, err := abiInterfaceToString(i)
+	if err != nil {
+		return nil, err
+	}
 
-	// If it's a string, just parse it. Otherwise, we assume it's an interface and serialize it into a string.
+	result, err := abi.JSON(strings.NewReader(abiDefinition))
+	if err == nil {
+		return &result, nil
+	}
+
+	normalizedDefinition, changed, normalizeErr := normalizeABIDefinitionTypes(abiDefinition)
+	if normalizeErr != nil || !changed {
+		return nil, err
+	}
+
+	result, err = abi.JSON(strings.NewReader(normalizedDefinition))
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func abiInterfaceToString(i any) (string, error) {
 	if s, ok := i.(string); ok {
-		result, err = abi.JSON(strings.NewReader(s))
-		if err != nil {
-			return nil, err
+		return s, nil
+	}
+
+	b, err := json.Marshal(i)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func normalizeABIDefinitionTypes(abiDefinition string) (string, bool, error) {
+	var root any
+	if err := json.Unmarshal([]byte(abiDefinition), &root); err != nil {
+		return "", false, err
+	}
+
+	changed := normalizeABITypeFieldsInValue(root)
+	if !changed {
+		return abiDefinition, false, nil
+	}
+
+	normalizedBytes, err := json.Marshal(root)
+	if err != nil {
+		return "", false, err
+	}
+
+	return string(normalizedBytes), true, nil
+}
+
+func normalizeABITypeFieldsInValue(value any) bool {
+	changed := false
+
+	switch node := value.(type) {
+	case map[string]any:
+		rawType, hasType := node["type"].(string)
+		internalType, hasInternalType := node["internalType"].(string)
+		if hasType && hasInternalType {
+			normalizedType := normalizeABITypeValue(rawType, internalType)
+			if normalizedType != rawType {
+				node["type"] = normalizedType
+				changed = true
+			}
 		}
-	} else {
-		var b []byte
-		b, err = json.Marshal(i)
-		if err != nil {
-			return nil, err
+
+		for _, nested := range node {
+			if normalizeABITypeFieldsInValue(nested) {
+				changed = true
+			}
 		}
-		result, err = abi.JSON(strings.NewReader(string(b)))
-		if err != nil {
-			return nil, err
+	case []any:
+		for _, nested := range node {
+			if normalizeABITypeFieldsInValue(nested) {
+				changed = true
+			}
 		}
 	}
-	return &result, nil
+
+	return changed
+}
+
+func normalizeABITypeValue(rawType string, internalType string) string {
+	if rawType == "" || internalType == "" {
+		return rawType
+	}
+
+	internalType = strings.TrimSpace(internalType)
+	arraySuffix := abiArraySuffixExpression.FindString(rawType)
+	if arraySuffix == "" {
+		arraySuffix = abiArraySuffixExpression.FindString(internalType)
+	}
+
+	switch {
+	case strings.HasPrefix(internalType, "contract "), strings.HasPrefix(internalType, "interface "):
+		return "address" + arraySuffix
+	case strings.HasPrefix(internalType, "enum "):
+		return "uint8" + arraySuffix
+	case strings.HasPrefix(internalType, "struct "):
+		if strings.HasPrefix(rawType, "tuple") {
+			return rawType
+		}
+		return "tuple" + arraySuffix
+	default:
+		return rawType
+	}
 }
 
 func (c *CompiledContract) DecodeLinkedInitBytecodeBytes() ([]byte, error) {
