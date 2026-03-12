@@ -331,6 +331,61 @@ func TestCheatCodes(t *testing.T) {
 	}
 }
 
+// TestAssertCheatCodes runs tests to ensure that vm extensions ("cheat codes") that perform assertions are working as intended.
+func TestAssertCheatCodes(t *testing.T) {
+	filePath := "testdata/contracts/cheat_codes/vm/assertions.sol"
+
+	configUpdates := func(config *config.ProjectConfig) {
+		config.Fuzzing.TargetContracts = []string{"TestContract"}
+
+		config.Fuzzing.Workers = 1
+		config.Fuzzing.TestLimit = 100 // this test should expose a failure quickly.
+
+		// enable assertion testing only
+		config.Fuzzing.Testing.PropertyTesting.Enabled = false
+		config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+		config.Fuzzing.Testing.AssertionTesting.Enabled = true
+
+		config.Fuzzing.TestChainConfig.CheatCodeConfig.CheatCodesEnabled = true
+		config.Fuzzing.TestChainConfig.CheatCodeConfig.EnableFFI = true
+		config.Slither.UseSlither = false
+	}
+
+	// test() exercises all passing cheatcode assertions and should not trigger any failures.
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: filePath,
+		configUpdates: func(config *config.ProjectConfig) {
+			configUpdates(config)
+			config.Fuzzing.Testing.TargetFunctionSignatures = []string{"TestContract.test()"}
+		},
+		method: func(f *fuzzerTestContext) {
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			assertFailedTestsExpected(f, false)
+		},
+	})
+
+	// assertions.sol contains testFail* methods that are expected to trigger assertion failures.
+	// Run one test per failing method to verify each cheatcode assertion fails as expected.
+	for _, targetMethod := range []string{"testFailAsserttrue()", "testFailAssertEq()", "testFailAssertLt()"} {
+		targetMethod := targetMethod
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: filePath,
+			configUpdates: func(config *config.ProjectConfig) {
+				configUpdates(config)
+				config.Fuzzing.Testing.TargetFunctionSignatures = []string{"TestContract." + targetMethod}
+			},
+			method: func(f *fuzzerTestContext) {
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				assertFailedTestsExpected(f, true)
+			},
+		})
+	}
+}
+
 // TestConsoleLog tests the console.log precompile contract by logging a variety of different primitive types and
 // then failing. The execution trace for the failing call sequence should hold the various logs.
 func TestConsoleLog(t *testing.T) {

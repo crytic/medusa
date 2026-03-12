@@ -87,7 +87,7 @@ func (c *ClientPool) ExecuteRequestAsync(ctx context.Context, method string, arg
 		c.inflightLock.Unlock()
 		client := c.getClient()
 
-		go c.launchRequest(client, inflight, method, args...)
+		go c.launchRequest(client, inflight, key, method, args...)
 		return newPendingResult(inflight), nil
 	}
 }
@@ -107,9 +107,15 @@ func (c *ClientPool) getClient() *rpc.Client {
 func (c *ClientPool) launchRequest(
 	client *rpc.Client,
 	request *inflightRequest,
+	key requestKey,
 	method string,
 	args ...any) {
 	defer close(request.Done)
+	defer func() {
+		c.inflightLock.Lock()
+		delete(c.inflightRequests, key)
+		c.inflightLock.Unlock()
+	}()
 
 	var err error
 	var result string
