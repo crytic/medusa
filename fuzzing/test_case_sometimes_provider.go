@@ -7,6 +7,7 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/logging"
 )
 
 // SometimesTestCaseProvider is a provider for on-chain sometimes tests.
@@ -117,8 +118,8 @@ func (t *SometimesTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) 
 		// Only evaluate tests that are running and have enough executions
 		if testCase.status == TestCaseStatusRunning {
 			if testCase.executionCount >= testCase.minExecutionCount {
-				// Calculate success rate
-				successRate := testCase.SuccessRate()
+				// Calculate success rate (no lock needed — all workers are destroyed at this point)
+				successRate := testCase.successRate()
 
 				// Check if success rate meets the minimum threshold
 				if successRate >= testCase.minSuccessRate {
@@ -128,8 +129,15 @@ func (t *SometimesTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) 
 					t.fuzzer.ReportTestCaseFinished(testCase)
 				}
 			} else {
-				// Not enough executions to evaluate, mark as passed with a note
+				// Not enough executions to evaluate — log a warning so users know the test was not fully evaluated.
 				testCase.status = TestCaseStatusPassed
+				if logging.GlobalLogger != nil {
+					logging.GlobalLogger.Warn(fmt.Sprintf(
+						"Sometimes test '%s.%s' had only %d executions (minimum required: %d) and was not evaluated — marked as passed by default",
+						testCase.targetContract.Name(), testCase.targetMethod.Sig,
+						testCase.executionCount, testCase.minExecutionCount,
+					))
+				}
 			}
 		}
 	}

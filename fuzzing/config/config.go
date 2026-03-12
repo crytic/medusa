@@ -356,7 +356,9 @@ type OptimizationTestingConfig struct {
 	TestPrefixes []string `json:"testPrefixes"`
 }
 
-// SometimesTestingConfig describes the configuration options used for sometimes testing
+// SometimesTestingConfig describes the configuration options used for sometimes testing.
+// Note: Sometimes tests are evaluated at the end of the fuzzing campaign (not during it),
+// so StopOnFailedTest will not cause early termination for sometimes test failures.
 type SometimesTestingConfig struct {
 	// Enabled describes whether testing is enabled.
 	Enabled bool `json:"enabled"`
