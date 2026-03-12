@@ -241,10 +241,13 @@ func (t *OptimizationTestCaseProvider) onWorkerDeployedContractAdded(event Fuzze
 		t.testCasesLock.Unlock()
 
 		if optimizationTestCaseExists {
-			if optimizationTestCase.Status() == TestCaseStatusNotStarted {
+			optimizationTestCase.lock.Lock()
+			if optimizationTestCase.status == TestCaseStatusNotStarted {
 				optimizationTestCase.status = TestCaseStatusRunning
 			}
-			if optimizationTestCase.Status() != TestCaseStatusFailed {
+			isFailed := optimizationTestCase.status == TestCaseStatusFailed
+			optimizationTestCase.lock.Unlock()
+			if !isFailed {
 				// Create our optimization test method reference.
 				workerState := &t.workerStates[event.Worker.WorkerIndex()]
 				workerState.optimizationTestMethodsLock.Lock()
@@ -312,13 +315,17 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 			return nil, err
 		}
 
-		// If we updated the test case's maximum value, we update our state immediately. Note that we are allowing
-		// for races here. We also update the test case's cached shrink request.
-		// TODO: Should we allow for races here?
-		if newValue.Cmp(testCase.value) == 1 {
+		// If we updated the test case's maximum value, we update our state immediately.
+		// We also update the test case's cached shrink request.
+		testCase.lock.Lock()
+		isNewMax := newValue.Cmp(testCase.value) == 1
+		if isNewMax {
 			// Update the test case's value and call sequence
 			testCase.value = newValue
 			testCase.callSequence = &callSequence
+		}
+		testCase.lock.Unlock()
+		if isNewMax {
 
 			// Create a request to shrink this call sequence.
 			shrinkRequest := ShrinkCallSequenceRequest{
@@ -366,15 +373,19 @@ func (t *OptimizationTestCaseProvider) callSequencePostCallTest(worker *FuzzerWo
 					}
 
 					// Update call sequence and trace
+					testCase.lock.Lock()
 					testCase.callSequence = &shrunkenCallSequence
 					testCase.optimizationTestTrace = executionTrace
+					testCase.lock.Unlock()
 					return nil
 				},
 				RecordResultInCorpus: true,
 			}
 
 			// Update the shrink request attached to this test case
+			testCase.lock.Lock()
 			testCase.shrinkCallSequenceRequest = &shrinkRequest
+			testCase.lock.Unlock()
 		}
 	}
 
