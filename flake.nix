@@ -17,7 +17,7 @@
       packages = {
         medusa = pkgs.buildGoModule {
           pname = "medusa";
-          version = "1.5.0";
+          version = "1.5.1";
           src = ./.;
           vendorHash = "sha256-r4p49cnObkugiEvGZx6bgXhjMbS5tMdfJsAJ7KzWW10=";
           nativeBuildInputs = [
