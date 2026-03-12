@@ -234,6 +234,90 @@ func TestOptimizationMode(t *testing.T) {
 	}
 }
 
+// TestSometimesMode runs tests to ensure that sometimes assertions work as expected.
+// Sometimes tests should pass if they succeed at least MinSuccessRate of the time.
+func TestSometimesMode(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/sometimes/sometimes_basic.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 5_000 // enough executions to reach MinExecutionCount
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.Testing.SometimesTesting.Enabled = true
+			config.Fuzzing.Testing.SometimesTesting.TestPrefixes = []string{"sometimes_"}
+			config.Fuzzing.Testing.SometimesTesting.MinSuccessRate = 0.05 // 5%
+			config.Fuzzing.Testing.SometimesTesting.MinExecutionCount = 100
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Get all test cases
+			passedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
+			failedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+
+			// We expect 2 passed and 1 failed:
+			// - sometimes_counterIncremented should PASS (counter increments ~50% of time)
+			// - sometimes_alwaysSucceeds should PASS (never reverts, 100% success)
+			// - sometimes_impossibleCondition should FAIL (never succeeds, 0% success)
+			assert.EqualValues(t, 2, len(passedTests), "Expected 2 sometimes tests to pass")
+			assert.EqualValues(t, 1, len(failedTests), "Expected 1 sometimes test to fail")
+
+			// Verify the failed test is the impossible condition
+			assert.NotNil(t, failedTests[0], "Expected a failed test case")
+			failedTestCase, ok := failedTests[0].(*SometimesTestCase)
+			assert.True(t, ok, "Expected failed test to be a SometimesTestCase")
+			assert.Contains(t, failedTestCase.Name(), "impossibleCondition", "Expected the impossible condition test to fail")
+
+			// Verify that execution counts are reasonable
+			assert.GreaterOrEqual(t, failedTestCase.executionCount, uint64(100), "Expected at least MinExecutionCount executions")
+			assert.EqualValues(t, 0, failedTestCase.successCount, "Expected impossible condition to never succeed")
+		},
+	})
+}
+
+// TestSometimesMultipleContracts runs tests to ensure sometimes assertions work across multiple contracts
+// when TestAllContracts is enabled.
+func TestSometimesMultipleContracts(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/sometimes/sometimes_multiple_contracts.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract", "SecondContract"}
+			config.Fuzzing.TestLimit = 5_000
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.AssertionTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Fuzzing.Testing.SometimesTesting.Enabled = true
+			config.Fuzzing.Testing.SometimesTesting.TestPrefixes = []string{"sometimes_"}
+			config.Fuzzing.Testing.SometimesTesting.MinSuccessRate = 0.05
+			config.Fuzzing.Testing.SometimesTesting.MinExecutionCount = 100
+			config.Fuzzing.Testing.TestAllContracts = true
+			config.Fuzzing.Testing.StopOnFailedTest = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Get all test cases
+			passedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
+			failedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+
+			// We expect 2 passed tests (one from each contract) and no failures
+			// - TestContract.sometimes_stateSet should PASS
+			// - SecondContract.sometimes_flagSet should PASS
+			assert.EqualValues(t, 2, len(passedTests), "Expected 2 sometimes tests to pass (one from each contract)")
+			assert.EqualValues(t, 0, len(failedTests), "Expected no sometimes tests to fail")
+		},
+	})
+}
+
 // TestChainBehaviour runs tests to ensure the chain behaves as expected.
 func TestChainBehaviour(t *testing.T) {
 	// Run a test to simulate out of gas errors to make sure its handled well by the Chain and does not panic.
