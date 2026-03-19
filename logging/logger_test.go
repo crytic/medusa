@@ -57,6 +57,9 @@ func TestDisabledColors(t *testing.T) {
 	// Create a base logger
 	logger := NewLogger(zerolog.InfoLevel)
 
+	// Reset global color state after the test because the color helpers are process-global.
+	t.Cleanup(colors.EnableColor)
+
 	// Add colorized logger
 	var buf bytes.Buffer
 	logger.AddWriter(&buf, UNSTRUCTURED, true)
@@ -68,9 +71,10 @@ func TestDisabledColors(t *testing.T) {
 	colors.DisableColor()
 	logger.Info("foo")
 
-	// Ensure that msg doesn't include colors afterwards (it is bolded)
-	prefix := fmt.Sprintf("%s \033[1m%s\033[0m", colors.LEFT_ARROW, "foo")
+	// Ensure that msg doesn't include ANSI colors afterwards.
+	prefix := fmt.Sprintf("%s %s", colors.LEFT_ARROW, "foo")
 
 	_, _, ok := strings.Cut(buf.String(), prefix)
 	assert.True(t, ok)
+	assert.NotContains(t, buf.String(), "\033[")
 }
