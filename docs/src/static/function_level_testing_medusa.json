@@ -21,10 +21,9 @@
       "stopOnFailedContractMatching": false,
       "stopOnNoTests": true,
       "testAllContracts": false,
-      "traceAll": false,
+      "testViewMethods": false,
       "assertionTesting": {
         "enabled": true,
-        "testViewMethods": false,
         "panicCodeConfig": {
           "failOnCompilerInsertedPanic": false,
           "failOnAssertion": true,

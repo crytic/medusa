@@ -52,7 +52,7 @@ Now that multiple functions can modify `totalDeposited` and user balances, we ca
 2. `totalDeposited` should always equal the ETH balance of the contract (`address(this).balance`).
 3. No individual user's balance should ever exceed `totalDeposited`.
 
-These properties cannot be fully validated by testing a single function in isolation. For example, a bug might only manifest after a specific sequence of deposits and withdrawals from multiple users. This is exactly where system-level invariant testing shines.
+These properties cannot be fully validated by testing a single function in isolation. For example, a bug might only manifest after a specific sequence of deposits and withdrawals. This is exactly where system-level invariant testing shines.
 
 ### Writing property tests
 
@@ -202,7 +202,9 @@ contract TestDepositContract {
 ```
 
 Note that we added `deposit` and `withdraw` wrapper functions in `TestDepositContract`. These wrappers allow the fuzzer to call `deposit` and `withdraw` with fuzzed arguments while automatically bounding the inputs to valid ranges.
-The property test functions then check the invariants after each of these calls.
+The property test functions then check the invariants after each of these calls. Because the wrappers call `DepositContract`
+internally, `msg.sender` inside `DepositContract` is always `TestDepositContract` in this example. This keeps the example
+focused on stateful call sequences rather than multi-user behavior.
 
 To run this test contract, download the project configuration file [here](../static/system_level_testing_medusa.json), rename it to `medusa.json`, and run:
 
@@ -210,29 +212,34 @@ To run this test contract, download the project configuration file [here](../sta
 medusa fuzz --config medusa.json
 ```
 
-The following changes were made to the default project configuration file to allow this test to run:
+The following non-default changes were made to the default project configuration file to allow this test to run:
 
 - `fuzzing.targetContracts`: Updated to `["TestDepositContract"]`.
 - `fuzzing.targetContractsBalances`: Updated to `["21267647932558653966460912964485513215"]` to give the test contract an ETH balance for depositing.
 - `fuzzing.testLimit`: Set to `10_000` to run a reasonable campaign.
-- `fuzzing.callSequenceLength`: Set to `100` so that Medusa tests longer sequences of deposits and withdrawals. This is critical for system-level testing since bugs often emerge from specific orderings of multiple transactions.
 
-> **Note**: Unlike function-level testing where `callSequenceLength` is typically `1`, system-level testing benefits from longer call sequences. A longer sequence gives the fuzzer more room to explore complex state transitions that arise from interleaving multiple function calls.
+> **Note**: The default `callSequenceLength` of `100` is already well-suited for system-level testing. Unlike
+> function-level testing where `callSequenceLength` is typically `1`, system-level testing benefits from longer call
+> sequences. A longer sequence gives the fuzzer more room to explore complex state transitions that arise from
+> interleaving multiple function calls.
 
 ### When a property test fails
 
-If Medusa discovers a call sequence that violates a property test, it will halt and report the failing sequence:
+If a property test fails, Medusa will halt and report the failing sequence. The output format looks like this
+(illustrative example):
 
 ```
 [FAILED] Property Test: TestDepositContract.property_total_deposited_eq_balance()
 Test for method "TestDepositContract.property_total_deposited_eq_balance()" failed after the following call sequence:
 [Call Sequence]
-1) TestDepositContract.deposit([55408297438917960862474451975836818265]) (block=1, time=2, gas=12500000, gasprice=1, value=0, sender=0x1111111111111111111111111111111111111111)
-2) TestDepositContract.withdraw([19028842074912045090817234023499421958]) (block=3, time=5, gas=12500000, gasprice=1, value=0, sender=0x2222222222222222222222222222222222222222)
-3) TestDepositContract.deposit([7702981288038713856009128004564213903]) (block=4, time=8, gas=12500000, gasprice=1, value=0, sender=0x1111111111111111111111111111111111111111)
+1) TestDepositContract.deposit([55408297438917960862474451975836818265]) (block=1, time=2, gas=12500000, gasprice=1, value=0, sender=0x10000)
+2) TestDepositContract.withdraw([19028842074912045090817234023499421958]) (block=3, time=5, gas=12500000, gasprice=1, value=0, sender=0x20000)
+3) TestDepositContract.deposit([7702981288038713856009128004564213903]) (block=4, time=8, gas=12500000, gasprice=1, value=0, sender=0x10000)
 ```
 
-Medusa will also attempt to **shrink** the failing call sequence to the minimal set of transactions required to reproduce the failure. This makes it significantly easier to diagnose the root cause of the invariant violation.
+The exact sender addresses, calldata, and sequence length will depend on your configuration and the bug being
+exercised. Medusa will also attempt to **shrink** the failing call sequence to the minimal set of transactions required
+to reproduce the failure. This makes it significantly easier to diagnose the root cause of the invariant violation.
 
 ### Tips for writing effective system-level invariants
 
@@ -242,5 +249,7 @@ Medusa will also attempt to **shrink** the failing call sequence to the minimal 
 3. **Use wrapper functions**: Create wrapper functions in your test contract that bound fuzzed inputs to valid ranges.
    This prevents the fuzzer from wasting time on transactions that will simply revert.
 4. **Increase the call sequence length**: System-level bugs often require multiple transactions to surface. Use a `callSequenceLength` of `50` or more to give the fuzzer room to explore complex state transitions.
-5. **Use multiple sender addresses**: Configure `fuzzing.senderAddresses` with several addresses to test interactions between multiple users. Many system-level bugs involve cross-user state corruption.
+5. **Use multiple sender addresses when caller identity matters**: If your system under test depends on `msg.sender`,
+   configure `fuzzing.senderAddresses` accordingly and ensure your harness preserves the original caller rather than
+   routing every interaction through a single wrapper contract.
 6. **Combine with assertion tests**: Property tests and assertion tests complement each other. Use assertion tests for function-level pre/post-conditions and property tests for system-wide invariants. Both can run simultaneously.
