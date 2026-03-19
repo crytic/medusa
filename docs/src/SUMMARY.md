@@ -22,6 +22,7 @@
 - [CLI Overview](./cli/overview.md)
 - [init](./cli/init.md)
 - [fuzz](./cli/fuzz.md)
+- [corpus clean](./cli/corpus.md)
 - [completion](./cli/completion.md)
 
 # Writing Tests
