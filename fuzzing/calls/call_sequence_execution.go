@@ -116,9 +116,14 @@ func ExecuteCallSequenceIteratively(chain *chain.TestChain, fetchElementFunc Exe
 		}
 
 		// Update our chain reference for this element.
+		// Capture immutable snapshots of block number and timestamp at execution time
+		// to preserve the actual execution context even if the block header is modified later.
+		pendingBlock := chain.PendingBlock()
 		callSequenceElement.ChainReference = &CallSequenceElementChainReference{
-			Block:            chain.PendingBlock(),
-			TransactionIndex: len(chain.PendingBlock().Messages) - 1,
+			Block:            pendingBlock,
+			TransactionIndex: len(pendingBlock.Messages) - 1,
+			BlockNumber:      pendingBlock.Header.Number.Uint64(),
+			BlockTimestamp:   pendingBlock.Header.Time,
 		}
 
 		// Add to our executed call sequence

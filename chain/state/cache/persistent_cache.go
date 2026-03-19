@@ -72,7 +72,7 @@ func newPersistentCache(ctx context.Context, workingDir string, rpcAddr string, 
 	return p, nil
 }
 
-func (p *persistentCache) getFromPersist(key []byte, value interface{}) (bool, error) {
+func (p *persistentCache) getFromPersist(key []byte, value any) (bool, error) {
 	found := false
 	err := p.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket([]byte("cache"))

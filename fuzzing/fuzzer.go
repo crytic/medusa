@@ -32,6 +32,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -121,6 +122,25 @@ type Fuzzer struct {
 
 // Amount of time between "total PCs hit" log messages. This message is only output when debug logging is enabled.
 const timeBetweenPCsLogMsgs = time.Minute
+
+// formatDuration formats a duration with zero-padded components for consistent log alignment.
+// For example: 5m2s becomes 5m02s, 1h3m4s becomes 1h03m04s.
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm%02ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm%02ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
 
 // Large number used for block gas limit that should never get hit.
 const blockGasLimit = 0x0FFFFFFFFFFFFFFF
@@ -228,6 +248,13 @@ func NewFuzzer(config config.ProjectConfig) (*Fuzzer, error) {
 		}
 		fuzzer.logger.Info("Finished compiling targets in ", time.Since(start).Round(time.Second))
 
+		// Notify user about artifact hash status (new vs unchanged artifacts)
+		cacheDir := fuzzer.config.Fuzzing.CorpusDirectory
+		if cacheDir == "" {
+			cacheDir = "."
+		}
+		compilation.NotifyArtifactHashStatus(compilations, cacheDir, fuzzer.logger)
+
 		// Add our compilation targets
 		fuzzer.AddCompilationTargets(compilations)
 	}
@@ -273,6 +300,61 @@ func (f *Fuzzer) SenderAddresses() []common.Address {
 // DeployerAddress exposes the account address from which contracts will be deployed by a FuzzerWorker.
 func (f *Fuzzer) DeployerAddress() common.Address {
 	return f.deployer
+}
+
+// CreateTestChainForCleaning creates a test chain for corpus cleaning operations.
+// This is a convenience method for CLI commands that need to set up a chain
+// without running the full fuzzing campaign.
+func (f *Fuzzer) CreateTestChainForCleaning() (*chain.TestChain, map[common.Address]*fuzzerTypes.Contract, error) {
+	// Create context if not already set
+	if f.ctx == nil {
+		f.ctx, f.ctxCancelFunc = context.WithCancel(context.Background())
+	}
+
+	// Create base test chain
+	baseTestChain, err := f.createTestChain()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create test chain: %w", err)
+	}
+
+	// Setup chain
+	_, err = f.Hooks.ChainSetupFunc(f, baseTestChain)
+	if err != nil {
+		baseTestChain.Close()
+		return nil, nil, fmt.Errorf("failed to setup test chain: %w", err)
+	}
+
+	// Build deployed contracts map
+	deployedContracts := make(map[common.Address]*fuzzerTypes.Contract)
+	testChain, err := baseTestChain.Clone(func(newChain *chain.TestChain) error {
+		newChain.Events.ContractDeploymentAddedEventEmitter.Subscribe(
+			func(event chain.ContractDeploymentsAddedEvent) error {
+				matchedContract := f.contractDefinitions.MatchBytecode(
+					event.Contract.InitBytecode,
+					event.Contract.RuntimeBytecode,
+				)
+				if matchedContract != nil {
+					deployedContracts[event.Contract.Address] = matchedContract
+				}
+				return nil
+			},
+		)
+		newChain.Events.ContractDeploymentRemovedEventEmitter.Subscribe(
+			func(event chain.ContractDeploymentsRemovedEvent) error {
+				delete(deployedContracts, event.Contract.Address)
+				return nil
+			},
+		)
+		return nil
+	})
+	if err != nil {
+		baseTestChain.Close()
+		return nil, nil, fmt.Errorf("failed to clone test chain: %w", err)
+	}
+
+	// Close base chain, return cloned chain
+	baseTestChain.Close()
+	return testChain, deployedContracts, nil
 }
 
 // isLibrary checks if a contract with the given name is a library
@@ -471,8 +553,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(types.GenesisAlloc)
 
-	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
-	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
+	// Fund all of our sender addresses in the genesis block with 2^128-1 ETH equivalent.
+	// This should both prevent us from running out of gas and prevent us from overflowing above 2^256 eth.
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
 			Balance: new(big.Int).Set(initBalance),
@@ -1178,20 +1261,26 @@ func (f *Fuzzer) printMetricsLoop() {
 		memoryUsedMB := memStats.Alloc / 1024 / 1024
 		memoryTotalMB := memStats.Sys / 1024 / 1024
 
-		// Print a metrics update
+		// Calculate per-second metrics
+		callsPerSec := uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64()) / secondsSinceLastUpdate)
+		seqPerSec := uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64()) / secondsSinceLastUpdate)
+		gasPerSec := uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64()) / secondsSinceLastUpdate)
+
+		// Print a metrics update with consistent formatting for alignment
 		logBuffer := logging.NewLogBuffer()
 		logBuffer.Append(colors.Bold, "fuzz: ", colors.Reset)
-		logBuffer.Append("elapsed: ", colors.Bold, time.Since(startTime).Round(time.Second).String(), colors.Reset)
-		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%d (%d/sec)", callsTested, uint64(float64(new(big.Int).Sub(callsTested, lastCallsTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(sequencesTested, lastSequencesTested).Uint64())/secondsSinceLastUpdate)), colors.Reset)
-		logBuffer.Append(", branches hit: ", colors.Bold, fmt.Sprintf("%d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
-		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
+		logBuffer.Append("elapsed: ", colors.Bold, fmt.Sprintf("%8s", formatDuration(time.Since(startTime))), colors.Reset)
+		logBuffer.Append(", calls: ", colors.Bold, fmt.Sprintf("%10d (%6d/sec)", callsTested, callsPerSec), colors.Reset)
+		logBuffer.Append(", seq/s: ", colors.Bold, fmt.Sprintf("%6d", seqPerSec), colors.Reset)
+		logBuffer.Append(", branches: ", colors.Bold, fmt.Sprintf("%6d", f.corpus.CoverageMaps().BranchesHit()), colors.Reset)
+		logBuffer.Append(", corpus: ", colors.Bold, fmt.Sprintf("%5d", f.corpus.ActiveMutableSequenceCount()), colors.Reset)
 		logBuffer.Append(", failures: ", colors.Bold, fmt.Sprintf("%d/%d", failedSequences, sequencesTested), colors.Reset)
-		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(gasUsed, lastGasUsed).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+		logBuffer.Append(", gas/s: ", colors.Bold, fmt.Sprintf("%12d", gasPerSec), colors.Reset)
 		if f.logger.Level() <= zerolog.DebugLevel {
-			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%v", workersShrinking), colors.Reset)
-			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%v/%v MB", memoryUsedMB, memoryTotalMB), colors.Reset)
-			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%d", uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64())/secondsSinceLastUpdate)), colors.Reset)
+			resetsPerSec := uint64(float64(new(big.Int).Sub(workerStartupCount, lastWorkerStartupCount).Uint64()) / secondsSinceLastUpdate)
+			logBuffer.Append(", shrinking: ", colors.Bold, fmt.Sprintf("%3d", workersShrinking), colors.Reset)
+			logBuffer.Append(", mem: ", colors.Bold, fmt.Sprintf("%4d/%4d MB", memoryUsedMB, memoryTotalMB), colors.Reset)
+			logBuffer.Append(", resets/s: ", colors.Bold, fmt.Sprintf("%4d", resetsPerSec), colors.Reset)
 
 			if time.Since(f.lastPCsLogMsg) >= timeBetweenPCsLogMsgs {
 				start := time.Now()

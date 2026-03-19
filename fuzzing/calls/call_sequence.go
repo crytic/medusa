@@ -262,15 +262,18 @@ func (cse *CallSequenceElement) String() string {
 	}
 
 	// Get our labels that we can use to make the string look better
-	labels := chain.GetLabels(cse.ChainReference.MessageResults())
+	var labels map[common.Address]string
+	if cse.ChainReference != nil {
+		labels = chain.GetLabels(cse.ChainReference.MessageResults())
+	}
 
 	// Next decode our arguments (we jump four bytes to skip the function selector)
 	argsText := "<unable to unpack args>"
 	// Special handlers for fallback and receive
-	if method.Type == abi.Fallback {
+	if method != nil && method.Type == abi.Fallback {
 		// Provide the calldata as an argument for fallback
 		argsText = fmt.Sprintf("0x%x", cse.Call.Data)
-	} else if method.Type == abi.Receive {
+	} else if method != nil && method.Type == abi.Receive {
 		argsText = ""
 	} else if method != nil {
 		args, err := method.Inputs.Unpack(cse.Call.Data[4:])
@@ -286,8 +289,8 @@ func (cse *CallSequenceElement) String() string {
 	blockNumberStr := "n/a"
 	blockTimeStr := "n/a"
 	if cse.ChainReference != nil {
-		blockNumberStr = cse.ChainReference.Block.Header.Number.String()
-		blockTimeStr = strconv.FormatUint(cse.ChainReference.Block.Header.Time, 10)
+		blockNumberStr = strconv.FormatUint(cse.ChainReference.BlockNumber, 10)
+		blockTimeStr = strconv.FormatUint(cse.ChainReference.BlockTimestamp, 10)
 	}
 
 	// Trim the leading zeros and use the labels
@@ -317,6 +320,14 @@ type CallSequenceElementChainReference struct {
 
 	// TransactionIndex describes the index at which the transaction was included into the Block.
 	TransactionIndex int
+
+	// BlockNumber captures the block number at execution time (immutable snapshot).
+	// This preserves the actual execution context even if the underlying Block.Header is modified later.
+	BlockNumber uint64
+
+	// BlockTimestamp captures the block timestamp at execution time (immutable snapshot).
+	// This preserves the actual execution context even if the underlying Block.Header is modified later.
+	BlockTimestamp uint64
 }
 
 // MessageResults obtains the results of executing the CallSequenceElement.
