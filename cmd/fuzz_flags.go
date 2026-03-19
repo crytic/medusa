@@ -11,6 +11,11 @@ import (
 
 // addFuzzFlags adds the various flags for the fuzz command
 func addFuzzFlags() error {
+	return addFuzzFlagsToCommand(fuzzCmd)
+}
+
+// addFuzzFlagsToCommand adds the various flags for the fuzz command to the provided command.
+func addFuzzFlagsToCommand(cmd *cobra.Command) error {
 	// Get the default project config and throw an error if we can't
 	defaultConfig, err := config.GetDefaultProjectConfig(DefaultCompilationPlatform)
 	if err != nil {
@@ -18,72 +23,72 @@ func addFuzzFlags() error {
 	}
 
 	// Prevent alphabetical sorting of usage message
-	fuzzCmd.Flags().SortFlags = false
+	cmd.Flags().SortFlags = false
 
 	// Config file
-	fuzzCmd.Flags().String("config", "", "path to config file")
+	cmd.Flags().String("config", "", "path to config file")
 
 	// Compilation Target
-	fuzzCmd.Flags().String("compilation-target", "", TargetFlagDescription)
+	cmd.Flags().String("compilation-target", "", TargetFlagDescription)
 
 	// Number of workers
-	fuzzCmd.Flags().Int("workers", 0,
+	cmd.Flags().Int("workers", 0,
 		fmt.Sprintf("number of fuzzer workers (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.Workers))
 
 	// Timeout
-	fuzzCmd.Flags().Int("timeout", 0,
+	cmd.Flags().Int("timeout", 0,
 		fmt.Sprintf("number of seconds to run the fuzzer campaign for (unless a config file is provided, default is %d). 0 means that timeout is not enforced", defaultConfig.Fuzzing.Timeout))
 
 	// Test limit
-	fuzzCmd.Flags().Uint64("test-limit", 0,
+	cmd.Flags().Uint64("test-limit", 0,
 		fmt.Sprintf("number of transactions to test before exiting (unless a config file is provided, default is %d). 0 means that test limit is not enforced", defaultConfig.Fuzzing.TestLimit))
 
 	// Tx sequence length
-	fuzzCmd.Flags().Int("seq-len", 0,
+	cmd.Flags().Int("seq-len", 0,
 		fmt.Sprintf("maximum transactions to run in sequence (unless a config file is provided, default is %d)", defaultConfig.Fuzzing.CallSequenceLength))
 
 	// Target contracts
-	fuzzCmd.Flags().StringSlice("target-contracts", []string{},
+	cmd.Flags().StringSlice("target-contracts", []string{},
 		fmt.Sprintf("target contracts for fuzz testing (unless a config file is provided, default is %v)", defaultConfig.Fuzzing.TargetContracts))
 
 	// Corpus directory
-	fuzzCmd.Flags().String("corpus-dir", "",
+	cmd.Flags().String("corpus-dir", "",
 		fmt.Sprintf("directory path for corpus items and coverage reports (unless a config file is provided, default is %q)", defaultConfig.Fuzzing.CorpusDirectory))
 
 	// Senders
-	fuzzCmd.Flags().StringSlice("senders", []string{},
+	cmd.Flags().StringSlice("senders", []string{},
 		"account address(es) used to send state-changing txns")
 
 	// Deployer address
-	fuzzCmd.Flags().String("deployer", "",
+	cmd.Flags().String("deployer", "",
 		"account address used to deploy contracts")
 
 	// Logging color
-	fuzzCmd.Flags().Bool("no-color", false, "disables colored terminal output")
+	cmd.Flags().Bool("no-color", false, "disables colored terminal output")
 
 	// Enable stop on failed test
-	fuzzCmd.Flags().Bool("fail-fast", false, "enables stop on failed test")
+	cmd.Flags().Bool("fail-fast", false, "enables stop on failed test")
 
 	// Exploration mode
-	fuzzCmd.Flags().Bool("explore", false, "enables exploration mode")
+	cmd.Flags().Bool("explore", false, "enables exploration mode")
 
 	// Run slither while still trying to use the cache
-	fuzzCmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
+	cmd.Flags().Bool("use-slither", false, "runs slither and use the current cached results")
 
 	// Run slither and overwrite the cache
-	fuzzCmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
+	cmd.Flags().Bool("use-slither-force", false, "runs slither and overwrite the cached results")
 
 	// RPC url
-	fuzzCmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
+	cmd.Flags().String("rpc-url", "", "RPC URL to fetch contracts over")
 
 	// RPC block
-	fuzzCmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
+	cmd.Flags().Uint64("rpc-block", 0, "block number to use when fetching contracts over RPC")
 
 	// Verbosity levels (-v, -vv, -vvv)
-	fuzzCmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
+	cmd.Flags().CountP("verbosity", "v", "set execution trace verbosity levels: -v (top-level calls only), -vv (detailed, default), -vvv (trace all call sequence elements)")
 
 	// Log level
-	fuzzCmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
+	cmd.Flags().String("log-level", "", "set which level of log messages will be displayed (trace, debug, info, warn, error, or panic; default: info)")
 	return nil
 }
 
