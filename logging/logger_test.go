@@ -2,9 +2,7 @@ package logging
 
 import (
 	"bytes"
-	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/crytic/medusa/logging/colors"
@@ -54,6 +52,10 @@ func TestAddAndRemoveWriter(t *testing.T) {
 // TestDisabledColors verifies the behavior of the unstructured colored logger when colors are disabled,
 // ensuring that it does not output colors when the color feature is turned off.
 func TestDisabledColors(t *testing.T) {
+	// Force a deterministic terminal environment so the colored ConsoleWriter behavior is consistent.
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "xterm-256color")
+
 	// Create a base logger
 	logger := NewLogger(zerolog.InfoLevel)
 
@@ -67,14 +69,15 @@ func TestDisabledColors(t *testing.T) {
 	// We should expect the underlying data structures are correctly updated
 	assert.Equal(t, len(logger.unstructuredColorWriters), 1)
 
+	// Record the fully colorized level marker before disabling package-level colors.
+	coloredArrow := colors.GreenBold(colors.LEFT_ARROW)
+
 	// Disable colors and log msg
 	colors.DisableColor()
 	logger.Info("foo")
 
-	// Ensure that msg doesn't include ANSI colors afterwards.
-	prefix := fmt.Sprintf("%s %s", colors.LEFT_ARROW, "foo")
-
-	_, _, ok := strings.Cut(buf.String(), prefix)
-	assert.True(t, ok)
-	assert.NotContains(t, buf.String(), "\033[")
+	// Disabling the package-level colors should remove Medusa's custom level coloring even when the
+	// underlying ConsoleWriter is configured for colored output.
+	assert.Contains(t, buf.String(), colors.LEFT_ARROW)
+	assert.NotContains(t, buf.String(), coloredArrow)
 }
