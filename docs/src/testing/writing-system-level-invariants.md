@@ -5,9 +5,9 @@ This chapter will walk you through writing system-level fuzz tests. We will cont
 Before we begin, let's recall the definition from the [Types of Invariants](./invariants.md#system-level-invariants)
 chapter:
 
-> **Definition**: A system-level invariant is a property that holds true across the *entire* execution of a system.
+> **Definition**: A system-level invariant is a property that holds true across the _entire_ execution of a system.
 
-Unlike function-level invariants that assert pre/post-conditions of a *single* function call, system-level invariants must hold **regardless of the order or combination of function calls** made to the system.
+Unlike function-level invariants that assert pre/post-conditions of a _single_ function call, system-level invariants must hold **regardless of the order or combination of function calls** made to the system.
 
 ### Identifying system-level invariants
 
@@ -46,7 +46,7 @@ contract DepositContract {
 }
 ```
 
-Now that multiple functions can modify `totalDeposited` and user balances, we can identify system-level invariants that must hold after *any* sequence of deposits and withdrawals:
+Now that multiple functions can modify `totalDeposited` and user balances, we can identify system-level invariants that must hold after _any_ sequence of deposits and withdrawals:
 
 1. `totalDeposited` should always be less than or equal to `MAX_DEPOSIT_AMOUNT`.
 2. `totalDeposited` should always equal the ETH balance of the contract (`address(this).balance`).
@@ -98,27 +98,25 @@ contract TestDepositContract {
 
 Notice the key differences from the function-level fuzz test in the [previous chapter](./writing-function-level-invariants.md):
 
-- **No input arguments**: The fuzzer does *not* control the inputs to property tests. Instead, the fuzzer generates
-random call sequences targeting all public functions (e.g. `deposit`, `withdraw`) and the property tests passively
-observe whether the resulting state is valid.
-- **No direct function calls**: Property tests do not call into the system under test. They only *read* state and
-return whether the invariant holds.
+- **No input arguments**: The fuzzer does _not_ control the inputs to property tests. Instead, the fuzzer generates
+  random call sequences targeting all public functions (e.g. `deposit`, `withdraw`) and the property tests passively
+  observe whether the resulting state is valid.
+- **No direct function calls**: Property tests do not call into the system under test. They only _read_ state and
+  return whether the invariant holds.
 - **Multiple invariants**: Each property test checks a single invariant. This makes it easy to identify exactly which
-invariant was violated when a test fails.
+  invariant was violated when a test fails.
 
 ### Comparing to function-level invariants
 
 It is worth understanding the difference between how function-level and system-level invariants are tested:
 
-
 |                           | Function-level (assertion tests)                                                            | System-level (property tests)                              |
 | ------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | **Where invariants live** | Inside the function being tested (via `assert()`) or in a fuzz test that calls the function | In standalone `property_` functions                        |
-| **Inputs**                | Fuzzer controls function arguments                                                          | Fuzzer controls the *call sequence*, not the property test |
-| **When checked**          | During execution of the function                                                            | After *every* transaction in a call sequence               |
+| **Inputs**                | Fuzzer controls function arguments                                                          | Fuzzer controls the _call sequence_, not the property test |
+| **When checked**          | During execution of the function                                                            | After _every_ transaction in a call sequence               |
 | **What they test**        | Pre/post-conditions of a single function                                                    | Global properties across arbitrary sequences of calls      |
 | **Call sequence length**  | Typically `1` (stateless)                                                                   | Typically `> 1` (stateful)                                 |
-
 
 ### Running a system-level test with Medusa
 
@@ -238,11 +236,11 @@ Medusa will also attempt to **shrink** the failing call sequence to the minimal 
 
 ### Tips for writing effective system-level invariants
 
-1. **Start with the specification**: Identify what must *always* be true about your system regardless of usage patterns.
-  Common examples include conservation of value, supply invariants, and access control guarantees.
+1. **Start with the specification**: Identify what must _always_ be true about your system regardless of usage patterns.
+   Common examples include conservation of value, supply invariants, and access control guarantees.
 2. **One invariant per property test**: Keep each `property_` function focused on a single invariant. This makes failures easier to diagnose.
 3. **Use wrapper functions**: Create wrapper functions in your test contract that bound fuzzed inputs to valid ranges.
-  This prevents the fuzzer from wasting time on transactions that will simply revert.
+   This prevents the fuzzer from wasting time on transactions that will simply revert.
 4. **Increase the call sequence length**: System-level bugs often require multiple transactions to surface. Use a `callSequenceLength` of `50` or more to give the fuzzer room to explore complex state transitions.
 5. **Use multiple sender addresses**: Configure `fuzzing.senderAddresses` with several addresses to test interactions between multiple users. Many system-level bugs involve cross-user state corruption.
 6. **Combine with assertion tests**: Property tests and assertion tests complement each other. Use assertion tests for function-level pre/post-conditions and property tests for system-wide invariants. Both can run simultaneously.
