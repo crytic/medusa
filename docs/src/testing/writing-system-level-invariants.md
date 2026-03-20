@@ -166,7 +166,20 @@ contract TestDepositContract {
 
     // @notice wrapper for deposit that the fuzzer can call
     function deposit(uint256 _amount) public {
-        uint256 amount = clampLte(_amount, address(this).balance);
+        uint256 maxAmount = address(this).balance;
+        uint256 maxDepositAmount = depositContract.MAX_DEPOSIT_AMOUNT();
+        uint256 totalDeposited = depositContract.totalDeposited();
+
+        if (totalDeposited < maxDepositAmount) {
+            uint256 remainingCapacity = maxDepositAmount - totalDeposited;
+            if (remainingCapacity < maxAmount) {
+                maxAmount = remainingCapacity;
+            }
+        } else {
+            maxAmount = 0;
+        }
+
+        uint256 amount = clampLte(_amount, maxAmount);
         depositContract.deposit{value: amount}();
     }
 
@@ -201,12 +214,12 @@ contract TestDepositContract {
 }
 ```
 
-Note that we added `deposit` and `withdraw` wrapper functions in `TestDepositContract`. These wrappers allow the fuzzer to call `deposit` and `withdraw` with fuzzed arguments while automatically bounding the inputs to valid ranges.
+Note that we added `deposit` and `withdraw` wrapper functions in `TestDepositContract`. These wrappers allow the fuzzer to call `deposit` and `withdraw` with fuzzed arguments while automatically bounding the inputs to valid ranges. In particular, the `deposit` wrapper caps the value by both the test contract's ETH balance and the remaining deposit capacity.
 The property test functions then check the invariants after each of these calls. Because the wrappers call `DepositContract`
 internally, `msg.sender` inside `DepositContract` is always `TestDepositContract` in this example. This keeps the example
 focused on stateful call sequences rather than multi-user behavior.
 
-To run this test contract, download the project configuration file [here](../static/system_level_testing_medusa.json), rename it to `medusa.json`, and run:
+Save the Solidity code above as `test.sol`. Then download the project configuration file [here](../static/system_level_testing_medusa.json), rename it to `medusa.json`, and run:
 
 ```
 medusa fuzz --config medusa.json
