@@ -69,9 +69,6 @@ func TestDisabledColors(t *testing.T) {
 	// We should expect the underlying data structures are correctly updated
 	assert.Equal(t, len(logger.unstructuredColorWriters), 1)
 
-	// Record the fully colorized level marker before disabling package-level colors.
-	coloredArrow := colors.GreenBold(colors.LEFT_ARROW)
-
 	// Disable colors and log msg
 	colors.DisableColor()
 	logger.Info("foo")
@@ -79,5 +76,5 @@ func TestDisabledColors(t *testing.T) {
 	// Disabling the package-level colors should remove Medusa's custom level coloring even when the
 	// underlying ConsoleWriter is configured for colored output.
 	assert.Contains(t, buf.String(), colors.LEFT_ARROW)
-	assert.NotContains(t, buf.String(), coloredArrow)
+	assert.NotContains(t, buf.String(), "\x1b[32m")
 }
