@@ -24,7 +24,7 @@ GetResultBlocking obtains the result from the client, blocking until the result 
 pass a pointer to their data through result. Note that if the fuzzer is shutting down, an error may be returned to
 signify the context has been cancelled.
 */
-func (p *PendingResult) GetResultBlocking(result interface{}) error {
+func (p *PendingResult) GetResultBlocking(result any) error {
 	select {
 	case <-p.request.Done:
 		if p.request.Error != nil {
@@ -44,7 +44,7 @@ type requestKey struct {
 	Args   string
 }
 
-func makeRequestKey(method string, args ...interface{}) (requestKey, error) {
+func makeRequestKey(method string, args ...any) (requestKey, error) {
 	serialized, err := json.Marshal(args)
 	if err != nil {
 		return requestKey{}, err

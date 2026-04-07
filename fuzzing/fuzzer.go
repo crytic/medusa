@@ -32,6 +32,7 @@ import (
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa/chain"
+	chainState "github.com/crytic/medusa/chain/state"
 	"github.com/crytic/medusa/compilation"
 	"github.com/crytic/medusa/compilation/platforms"
 	compilationTypes "github.com/crytic/medusa/compilation/types"
@@ -352,9 +353,45 @@ func (f *Fuzzer) CreateTestChainForCleaning() (*chain.TestChain, map[common.Addr
 		return nil, nil, fmt.Errorf("failed to clone test chain: %w", err)
 	}
 
+	// Register genesis-loaded contracts with their ABIs
+	if len(f.config.Fuzzing.TestChainConfig.GenesisContractMappings) > 0 {
+		if err := f.applyGenesisContractMappings(deployedContracts); err != nil {
+			baseTestChain.Close()
+			testChain.Close()
+			return nil, nil, err
+		}
+	}
+
 	// Close base chain, return cloned chain
 	baseTestChain.Close()
 	return testChain, deployedContracts, nil
+}
+
+// applyGenesisContractMappings resolves each entry in GenesisContractMappings to its compiled
+// contract definition and registers the address→contract pair in deployedContracts.
+// It returns an error if an address cannot be parsed or a named contract is not found.
+func (f *Fuzzer) applyGenesisContractMappings(deployedContracts map[common.Address]*fuzzerTypes.Contract) error {
+	for addrStr, contractName := range f.config.Fuzzing.TestChainConfig.GenesisContractMappings {
+		addr, err := utils.HexStringToAddress(addrStr)
+		if err != nil {
+			return fmt.Errorf("invalid address in genesisContractMappings: %s: %w", addrStr, err)
+		}
+
+		var matched *fuzzerTypes.Contract
+		for _, contract := range f.contractDefinitions {
+			if contract.Name() == contractName {
+				matched = contract
+				break
+			}
+		}
+		if matched == nil {
+			return fmt.Errorf("contract '%s' specified in genesisContractMappings not found in compilation artifacts", contractName)
+		}
+
+		deployedContracts[addr] = matched
+		f.logger.Info(fmt.Sprintf("Mapped genesis contract at %s to %s", addr.Hex(), contractName))
+	}
+	return nil
 }
 
 // isLibrary checks if a contract with the given name is a library
@@ -553,8 +590,24 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 	// NOTE: Sharing GenesisAlloc between chains will result in some accounts not being funded for some reason.
 	genesisAlloc := make(types.GenesisAlloc)
 
-	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
-	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
+	// If a genesis state file is specified, load it first
+	if f.config.Fuzzing.TestChainConfig.GenesisStateFile != "" {
+		loadedAlloc, err := chainState.LoadGenesisAllocFromFile(f.config.Fuzzing.TestChainConfig.GenesisStateFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load genesis state from file %s: %w", f.config.Fuzzing.TestChainConfig.GenesisStateFile, err)
+		}
+		// Start with the loaded allocation
+		genesisAlloc = loadedAlloc
+		f.logger.Info(fmt.Sprintf("Loaded genesis state from %s with %d accounts", f.config.Fuzzing.TestChainConfig.GenesisStateFile, len(loadedAlloc)))
+		if len(f.config.Fuzzing.TestChainConfig.GenesisContractMappings) == 0 {
+			f.logger.Warn("genesisStateFile is set but genesisContractMappings is empty: " +
+				"genesis contracts will be present on-chain but the fuzzer has no ABI for them and will not call them")
+		}
+	}
+
+	// Fund all of our sender addresses in the genesis block with 2^128-1 ETH equivalent.
+	// This should both prevent us from running out of gas and prevent us from overflowing above 2^256 eth.
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
 			Balance: new(big.Int).Set(initBalance),
@@ -635,6 +688,12 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 	contractsToDeploy := make([]string, 0)
 	balances := make([]*config.ContractBalance, 0)
 
+	// Build a lookup set of genesis-mapped contract names once; used in both branches below.
+	genesisMappedContracts := make(map[string]bool)
+	for _, contractName := range fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings {
+		genesisMappedContracts[contractName] = true
+	}
+
 	if len(fuzzer.deploymentOrder) > 0 {
 		// Create a set of target contracts for easy lookup
 		targetContracts := make(map[string]bool)
@@ -646,9 +705,16 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 				targetContractBalances[name] = fuzzer.config.Fuzzing.TargetContractsBalances[i]
 			}
 		}
+
 		// Add contracts from the deployment order
 		for _, name := range fuzzer.deploymentOrder {
 			_, isPredeploy := fuzzer.config.Fuzzing.PredeployedContracts[name]
+
+			// Skip deploying contracts that are already in genesis
+			if genesisMappedContracts[name] {
+				continue
+			}
+
 			if isPredeploy || targetContracts[name] || fuzzer.isLibrary(name) {
 				contractsToDeploy = append(contractsToDeploy, name)
 				// Add balance for target contracts, zero for libraries
@@ -660,8 +726,15 @@ func chainSetupFromCompilations(fuzzer *Fuzzer, testChain *chain.TestChain) (*ex
 			}
 		}
 	} else {
-		contractsToDeploy = append(contractsToDeploy, fuzzer.config.Fuzzing.TargetContracts...)
-		balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances...)
+		// Add target contracts, skipping genesis-mapped ones
+		for i, name := range fuzzer.config.Fuzzing.TargetContracts {
+			if !genesisMappedContracts[name] {
+				contractsToDeploy = append(contractsToDeploy, name)
+				if i < len(fuzzer.config.Fuzzing.TargetContractsBalances) {
+					balances = append(balances, fuzzer.config.Fuzzing.TargetContractsBalances[i])
+				}
+			}
+		}
 	}
 
 	deployedContractAddr := make(map[string]common.Address)
