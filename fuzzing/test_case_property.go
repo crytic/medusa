@@ -3,7 +3,6 @@ package fuzzing
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -15,8 +14,6 @@ import (
 
 // PropertyTestCase describes a test being run by a PropertyTestCaseProvider.
 type PropertyTestCase struct {
-	// lock is used for thread-synchronization when reading or updating test case fields.
-	lock sync.Mutex
 	// status describes the status of the test case
 	status TestCaseStatus
 	// targetContract describes the target contract where the test case was found
@@ -31,8 +28,6 @@ type PropertyTestCase struct {
 
 // Status describes the TestCaseStatus used to define the current state of the test.
 func (t *PropertyTestCase) Status() TestCaseStatus {
-	t.lock.Lock()
-	defer t.lock.Unlock()
 	return t.status
 }
 
@@ -50,15 +45,13 @@ func (t *PropertyTestCase) Name() string {
 // LogMessage obtains a buffer that represents the result of the PropertyTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
+	// If the test failed, return a failure message.
 	buffer := logging.NewLogBuffer()
-	if t.status == TestCaseStatusFailed {
-		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset, "\n")
+	if t.Status() == TestCaseStatusFailed {
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
 		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed after the following call sequence:\n", t.targetContract.Name(), t.targetMethod.Sig))
 		buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
-		buffer.Append(t.callSequence.Log().Elements()...)
+		buffer.Append(t.CallSequence().Log().Elements()...)
 
 		// If an execution trace is attached then add it to the message
 		if t.propertyTestTrace != nil {
@@ -68,7 +61,7 @@ func (t *PropertyTestCase) LogMessage() *logging.LogBuffer {
 		return buffer
 	}
 
-	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset)
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset)
 	return buffer
 }
 

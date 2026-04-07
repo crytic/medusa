@@ -113,7 +113,6 @@ func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) 
 // "passed".
 func (t *AssertionTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) error {
 	// Loop through each test case and set any tests with a running status to a passed status.
-	// No lock needed — all workers are destroyed at this point.
 	for _, testCase := range t.testCases {
 		if testCase.status == TestCaseStatusRunning {
 			testCase.status = TestCaseStatusPassed
@@ -150,12 +149,8 @@ func (t *AssertionTestCaseProvider) onWorkerDeployedContractAdded(event FuzzerWo
 		t.testCasesLock.Lock()
 		testCase, testCaseExists := t.testCases[methodId]
 		t.testCasesLock.Unlock()
-		if testCaseExists {
-			testCase.lock.Lock()
-			if testCase.status == TestCaseStatusNotStarted {
-				testCase.status = TestCaseStatusRunning
-			}
-			testCase.lock.Unlock()
+		if testCaseExists && testCase.Status() == TestCaseStatusNotStarted {
+			testCase.status = TestCaseStatusRunning
 		}
 	}
 	return nil
@@ -217,10 +212,8 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 				}
 
 				// Update our test state and report it finalized.
-				testCase.lock.Lock()
 				testCase.status = TestCaseStatusFailed
 				testCase.callSequence = &shrunkenCallSequence
-				testCase.lock.Unlock()
 				worker.workerMetrics().failedSequences.Add(worker.workerMetrics().failedSequences, big.NewInt(1))
 				worker.Fuzzer().ReportTestCaseFinished(testCase)
 				return nil

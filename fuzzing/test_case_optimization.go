@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"sync"
 
 	"github.com/crytic/medusa-geth/accounts/abi"
 	"github.com/crytic/medusa/fuzzing/calls"
@@ -16,8 +15,6 @@ import (
 
 // OptimizationTestCase describes a test being run by a OptimizationTestCaseProvider.
 type OptimizationTestCase struct {
-	// lock is used for thread-synchronization when reading or updating test case fields.
-	lock sync.Mutex
 	// status describes the status of the test case
 	status TestCaseStatus
 	// targetContract describes the target contract where the test case was found
@@ -37,8 +34,6 @@ type OptimizationTestCase struct {
 
 // Status describes the TestCaseStatus used to define the current state of the test.
 func (t *OptimizationTestCase) Status() TestCaseStatus {
-	t.lock.Lock()
-	defer t.lock.Unlock()
 	return t.status
 }
 
@@ -56,26 +51,23 @@ func (t *OptimizationTestCase) Name() string {
 // LogMessage obtains a buffer that represents the result of the OptimizationTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	buffer := logging.NewLogBuffer()
 
 	// If the test case never started, just log the status and name of the test case
-	if t.status == TestCaseStatusNotStarted {
-		buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset, "\n")
+	if t.Status() == TestCaseStatusNotStarted {
+		buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
 		return buffer
 	}
 
 	// We are now guaranteed to handle only test cases in the running state
 	// If we weren't able to find a value greater than the minimum, the test case has failed
 	minInt, _ := new(big.Int).SetString(MIN_INT, 16)
-	if t.value.Cmp(minInt) == 0 {
+	if t.Value().Cmp(minInt) == 0 {
 		t.status = TestCaseStatusFailed
 	} else {
 		t.status = TestCaseStatusPassed
 	}
-	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset, "\n")
+	buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
 
 	// Notify the user we failed to find anything
 	if t.status == TestCaseStatusFailed {
@@ -89,7 +81,7 @@ func (t *OptimizationTestCase) LogMessage() *logging.LogBuffer {
 	buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" resulted in the maximum value: ", t.targetContract.Name(), t.targetMethod.Sig))
 	buffer.Append(colors.Bold, t.value, colors.Reset, "\n")
 	buffer.Append(colors.Bold, "[Call Sequence]", colors.Reset, "\n")
-	buffer.Append(t.callSequence.Log().Elements()...)
+	buffer.Append(t.CallSequence().Log().Elements()...)
 
 	// If an execution trace is attached then add it to the message
 	if t.optimizationTestTrace != nil {
@@ -112,7 +104,5 @@ func (t *OptimizationTestCase) ID() string {
 
 // Value obtains the maximum value returned by the test method found till now
 func (t *OptimizationTestCase) Value() *big.Int {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	return new(big.Int).Set(t.value)
+	return t.value
 }
