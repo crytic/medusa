@@ -17,6 +17,7 @@
             --gray-50: #f9fafb;
             --gray-100: #f3f4f6;
             --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
             --gray-400: #9ca3af;
             --gray-500: #6b7280;
             --gray-600: #4b5563;
@@ -25,9 +26,13 @@
             --surface: #fff;
             --text: var(--gray-800);
             --text-light: var(--gray-500);
+            --source-header-bg: #12181E;
+            --source-header-bg-hover: #1e2832;
+            --source-header-text: #ffffff;
             --radius: 0.375rem;
             --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
             --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            color-scheme: light dark;
             /* RGB values for opacity variants */
             --success-rgb: 34,197,94;
             --warning-rgb: 234,179,8;
@@ -400,8 +405,8 @@
         
         .source-file-header {
             padding:0.75rem 1rem;
-            background:#12181E;
-            color:white;
+            background:var(--source-header-bg);
+            color:var(--source-header-text);
             cursor:pointer;
             display:flex;
             align-items:center;
@@ -410,7 +415,7 @@
         }
         
         .source-file-header:hover {
-            background:#1e2832;
+            background:var(--source-header-bg-hover);
         }
         
         .source-file-header .file-info {
@@ -516,6 +521,32 @@
             color:var(--gray-500);
         }
         
+        /* Dark mode */
+        @media (prefers-color-scheme:dark) {
+            :root {
+                --gray-50: #111318;
+                --gray-100: #1a1d25;
+                --gray-200: #2a2d37;
+                --gray-300: #374151;
+                --gray-400: #6b7280;
+                --gray-500: #9ca3af;
+                --gray-600: #d1d5db;
+                --gray-700: #e5e7eb;
+                --gray-800: #f3f4f6;
+                --surface: #181a22;
+                --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+                --shadow: 0 1px 3px rgba(0,0,0,0.4);
+                --primary-light: rgba(99,102,241,0.15);
+                --source-header-bg: #0f141b;
+                --source-header-bg-hover: #1b2330;
+                --source-header-text: #f9fafb;
+            }
+            .file-search input {
+                background:var(--gray-100);
+                color:var(--text);
+            }
+        }
+
         /* Responsive */
         @media (max-width:768px) {
             .stats-container {grid-template-columns:1fr}

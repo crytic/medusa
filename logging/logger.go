@@ -387,7 +387,7 @@ func formatUnstructuredWriter(writer io.Writer, level zerolog.Level, colored boo
 	consoleWriter := zerolog.ConsoleWriter{Out: writer, NoColor: !colored}
 
 	// Get rid of the timestamp for unstructured output
-	consoleWriter.FormatTimestamp = func(i interface{}) string {
+	consoleWriter.FormatTimestamp = func(i any) string {
 		return ""
 	}
 

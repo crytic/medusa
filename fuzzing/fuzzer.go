@@ -597,9 +597,9 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		f.logger.Info(fmt.Sprintf("Loaded genesis state from %s with %d accounts", f.config.Fuzzing.TestChainConfig.GenesisStateFile, len(loadedAlloc)))
 	}
 
-	// Fund all of our sender addresses in the genesis block with 2^256-1 ETH equivalent
-	// These will override any loaded accounts at the same addresses
-	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
+	// Fund all of our sender addresses in the genesis block with 2^128-1 ETH equivalent.
+	// This should both prevent us from running out of gas and prevent us from overflowing above 2^256 eth.
+	initBalance := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil), big.NewInt(1))
 	for _, sender := range f.senders {
 		genesisAlloc[sender] = types.Account{
 			Balance: new(big.Int).Set(initBalance),
