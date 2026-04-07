@@ -7,6 +7,7 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/contracts"
+	"github.com/crytic/medusa/logging"
 )
 
 // SometimesTestCaseProvider is a provider for on-chain sometimes tests.
@@ -63,7 +64,7 @@ func (t *SometimesTestCaseProvider) executeSometimesTest(worker *FuzzerWorker, s
 	// Execute the call.
 	executionResult, err := worker.Chain().CallContract(msg.ToCoreMessage(), nil)
 	if err != nil {
-		return false, fmt.Errorf("failed to call sometimes test method: %v", err)
+		return false, fmt.Errorf("failed to call sometimes test method: %w", err)
 	}
 
 	// If our sometimes test method call succeeded (didn't revert), return true
@@ -128,7 +129,12 @@ func (t *SometimesTestCaseProvider) onFuzzerStopping(event FuzzerStoppingEvent) 
 					t.fuzzer.ReportTestCaseFinished(testCase)
 				}
 			} else {
-				// Not enough executions to evaluate, mark as passed with a note
+				// Not enough executions to evaluate — log a warning so the user knows
+				// this test was not meaningfully evaluated, then mark as passed.
+				logging.GlobalLogger.Warn(fmt.Sprintf(
+					"Sometimes test '%s' did not reach minimum execution count (%d/%d) and was marked as passed by default. Increase TestLimit or campaign duration to fully evaluate this test.",
+					testCase.Name(), testCase.executionCount, testCase.minExecutionCount,
+				))
 				testCase.status = TestCaseStatusPassed
 			}
 		}

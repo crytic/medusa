@@ -92,7 +92,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					},
 				},
 				SometimesTesting: SometimesTestingConfig{
-					Enabled: true,
+					Enabled: false,
 					TestPrefixes: []string{
 						"sometimes_",
 					},
