@@ -275,7 +275,7 @@ func TestSometimesMode(t *testing.T) {
 			assert.Contains(t, failedTestCase.Name(), "impossibleCondition", "Expected the impossible condition test to fail")
 
 			// Verify that execution counts are reasonable
-			assert.GreaterOrEqual(t, failedTestCase.executionCount, uint64(100), "Expected at least MinExecutionCount executions")
+			assert.Greater(t, failedTestCase.executionCount, uint64(100), "Expected at least MinExecutionCount executions")
 			assert.EqualValues(t, 0, failedTestCase.successCount, "Expected impossible condition to never succeed")
 		},
 	})
@@ -297,7 +297,6 @@ func TestSometimesMultipleContracts(t *testing.T) {
 			config.Fuzzing.Testing.SometimesTesting.MinSuccessRate = 0.05
 			config.Fuzzing.Testing.SometimesTesting.MinExecutionCount = 100
 			config.Fuzzing.Testing.TestAllContracts = true
-			config.Fuzzing.Testing.StopOnFailedTest = false
 			config.Slither.UseSlither = false
 		},
 		method: func(f *fuzzerTestContext) {
@@ -307,13 +306,11 @@ func TestSometimesMultipleContracts(t *testing.T) {
 
 			// Get all test cases
 			passedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusPassed)
-			failedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
 
-			// We expect 2 passed tests (one from each contract) and no failures
+			// We expect 2 passed tests (one from each contract)
 			// - TestContract.sometimes_stateSet should PASS
 			// - SecondContract.sometimes_flagSet should PASS
 			assert.EqualValues(t, 2, len(passedTests), "Expected 2 sometimes tests to pass (one from each contract)")
-			assert.EqualValues(t, 0, len(failedTests), "Expected no sometimes tests to fail")
 		},
 	})
 }

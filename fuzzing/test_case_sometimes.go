@@ -34,8 +34,6 @@ type SometimesTestCase struct {
 
 // Status describes the TestCaseStatus used to define the current state of the test.
 func (t *SometimesTestCase) Status() TestCaseStatus {
-	t.lock.Lock()
-	defer t.lock.Unlock()
 	return t.status
 }
 
@@ -50,9 +48,8 @@ func (t *SometimesTestCase) Name() string {
 	return fmt.Sprintf("Sometimes Test: %s.%s", t.targetContract.Name(), t.targetMethod.Sig)
 }
 
-// successRate returns the current success rate of the test.
-// The caller must hold t.lock.
-func (t *SometimesTestCase) successRate() float64 {
+// SuccessRate returns the current success rate of the test.
+func (t *SometimesTestCase) SuccessRate() float64 {
 	if t.executionCount == 0 {
 		return 0.0
 	}
@@ -62,39 +59,36 @@ func (t *SometimesTestCase) successRate() float64 {
 // LogMessage obtains a buffer that represents the result of the SometimesTestCase. This buffer can be passed to a logger for
 // console or file logging.
 func (t *SometimesTestCase) LogMessage() *logging.LogBuffer {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	buffer := logging.NewLogBuffer()
 
-	rate := t.successRate()
+	successRate := t.SuccessRate()
 
-	if t.status == TestCaseStatusFailed {
-		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset, "\n")
+	if t.Status() == TestCaseStatusFailed {
+		buffer.Append(colors.RedBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset, "\n")
 		buffer.Append(fmt.Sprintf("Test for method \"%s.%s\" failed:\n", t.targetContract.Name(), t.targetMethod.Sig))
 		buffer.Append(fmt.Sprintf("  Executions: %d (minimum required: %d)\n", t.executionCount, t.minExecutionCount))
 		buffer.Append(fmt.Sprintf("  Successes: %d\n", t.successCount))
 		buffer.Append(fmt.Sprintf("  Success rate: %.2f%% (minimum required: %.2f%%)\n",
-			rate*100, t.minSuccessRate*100))
+			successRate*100, t.minSuccessRate*100))
 		buffer.Append(fmt.Sprintf("  The test should succeed at least %.2f%% of the time but only succeeded %.2f%% of the time.\n",
-			t.minSuccessRate*100, rate*100))
+			t.minSuccessRate*100, successRate*100))
 		return buffer
 	}
 
-	if t.status == TestCaseStatusPassed {
-		buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.status), colors.Bold, t.Name(), colors.Reset)
+	if t.Status() == TestCaseStatusPassed {
+		buffer.Append(colors.GreenBold, fmt.Sprintf("[%s] ", t.Status()), colors.Bold, t.Name(), colors.Reset)
 		if t.executionCount > 0 {
 			buffer.Append(fmt.Sprintf(" (executions: %d, successes: %d, rate: %.2f%%)",
-				t.executionCount, t.successCount, rate*100))
+				t.executionCount, t.successCount, successRate*100))
 		}
 		return buffer
 	}
 
 	// For RUNNING or NOT_STARTED status
-	buffer.Append(colors.Bold, fmt.Sprintf("[%s] ", t.status), t.Name(), colors.Reset)
+	buffer.Append(colors.Bold, fmt.Sprintf("[%s] ", t.Status()), t.Name(), colors.Reset)
 	if t.executionCount > 0 {
 		buffer.Append(fmt.Sprintf(" (executions: %d, successes: %d, rate: %.2f%%)",
-			t.executionCount, t.successCount, rate*100))
+			t.executionCount, t.successCount, successRate*100))
 	}
 	return buffer
 }
@@ -106,5 +100,5 @@ func (t *SometimesTestCase) Message() string {
 
 // ID obtains a unique identifier for a test result.
 func (t *SometimesTestCase) ID() string {
-	return strings.ReplaceAll(fmt.Sprintf("SOMETIMES-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-")
+	return strings.Replace(fmt.Sprintf("SOMETIMES-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
 }
