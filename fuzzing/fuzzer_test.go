@@ -2,9 +2,11 @@ package fuzzing
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -19,6 +21,7 @@ import (
 
 	"github.com/crytic/medusa/fuzzing/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFuzzerHooks runs tests to ensure that fuzzer hooks can be modified externally on an API level.
@@ -539,6 +542,67 @@ func TestDeploymentsWithPredeploy(t *testing.T) {
 			// Check for any failed tests and verify coverage was captured
 			assertFailedTestsExpected(f, true)
 			assertCorpusCallSequencesCollected(f, true)
+		},
+	})
+}
+
+// TestGenesisStateContractFuzzing verifies that a contract loaded from a genesis state file is correctly
+// registered and fuzzed. It simulates the workflow where a contract was deployed outside of Medusa (e.g.,
+// via a Foundry script) and its state was captured with `cast rpc anvil_dumpState`. The test confirms
+// that the fuzzer finds the same assertion failure it would find when deploying the contract normally.
+func TestGenesisStateContractFuzzing(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_immediate.sol",
+		configUpdates: func(cfg *config.ProjectConfig) {
+			cfg.Fuzzing.TargetContracts = []string{"TestContract"}
+			cfg.Fuzzing.Testing.PropertyTesting.Enabled = false
+			cfg.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			cfg.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Pull the compiled runtime bytecode for TestContract so we can inject it into a
+			// genesis state file, simulating the bytecode an anvil_dumpState snapshot would contain.
+			// RuntimeBytecode is already raw bytes after compilation (no library placeholders), so
+			// we encode it as a 0x-prefixed hex string that hexutil.Bytes (used by the genesis loader) accepts.
+			var codeHex string
+			for _, contract := range f.fuzzer.contractDefinitions {
+				if contract.Name() == "TestContract" {
+					codeHex = "0x" + hex.EncodeToString(contract.CompiledContract().RuntimeBytecode)
+					break
+				}
+			}
+			require.NotEmpty(t, codeHex, "TestContract runtime bytecode not found in compiled artifacts")
+
+			// Build a plain-accounts genesis state JSON with TestContract pre-deployed at a
+			// deterministic address. This is the format that LoadGenesisAllocFromFile accepts.
+			const genesisAddr = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+			genesisState := map[string]any{
+				genesisAddr: map[string]any{
+					"balance": "0x0",
+					"nonce":   "0x1",
+					"code":    codeHex,
+				},
+			}
+			genesisJSON, err := json.Marshal(genesisState)
+			require.NoError(t, err)
+
+			genesisFile := filepath.Join(t.TempDir(), "genesis_state.json")
+			err = os.WriteFile(genesisFile, genesisJSON, 0o644)
+			require.NoError(t, err)
+
+			// Wire up the genesis config. TestContract is in TargetContracts so the test providers
+			// register it; GenesisContractMappings binds its ABI to the pre-deployed address and
+			// prevents a second deployment.
+			f.fuzzer.config.Fuzzing.TestChainConfig.GenesisStateFile = genesisFile
+			f.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings = map[string]string{
+				genesisAddr: "TestContract",
+			}
+
+			err = f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// The genesis-loaded contract contains assert(false), so the fuzzer must find the failure.
+			assertFailedTestsExpected(f, true)
 		},
 	})
 }

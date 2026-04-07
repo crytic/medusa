@@ -127,7 +127,7 @@ contract TestDepositContract {
 }
 ```
 
-To run this test contract, download the project configuration file [here](../static/function_level_testing_medusa.json),
+Save the Solidity code above as `test.sol`. Then download the project configuration file [here](../static/function_level_testing_medusa.json),
 rename it to `medusa.json`, and run:
 
 ```
