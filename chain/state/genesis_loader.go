@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"strings"
@@ -16,6 +17,10 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// maxDecompressedGenesisBytes caps decompressed anvil state size to prevent memory exhaustion
+// from malformed or malicious files. 512 MB is generous for any realistic EVM state dump.
+const maxDecompressedGenesisBytes = 512 * 1024 * 1024
+
 // flexibleNonce handles both integer (0) and hex string ("0x0") nonce formats
 type flexibleNonce uint64
 
@@ -23,6 +28,17 @@ func (n *flexibleNonce) UnmarshalJSON(data []byte) error {
 	// Reject null explicitly
 	if bytes.Equal(data, []byte("null")) {
 		return fmt.Errorf("nonce must be integer or hex string, got: null")
+	}
+
+	// Reject floats: JSON numbers containing '.' or 'e'/'E' are not valid nonces.
+	// json.Unmarshal into uint64 silently truncates 5.0 → 5, but also accepts -1
+	// wrapping to maxUint64, so we gate on the raw token first.
+	if len(data) > 0 && data[0] != '"' {
+		for _, b := range data {
+			if b == '.' || b == 'e' || b == 'E' {
+				return fmt.Errorf("nonce must be an integer, got float: %s", string(data))
+			}
+		}
 	}
 
 	// Try unmarshaling as integer first (anvil_dumpState format)
@@ -91,16 +107,17 @@ func detectGenesisFormat(data []byte) genesisFormat {
 		return formatPlainAccounts
 	}
 
-	// Check if keys look like addresses (0x followed by 40 hex chars)
+	// Check if all keys look like addresses (0x followed by 40 hex chars).
+	// Inspect every key rather than relying on the non-deterministic iteration
+	// order of Go maps, which would cause misclassification if a non-address key
+	// happened to be visited first.
 	for key := range testMap {
-		if len(key) == 42 && strings.HasPrefix(key, "0x") {
-			return formatPlainAccounts
+		if len(key) != 42 || !strings.HasPrefix(key, "0x") {
+			return formatUnknown
 		}
-		// If first key doesn't match, it's not plain accounts format
-		break
 	}
 
-	return formatUnknown
+	return formatPlainAccounts
 }
 
 // loadNativeAnvilDumpState handles gzip-compressed anvil_dumpState
@@ -126,11 +143,17 @@ func loadNativeAnvilDumpState(data []byte) (gethTypes.GenesisAlloc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzipReader.Close()
-
 	var decompressed bytes.Buffer
-	if _, err := decompressed.ReadFrom(gzipReader); err != nil {
+	limitedReader := io.LimitReader(gzipReader, maxDecompressedGenesisBytes+1)
+	if _, err := decompressed.ReadFrom(limitedReader); err != nil {
+		_ = gzipReader.Close()
 		return nil, fmt.Errorf("failed to decompress: %w", err)
+	}
+	if err := gzipReader.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close gzip reader: %w", err)
+	}
+	if int64(decompressed.Len()) > maxDecompressedGenesisBytes {
+		return nil, fmt.Errorf("decompressed genesis state exceeds %d MB limit", maxDecompressedGenesisBytes/(1024*1024))
 	}
 
 	// Parse as anvil wrapper
@@ -230,7 +253,7 @@ func MergeGenesisAllocs(priority, base gethTypes.GenesisAlloc) gethTypes.Genesis
 	// Copy base allocations
 	for addr, account := range base {
 		result[addr] = gethTypes.Account{
-			Balance: new(big.Int).Set(account.Balance),
+			Balance: copyBigInt(account.Balance),
 			Nonce:   account.Nonce,
 			Code:    append([]byte(nil), account.Code...),
 			Storage: copyStorage(account.Storage),
@@ -240,7 +263,7 @@ func MergeGenesisAllocs(priority, base gethTypes.GenesisAlloc) gethTypes.Genesis
 	// Override with priority allocations
 	for addr, account := range priority {
 		result[addr] = gethTypes.Account{
-			Balance: new(big.Int).Set(account.Balance),
+			Balance: copyBigInt(account.Balance),
 			Nonce:   account.Nonce,
 			Code:    append([]byte(nil), account.Code...),
 			Storage: copyStorage(account.Storage),
@@ -248,6 +271,14 @@ func MergeGenesisAllocs(priority, base gethTypes.GenesisAlloc) gethTypes.Genesis
 	}
 
 	return result
+}
+
+// copyBigInt returns a deep copy of b, or a new zero Int if b is nil.
+func copyBigInt(b *big.Int) *big.Int {
+	if b == nil {
+		return new(big.Int)
+	}
+	return new(big.Int).Set(b)
 }
 
 // copyStorage creates a deep copy of a storage map

@@ -1,7 +1,11 @@
 package state
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -309,27 +313,63 @@ func TestDetectGenesisFormat(t *testing.T) {
 	}
 }
 
+// makeNativeAnvilDump synthesizes a native anvil_dumpState file (gzip-compressed JSON hex string)
+// from a plain accounts map, matching the format produced by `cast rpc anvil_dumpState`.
+func makeNativeAnvilDump(t *testing.T, accounts map[string]interface{}) []byte {
+	t.Helper()
+
+	wrapper := map[string]interface{}{"accounts": accounts}
+	inner, err := json.Marshal(wrapper)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, err = gz.Write(inner)
+	require.NoError(t, err)
+	require.NoError(t, gz.Close())
+
+	// Encode as a JSON-quoted hex string with 0x prefix, matching anvil output.
+	hexStr := fmt.Sprintf(`"0x%s"`, hex.EncodeToString(buf.Bytes()))
+	return []byte(hexStr)
+}
+
 func TestLoadGenesisAllocFromFile_NativeAnvilFormat(t *testing.T) {
 	t.Parallel()
 
-	// Use the actual anvil_state.json from manual testing
-	testFile := "../../manual_test/anvil_state.json"
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Skip("anvil_state.json not found, skipping integration test")
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "anvil_state.json")
+
+	// Build a synthetic native anvil dump with one account, using integer nonce
+	// (the format anvil_dumpState actually produces).
+	accounts := map[string]interface{}{
+		"0x1111111111111111111111111111111111111111": map[string]interface{}{
+			"balance": "0x56bc75e2d63100000", // 100 ETH
+			"nonce":   1,                     // integer nonce (native anvil format)
+			"code":    "0x6080604052",
+			"storage": map[string]string{
+				"0x0000000000000000000000000000000000000000000000000000000000000001": "0x0000000000000000000000000000000000000000000000000000000000000002",
+			},
+		},
 	}
+
+	data := makeNativeAnvilDump(t, accounts)
+	require.NoError(t, os.WriteFile(testFile, data, 0o644))
 
 	genesisAlloc, err := LoadGenesisAllocFromFile(testFile)
 	require.NoError(t, err)
-	assert.Greater(t, len(genesisAlloc), 0, "should load at least one account")
+	require.Len(t, genesisAlloc, 1)
 
-	// Check for the deployed contract from manual test
-	contractAddr := common.HexToAddress("0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	contract, exists := genesisAlloc[contractAddr]
-	if exists {
-		assert.Equal(t, uint64(1), contract.Nonce, "contract should have nonce 1")
-		assert.Greater(t, len(contract.Code), 1000, "contract should have bytecode")
-		assert.Equal(t, 5, len(contract.Storage), "contract should have 5 storage entries")
-	}
+	addr := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	account, exists := genesisAlloc[addr]
+	require.True(t, exists)
+
+	expected, _ := new(big.Int).SetString("100000000000000000000", 10)
+	assert.Equal(t, expected, account.Balance)
+	assert.Equal(t, uint64(1), account.Nonce)
+	assert.Equal(t, []byte{0x60, 0x80, 0x60, 0x40, 0x52}, account.Code)
+	storageKey := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	storageVal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000002")
+	assert.Equal(t, storageVal, account.Storage[storageKey])
 }
 
 func TestLoadGenesisAllocFromFile_IntegerNonces(t *testing.T) {

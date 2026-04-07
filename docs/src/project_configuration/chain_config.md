@@ -49,7 +49,7 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
   | **Anvil wrapper JSON**  | Decompressed dump with a top-level `"accounts"` field                  |
   | **Plain accounts JSON** | A flat map of `"0xADDR"` → `{balance, nonce, code, storage}`           |
 
-  See [Fuzzing Pre-Deployed Contracts](../advanced.md) for a step-by-step workflow.
+  See [Fuzzing Pre-Deployed Contracts](../testing/genesis_state.md) for a step-by-step workflow.
 
 - **Default**: `""`
 

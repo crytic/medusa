@@ -664,37 +664,19 @@ func (fw *FuzzerWorker) run(baseTestChain *chain.TestChain) (bool, error) {
 		return false, err
 	}
 
-	// Register genesis-loaded contracts with their ABIs
-	// These contracts are already deployed (loaded from genesis state) so they don't trigger deployment events
+	// Register genesis-loaded contracts with their ABIs.
+	// These contracts are already deployed (loaded from genesis state) so they don't trigger
+	// the normal deployment events that would otherwise populate deployedContracts.
 	if len(fw.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings) > 0 {
-		for addrStr, contractName := range fw.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings {
-			// Parse address
-			addr, err := utils.HexStringToAddress(addrStr)
-			if err != nil {
-				return false, fmt.Errorf("invalid address in genesisContractMappings: %s: %w", addrStr, err)
-			}
-
-			// Find matching contract definition
-			var matchedContract *fuzzerTypes.Contract
-			for _, contract := range fw.fuzzer.contractDefinitions {
-				if contract.Name() == contractName {
-					matchedContract = contract
-					break
-				}
-			}
-
-			if matchedContract == nil {
-				return false, fmt.Errorf("contract '%s' specified in genesisContractMappings not found in compilation artifacts", contractName)
-			}
-
-			// Register the contract in this worker's deployed contracts map
-			fw.deployedContracts[addr] = matchedContract
-
-			// Add the address to the worker's value set so it can be used in fuzzing
-			fw.valueSet.AddAddress(addr)
+		if err := fw.fuzzer.applyGenesisContractMappings(fw.deployedContracts); err != nil {
+			return false, err
 		}
-
-		// Update the worker's method lists to include genesis contract methods
+		// Add only the genesis-mapped addresses to the value set so the fuzzer generates calls to them.
+		for addrStr := range fw.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings {
+			if addr, err := utils.HexStringToAddress(addrStr); err == nil {
+				fw.valueSet.AddAddress(addr)
+			}
+		}
 		fw.updateMethods()
 	}
 
