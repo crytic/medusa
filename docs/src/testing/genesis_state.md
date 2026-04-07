@@ -50,19 +50,40 @@ Add two fields to the `chainConfig` section of your `medusa.json`:
 
 - **`genesisStateFile`** — path to the snapshot file (relative to `medusa.json`).
 - **`genesisContractMappings`** — maps each pre-deployed address to the contract name in your
-  compilation artifacts. Medusa uses this to bind the correct ABI to the address so it can generate
-  valid calls.
+  compilation artifacts. Medusa uses this to bind the correct ABI to the address.
 
-The mapped contract names must also appear in `targetContracts` so their methods are classified as
-assertion tests, property tests, or optimization targets:
+**`genesisContractMappings` controls ABI binding only.** It does not control which contracts the
+fuzzer generates calls to. The two concepts are separate:
+
+| Goal                                                                               | Where to configure        |
+| ---------------------------------------------------------------------------------- | ------------------------- |
+| Make a genesis contract's functions callable (by the fuzzer or by other contracts) | `genesisContractMappings` |
+| Have the fuzzer generate top-level calls to a contract and check its invariants    | `targetContracts`         |
+
+Contracts you want to **fuzz** must appear in both. Contracts that are **dependencies** of your
+targets (tokens, oracles, registries, etc.) should appear only in `genesisContractMappings` — they
+need an ABI so internal calls resolve, but you do not want the fuzzer flooding them with calls.
 
 ```json
 {
+  "chainConfig": {
+    "genesisStateFile": "state.json",
+    "genesisContractMappings": {
+      "0x5FbDB2315678afecb367f032d93F642f64180aa3": "Counter",
+      "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512": "MyToken",
+      "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9": "USDC"
+    }
+  },
   "fuzzing": {
     "targetContracts": ["Counter", "MyToken"]
   }
 }
 ```
+
+In the example above, `USDC` is present on-chain and its ABI is registered (so `Counter` and
+`MyToken` can call into it), but the fuzzer will not generate calls to `USDC` directly. You could
+add `"USDC"` to `targetContracts` if you wanted the fuzzer to call its functions too — though for
+most dependency contracts that is not what you want.
 
 ### 4. Run Medusa
 

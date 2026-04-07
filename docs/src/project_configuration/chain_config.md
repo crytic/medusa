@@ -61,10 +61,15 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
 
   For each entry, Medusa will:
   1. Skip deploying the named contract (it is already present in the genesis state).
-  2. Bind the compiled ABI to the given address so the fuzzer can call its functions.
+  2. Bind the compiled ABI to the given address.
 
-  The contract name must appear in `targetContracts` so its methods are classified correctly (assertion
-  tests, property tests, etc.).
+  **This controls ABI binding only, not which contracts are fuzzed.** Listing a contract here makes
+  its functions callable (by the fuzzer or by other contracts), but does not make the fuzzer generate
+  calls to it directly. To fuzz a genesis contract, also add its name to `targetContracts`.
+
+  Contracts that are dependencies of your targets (tokens, oracles, registries, etc.) should appear
+  here but not in `targetContracts` — they need an ABI so internal calls resolve correctly, but you
+  do not want the fuzzer flooding them with top-level calls.
 
 - **Default**: `{}`
 

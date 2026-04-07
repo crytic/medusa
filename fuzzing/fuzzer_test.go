@@ -590,9 +590,9 @@ func TestGenesisStateContractFuzzing(t *testing.T) {
 			err = os.WriteFile(genesisFile, genesisJSON, 0o644)
 			require.NoError(t, err)
 
-			// Wire up the genesis config. TestContract stays in TargetContracts so the fuzzer
-			// classifies its methods correctly; GenesisContractMappings tells the fuzzer not to
-			// deploy it and instead bind its ABI to the pre-deployed address.
+			// Wire up the genesis config. TestContract is in TargetContracts so the test providers
+			// register it; GenesisContractMappings binds its ABI to the pre-deployed address and
+			// prevents a second deployment.
 			f.fuzzer.config.Fuzzing.TestChainConfig.GenesisStateFile = genesisFile
 			f.fuzzer.config.Fuzzing.TestChainConfig.GenesisContractMappings = map[string]string{
 				genesisAddr: "TestContract",

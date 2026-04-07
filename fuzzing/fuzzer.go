@@ -599,6 +599,10 @@ func (f *Fuzzer) createTestChain() (*chain.TestChain, error) {
 		// Start with the loaded allocation
 		genesisAlloc = loadedAlloc
 		f.logger.Info(fmt.Sprintf("Loaded genesis state from %s with %d accounts", f.config.Fuzzing.TestChainConfig.GenesisStateFile, len(loadedAlloc)))
+		if len(f.config.Fuzzing.TestChainConfig.GenesisContractMappings) == 0 {
+			f.logger.Warn("genesisStateFile is set but genesisContractMappings is empty: " +
+				"genesis contracts will be present on-chain but the fuzzer has no ABI for them and will not call them")
+		}
 	}
 
 	// Fund all of our sender addresses in the genesis block with 2^128-1 ETH equivalent.
