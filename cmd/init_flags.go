@@ -7,11 +7,16 @@ import (
 
 // addInitFlags adds the various flags for the init command
 func addInitFlags() error {
+	return addInitFlagsToCommand(initCmd)
+}
+
+// addInitFlagsToCommand adds the various flags for the init command to the provided command.
+func addInitFlagsToCommand(cmd *cobra.Command) error {
 	// Output path for configuration
-	initCmd.Flags().String("out", "", "output path for the new project configuration file")
+	cmd.Flags().String("out", "", "output path for the new project configuration file")
 
 	// Target file / directory for compilation
-	initCmd.Flags().String("compilation-target", "", TargetFlagDescription)
+	cmd.Flags().String("compilation-target", "", TargetFlagDescription)
 
 	return nil
 }
