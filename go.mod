@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/bmatcuk/doublestar/v4 v4.9.2
-	github.com/crytic/medusa-geth v0.0.0-20250423141023-d818338d6925
+	github.com/crytic/medusa-geth v0.0.0-20260420202548-b162a9edb4bb
 	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.2
