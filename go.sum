@@ -37,8 +37,8 @@ github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a h1:W8mUrRp6NOV
 github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a/go.mod h1:sTwzHBvIzm2RfVCGNEBZgRyjwK40bVoun3ZnGOCafNM=
 github.com/crate-crypto/go-kzg-4844 v1.1.0 h1:EN/u9k2TF6OWSHrCCDBBU6GLNMq88OspHHlMnHfoyU4=
 github.com/crate-crypto/go-kzg-4844 v1.1.0/go.mod h1:JolLjpSff1tCCJKaJx4psrlEdlXuJEC996PL3tTAFks=
-github.com/crytic/medusa-geth v0.0.0-20250423141023-d818338d6925 h1:CeTtLPdvD7uMvaa4VBXNLVCmePvv75yEQb8gR0q+Rsc=
-github.com/crytic/medusa-geth v0.0.0-20250423141023-d818338d6925/go.mod h1:Of9UoKsMjqZO047+RArQyB0t9/+YeJAHiKHM5vGPUU8=
+github.com/crytic/medusa-geth v0.0.0-20260420202548-b162a9edb4bb h1:U9VeknMXu3P4BqxaB6FgPsvUONxPDg7RuuIhGck4vI8=
+github.com/crytic/medusa-geth v0.0.0-20260420202548-b162a9edb4bb/go.mod h1:Of9UoKsMjqZO047+RArQyB0t9/+YeJAHiKHM5vGPUU8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
