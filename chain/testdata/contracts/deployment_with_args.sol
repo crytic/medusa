@@ -3,7 +3,7 @@ contract DeploymentWithArgs {
     uint x;
     bytes y;
 
-    constructor(uint _x, bytes memory _y) {
+    constructor(uint _x, bytes memory _y) public {
         x = _x;
         y = _y;
     }
