@@ -179,6 +179,10 @@ type SourceFileAnalysis struct {
 
 	// Functions is a list of functions defined in the source file
 	Functions []*types.FunctionDefinition
+
+	// ContractDeclarationLines is a set of line indices (0-based) that contain contract/library/interface
+	// declarations. These lines are excluded from coverage calculations since they are not executable code.
+	ContractDeclarationLines map[int]bool
 }
 
 // ActiveLineCount returns the count of lines that are marked executable/active within the source file.
@@ -282,6 +286,7 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 
 			lines, cumulativeOffset := parseSourceLines(compilation.SourceCode[sourcePath])
 			funcs := make([]*types.FunctionDefinition, 0)
+			contractDeclLines := make(map[int]bool)
 
 			var ast types.AST
 			b, err := json.Marshal(compilation.SourcePathToArtifact[sourcePath].Ast)
@@ -301,6 +306,14 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				}
 				if node.GetNodeType() == "ContractDefinition" {
 					contract := node.(types.ContractDefinition)
+
+					// Track the contract declaration line (the first line of the contract definition).
+					// This line contains the "contract X is Y {" statement which is not executable code.
+					declLineIdx := getContractDeclarationLineIndex(contract.Src, cumulativeOffset)
+					if declLineIdx >= 0 {
+						contractDeclLines[declLineIdx] = true
+					}
+
 					if contract.Kind == types.ContractKindInterface {
 						continue
 					}
@@ -317,10 +330,11 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 			// Obtain the parsed source code lines for this source.
 			if _, ok := sourceAnalysis.Files[sourcePath]; !ok {
 				sourceAnalysis.Files[sourcePath] = &SourceFileAnalysis{
-					Path:                   sourcePath,
-					CumulativeOffsetByLine: cumulativeOffset,
-					Lines:                  lines,
-					Functions:              funcs,
+					Path:                     sourcePath,
+					CumulativeOffsetByLine:   cumulativeOffset,
+					Lines:                    lines,
+					Functions:                funcs,
+					ContractDeclarationLines: contractDeclLines,
 				}
 			}
 
@@ -450,7 +464,16 @@ func analyzeContractSourceCoverage(compilation types.Compilation, sourceAnalysis
 			})
 
 			// index is zero based, line numbers are 1 based
-			sourceLine := sourceFile.Lines[startLine-1]
+			lineIdx := startLine - 1
+			if lineIdx < 0 || lineIdx >= len(sourceFile.Lines) {
+				continue
+			}
+			sourceLine := sourceFile.Lines[lineIdx]
+
+			// Skip contract declaration lines - they are not executable code
+			if sourceFile.ContractDeclarationLines[lineIdx] {
+				continue
+			}
 
 			// Check if the line is within range
 			if sourceMapElement.Offset < sourceLine.End {
@@ -654,4 +677,29 @@ func parseSourceLines(sourceCode []byte) ([]*SourceLineAnalysis, []int) {
 
 	// Return the resulting lines
 	return lines, cumulativeOffset
+}
+
+// getContractDeclarationLineIndex returns the 0-based line index for a contract declaration
+// based on its source location string (format: "offset:length:sourceUnitID").
+// Contract declarations (contract, library, interface, abstract contract) are not executable
+// code and should be excluded from coverage calculations.
+// Returns -1 if the source location cannot be parsed.
+func getContractDeclarationLineIndex(src string, cumulativeOffsetByLine []int) int {
+	byteStart := types.GetSrcMapStart(src)
+	if byteStart < 0 {
+		return -1
+	}
+
+	// Use binary search to find which line contains this byte offset.
+	// The search finds the first line whose cumulative offset is > byteStart,
+	// so we subtract 1 to get the actual line containing the offset.
+	lineNumber := sort.Search(len(cumulativeOffsetByLine), func(i int) bool {
+		return cumulativeOffsetByLine[i] > byteStart
+	})
+
+	// Convert from 1-based line number to 0-based index
+	if lineNumber > 0 {
+		return lineNumber - 1
+	}
+	return 0
 }
