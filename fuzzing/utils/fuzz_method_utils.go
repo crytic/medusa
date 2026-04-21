@@ -30,16 +30,25 @@ func IsOptimizationTest(method abi.Method, prefixes []string) (bool, string) {
 // IsPropertyTest checks whether the method is a property test given potential naming prefixes it must conform to
 // and its underlying input/output arguments.
 // Returns (isValid, warningMessage). If the method has a prefix but invalid signature, warningMessage explains why.
-func IsPropertyTest(method abi.Method, prefixes []string) (bool, string) {
+func IsPropertyTest(method abi.Method, prefixes []string, propertyTestReturnBool bool) (bool, string) {
 	// Loop through all enabled prefixes to find a match
 	for _, prefix := range prefixes {
-		// The property test must simply have the right prefix and take no inputs and return a boolean
 		if strings.HasPrefix(method.Name, prefix) {
-			if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+			// If returnBool is set to true, the property must return a boolean
+			if propertyTestReturnBool {
+				if len(method.Inputs) == 0 && len(method.Outputs) == 1 && method.Outputs[0].Type.T == abi.BoolTy {
+					return true, ""
+				}
+				// Has prefix but invalid signature
+				expectedSig := method.Name + "() " + method.StateMutability + " returns (bool)"
+				return false, fmt.Sprintf("has signature '%s' but property testing provider expects '%s'", method.String(), expectedSig)
+			}
+			// If returnBool is set to false, the property must return nothing
+			if len(method.Inputs) == 0 && len(method.Outputs) == 0 {
 				return true, ""
 			}
 			// Has prefix but invalid signature
-			expectedSig := method.Name + "() " + method.StateMutability + " returns (bool)"
+			expectedSig := method.Name + "() " + method.StateMutability
 			return false, fmt.Sprintf("has signature '%s' but property testing provider expects '%s'", method.String(), expectedSig)
 		}
 	}
@@ -48,12 +57,12 @@ func IsPropertyTest(method abi.Method, prefixes []string) (bool, string) {
 
 // BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
 // Returns lists of methods for each test type, plus any warnings for methods with test prefixes but invalid signatures.
-func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method, warnings []string) {
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool, propertyTestReturnBool bool) (assertionTests, propertyTests, optimizationTests []abi.Method, warnings []string) {
 	warnings = []string{}
 
 	for _, method := range contract.Abi.Methods {
 		// Check if it's a property test
-		isPropertyTest, propertyWarning := IsPropertyTest(method, propertyTestPrefixes)
+		isPropertyTest, propertyWarning := IsPropertyTest(method, propertyTestPrefixes, propertyTestReturnBool)
 		if isPropertyTest {
 			propertyTests = append(propertyTests, method)
 			continue

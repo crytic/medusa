@@ -34,6 +34,8 @@ contract TestXY {
 
 `medusa` deploys your contract containing property tests and generates a sequence of calls to execute against all publicly accessible methods. After each function call, it calls upon your property tests to ensure they return a `true` (success) status.
 
+If you are using [Foundry's invariant testing](https://getfoundry.sh/forge/advanced-testing/invariant-testing/#conditional-invariants), you can define the properties to not return a boolean by setting `returnBool` to false.
+
 ### Testing in property-mode
 
 To begin a fuzzing campaign in property-mode, you can run `medusa fuzz` or `medusa fuzz --config [config_path]`.
