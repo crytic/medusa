@@ -14,7 +14,10 @@ func (vs *ValueSet) SeedFromSlither(slither *compilationTypes.SlitherResults) {
 	for _, constant := range slither.Constants {
 		// Capture uint/int types
 		if strings.HasPrefix(constant.Type, "uint") || strings.HasPrefix(constant.Type, "int") {
-			var b, _ = new(big.Int).SetString(constant.Value, 10)
+			b, ok := new(big.Int).SetString(constant.Value, 10)
+			if !ok {
+				continue
+			}
 			vs.AddInteger(b)
 			vs.AddInteger(new(big.Int).Neg(b))
 			vs.AddBytes(b.Bytes())
@@ -31,7 +34,10 @@ func (vs *ValueSet) SeedFromSlither(slither *compilationTypes.SlitherResults) {
 			vs.AddBytes([]byte(constant.Value))
 		} else if constant.Type == "address" {
 			// Capture addresses
-			var addressBigInt, _ = new(big.Int).SetString(constant.Value, 10)
+			addressBigInt, ok := new(big.Int).SetString(constant.Value, 10)
+			if !ok {
+				continue
+			}
 			vs.AddAddress(common.BigToAddress(addressBigInt))
 			vs.AddBytes([]byte(constant.Value))
 		}
