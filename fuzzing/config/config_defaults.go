@@ -91,6 +91,14 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 						"optimize_",
 					},
 				},
+				SometimesTesting: SometimesTestingConfig{
+					Enabled: false,
+					TestPrefixes: []string{
+						"sometimes_",
+					},
+					MinSuccessRate:    0.05, // 5% minimum success rate
+					MinExecutionCount: 100,  // Require at least 100 executions before evaluation
+				},
 			},
 			TestChainConfig: *chainConfig,
 		},
