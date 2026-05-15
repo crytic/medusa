@@ -61,6 +61,24 @@ func (s *SourceAnalysis) CoveredLineCount() int {
 	return count
 }
 
+// TotalBranchCount returns the total count of branches across all source files.
+func (s *SourceAnalysis) TotalBranchCount() int {
+	count := 0
+	for _, file := range s.Files {
+		count += file.TotalBranches
+	}
+	return count
+}
+
+// CoveredBranchCount returns the count of branches that were covered across all source files.
+func (s *SourceAnalysis) CoveredBranchCount() int {
+	count := 0
+	for _, file := range s.Files {
+		count += file.CoveredBranches
+	}
+	return count
+}
+
 // shouldExcludeFile checks if a file path matches any of the exclusion patterns
 func shouldExcludeFile(filePath string, exclusionPatterns []string) bool {
 	for _, pattern := range exclusionPatterns {
@@ -179,6 +197,12 @@ type SourceFileAnalysis struct {
 
 	// Functions is a list of functions defined in the source file
 	Functions []*types.FunctionDefinition
+
+	// TotalBranches describes the total number of branches (conditional jumps) in this file.
+	TotalBranches int
+
+	// CoveredBranches describes the number of branches that were executed at least once.
+	CoveredBranches int
 }
 
 // ActiveLineCount returns the count of lines that are marked executable/active within the source file.
@@ -369,6 +393,10 @@ func AnalyzeSourceCoverage(compilations []types.Compilation, coverageMaps *Cover
 				if err != nil {
 					return nil, err
 				}
+
+				// Analyze branch coverage for both init and runtime bytecode.
+				analyzeContractBranchCoverage(compilation, sourceAnalysis, initSourceMap, contract.InitBytecode, initCoverageMapData)
+				analyzeContractBranchCoverage(compilation, sourceAnalysis, runtimeSourceMap, contract.RuntimeBytecode, runtimeCoverageMapData)
 			}
 		}
 	}
@@ -395,6 +423,88 @@ func getContractPCsHit(bytecode []byte, contractCoverageData *ContractCoverageMa
 		}
 	}
 	return pcsHit
+}
+
+// analyzeContractBranchCoverage analyzes branch coverage for a contract and updates the source file analysis.
+// Branches are identified as JUMPI instructions in the bytecode. Each JUMPI represents a conditional branch
+// that can take two paths: the jump destination or falling through to the next instruction.
+func analyzeContractBranchCoverage(
+	compilation types.Compilation,
+	sourceAnalysis *SourceAnalysis,
+	sourceMap types.SourceMap,
+	bytecode []byte,
+	contractCoverageData *ContractCoverageMap,
+) {
+	if len(bytecode) == 0 {
+		return
+	}
+
+	// Get instruction index to offset lookup
+	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
+
+	// Track branches per file: map[sourcePath] -> set of branch instruction indices
+	fileBranches := make(map[string]map[int]struct{})
+	fileCoveredBranches := make(map[string]map[int]struct{})
+
+	// Initialize maps for each file
+	for sourcePath := range sourceAnalysis.Files {
+		fileBranches[sourcePath] = make(map[int]struct{})
+		fileCoveredBranches[sourcePath] = make(map[int]struct{})
+	}
+
+	// Find all JUMPI instructions (conditional branches) and map them to source files
+	for idx, pc := range indexToOffset {
+		if pc >= len(bytecode) {
+			continue
+		}
+		op := vm.OpCode(bytecode[pc])
+		if op != vm.JUMPI {
+			continue
+		}
+
+		// This is a JUMPI instruction - find which source file it belongs to
+		if idx >= len(sourceMap) {
+			continue
+		}
+
+		sourceMapElement := sourceMap[idx]
+		if sourceMapElement.SourceUnitID == -1 {
+			continue
+		}
+
+		sourcePath, idExists := compilation.SourceIdToPath[sourceMapElement.SourceUnitID]
+		if !idExists {
+			continue
+		}
+
+		if _, ok := sourceAnalysis.Files[sourcePath]; !ok {
+			continue
+		}
+
+		// Record this branch for the file
+		fileBranches[sourcePath][idx] = struct{}{}
+
+		// Check if this branch was covered
+		if contractCoverageData != nil && contractCoverageData.executedMarkers != nil {
+			// A JUMPI is covered if we have a marker with this PC as the source
+			// The marker format is: source (upper 32 bits) XOR destination (lower 32 bits)
+			for marker := range contractCoverageData.executedMarkers {
+				markerSrc := marker >> 32
+				if markerSrc == uint64(pc) {
+					fileCoveredBranches[sourcePath][idx] = struct{}{}
+					break
+				}
+			}
+		}
+	}
+
+	// Update the source file analysis with branch counts
+	for sourcePath, branches := range fileBranches {
+		if sourceFile, ok := sourceAnalysis.Files[sourcePath]; ok {
+			sourceFile.TotalBranches += len(branches)
+			sourceFile.CoveredBranches += len(fileCoveredBranches[sourcePath])
+		}
+	}
 }
 
 // analyzeContractSourceCoverage takes a compilation, a SourceAnalysis, the source map they were derived from,
