@@ -133,9 +133,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned to go.mod rather than a floating constraint: golangci-lint v1.64.8
+      # cannot read export data from a toolchain newer than Go 1.24, and reports
+      # the mismatch as typecheck errors inside dependencies.
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
-          go-version: "^1.22"
+          go-version-file: go.mod
 
       - name: Cache actionlint
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
