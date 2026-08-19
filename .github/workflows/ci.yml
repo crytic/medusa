@@ -128,6 +128,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      ACTIONLINT_VERSION: v1.7.12
+
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
@@ -144,12 +147,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/go/bin/actionlint
-          key: actionlint-${{ runner.os }}
+          key: actionlint-${{ runner.os }}-${{ env.ACTIONLINT_VERSION }}
 
       - name: Actionlint
+        # actionlint needs a newer toolchain than golangci-lint supports, so this
+        # step alone opts back into toolchain download. GOTOOLCHAIN is local for
+        # the job because go-version-file sets it.
+        env:
+          GOTOOLCHAIN: auto
         run: |
           if [ ! -f ~/go/bin/actionlint ]; then
-            go install github.com/rhysd/actionlint/cmd/actionlint@latest
+            go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
           fi
           actionlint
 
