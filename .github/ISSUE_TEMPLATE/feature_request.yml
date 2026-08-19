@@ -1,7 +1,7 @@
 name: Feature Request
 description: Suggest a new feature or enhancement for Medusa
 title: "[Feature]: "
-labels: ["enhancement"]
+labels: ["feature-request"]
 body:
   - type: markdown
     attributes:
