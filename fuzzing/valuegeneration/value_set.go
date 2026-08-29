@@ -16,11 +16,11 @@ import (
 // ValueSet represents potential values of significance within the source code to be used in fuzz tests.
 type ValueSet struct {
 	// addresses represents a set of common.Address to use in fuzz tests. A mapping is used to avoid duplicates.
-	addresses map[common.Address]any
+	addresses map[common.Address]struct{}
 	// integers represents a set of integers to use in fuzz tests. A mapping is used to avoid duplicates.
 	integers map[string]*big.Int
 	// strings represents a set of strings to use in fuzz tests. A mapping is used to avoid duplicates.
-	strings map[string]any
+	strings map[string]struct{}
 	// bytes represents a set of bytes to use in fuzz tests. A mapping is used to avoid duplicates.
 	bytes map[string][]byte
 	// hashProvider represents a hash provider used to create keys for some data.
@@ -30,9 +30,9 @@ type ValueSet struct {
 // NewValueSet initializes a new ValueSet object for use with a Fuzzer.
 func NewValueSet() *ValueSet {
 	baseValueSet := &ValueSet{
-		addresses:    make(map[common.Address]any, 0),
+		addresses:    make(map[common.Address]struct{}, 0),
 		integers:     make(map[string]*big.Int, 0),
-		strings:      make(map[string]any, 0),
+		strings:      make(map[string]struct{}, 0),
 		bytes:        make(map[string][]byte, 0),
 		hashProvider: sha3.NewLegacyKeccak256(),
 	}
@@ -64,7 +64,7 @@ func (vs *ValueSet) Addresses() []common.Address {
 
 // AddAddress adds an address item to the ValueSet.
 func (vs *ValueSet) AddAddress(a common.Address) {
-	vs.addresses[a] = nil
+	vs.addresses[a] = struct{}{}
 }
 
 // ContainsAddress checks if an address is contained in the ValueSet.
@@ -118,7 +118,7 @@ func (vs *ValueSet) Strings() []string {
 
 // AddString adds a string item to the ValueSet.
 func (vs *ValueSet) AddString(s string) {
-	vs.strings[s] = nil
+	vs.strings[s] = struct{}{}
 }
 
 // ContainsString checks if a string is contained in the ValueSet.
