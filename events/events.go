@@ -10,7 +10,7 @@ type EventHandler[T any] func(T) error
 
 // EventType returns the event type given an EventHandler object
 func (e *EventHandler[T]) EventType() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
+	return reflect.TypeFor[T]()
 }
 
 // globalEventHandlers describes a mapping of event types to EventHandler objects. These callbacks are called
@@ -57,7 +57,7 @@ type EventEmitter[T any] struct {
 
 // EventType returns the event type given an EventEmitter object
 func (e *EventEmitter[T]) EventType() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
+	return reflect.TypeFor[T]()
 }
 
 // Publish emits the provided event by calling every EventHandler subscribed.
