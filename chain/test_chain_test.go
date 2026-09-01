@@ -66,6 +66,50 @@ func createChain(t *testing.T) (*TestChain, []common.Address) {
 	return chain, senders
 }
 
+// TestChainPendingBlockAddedTxEventIndex ensures pending block transaction events identify the transaction and result
+// that were just added.
+func TestChainPendingBlockAddedTxEventIndex(t *testing.T) {
+	chain, senders := createChain(t)
+	block, err := chain.PendingBlockCreate()
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	events := make([]PendingBlockAddedTxEvent, 0, 2)
+	chain.Events.PendingBlockAddedTx.Subscribe(func(event PendingBlockAddedTxEvent) error {
+		events = append(events, event)
+		return nil
+	})
+
+	recipient := senders[2]
+	for i := 0; i < 2; i++ {
+		message := &core.Message{
+			To:               &recipient,
+			From:             senders[i],
+			Nonce:            chain.State().GetNonce(senders[i]),
+			Value:            big.NewInt(0),
+			GasLimit:         21_000,
+			GasPrice:         big.NewInt(1),
+			GasFeeCap:        big.NewInt(0),
+			GasTipCap:        big.NewInt(0),
+			SkipNonceChecks:  false,
+			SkipFromEOACheck: false,
+		}
+
+		err = chain.PendingBlockAddTx(message)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.EqualValues(t, types.ReceiptStatusSuccessful, block.MessageResults[i].Receipt.Status)
+		if !assert.Len(t, events, i+1) || !assert.Equal(t, i, events[i].TransactionIndex) {
+			continue
+		}
+
+		assert.Same(t, message, events[i].Block.Messages[events[i].TransactionIndex])
+		assert.Same(t, block.MessageResults[i], events[i].Block.MessageResults[events[i].TransactionIndex])
+	}
+}
+
 // TestChainReverting creates a TestChain and creates blocks and later reverts backward through all possible steps
 // to ensure no error occurs and the chain state is restored.
 func TestChainReverting(t *testing.T) {
