@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/crytic/medusa/logging"
+	"github.com/crytic/medusa/utils"
 )
 
 // SlitherConfig determines whether to run slither and whether and where to cache the results from slither
@@ -130,9 +131,9 @@ func (s *SlitherConfig) RunSlither(target string, solcVersion string) (*SlitherR
 			cmd.Env = append(os.Environ(), fmt.Sprintf("SOLC_VERSION=%s", solcVersion))
 		}
 
-		// Run slither
+		// Run slither while keeping diagnostics separate from the JSON output.
 		start := time.Now()
-		out, err = cmd.CombinedOutput()
+		out, err = runSlitherCommand(cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +165,15 @@ func (s *SlitherConfig) RunSlither(target string, solcVersion string) (*SlitherR
 	}
 
 	return &slitherResults, nil
+}
+
+// runSlitherCommand runs Slither and returns only stdout so stderr diagnostics cannot corrupt its JSON output.
+func runSlitherCommand(cmd *exec.Cmd) ([]byte, error) {
+	stdout, _, combined, err := utils.RunCommandWithOutputAndError(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error while executing slither: %w\n\nCommand Output:\n%s", err, string(combined))
+	}
+	return stdout, nil
 }
 
 // UnmarshalJSON unmarshals the slither output into a SlitherResults type
