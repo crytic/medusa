@@ -119,7 +119,7 @@ func TestPersistentCache(t *testing.T) {
 	blockHeight := uint64(55555)
 	tmpDir, err := os.MkdirTemp("", "test-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	pc, err := newPersistentCache(ctx, tmpDir, rpcAddr, blockHeight)
 	assert.NoError(t, err)

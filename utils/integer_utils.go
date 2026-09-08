@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"cmp"
 	"math/big"
 
 	"golang.org/x/exp/constraints"
@@ -95,7 +96,7 @@ func Abs[T constraints.Integer](x T) T {
 
 // Min provides generic support for various integer types to be compared and the minimum of two values returned.
 // Returns the minimum of the two values provided.
-func Min[T constraints.Ordered](x T, y T) T {
+func Min[T cmp.Ordered](x T, y T) T {
 	if x <= y {
 		return x
 	}
@@ -104,7 +105,7 @@ func Min[T constraints.Ordered](x T, y T) T {
 
 // Max provides generic support for various integer types to be compared and the maximum of two values returned.
 // Returns the maximum of the two values provided.
-func Max[T constraints.Ordered](x T, y T) T {
+func Max[T cmp.Ordered](x T, y T) T {
 	if x >= y {
 		return x
 	}

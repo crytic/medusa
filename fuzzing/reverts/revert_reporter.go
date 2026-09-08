@@ -174,10 +174,8 @@ func (r *RevertReporter) writeHTMLReport() error {
 	path := filepath.Join(r.Path, "revert_report.html")
 	file, err := os.Create(path)
 	if err != nil {
-		_ = file.Close()
 		return fmt.Errorf("failed to open HTML revert report for writing: %v", err)
 	}
-	defer file.Close()
 
 	functionMap := template.FuncMap{
 		"timeNow": time.Now,
@@ -251,10 +249,17 @@ func (r *RevertReporter) writeHTMLReport() error {
 
 	tmpl, err := template.New("revert_report.html").Funcs(functionMap).Parse(string(htmlReportTemplate))
 	if err != nil {
+		_ = file.Close()
 		return fmt.Errorf("failed to parse HTML revert report template: %v", err)
 	}
 
+	// Close reports buffered writes that failed to flush, so a truncated report
+	// is surfaced rather than logged as a success.
 	err = tmpl.Execute(file, r.RevertMetrics)
+	fileCloseErr := file.Close()
+	if err == nil {
+		err = fileCloseErr
+	}
 	if err != nil {
 		return fmt.Errorf("failed to write HTML revert report at %v: %v", path, err)
 	}
