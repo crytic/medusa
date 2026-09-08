@@ -2,17 +2,19 @@ package coverage
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/types"
 	"github.com/crytic/medusa/logging"
-	"golang.org/x/exp/maps"
 )
 
 // SourceAnalysis describes source code coverage across a list of compilations, after analyzing associated CoverageMaps.
@@ -24,11 +26,11 @@ type SourceAnalysis struct {
 // SortedFiles returns a list of Files within the SourceAnalysis, sorted by source file path in alphabetical order.
 func (s *SourceAnalysis) SortedFiles() []*SourceFileAnalysis {
 	// Copy all source files from our analysis into a list.
-	sourceFiles := maps.Values(s.Files)
+	sourceFiles := slices.Collect(maps.Values(s.Files))
 
 	// Sort source files by path
-	sort.Slice(sourceFiles, func(x, y int) bool {
-		return sourceFiles[x].Path < sourceFiles[y].Path
+	slices.SortFunc(sourceFiles, func(x, y *SourceFileAnalysis) int {
+		return cmp.Compare(x.Path, y.Path)
 	})
 
 	return sourceFiles
@@ -115,15 +117,15 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 	buffer.WriteString("TN:\n")
 	for _, file := range s.SortedFiles() {
 		// SF:<path to the source file>
-		buffer.WriteString(fmt.Sprintf("SF:%s\n", file.Path))
+		fmt.Fprintf(&buffer, "SF:%s\n", file.Path)
 		for idx, line := range file.Lines {
 			if line.IsActive {
 				// DA:<line number>,<execution count>
 				if line.IsCovered {
-					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, line.SuccessHitCount))
+					fmt.Fprintf(&buffer, "DA:%d,%d\n", idx+1, line.SuccessHitCount)
 					linesHit++
 				} else {
-					buffer.WriteString(fmt.Sprintf("DA:%d,%d\n", idx+1, 0))
+					fmt.Fprintf(&buffer, "DA:%d,%d\n", idx+1, 0)
 				}
 				linesInstrumented++
 			}
@@ -153,8 +155,8 @@ func (s *SourceAnalysis) GenerateLCOVReport() string {
 
 			// TODO: handle fallback, receive, and constructor
 			if fn.Name != "" {
-				buffer.WriteString(fmt.Sprintf("FN:%d,%s\n", startLine, fn.Name))
-				buffer.WriteString(fmt.Sprintf("FNDA:%d,%s\n", hit, fn.Name))
+				fmt.Fprintf(&buffer, "FN:%d,%s\n", startLine, fn.Name)
+				fmt.Fprintf(&buffer, "FNDA:%d,%s\n", hit, fn.Name)
 			}
 
 		}
@@ -610,7 +612,7 @@ func filterSourceMaps(compilation types.Compilation, sourceMap types.SourceMap) 
 		encapsulatesOtherMapping := false
 		for x, sourceMapElement2 := range sourceMap {
 			if i != x && sourceMapElement.SourceUnitID == sourceMapElement2.SourceUnitID &&
-				!(sourceMapElement.Offset == sourceMapElement2.Offset && sourceMapElement.Length == sourceMapElement2.Length) {
+				(sourceMapElement.Offset != sourceMapElement2.Offset || sourceMapElement.Length != sourceMapElement2.Length) {
 				if sourceMapElement2.Offset >= sourceMapElement.Offset &&
 					sourceMapElement2.Offset+sourceMapElement2.Length <= sourceMapElement.Offset+sourceMapElement.Length {
 					encapsulatesOtherMapping = true
