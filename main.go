@@ -13,8 +13,7 @@ func main() {
 	err := cmd.Execute()
 
 	// Obtain the actual error and exit code from the error, if any.
-	var exitCode int
-	err, exitCode = exitcodes.GetInnerErrorAndExitCode(err)
+	exitCode, err := exitcodes.GetInnerErrorAndExitCode(err)
 
 	// If we have an error, print it.
 	if err != nil && exitCode != exitcodes.ExitCodeHandledError {

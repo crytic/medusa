@@ -170,13 +170,13 @@ func (c *CompiledContract) LinkBytecodes(contractName string, deployedLibraries 
 	// Decode into hex string
 	initBytecode, err := c.DecodeLinkedInitBytecodeBytes()
 	if err != nil {
-		panic(fmt.Errorf("unable to parse init bytecode for contract %s \n", contractName))
+		panic(fmt.Errorf("unable to parse init bytecode for contract %s", contractName))
 	}
 
 	// Decode into a hex string
 	runtimeBytecode, err := c.DecodeLinkedRuntimeBytecodeBytes()
 	if err != nil {
-		panic(fmt.Errorf("unable to parse runtime bytecode for contract %s \n", contractName))
+		panic(fmt.Errorf("unable to parse runtime bytecode for contract %s", contractName))
 	}
 	c.InitBytecode = initBytecode
 	c.RuntimeBytecode = runtimeBytecode

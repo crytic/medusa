@@ -77,8 +77,8 @@ func cmdValidInitArgs(cmd *cobra.Command, args []string, toComplete string) ([]s
 func cmdValidateInitArgs(cmd *cobra.Command, args []string) error {
 	// Make sure we have no more than 1 arg
 	if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
-		err = fmt.Errorf("init accepts at most 1 platform argument (options: %s). "+
-			"default platform is %v\n", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
+		err = fmt.Errorf("init accepts at most 1 platform argument (options: %s), "+
+			"default platform is %v", strings.Join(supportedPlatforms, ", "), DefaultCompilationPlatform)
 		cmdLogger.Error("Failed to validate args to the init command", err)
 		return err
 	}

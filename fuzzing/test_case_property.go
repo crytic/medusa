@@ -73,5 +73,5 @@ func (t *PropertyTestCase) Message() string {
 
 // ID obtains a unique identifier for a test result.
 func (t *PropertyTestCase) ID() string {
-	return strings.Replace(fmt.Sprintf("PROPERTY-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
+	return strings.ReplaceAll(fmt.Sprintf("PROPERTY-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-")
 }
