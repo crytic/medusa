@@ -787,7 +787,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	err = t.Events.PendingBlockAddedTx.Publish(PendingBlockAddedTxEvent{
 		Chain:            t,
 		Block:            t.pendingBlock,
-		TransactionIndex: len(t.pendingBlock.Messages),
+		TransactionIndex: len(t.pendingBlock.Messages) - 1,
 	})
 	if err != nil {
 		return err
