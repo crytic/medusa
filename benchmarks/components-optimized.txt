@@ -1,0 +1,104 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/chain
+cpu: Apple M4 Max
+BenchmarkChainCall-16    	   24002	      4837 ns/op	    6780 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   24604	      4857 ns/op	    6777 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25333	      4814 ns/op	    6776 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   23034	      4970 ns/op	    6779 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25246	      4770 ns/op	    6778 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25819	      4680 ns/op	    6775 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25369	      4795 ns/op	    6778 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25380	      4705 ns/op	    6777 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25173	      5019 ns/op	    6779 B/op	      82 allocs/op
+BenchmarkChainCall-16    	   25124	      4935 ns/op	    6779 B/op	      82 allocs/op
+PASS
+ok  	github.com/crytic/medusa/chain	2.017s
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/coverage
+cpu: Apple M4 Max
+BenchmarkCoverageNestedFrames-16    	  198610	       546.6 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  221299	       553.1 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  211404	       567.9 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  221065	       562.9 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  206548	       588.3 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  207872	       582.3 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  214620	       586.2 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  212985	       551.5 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  219334	       558.9 ns/op	    1016 B/op	       8 allocs/op
+BenchmarkCoverageNestedFrames-16    	  224108	       554.3 ns/op	    1016 B/op	       8 allocs/op
+PASS
+ok  	github.com/crytic/medusa/fuzzing/coverage	1.677s
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/valuegeneration
+cpu: Apple M4 Max
+BenchmarkIntegerGeneration/seeds=8-16         	  266163	       398.6 ns/op	     554 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  317694	       391.4 ns/op	     555 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  303624	       384.2 ns/op	     554 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  326726	       402.5 ns/op	     555 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  298711	       411.5 ns/op	     554 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  304987	       405.4 ns/op	     554 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  298201	       399.6 ns/op	     554 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  315519	       394.3 ns/op	     555 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  308552	       392.8 ns/op	     555 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=8-16         	  316542	       395.6 ns/op	     555 B/op	      13 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   66186	      1831 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   66157	      1865 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   61652	      2028 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   62064	      1937 ns/op	    2721 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   63237	      1922 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   60468	      1910 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   64857	      1862 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   63186	      1868 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   65799	      1857 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=256-16       	   64736	      1781 ns/op	    2722 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4375	     28259 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4402	     29929 ns/op	   41375 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4356	     29200 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4562	     28096 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4440	     28474 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4400	     29390 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4285	     29245 ns/op	   41374 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    3800	     29327 ns/op	   41375 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    4508	     29434 ns/op	   41375 B/op	      14 allocs/op
+BenchmarkIntegerGeneration/seeds=4096-16      	    3896	     30290 ns/op	   41375 B/op	      14 allocs/op
+PASS
+ok  	github.com/crytic/medusa/fuzzing/valuegeneration	4.342s
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/utils
+cpu: Apple M4 Max
+BenchmarkConstrainInteger/inRange-16         	 4801400	        24.19 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 4908727	        23.94 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 4961923	        24.22 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 4858372	        24.05 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 5054776	        24.00 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 4867857	        24.32 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 5122366	        23.04 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 5135328	        23.79 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 5005170	        23.98 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/inRange-16         	 5072083	        22.95 ns/op	      40 B/op	       2 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  521728	       228.4 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  518451	       226.7 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  495568	       225.8 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  552135	       222.7 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  510710	       222.6 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  549565	       215.4 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  553856	       212.5 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  551269	       213.1 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  560551	       221.2 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/overflow-16        	  547558	       212.4 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  510846	       226.7 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  507703	       225.1 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  528740	       225.8 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  515389	       225.8 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  523855	       224.5 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  523807	       223.1 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  518301	       224.7 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  531139	       227.6 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  486231	       239.8 ns/op	     304 B/op	       4 allocs/op
+BenchmarkConstrainInteger/underflow-16       	  490880	       234.6 ns/op	     304 B/op	       4 allocs/op
+PASS
+ok  	github.com/crytic/medusa/utils	4.114s

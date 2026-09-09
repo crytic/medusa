@@ -9,34 +9,18 @@ import (
 
 // ConstrainIntegerToBounds takes a provided big integer and minimum/maximum bounds (inclusive) and ensures
 // that the provided integer is represented in those bounds. In effect, this simulates overflow and underflow.
-// Returns the constrained integer.
+// The minimum must not exceed the maximum. Returns an independent copy of the constrained integer.
 func ConstrainIntegerToBounds(b *big.Int, min *big.Int, max *big.Int) *big.Int {
-	// Get the bounding range
-	boundingRange := big.NewInt(0).Add(big.NewInt(0).Sub(max, min), big.NewInt(1))
-
-	// Next we check boundaries for underflow/overflow. If it occurred, we calculate the distance and then find out
-	// how many wrap-arounds (bounding ranges) should be added/subtracted to correct the value. This is done by
-	// division with ceiling: (distance + (boundingRange - 1)) / distance. This way even a small underflow like -1 in
-	// an unsigned int (meaning underflow by 1) will result in one bounding range being added to wrap back around.
-
-	// Check underflow
-	if b.Cmp(min) < 0 {
-		distance := big.NewInt(0).Sub(min, b)
-		correction := big.NewInt(0).Div(big.NewInt(0).Add(distance, big.NewInt(0).Sub(boundingRange, big.NewInt(1))), boundingRange)
-		correction.Mul(correction, boundingRange)
-		return big.NewInt(0).Add(b, correction)
+	if b.Cmp(min) >= 0 && b.Cmp(max) <= 0 {
+		return new(big.Int).Set(b)
 	}
 
-	// Check overflow
-	if b.Cmp(max) > 0 {
-		distance := big.NewInt(0).Sub(b, max)
-		correction := big.NewInt(0).Div(big.NewInt(0).Add(distance, big.NewInt(0).Sub(boundingRange, big.NewInt(1))), boundingRange)
-		correction.Mul(correction, boundingRange)
-		return big.NewInt(0).Sub(b, correction)
-	}
-
-	// b is in range, return a copy of it
-	return big.NewInt(0).Set(b)
+	width := new(big.Int).Sub(max, min)
+	width.Add(width, big.NewInt(1))
+	result := new(big.Int).Sub(b, min)
+	// Euclidean modulo wraps negative inputs into [0, width) as well as positive ones.
+	result.Mod(result, width)
+	return result.Add(result, min)
 }
 
 // ConstrainIntegerToBitLength takes a provided big integer, signed indicator, and bit length and ensures that the
@@ -54,26 +38,20 @@ func ConstrainIntegerToBitLength(b *big.Int, signed bool, bitLength int) *big.In
 // minimum/maximum value boundaries.
 // Returns the minimum and maximum value for the provided integer properties. Minimums and maximums are inclusive.
 func GetIntegerConstraints(signed bool, bitLength int) (*big.Int, *big.Int) {
-	// Calculate our min and max bounds for this integer.
-	var min, max *big.Int
+	exponent := bitLength
 	if signed {
-		// Set max as 2^(bitLen - 1) - 1
-		max = big.NewInt(2)
-		max.Exp(max, big.NewInt(int64(bitLength-1)), nil)
-		max.Sub(max, big.NewInt(1))
-
-		// Set min as -(2^(bitLen - 1))
-		min = big.NewInt(0).Mul(max, big.NewInt(-1))
-		min.Sub(min, big.NewInt(1))
-	} else {
-		// Set maximum as 2^bitLen - 1
-		max = big.NewInt(2)
-		max.Exp(max, big.NewInt(int64(bitLength)), nil)
-		max.Sub(max, big.NewInt(1))
-
-		// Set minimum as zero
-		min = big.NewInt(0)
+		exponent--
 	}
+	// Match big.Int.Exp's result of one for a negative exponent without a modulus.
+	if exponent < 0 {
+		exponent = 0
+	}
+	max := new(big.Int).Lsh(big.NewInt(1), uint(exponent))
+	min := new(big.Int)
+	if signed {
+		min.Neg(max)
+	}
+	max.Sub(max, big.NewInt(1))
 	return min, max
 }
 

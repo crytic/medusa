@@ -1,0 +1,90 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1593995333 ns/op	     44619 gas/tx	     97290 ns/tx	     10279 tx/s	622512648 B/op	 7078822 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1271763625 ns/op	     44513 gas/tx	     77622 ns/tx	     12883 tx/s	559062976 B/op	 6949875 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 497954542 ns/op	     44577 gas/tx	     30387 ns/tx	     32909 tx/s	614314736 B/op	 7008291 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 393761792 ns/op	     44276 gas/tx	     24029 ns/tx	     41617 tx/s	541839272 B/op	 6803519 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1565920583 ns/op	     43976 gas/tx	     95576 ns/tx	     10463 tx/s	634327192 B/op	 7135340 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1251769458 ns/op	     44342 gas/tx	     76402 ns/tx	     13089 tx/s	544340192 B/op	 6804875 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 508350582 ns/op	     44464 gas/tx	     31022 ns/tx	     32236 tx/s	624825472 B/op	 7113120 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 506636042 ns/op	     44375 gas/tx	     30917 ns/tx	     32345 tx/s	559197680 B/op	 6988352 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1654672916 ns/op	     44702 gas/tx	    100993 ns/tx	      9902 tx/s	629116752 B/op	 7134925 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1264377124 ns/op	     44516 gas/tx	     77171 ns/tx	     12958 tx/s	548539728 B/op	 6838646 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 609248041 ns/op	     44609 gas/tx	     37179 ns/tx	     26897 tx/s	642522352 B/op	 7251503 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 396754583 ns/op	     44402 gas/tx	     24212 ns/tx	     41303 tx/s	534283784 B/op	 6723583 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1575277376 ns/op	     44254 gas/tx	     96147 ns/tx	     10401 tx/s	636723136 B/op	 7163981 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1234310875 ns/op	     44315 gas/tx	     75336 ns/tx	     13274 tx/s	538173328 B/op	 6749200 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 492753167 ns/op	     44277 gas/tx	     30070 ns/tx	     33256 tx/s	629636520 B/op	 7130042 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 394020250 ns/op	     44366 gas/tx	     24045 ns/tx	     41589 tx/s	548300120 B/op	 6868220 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1564543209 ns/op	     44350 gas/tx	     95492 ns/tx	     10472 tx/s	614482552 B/op	 7009787 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1206276250 ns/op	     44545 gas/tx	     73625 ns/tx	     13582 tx/s	535180560 B/op	 6703612 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 538308166 ns/op	     44565 gas/tx	     32850 ns/tx	     30442 tx/s	631104088 B/op	 7150125 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 396667958 ns/op	     44319 gas/tx	     24206 ns/tx	     41312 tx/s	538893872 B/op	 6765524 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1617606000 ns/op	     44852 gas/tx	     98731 ns/tx	     10129 tx/s	626753312 B/op	 7108247 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1240244167 ns/op	     44525 gas/tx	     75698 ns/tx	     13210 tx/s	544397048 B/op	 6798900 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 547818333 ns/op	     44434 gas/tx	     33430 ns/tx	     29913 tx/s	629680904 B/op	 7148113 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 393317667 ns/op	     44246 gas/tx	     24002 ns/tx	     41664 tx/s	535736880 B/op	 6742258 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1529371167 ns/op	     44234 gas/tx	     93345 ns/tx	     10713 tx/s	619465608 B/op	 7011423 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1266276375 ns/op	     44540 gas/tx	     77287 ns/tx	     12939 tx/s	546667016 B/op	 6822286 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 493951250 ns/op	     44376 gas/tx	     30143 ns/tx	     33175 tx/s	618274312 B/op	 7063132 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 402352624 ns/op	     44240 gas/tx	     24553 ns/tx	     40728 tx/s	542772304 B/op	 6809888 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1578150167 ns/op	     44321 gas/tx	     96323 ns/tx	     10382 tx/s	630646568 B/op	 7112183 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1246893000 ns/op	     44523 gas/tx	     76104 ns/tx	     13140 tx/s	543530024 B/op	 6786148 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 521122584 ns/op	     44552 gas/tx	     31801 ns/tx	     31446 tx/s	624819256 B/op	 7103377 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 451179374 ns/op	     44394 gas/tx	     27533 ns/tx	     36320 tx/s	553013728 B/op	 6916452 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1623615625 ns/op	     44423 gas/tx	     99098 ns/tx	     10091 tx/s	621930008 B/op	 7066552 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1285529541 ns/op	     44525 gas/tx	     78462 ns/tx	     12745 tx/s	545871384 B/op	 6813255 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 515299417 ns/op	     44304 gas/tx	     31446 ns/tx	     31801 tx/s	613942296 B/op	 7013094 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 402218251 ns/op	     44391 gas/tx	     24545 ns/tx	     40742 tx/s	534870704 B/op	 6727503 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+BenchmarkFuzzer/workers=1/coverage=true-16         	       1	1612642667 ns/op	     44587 gas/tx	     98428 ns/tx	     10160 tx/s	623163088 B/op	 7085320 allocs/op
+BenchmarkFuzzer/workers=1/coverage=false-16        	       1	1285854333 ns/op	     44508 gas/tx	     78482 ns/tx	     12742 tx/s	549696288 B/op	 6850820 allocs/op
+BenchmarkFuzzer/workers=4/coverage=true-16         	       1	 532701125 ns/op	     44126 gas/tx	     32508 ns/tx	     30762 tx/s	623111704 B/op	 7098283 allocs/op
+BenchmarkFuzzer/workers=4/coverage=false-16        	       1	 436756667 ns/op	     44360 gas/tx	     26653 ns/tx	     37520 tx/s	535537896 B/op	 6736182 allocs/op
+PASS
