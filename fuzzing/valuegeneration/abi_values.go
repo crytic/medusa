@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/crytic/medusa/logging"
 	"github.com/crytic/medusa/utils"
@@ -16,9 +18,36 @@ import (
 	"github.com/crytic/medusa/utils/reflectionutils"
 )
 
+// stringHexEncodedPrefix is used to identify strings that have been hex-encoded during JSON
+// serialization. This is necessary because strings containing null bytes or other non-printable
+// characters cannot be reliably stored in JSON without encoding.
+const stringHexEncodedPrefix = "hex:"
+
 // addressJSONContractNameOverridePrefix defines a string prefix which is to be followed by a contract name. The
 // contract address will be resolved by searching the deployed contracts for a contract with this name.
 const addressJSONContractNameOverridePrefix = "DeployedContract:"
+
+// stringNeedsHexEncoding checks if a string contains any characters that cannot be reliably
+// represented in JSON. This includes null bytes, non-UTF8 sequences, and control characters.
+func stringNeedsHexEncoding(s string) bool {
+	// Check if the string is valid UTF-8
+	if !utf8.ValidString(s) {
+		return true
+	}
+
+	// Check for null bytes and other control characters that may cause issues in JSON
+	for _, r := range s {
+		// Null byte always needs encoding
+		if r == 0 {
+			return true
+		}
+		// Other control characters (except common whitespace) should be encoded
+		if unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r' {
+			return true
+		}
+	}
+	return false
+}
 
 // GenerateAbiValue generates a value of the provided abi.Type using the provided ValueGenerator.
 // The generated value is returned.
@@ -618,6 +647,11 @@ func encodeJSONArgument(inputType *abi.Type, value any) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("could not encode string as the value provided is not of the correct type")
 		}
+		// If the string contains null bytes or other non-printable characters that cannot be
+		// reliably represented in JSON, hex-encode it with a prefix for identification.
+		if stringNeedsHexEncoding(str) {
+			return stringHexEncodedPrefix + hex.EncodeToString([]byte(str)), nil
+		}
 		return str, nil
 	case abi.BytesTy:
 		b, ok := value.([]byte)
@@ -800,7 +834,18 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 		if !ok {
 			return nil, fmt.Errorf("invalid string value")
 		}
-		v = str
+		// Check if the string was hex-encoded during serialization (for strings with null bytes
+		// or other non-printable characters).
+		if strings.HasPrefix(str, stringHexEncodedPrefix) {
+			hexStr := strings.TrimPrefix(str, stringHexEncodedPrefix)
+			decodedBytes, err := hex.DecodeString(hexStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode hex-encoded string: %w", err)
+			}
+			v = string(decodedBytes)
+		} else {
+			v = str
+		}
 	case abi.BytesTy:
 		str, ok := value.(string)
 		if !ok {
