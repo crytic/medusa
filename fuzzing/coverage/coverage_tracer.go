@@ -40,26 +40,21 @@ func RemoveCoverageTracerResults(messageResults *types.MessageResults) {
 // CoverageTracer implements tracers.Tracer to collect information such as coverage maps
 // for fuzzing campaigns from EVM execution traces.
 type CoverageTracer struct {
-	// coverageMaps describes the execution coverage recorded. Call frames which errored are not recorded.
+	// coverageMaps records all executed branches, including reverted call frames.
 	coverageMaps *CoverageMaps
 
 	// callFrameStates describes the state tracked by the tracer per call frame.
-	callFrameStates []*coverageTracerCallFrameState
+	callFrameStates []coverageTracerCallFrameState
 
 	// callDepth refers to the current EVM depth during tracing.
 	callDepth int
 
-	evmContext *tracing.VMContext
-
 	// nativeTracer is the underlying tracer used to capture EVM execution.
 	nativeTracer *chain.TestChainTracer
 
-	// codeHashCache is a cache for values returned by getContractCoverageMapHash,
-	// so that this expensive calculation doesn't need to be done every opcode.
-	// The [2] array is to differentiate between contract init (0) vs runtime (1),
-	// since init vs runtime produces different results from getContractCoverageMapHash.
-	// The Hash key is a contract's codehash, which uniquely identifies it.
-	codeHashCache [2]map[common.Hash]common.Hash
+	// codeHashCache reuses metadata-aware coverage identities across call frames.
+	// Only runtime bytecode is cached: init bytecode may have no geth code hash.
+	codeHashCache map[common.Hash]common.Hash
 
 	// initialContractsSet records the set of contract addresses present in the base chain,
 	// before any contracts are added by test sequences. Only these addresses will be recorded
@@ -76,11 +71,8 @@ type coverageTracerCallFrameState struct {
 	// create indicates whether the current call frame is executing on init bytecode (deploying a contract).
 	create bool
 
-	// pendingCoverageMap describes the coverage maps recorded for this call frame.
-	pendingCoverageMap *CoverageMaps
-
 	// lookupHash describes the hash used to look up the ContractCoverageMap being updated in this frame.
-	lookupHash *common.Hash
+	lookupHash common.Hash
 
 	// lastPC is the most recent PC that has been executed. Used for coverage tracking.
 	lastPC uint64
@@ -97,8 +89,8 @@ type coverageTracerCallFrameState struct {
 func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
 		coverageMaps:    NewCoverageMaps(),
-		callFrameStates: make([]*coverageTracerCallFrameState, 0),
-		codeHashCache:   [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
+		callFrameStates: make([]coverageTracerCallFrameState, 0),
+		codeHashCache:   make(map[common.Hash]common.Hash),
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -146,8 +138,7 @@ func (t *CoverageTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transact
 	// Reset our call frame states
 	t.callDepth = 0
 	t.coverageMaps = NewCoverageMaps()
-	t.callFrameStates = make([]*coverageTracerCallFrameState, 0)
-	t.evmContext = vm
+	t.callFrameStates = t.callFrameStates[:0]
 }
 
 // OnEnter initializes the tracing operation for the top of a call frame, as defined by tracers.Tracer.
@@ -161,20 +152,18 @@ func (t *CoverageTracer) OnEnter(depth int, typ byte, from common.Address, to co
 	}
 
 	// Create our state tracking struct for this frame.
-	t.callFrameStates = append(t.callFrameStates, &coverageTracerCallFrameState{
-		create:             typ == byte(vm.CREATE) || typ == byte(vm.CREATE2),
-		pendingCoverageMap: NewCoverageMaps(),
+	t.callFrameStates = append(t.callFrameStates, coverageTracerCallFrameState{
+		create: typ == byte(vm.CREATE) || typ == byte(vm.CREATE2),
 	})
 }
 
 // OnExit is called after a call to finalize tracing completes for the top of a call frame, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	currentCallFrameState := t.callFrameStates[t.callDepth]
-	currentCoverageMap := currentCallFrameState.pendingCoverageMap
+	currentCallFrameState := &t.callFrameStates[t.callDepth]
 
 	// Record the exit in our coverage map
 	// We should always be initialized here, but if we aren't then fields like address will be messed up, so we check to be sure
-	if currentCallFrameState.initialized && currentCallFrameState.lookupHash != nil {
+	if currentCallFrameState.initialized {
 		var markerXor uint64
 		if reverted {
 			markerXor = REVERT_MARKER_XOR
@@ -182,38 +171,23 @@ func (t *CoverageTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 			markerXor = RETURN_MARKER_XOR
 		}
 		marker := bits.RotateLeft64(currentCallFrameState.lastPC, 32) ^ markerXor
-		_, coverageUpdateErr := currentCoverageMap.UpdateAt(t.addressForCoverage(currentCallFrameState.address), *currentCallFrameState.lookupHash, marker)
+		address := t.addressForCoverage(currentCallFrameState.address)
+		_, coverageUpdateErr := t.coverageMaps.UpdateAt(address, currentCallFrameState.lookupHash, marker)
 		if coverageUpdateErr != nil {
 			logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 		}
 	}
 
-	// Check to see if this is the top level call frame
-	isTopLevelFrame := depth == 0
-
-	// Commit all our coverage maps up one call frame.
-	var coverageUpdateErr error
-	if isTopLevelFrame {
-		// Update the final coverage map if this is the top level call frame
-		_, coverageUpdateErr = t.coverageMaps.Update(currentCoverageMap)
-	} else {
-		// Move coverage up one call frame
-		_, coverageUpdateErr = t.callFrameStates[t.callDepth-1].pendingCoverageMap.Update(currentCoverageMap)
-
-		// Pop the state tracking struct for this call frame off the stack and decrement the call depth
+	if depth != 0 {
 		t.callFrameStates = t.callFrameStates[:t.callDepth]
 		t.callDepth--
 	}
-	if coverageUpdateErr != nil {
-		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map during capture end", coverageUpdateErr)
-	}
-
 }
 
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Obtain our call frame state tracking struct
-	callFrameState := t.callFrameStates[t.callDepth]
+	callFrameState := &t.callFrameStates[t.callDepth]
 
 	// Back up these values before we overwrite them
 	initialized := callFrameState.initialized
@@ -226,6 +200,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	if !initialized {
 		callFrameState.initialized = true
 		callFrameState.address = scope.Address()
+		callFrameState.lookupHash = t.lookupCodeHash(scope.(*vm.ScopeContext), callFrameState.create)
 	}
 
 	// Now record coverage, if applicable. Otherwise return
@@ -239,37 +214,25 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		return
 	}
 
-	// We can cast OpContext to ScopeContext because that is the type passed to OnOpcode.
-	scopeContext := scope.(*vm.ScopeContext)
-	code := scopeContext.Contract.Code
-	isCreate := callFrameState.create
-	gethCodeHash := scopeContext.Contract.CodeHash
-
-	cacheArrayKey := 1
-	if isCreate {
-		cacheArrayKey = 0
-	}
-
-	// Obtain our contract coverage map lookup hash.
-	if callFrameState.lookupHash == nil {
-		if isCreate {
-			lookupHash := getContractCoverageMapHash(code, isCreate)
-			callFrameState.lookupHash = &lookupHash
-		} else {
-			lookupHash, cacheHit := t.codeHashCache[cacheArrayKey][gethCodeHash]
-			if !cacheHit {
-				lookupHash = getContractCoverageMapHash(code, isCreate)
-				t.codeHashCache[cacheArrayKey][gethCodeHash] = lookupHash
-			}
-			callFrameState.lookupHash = &lookupHash
-		}
-	}
-
 	// Record coverage for this location in our map.
-	_, coverageUpdateErr := callFrameState.pendingCoverageMap.UpdateAt(t.addressForCoverage(callFrameState.address), *callFrameState.lookupHash, marker)
+	address := t.addressForCoverage(callFrameState.address)
+	_, coverageUpdateErr := t.coverageMaps.UpdateAt(address, callFrameState.lookupHash, marker)
 	if coverageUpdateErr != nil {
 		logging.GlobalLogger.Panic("Coverage tracer failed to update coverage map while tracing state", coverageUpdateErr)
 	}
+}
+
+func (t *CoverageTracer) lookupCodeHash(scope *vm.ScopeContext, create bool) common.Hash {
+	if create {
+		return getContractCoverageMapHash(scope.Contract.Code, true)
+	}
+	codeHash := scope.Contract.CodeHash
+	lookupHash, ok := t.codeHashCache[codeHash]
+	if !ok {
+		lookupHash = getContractCoverageMapHash(scope.Contract.Code, false)
+		t.codeHashCache[codeHash] = lookupHash
+	}
+	return lookupHash
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

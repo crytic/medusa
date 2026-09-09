@@ -532,11 +532,13 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 		blockContext = newTestChainBlockContext(t, t.Head().Header)
 	}
 
-	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
-	// still calling our internal tracers.
-	extendedTracerRouter := NewTestChainTracerRouter()
-	extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer())
-	extendedTracerRouter.AddTracers(additionalTracers...)
+	// Reuse the default router unless this call supplies additional tracers.
+	extendedTracerRouter := t.callTracerRouter
+	if len(additionalTracers) > 0 {
+		extendedTracerRouter = NewTestChainTracerRouter()
+		extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer())
+		extendedTracerRouter.AddTracers(additionalTracers...)
+	}
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, state, t.chainConfig, vm.Config{

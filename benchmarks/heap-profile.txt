@@ -1,0 +1,27 @@
+File: medusa-pass2-final.test
+Type: alloc_space
+Time: 2026-09-09 14:13:29 EDT
+Showing nodes accounting for 1627.31MB, 69.13% of 2354.14MB total
+Dropped 277 nodes (cum <= 11.77MB)
+Showing top 20 nodes out of 148
+      flat  flat%   sum%        cum   cum%
+  386.31MB 16.41% 16.41%   386.31MB 16.41%  github.com/crytic/medusa-geth/core/state.(*accessList).AddAddress (inline)
+  218.77MB  9.29% 25.70%   218.77MB  9.29%  github.com/crytic/medusa/fuzzing/coverage.(*ContractCoverageMap).updateCoveredAt (inline)
+  104.01MB  4.42% 30.12%   104.01MB  4.42%  github.com/crytic/medusa-geth/core/state.(*journal).append
+   90.04MB  3.82% 33.95%   144.06MB  6.12%  github.com/crytic/medusa-geth/core/vm.(*Contract).isCode
+   82.01MB  3.48% 37.43%   162.52MB  6.90%  github.com/crytic/medusa-geth/core/state.(*journal).storageChange (inline)
+   77.02MB  3.27% 40.70%   100.03MB  4.25%  github.com/crytic/medusa-geth/core/vm.NewEVM
+      74MB  3.14% 43.84%       74MB  3.14%  math/big.nat.make (inline)
+   65.52MB  2.78% 46.63%    65.52MB  2.78%  github.com/crytic/medusa-geth/core/state.(*accessList).AddSlot (inline)
+   56.51MB  2.40% 49.03%    76.01MB  3.23%  github.com/crytic/medusa/fuzzing/calls.(*CallMessage).ToCoreMessage
+   54.01MB  2.29% 51.32%    54.01MB  2.29%  github.com/crytic/medusa-geth/core/vm.codeBitmap (inline)
+   54.01MB  2.29% 53.62%    54.01MB  2.29%  github.com/crytic/medusa/chain.newCheatCodeTracerCallFrame (inline)
+   53.52MB  2.27% 55.89%   820.81MB 34.87%  github.com/crytic/medusa/chain.(*TestChain).CallContract
+   50.51MB  2.15% 58.04%   269.28MB 11.44%  github.com/crytic/medusa/fuzzing/coverage.(*CoverageMaps).UpdateAt
+   42.52MB  1.81% 59.84%    42.52MB  1.81%  github.com/crytic/medusa-geth/core/state.(*stateObject).setState (inline)
+   42.50MB  1.81% 61.65%    63.01MB  2.68%  github.com/crytic/medusa-geth/core/types.(*LegacyTx).copy
+   41.01MB  1.74% 63.39%    41.01MB  1.74%  github.com/crytic/medusa-geth/accounts/abi.Arguments.NonIndexed
+   38.51MB  1.64% 65.03%    38.51MB  1.64%  github.com/crytic/medusa-geth/core/vm.NewContract (inline)
+   36.02MB  1.53% 66.56%   913.03MB 38.78%  github.com/crytic/medusa/chain/vendored.EVMApplyTransaction
+   31.01MB  1.32% 67.87%    45.51MB  1.93%  github.com/crytic/medusa-geth/accounts/abi.Arguments.Pack
+   29.50MB  1.25% 69.13%    29.50MB  1.25%  math/big.NewInt

@@ -1,0 +1,72 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/chain
+cpu: Apple M4 Max
+             │ components-baseline.txt │      components-optimized.txt       │
+             │         sec/op          │   sec/op     vs base                │
+ChainCall-16               5.442µ ± 2%   4.825µ ± 3%  -11.32% (p=0.000 n=10)
+
+             │ components-baseline.txt │      components-optimized.txt       │
+             │          B/op           │     B/op      vs base               │
+ChainCall-16              6.983Ki ± 0%   6.619Ki ± 0%  -5.22% (p=0.000 n=10)
+
+             │ components-baseline.txt │      components-optimized.txt      │
+             │        allocs/op        │ allocs/op   vs base                │
+ChainCall-16                93.00 ± 0%   82.00 ± 0%  -11.83% (p=0.000 n=10)
+
+pkg: github.com/crytic/medusa/fuzzing/coverage
+                        │ components-baseline.txt │      components-optimized.txt       │
+                        │         sec/op          │   sec/op     vs base                │
+CoverageNestedFrames-16              2658.0n ± 2%   560.9n ± 5%  -78.90% (p=0.000 n=10)
+
+                        │ components-baseline.txt │      components-optimized.txt       │
+                        │          B/op           │    B/op      vs base                │
+CoverageNestedFrames-16               6400.0 ± 0%   1016.0 ± 0%  -84.12% (p=0.000 n=10)
+
+                        │ components-baseline.txt │      components-optimized.txt      │
+                        │        allocs/op        │ allocs/op   vs base                │
+CoverageNestedFrames-16               57.000 ± 0%   8.000 ± 0%  -85.96% (p=0.000 n=10)
+
+pkg: github.com/crytic/medusa/fuzzing/valuegeneration
+                                │ components-baseline.txt │      components-optimized.txt       │
+                                │         sec/op          │   sec/op     vs base                │
+IntegerGeneration/seeds=8-16                  796.9n ± 4%   397.1n ± 2%  -50.17% (p=0.000 n=10)
+IntegerGeneration/seeds=256-16                2.450µ ± 1%   1.867µ ± 4%  -23.82% (p=0.000 n=10)
+IntegerGeneration/seeds=4096-16               38.16µ ± 2%   29.29µ ± 4%  -23.24% (p=0.000 n=10)
+geomean                                       4.208µ        2.790µ       -33.70%
+
+                                │ components-baseline.txt │       components-optimized.txt       │
+                                │          B/op           │     B/op      vs base                │
+IntegerGeneration/seeds=8-16                  1416.5 ± 0%     554.5 ± 0%  -60.85% (p=0.000 n=10)
+IntegerGeneration/seeds=256-16               5.500Ki ± 0%   2.658Ki ± 0%  -51.67% (p=0.000 n=10)
+IntegerGeneration/seeds=4096-16             113.10Ki ± 0%   40.40Ki ± 0%  -64.27% (p=0.000 n=10)
+geomean                                      9.511Ki        3.874Ki       -59.27%
+
+                                │ components-baseline.txt │      components-optimized.txt      │
+                                │        allocs/op        │ allocs/op   vs base                │
+IntegerGeneration/seeds=8-16                   28.00 ± 0%   13.00 ± 0%  -53.57% (p=0.000 n=10)
+IntegerGeneration/seeds=256-16                 27.00 ± 0%   14.00 ± 0%  -48.15% (p=0.000 n=10)
+IntegerGeneration/seeds=4096-16                28.00 ± 0%   14.00 ± 0%  -50.00% (p=0.000 n=10)
+geomean                                        27.66        13.66       -50.63%
+
+pkg: github.com/crytic/medusa/utils
+                              │ components-baseline.txt │      components-optimized.txt       │
+                              │         sec/op          │   sec/op     vs base                │
+ConstrainInteger/inRange-16                 67.96n ± 3%   23.99n ± 4%  -64.70% (p=0.000 n=10)
+ConstrainInteger/overflow-16                360.7n ± 5%   221.9n ± 4%  -38.48% (p=0.000 n=10)
+ConstrainInteger/underflow-16               367.7n ± 3%   225.8n ± 4%  -38.59% (p=0.000 n=10)
+geomean                                     208.1n        106.3n       -48.91%
+
+                              │ components-baseline.txt │      components-optimized.txt      │
+                              │          B/op           │    B/op     vs base                │
+ConstrainInteger/inRange-16                 200.00 ± 0%   40.00 ± 0%  -80.00% (p=0.000 n=10)
+ConstrainInteger/overflow-16                 912.0 ± 0%   304.0 ± 0%  -66.67% (p=0.000 n=10)
+ConstrainInteger/underflow-16                912.0 ± 0%   304.0 ± 0%  -66.67% (p=0.000 n=10)
+geomean                                      550.0        154.6       -71.89%
+
+                              │ components-baseline.txt │      components-optimized.txt      │
+                              │        allocs/op        │ allocs/op   vs base                │
+ConstrainInteger/inRange-16                  4.000 ± 0%   2.000 ± 0%  -50.00% (p=0.000 n=10)
+ConstrainInteger/overflow-16                10.000 ± 0%   4.000 ± 0%  -60.00% (p=0.000 n=10)
+ConstrainInteger/underflow-16               10.000 ± 0%   4.000 ± 0%  -60.00% (p=0.000 n=10)
+geomean                                      7.368        3.175       -56.91%

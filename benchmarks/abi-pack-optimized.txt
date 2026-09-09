@@ -1,0 +1,80 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	28738948	        12.26 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4432072	        80.32 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  328183	      1093 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	28204417	        12.90 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4217818	        85.10 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  285163	      1184 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/dynamic-16         	  309728	      1143 ns/op	    6360 B/op	      30 allocs/op
+BenchmarkABIPack/empty-16           	28694118	        12.33 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16         	 4441327	        81.60 ns/op	     120 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	25785502	        13.16 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4141322	        85.85 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  314569	      1207 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	28230498	        13.09 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4296265	        82.86 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  323215	      1124 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	27183060	        13.02 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4266124	        85.26 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  301219	      1185 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	28748252	        12.61 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4358784	        80.69 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  329950	      1202 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	28347385	        12.48 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4533052	        79.52 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  322201	      1119 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/empty-16         	27689644	        12.65 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16       	 4209315	        83.97 ns/op	     120 B/op	       4 allocs/op
+BenchmarkABIPack/dynamic-16       	  317308	      1138 ns/op	    6360 B/op	      30 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+BenchmarkABIPack/dynamic-16         	  315246	      1101 ns/op	    6360 B/op	      30 allocs/op
+BenchmarkABIPack/empty-16           	29205369	        12.35 ns/op	       4 B/op	       1 allocs/op
+BenchmarkABIPack/integer-16         	 4313540	        84.55 ns/op	     120 B/op	       4 allocs/op
+PASS
