@@ -31,10 +31,69 @@ type FunctionDefinition struct {
 	// Src is the source file for this AST
 	Src  string `json:"src"`
 	Name string `json:"name,omitempty"`
+	// Body is the function body block
+	Body *Block `json:"body,omitempty"`
 }
 
 func (s FunctionDefinition) GetNodeType() string {
 	return s.NodeType
+}
+
+// Block represents a block of statements (function body)
+type Block struct {
+	NodeType   string            `json:"nodeType"`
+	Src        string            `json:"src"`
+	Statements []json.RawMessage `json:"statements"`
+}
+
+func (b Block) GetNodeType() string {
+	return b.NodeType
+}
+
+// ExpressionStatement wraps an expression as a statement
+type ExpressionStatement struct {
+	NodeType   string          `json:"nodeType"`
+	Src        string          `json:"src"`
+	Expression json.RawMessage `json:"expression"`
+}
+
+func (e ExpressionStatement) GetNodeType() string {
+	return e.NodeType
+}
+
+// FunctionCall represents a function call expression
+type FunctionCall struct {
+	NodeType   string            `json:"nodeType"`
+	Src        string            `json:"src"`
+	Expression json.RawMessage   `json:"expression"`
+	Arguments  []json.RawMessage `json:"arguments"`
+}
+
+func (f FunctionCall) GetNodeType() string {
+	return f.NodeType
+}
+
+// MemberAccess represents member access (e.g., contract.function)
+type MemberAccess struct {
+	NodeType   string          `json:"nodeType"`
+	Src        string          `json:"src"`
+	Expression json.RawMessage `json:"expression"`
+	MemberName string          `json:"memberName"`
+}
+
+func (m MemberAccess) GetNodeType() string {
+	return m.NodeType
+}
+
+// Identifier represents a variable or function name reference
+type Identifier struct {
+	NodeType string `json:"nodeType"`
+	Src      string `json:"src"`
+	Name     string `json:"name"`
+}
+
+func (i Identifier) GetNodeType() string {
+	return i.NodeType
 }
 
 // ContractDefinition is the contract definition node
