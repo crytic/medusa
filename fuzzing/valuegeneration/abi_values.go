@@ -28,27 +28,29 @@ func GenerateAbiValue(generator ValueGenerator, inputType *abi.Type) any {
 	case abi.AddressTy:
 		return generator.GenerateAddress()
 	case abi.UintTy:
-		if inputType.Size == 64 {
+		switch inputType.Size {
+		case 64:
 			return generator.GenerateInteger(false, inputType.Size).Uint64()
-		} else if inputType.Size == 32 {
+		case 32:
 			return uint32(generator.GenerateInteger(false, inputType.Size).Uint64())
-		} else if inputType.Size == 16 {
+		case 16:
 			return uint16(generator.GenerateInteger(false, inputType.Size).Uint64())
-		} else if inputType.Size == 8 {
+		case 8:
 			return uint8(generator.GenerateInteger(false, inputType.Size).Uint64())
-		} else {
+		default:
 			return generator.GenerateInteger(false, inputType.Size)
 		}
 	case abi.IntTy:
-		if inputType.Size == 64 {
+		switch inputType.Size {
+		case 64:
 			return generator.GenerateInteger(true, inputType.Size).Int64()
-		} else if inputType.Size == 32 {
+		case 32:
 			return int32(generator.GenerateInteger(true, inputType.Size).Int64())
-		} else if inputType.Size == 16 {
+		case 16:
 			return int16(generator.GenerateInteger(true, inputType.Size).Int64())
-		} else if inputType.Size == 8 {
+		case 8:
 			return int8(generator.GenerateInteger(true, inputType.Size).Int64())
-		} else {
+		default:
 			return generator.GenerateInteger(true, inputType.Size)
 		}
 	case abi.BoolTy:
@@ -115,31 +117,32 @@ func MutateAbiValue(generator ValueGenerator, mutator ValueMutator, inputType *a
 		}
 		return mutator.MutateAddress(addr), nil
 	case abi.UintTy:
-		if inputType.Size == 64 {
+		switch inputType.Size {
+		case 64:
 			v, ok := value.(uint64)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return mutator.MutateInteger(new(big.Int).SetUint64(v), false, inputType.Size).Uint64(), nil
-		} else if inputType.Size == 32 {
+		case 32:
 			v, ok := value.(uint32)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint32(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
-		} else if inputType.Size == 16 {
+		case 16:
 			v, ok := value.(uint16)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint16(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
-		} else if inputType.Size == 8 {
+		case 8:
 			v, ok := value.(uint8)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return uint8(mutator.MutateInteger(new(big.Int).SetUint64(uint64(v)), false, inputType.Size).Uint64()), nil
-		} else {
+		default:
 			v, ok := value.(*big.Int)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate uint%v input as the value provided is not of the correct type", inputType.Size)
@@ -147,31 +150,32 @@ func MutateAbiValue(generator ValueGenerator, mutator ValueMutator, inputType *a
 			return mutator.MutateInteger(new(big.Int).Set(v), false, inputType.Size), nil
 		}
 	case abi.IntTy:
-		if inputType.Size == 64 {
+		switch inputType.Size {
+		case 64:
 			v, ok := value.(int64)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return mutator.MutateInteger(new(big.Int).SetInt64(v), true, inputType.Size).Int64(), nil
-		} else if inputType.Size == 32 {
+		case 32:
 			v, ok := value.(int32)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int32(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
-		} else if inputType.Size == 16 {
+		case 16:
 			v, ok := value.(int16)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int16(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
-		} else if inputType.Size == 8 {
+		case 8:
 			v, ok := value.(int8)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
 			}
 			return int8(mutator.MutateInteger(new(big.Int).SetInt64(int64(v)), true, inputType.Size).Int64()), nil
-		} else {
+		default:
 			v, ok := value.(*big.Int)
 			if !ok {
 				return nil, fmt.Errorf("could not mutate int%v input as the value provided is not of the correct type", inputType.Size)
@@ -739,7 +743,7 @@ func decodeJSONArgument(inputType *abi.Type, value any, deployedContractAddr map
 				return nil, fmt.Errorf("contract %s not found in deployed contracts", contractName)
 			}
 		} else {
-			if !((len(str) == (common.AddressLength*2 + 2)) || (len(str) == common.AddressLength*2)) {
+			if len(str) != common.AddressLength*2+2 && len(str) != common.AddressLength*2 {
 				err := fmt.Errorf("invalid address length (%v)", len(str))
 				return nil, err
 			}

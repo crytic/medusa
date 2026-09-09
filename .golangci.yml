@@ -1,0 +1,10 @@
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      # Upstream go-ethereum code, kept close to its original form so it can be
+      # diffed against and re-synced. Style findings here are not ours to fix.
+      - path: chain/vendored/
+        linters:
+          - staticcheck

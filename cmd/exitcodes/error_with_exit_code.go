@@ -26,16 +26,16 @@ func (e *ErrorWithExitCode) Error() string {
 // GetInnerErrorAndExitCode checks the given exit code that the application should exit with, if this error is bubbled
 // to the top-level. This will be 0 for a nil error, 1 for a generic error, or arbitrary if the error is of type
 // ErrorWithExitCode.
-// Returns the error (or inner error if it is an ErrorWithExitCode error type), along with the exit code associated
-// with the error.
-func GetInnerErrorAndExitCode(err error) (error, int) {
+// Returns the exit code associated with the error, along with the error itself (or inner error if it is an
+// ErrorWithExitCode error type).
+func GetInnerErrorAndExitCode(err error) (int, error) {
 	// If we have no error, return 0, if we have a generic error, return 1, if we have a custom error code, unwrap
 	// and return it.
 	if err == nil {
-		return nil, ExitCodeSuccess
+		return ExitCodeSuccess, nil
 	} else if unwrappedErr, ok := err.(*ErrorWithExitCode); ok {
-		return unwrappedErr.err, unwrappedErr.exitCode
+		return unwrappedErr.exitCode, unwrappedErr.err
 	} else {
-		return err, ExitCodeGeneralError
+		return ExitCodeGeneralError, err
 	}
 }
