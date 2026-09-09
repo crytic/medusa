@@ -428,7 +428,7 @@ func (g *MutationalValueGenerator) MutateBool(bl bool) bool {
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.MutateBoolProbability {
-		return g.RandomValueGenerator.GenerateBool()
+		return g.GenerateBool()
 	}
 	return bl
 }

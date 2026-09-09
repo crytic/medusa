@@ -159,7 +159,7 @@ func (s *SlitherConfig) RunSlither(target string, solcVersion string) (*SlitherR
 			if _, err = os.Stat(s.CachePath); err == nil {
 				// We will not handle the error of os.Remove since we have already checked for the file's existence
 				// and we have the right permissions.
-				os.Remove(s.CachePath)
+				_ = os.Remove(s.CachePath)
 			}
 		}
 	}

@@ -129,7 +129,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			// the solc version was not installed
 			out, err := exec.Command("solc-select", "install", c.SolcVersion).CombinedOutput()
 			if err != nil {
-				return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+				return nil, "", fmt.Errorf("error while executing `solc-select install`:\nOUTPUT:\n%s\nERROR: %s", string(out), err.Error())
 			}
 		}
 	}
@@ -137,7 +137,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 	// Run crytic-compile to compile and export our compilation artifacts.
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, "", fmt.Errorf("error while executing crytic-compile:\nOUTPUT:\n%s\nERROR: %s", string(out), err.Error())
 	}
 
 	// Find compilation artifacts in the export directory
@@ -242,7 +242,7 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			// Parse the ABI
 			contractAbi, err := types.ParseABIFromInterface(contract.Abi)
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'\n", contractName)
+				return nil, "", fmt.Errorf("unable to parse ABI for contract '%s'", contractName)
 			}
 
 			initBytecode := []byte(contract.Bin)
@@ -251,12 +251,12 @@ func (c *CryticCompilationConfig) Compile() ([]types.Compilation, string, error)
 			if len(libraryPlaceholders) == 0 {
 				initBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.Bin, "0x"))
 				if err != nil {
-					return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+					return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'", contractName)
 				}
 
 				runtimeBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.BinRuntime, "0x"))
 				if err != nil {
-					return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+					return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'", contractName)
 				}
 			}
 

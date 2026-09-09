@@ -56,22 +56,27 @@ func CopyFile(sourcePath string, targetPath string) error {
 		return err
 	}
 
-	// Open a handle to the source file
+	// Open a handle to the source file. This handle is only read from, so a failure
+	// to close it cannot lose data.
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	// Get a handle to the created target file
 	targetFile, err := os.Create(targetPath)
 	if err != nil {
 		return err
 	}
-	defer targetFile.Close()
 
-	// Copy contents from one file handle to the other
+	// Copy contents from one file handle to the other. Close reports buffered writes
+	// that failed to flush, so a truncated copy is not reported as a success.
 	_, err = io.Copy(targetFile, sourceFile)
+	targetCloseErr := targetFile.Close()
+	if err == nil {
+		err = targetCloseErr
+	}
 	if err != nil {
 		return err
 	}
@@ -142,7 +147,7 @@ func MakeDirectory(dirToMake string) error {
 
 	// dirToMake is a file, throw an error accordingly
 	if !dirInfo.IsDir() {
-		return fmt.Errorf("there is a file with the same name as %s\n", dirInfo)
+		return fmt.Errorf("there is a file with the same name as %s", dirInfo)
 	}
 
 	// Directory already exists, good to go

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 
 	"github.com/crytic/medusa/chain/state"
@@ -15,7 +16,6 @@ import (
 	"github.com/crytic/medusa-geth/triedb/hashdb"
 	"github.com/crytic/medusa/chain/config"
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/common/math"
@@ -266,8 +266,10 @@ func newTestChainWithStateFactory(
 // must be explicitly released is the stateDB trie's underlying cache. This cache, if not released, prevents the TestChain
 // object from being freed by the garbage collector and causes a severe memory leak.
 func (t *TestChain) Close() {
-	// Reset the state DB's cache
-	t.stateDatabase.TrieDB().Close()
+	// Reset the state DB's cache. Every caller invokes this from a defer during
+	// teardown and has no recovery path, so the close error is dropped here rather
+	// than widening the signature to one that callers would discard anyway.
+	_ = t.stateDatabase.TrieDB().Close()
 }
 
 // Clone recreates the current TestChain state into a new instance. This simply reconstructs the block/chain state
@@ -538,7 +540,7 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 
 	// Create our EVM instance.
 	evm := vm.NewEVM(blockContext, state, t.chainConfig, vm.Config{
-		Tracer:           extendedTracerRouter.NativeTracer().Tracer.Hooks,
+		Tracer:           extendedTracerRouter.NativeTracer().Hooks,
 		NoBaseFee:        true,
 		ConfigExtensions: t.vmConfigExtensions,
 	})
@@ -739,7 +741,7 @@ func (t *TestChain) PendingBlockAddTx(message *core.Message, additionalTracers .
 	}
 
 	// Update the VM's tracer
-	vmConfig.Tracer = extendedTracerRouter.NativeTracer().Tracer.Hooks
+	vmConfig.Tracer = extendedTracerRouter.NativeTracer().Hooks
 
 	// Set tx context
 	t.state.SetTxContext(tx.Hash(), len(t.pendingBlock.Messages))

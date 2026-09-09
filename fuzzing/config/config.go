@@ -133,13 +133,13 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 
 	// Empty string handling
 	if s == "" {
-		cb.Int.SetInt64(0)
+		cb.SetInt64(0)
 		return nil
 	}
 
 	// Hex notation handling
 	if strings.HasPrefix(strings.ToLower(s), "0x") {
-		if _, ok := cb.Int.SetString(s[2:], 16); !ok {
+		if _, ok := cb.SetString(s[2:], 16); !ok {
 			return fmt.Errorf("invalid hex string provided while unmarshaling contract balance: %s", s)
 		}
 		return nil
@@ -152,14 +152,14 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("error parsing scientific notation while unmarshaling contract balance: %w", err)
 		}
 		plainStr := strconv.FormatFloat(f, 'f', 0, 64)
-		if _, ok := cb.Int.SetString(plainStr, 10); !ok {
+		if _, ok := cb.SetString(plainStr, 10); !ok {
 			return fmt.Errorf("invalid format for contract balance (scientific notation) while unmarshaling contract balance: %s", s)
 		}
 		return nil
 	}
 
 	// Base-10 string handling
-	if _, ok := cb.Int.SetString(s, 10); !ok {
+	if _, ok := cb.SetString(s, 10); !ok {
 		return fmt.Errorf("invalid base-10 string provided while unmarshaling contract balance: %s", s)
 	}
 	return nil
@@ -167,7 +167,7 @@ func (cb *ContractBalance) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON marshals a ContractBalance to JSON.
 func (cb ContractBalance) MarshalJSON() ([]byte, error) {
-	return json.Marshal(cb.Int.String())
+	return json.Marshal(cb.String())
 }
 
 // VerbosityLevel defines different verbosity levels
