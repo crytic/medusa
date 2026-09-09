@@ -75,6 +75,9 @@ The chain configuration defines the parameters for setting up `medusa`'s underly
 
 ## Fork Configuration
 
+For a step-by-step guide to fuzzing against a forked network, see
+[On-Chain Fuzzing](../testing/on_chain_fuzzing.md).
+
 ### `forkModeEnabled`
 
 - **Type**: Boolean
