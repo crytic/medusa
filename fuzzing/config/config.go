@@ -314,6 +314,9 @@ type PropertyTestingConfig struct {
 
 	// TestPrefixes dictates what method name prefixes will determine if a contract method is a property test.
 	TestPrefixes []string `json:"testPrefixes"`
+
+	// TestReturnBool dictactes if the properties should return a bool or not
+	TestReturnBool bool `json:"returnBool"`
 }
 
 // OptimizationTestingConfig describes the configuration options used for optimization testing
