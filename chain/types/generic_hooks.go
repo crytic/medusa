@@ -1,6 +1,6 @@
 package types
 
-import "golang.org/x/exp/slices"
+import "slices"
 
 // GenericHookFunc defines a basic function that takes no arguments and returns none, to be used as a hook during
 // execution.

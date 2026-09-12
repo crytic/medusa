@@ -30,7 +30,8 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 			}
 
 			// Seed ValueSet with literals
-			if literalKind == "number" {
+			switch literalKind {
+			case "number":
 				// If it has a 0x prefix, it won't have decimals
 				if strings.HasPrefix(literalValue, "0x") {
 					if b, ok := big.NewInt(0).SetString(literalValue[2:], 16); ok {
@@ -46,7 +47,7 @@ func (vs *ValueSet) SeedFromAst(ast any) {
 						vs.AddAddress(common.BigToAddress(b))
 					}
 				}
-			} else if literalKind == "string" {
+			case "string":
 				vs.AddString(literalValue)
 			}
 		}

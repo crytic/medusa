@@ -99,7 +99,7 @@ func (t *OptimizationTestCase) Message() string {
 
 // ID obtains a unique identifier for a test result.
 func (t *OptimizationTestCase) ID() string {
-	return strings.Replace(fmt.Sprintf("OPTIMIZATION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
+	return strings.ReplaceAll(fmt.Sprintf("OPTIMIZATION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-")
 }
 
 // Value obtains the maximum value returned by the test method found till now

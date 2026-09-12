@@ -65,5 +65,5 @@ func (t *AssertionTestCase) Message() string {
 
 // ID obtains a unique identifier for a test result.
 func (t *AssertionTestCase) ID() string {
-	return strings.Replace(fmt.Sprintf("ASSERTION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-", -1)
+	return strings.ReplaceAll(fmt.Sprintf("ASSERTION-%s-%s", t.targetContract.Name(), t.targetMethod.Sig), "_", "-")
 }

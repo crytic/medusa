@@ -43,7 +43,7 @@ func GetSystemSolcVersion() (*semver.Version, error) {
 	// Run solc --version to obtain our compiler version.
 	out, err := exec.Command("solc", "--version").CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s\n", string(out), err.Error())
+		return nil, fmt.Errorf("error while executing solc:\nOUTPUT:\n%s\nERROR: %s", string(out), err.Error())
 	}
 
 	// Parse the compiler version out of the output
@@ -92,7 +92,7 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 	cmd := exec.Command("solc", s.Target, "--combined-json", outputOptions)
 	cmdStdout, cmdStderr, cmdCombined, err := utils.RunCommandWithOutputAndError(cmd)
 	if err != nil {
-		return nil, "", fmt.Errorf("error while executing solc:\n%s\n\nCommand Output:\n%s\n", err.Error(), string(cmdCombined))
+		return nil, "", fmt.Errorf("error while executing solc:\n%s\n\nCommand Output:\n%s", err.Error(), string(cmdCombined))
 	}
 
 	// Our compilation succeeded, load the JSON
@@ -184,11 +184,11 @@ func (s *SolcCompilationConfig) Compile() ([]types.Compilation, string, error) {
 		if len(libraryPlaceholders) == 0 {
 			initBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.Code, "0x"))
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'\n", contractName)
+				return nil, "", fmt.Errorf("unable to parse init bytecode for contract '%s'", contractName)
 			}
 			runtimeBytecode, err = hex.DecodeString(strings.TrimPrefix(contract.RuntimeCode, "0x"))
 			if err != nil {
-				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'\n", contractName)
+				return nil, "", fmt.Errorf("unable to parse runtime bytecode for contract '%s'", contractName)
 			}
 		}
 

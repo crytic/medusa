@@ -22,6 +22,13 @@ defaults:
 permissions:
   contents: read
 
+env:
+  # Bounded to a minor line so a new Go release cannot silently change what CI
+  # runs. golangci-lint only supports toolchains up to the Go version it was
+  # built with, so raising this may require raising GOLANGCI_LINT_VERSION too.
+  GO_VERSION: "1.26"
+  GOLANGCI_LINT_VERSION: v2.12.2
+
 jobs:
   build:
     needs: [lint]
@@ -56,7 +63,7 @@ jobs:
 
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
-          go-version: "^1.22"
+          go-version: ${{ env.GO_VERSION }}
           # disable caching during release (tag) builds
           cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
@@ -128,6 +135,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      ACTIONLINT_VERSION: v1.7.12
+
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
@@ -135,18 +145,18 @@ jobs:
 
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
-          go-version: "^1.22"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Cache actionlint
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/go/bin/actionlint
-          key: actionlint-${{ runner.os }}
+          key: actionlint-${{ runner.os }}-${{ env.ACTIONLINT_VERSION }}
 
       - name: Actionlint
         run: |
           if [ ! -f ~/go/bin/actionlint ]; then
-            go install github.com/rhysd/actionlint/cmd/actionlint@latest
+            go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
           fi
           actionlint
 
@@ -170,10 +180,11 @@ jobs:
           git diff --exit-code
 
       - name: Lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v1.64.8
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout 5m0s
+
   test:
     strategy:
       matrix:
@@ -213,7 +224,7 @@ jobs:
 
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
-          go-version: "^1.22"
+          go-version: ${{ env.GO_VERSION }}
 
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:

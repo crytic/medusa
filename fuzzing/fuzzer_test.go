@@ -67,6 +67,30 @@ func TestFuzzerHooks(t *testing.T) {
 	})
 }
 
+// TestFuzzerCoverageDisabled ensures a fuzzing campaign can run without coverage tracing.
+func TestFuzzerCoverageDisabled(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_immediate.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.Workers = 1
+			config.Fuzzing.TestLimit = 1
+			config.Fuzzing.ShrinkLimit = 0
+			config.Fuzzing.CallSequenceLength = 1
+			config.Fuzzing.CoverageEnabled = false
+			config.Fuzzing.CoverageFormats = nil
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			err := f.fuzzer.Start()
+			require.NoError(t, err)
+			assertFailedTestsExpected(f, true)
+		},
+	})
+}
+
 // TestSlitherPrinter runs slither and ensures that the constants are correctly added to the value set
 func TestSlitherPrinter(t *testing.T) {
 	expectedInts := []int64{

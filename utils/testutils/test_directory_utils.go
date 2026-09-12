@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/crytic/medusa/utils"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // CopyToTestDirectory copies files or directories from the provided filePath (relative to ./tests/contracts/) to an
@@ -14,13 +14,14 @@ import (
 func CopyToTestDirectory(t *testing.T, filePath string) string {
 	// Construct our file path relative to our working directory
 	cwd, err := os.Getwd()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	sourcePath := filepath.Join(cwd, filePath)
 
-	// Verify the file path exists
+	// Verify the file path exists. A missing source path must halt the test
+	// immediately: continuing would dereference a nil sourcePathInfo below.
 	sourcePathInfo, err := os.Stat(sourcePath)
-	assert.False(t, os.IsNotExist(err))
-	assert.NotNil(t, sourcePathInfo)
+	require.NoError(t, err)
+	require.NotNil(t, sourcePathInfo)
 
 	// Obtain an isolated test directory path.
 	targetDirectory := filepath.Join(t.TempDir(), "medusaTest")
@@ -31,11 +32,11 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 	} else {
 		err = utils.CopyFile(sourcePath, targetPath)
 	}
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Get a normalized absolute path
 	targetPath, err = filepath.Abs(targetPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return targetPath
 }
 
@@ -45,12 +46,13 @@ func CopyToTestDirectory(t *testing.T, filePath string) string {
 func ExecuteInDirectory(t *testing.T, testPath string, method func()) {
 	// Backup our old working directory
 	cwd, err := os.Getwd()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Check if the test path refers to a file or directory, as we'll want to change our working directory to a
-	// directory path.
+	// directory path. A missing test path must halt the test immediately: continuing would
+	// dereference a nil testPathInfo below.
 	testPathInfo, err := os.Stat(testPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Ensure we obtained a directory from our path
 	testDirectory := testPath
@@ -60,12 +62,12 @@ func ExecuteInDirectory(t *testing.T, testPath string, method func()) {
 
 	// Change our working directory to the test directory
 	err = os.Chdir(testDirectory)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Execute the given method
 	method()
 
 	// Restore our working directory (we must leave the test directory or else clean up will fail post testing)
 	err = os.Chdir(cwd)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

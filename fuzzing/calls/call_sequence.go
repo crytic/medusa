@@ -252,11 +252,12 @@ func (cse *CallSequenceElement) String() string {
 	methodName := "<unresolved method>"
 	if err == nil && method != nil {
 		// Special handlers for fallback and receive
-		if method.Type == abi.Fallback {
+		switch method.Type {
+		case abi.Fallback:
 			methodName = "fallback"
-		} else if method.Type == abi.Receive {
+		case abi.Receive:
 			methodName = "receive"
-		} else {
+		default:
 			methodName = method.Sig
 		}
 	}
