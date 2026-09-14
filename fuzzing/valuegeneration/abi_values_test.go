@@ -324,3 +324,162 @@ func TestEncodeABIArgumentToString(t *testing.T) {
 		}
 	}
 }
+
+// TestStringWithNullBytes verifies that strings containing null bytes are correctly serialized
+// and deserialized through JSON encoding. This is a regression test for issue #279.
+func TestStringWithNullBytes(t *testing.T) {
+	t.Parallel()
+
+	stringType := abi.Type{
+		Elem:          nil,
+		Size:          0,
+		T:             abi.StringTy,
+		TupleRawName:  "",
+		TupleElems:    nil,
+		TupleRawNames: nil,
+		TupleType:     nil,
+	}
+
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "single null byte",
+			input: "\x00",
+		},
+		{
+			name:  "null byte at start",
+			input: "\x00hello",
+		},
+		{
+			name:  "null byte at end",
+			input: "hello\x00",
+		},
+		{
+			name:  "embedded null byte",
+			input: "hello\x00world",
+		},
+		{
+			name:  "multiple null bytes",
+			input: "\x00\x00\x00",
+		},
+		{
+			name:  "mixed null and regular characters",
+			input: "a\x00b\x00c",
+		},
+		{
+			name:  "normal string without null bytes",
+			input: "hello world",
+		},
+		{
+			name:  "empty string",
+			input: "",
+		},
+		{
+			name:  "string with other control characters",
+			input: "hello\x01\x02world",
+		},
+		{
+			name:  "string with newlines and tabs (should not be hex encoded)",
+			input: "hello\nworld\ttab",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Encode the string
+			encoded, err := encodeJSONArgument(&stringType, tc.input)
+			assert.NoError(t, err, "encoding should not fail")
+
+			// Decode the string
+			decoded, err := decodeJSONArgument(&stringType, encoded, nil)
+			assert.NoError(t, err, "decoding should not fail")
+
+			// Verify the decoded string matches the original
+			decodedStr, ok := decoded.(string)
+			assert.True(t, ok, "decoded value should be a string")
+			assert.Equal(t, tc.input, decodedStr, "decoded string should match original")
+
+			// Re-encode and verify it matches the first encoding (round-trip consistency)
+			reencoded, err := encodeJSONArgument(&stringType, decodedStr)
+			assert.NoError(t, err, "re-encoding should not fail")
+			assert.Equal(t, encoded, reencoded, "re-encoded value should match first encoding")
+		})
+	}
+}
+
+// TestStringNeedsHexEncoding verifies the helper function correctly identifies strings that need
+// hex encoding.
+func TestStringNeedsHexEncoding(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "null byte only",
+			input:    "\x00",
+			expected: true,
+		},
+		{
+			name:     "embedded null byte",
+			input:    "hello\x00world",
+			expected: true,
+		},
+		{
+			name:     "normal ascii string",
+			input:    "hello world",
+			expected: false,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "newline only",
+			input:    "\n",
+			expected: false,
+		},
+		{
+			name:     "tab only",
+			input:    "\t",
+			expected: false,
+		},
+		{
+			name:     "carriage return only",
+			input:    "\r",
+			expected: false,
+		},
+		{
+			name:     "control character (bell)",
+			input:    "\x07",
+			expected: true,
+		},
+		{
+			name:     "unicode string",
+			input:    "hello \u4e16\u754c",
+			expected: false,
+		},
+		{
+			name:     "invalid utf8 sequence",
+			input:    string([]byte{0xff, 0xfe}),
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := stringNeedsHexEncoding(tc.input)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
