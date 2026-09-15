@@ -377,6 +377,47 @@ func (g *MutationalValueGenerator) mutateStringInternal(s *string) string {
 	return input
 }
 
+// arrayMutationMethods define methods which take an array of values (and whether its length is fixed) and
+// transform the array's structure. This is used in a loop to apply structure mutations to arrays. Fixed-size arrays
+// may only reorder their elements, while dynamic-sized arrays (slices) may additionally grow or shrink. An element
+// set to nil in the returned array instructs the caller to generate a new value in its place.
+var arrayMutationMethods = []func(*MutationalValueGenerator, []any, bool) []any{
+	// Swap two random elements
+	func(g *MutationalValueGenerator, value []any, fixedLength bool) []any {
+		// We need at least two elements to perform a swap.
+		if len(value) < 2 {
+			return value
+		}
+		i := g.randomProvider.Intn(len(value))
+		j := g.randomProvider.Intn(len(value))
+		value[i], value[j] = value[j], value[i]
+		return value
+	},
+	// Insert a new element at a random position (dynamic-sized arrays only). The inserted nil element instructs the
+	// caller to generate a new value in its place.
+	func(g *MutationalValueGenerator, value []any, fixedLength bool) []any {
+		// Fixed-size arrays cannot grow, so this mutation does not apply to them.
+		if fixedLength {
+			return value
+		}
+		// Grow the array by one element and shift the elements right to open a slot at the chosen position.
+		i := g.randomProvider.Intn(len(value) + 1)
+		value = append(value, nil)
+		copy(value[i+1:], value[i:])
+		value[i] = nil
+		return value
+	},
+	// Remove a random element (dynamic-sized arrays only)
+	func(g *MutationalValueGenerator, value []any, fixedLength bool) []any {
+		// Fixed-size arrays cannot shrink, and there is nothing to remove from an empty array.
+		if fixedLength || len(value) == 0 {
+			return value
+		}
+		i := g.randomProvider.Intn(len(value))
+		return append(value[:i], value[i+1:]...)
+	},
+}
+
 // GenerateAddress obtains an existing address from its underlying value set or generates a random one.
 func (g *MutationalValueGenerator) GenerateAddress() common.Address {
 	// If our bias directs us to, use the random generator instead
@@ -413,12 +454,13 @@ func (g *MutationalValueGenerator) MutateArray(value []any, fixedLength bool) []
 	// Determine whether to perform mutations against this input or just return it as-is.
 	randomGeneratorDecision := g.randomProvider.Float32()
 	if randomGeneratorDecision < g.config.MutateArrayStructureProbability {
-		// Determine how many mutations we'll apply
+		// Determine how many mutations we'll apply. The base input index is irrelevant here, so an input length of
+		// one is used (which also guards against empty arrays).
 		_, mutationCount := g.getMutationParams(1)
 		for i := 0; i < mutationCount; i++ {
-			// TODO: Apply array structure mutations (swap, insert, delete)
+			// Apply a random array structure mutation (swap, insert, delete).
+			value = arrayMutationMethods[g.randomProvider.Intn(len(arrayMutationMethods))](g, value, fixedLength)
 		}
-		return value
 	}
 	return value
 }
