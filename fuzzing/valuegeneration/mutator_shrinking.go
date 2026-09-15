@@ -8,6 +8,9 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
+// Ensure ShrinkingValueMutator implements ValueMutator at compile-time.
+var _ ValueMutator = (*ShrinkingValueMutator)(nil)
+
 // ShrinkingValueMutator represents a ValueMutator used to shrink function inputs and call arguments.
 type ShrinkingValueMutator struct {
 	// config describes the configuration defining value mutation parameters.

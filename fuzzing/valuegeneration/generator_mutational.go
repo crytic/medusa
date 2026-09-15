@@ -9,8 +9,18 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
+// Ensure MutationalValueGenerator implements ValueGenerator and ValueMutator at compile-time.
+var (
+	_ ValueGenerator = (*MutationalValueGenerator)(nil)
+	_ ValueMutator   = (*MutationalValueGenerator)(nil)
+)
+
 // MutationalValueGenerator represents a ValueGenerator and ValueMutator for function inputs and call arguments. It
 // leverages values from a ValueSet (e.g. AST literals) to generate new values or mutate existing ones.
+//
+// Note: its Generate methods intentionally derive new values by mutating seeds drawn from the ValueSet (falling back
+// to the embedded RandomValueGenerator by bias or when the set is empty). This corpus-aware generation is the core of
+// the mutational strategy; it is not mere duplication of RandomValueGenerator, whose methods are purely random.
 type MutationalValueGenerator struct {
 	// config describes the configuration defining value generation and mutation parameters.
 	config *MutationalValueGeneratorConfig
@@ -19,7 +29,9 @@ type MutationalValueGenerator struct {
 	// operations.
 	valueSet *ValueSet
 
-	// RandomValueGenerator is included to inherit from the random generator
+	// RandomValueGenerator is embedded to power the purely-random fallback paths (used by bias or when the ValueSet
+	// lacks values for a type) and to provide generation of types which are not corpus-aware (e.g. bools, array
+	// lengths).
 	*RandomValueGenerator
 }
 

@@ -8,8 +8,14 @@ import (
 	"github.com/crytic/medusa/utils"
 )
 
+// Ensure RandomValueGenerator implements ValueGenerator at compile-time.
+var _ ValueGenerator = (*RandomValueGenerator)(nil)
+
 // RandomValueGenerator represents a ValueGenerator used to generate transaction fields and call arguments with values
 // provided by a random number generator.
+//
+// This type is intentionally not a ValueMutator: mutation of existing values is the responsibility of dedicated
+// ValueMutator implementations (e.g. MutationalValueGenerator, ShrinkingValueMutator).
 type RandomValueGenerator struct {
 	// config describes the configuration defining value generation parameters.
 	config *RandomValueGeneratorConfig
@@ -52,12 +58,6 @@ func (g *RandomValueGenerator) GenerateAddress() common.Address {
 	return common.BytesToAddress(addressBytes)
 }
 
-// MutateAddress takes an address input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateAddress(addr common.Address) common.Address {
-	// This value generator does not apply mutations.
-	return addr
-}
-
 // GenerateArrayOfLength generates a random array length to use when populating inputs. This is used to determine how
 // many elements a non-byte, non-string array should have.
 func (g *RandomValueGenerator) GenerateArrayOfLength() int {
@@ -65,23 +65,9 @@ func (g *RandomValueGenerator) GenerateArrayOfLength() int {
 	return int(g.GenerateInteger(false, 16).Uint64()%rangeSize) + g.config.GenerateRandomArrayMinSize
 }
 
-// MutateArray takes a dynamic or fixed sized array as input, and returns a mutated value based off of the input.
-// Returns the mutated value. If any element of the returned array is nil, the value generator will be called upon
-// to generate it new.
-func (g *RandomValueGenerator) MutateArray(value []any, fixedLength bool) []any {
-	// This value generator does not apply mutations.
-	return value
-}
-
 // GenerateBool generates a random bool to use when populating inputs.
 func (g *RandomValueGenerator) GenerateBool() bool {
 	return g.randomProvider.Uint32()%2 == 0
-}
-
-// MutateBool takes a boolean input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateBool(bl bool) bool {
-	// This value generator does not apply mutations.
-	return bl
 }
 
 // GenerateBytes generates a random dynamic-sized byte array to use when populating inputs.
@@ -92,22 +78,10 @@ func (g *RandomValueGenerator) GenerateBytes() []byte {
 	return b
 }
 
-// MutateBytes takes a dynamic-sized byte array input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateBytes(b []byte) []byte {
-	// This value generator does not apply mutations.
-	return b
-}
-
 // GenerateFixedBytes generates a random fixed-sized byte array to use when populating inputs.
 func (g *RandomValueGenerator) GenerateFixedBytes(length int) []byte {
 	b := make([]byte, length)
 	g.randomProvider.Read(b)
-	return b
-}
-
-// MutateFixedBytes takes a fixed-sized byte array input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateFixedBytes(b []byte) []byte {
-	// This value generator does not apply mutations.
 	return b
 }
 
@@ -117,12 +91,6 @@ func (g *RandomValueGenerator) GenerateString() string {
 	b := make([]byte, int(g.randomProvider.Uint64()%rangeSize)+g.config.GenerateRandomStringMinSize)
 	g.randomProvider.Read(b)
 	return string(b)
-}
-
-// MutateString takes a string input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateString(s string) string {
-	// This value generator does not apply mutations.
-	return s
 }
 
 // GenerateInteger generates a random integer to use when populating inputs.
@@ -136,10 +104,4 @@ func (g *RandomValueGenerator) GenerateInteger(signed bool, bitLength int) *big.
 
 	// Constrain our integer bounds
 	return utils.ConstrainIntegerToBitLength(res, signed, bitLength)
-}
-
-// MutateInteger takes an integer input and returns a mutated value based off the input.
-func (g *RandomValueGenerator) MutateInteger(i *big.Int, signed bool, bitLength int) *big.Int {
-	// This value generator does not apply mutations.
-	return i
 }
