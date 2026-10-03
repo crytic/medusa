@@ -115,6 +115,9 @@ type FuzzingConfig struct {
 
 	// TestChainConfig represents the chain.TestChain config to use when initializing a chain.
 	TestChainConfig config.TestChainConfig `json:"chainConfig"`
+
+	// PrefillCorpus determines whether to extract call sequences from Foundry test functions and add them to the corpus.
+	PrefillCorpus bool `json:"prefillCorpus"`
 }
 
 // ContractBalance wraps big.Int to provide custom JSON marshaling/unmarshaling
