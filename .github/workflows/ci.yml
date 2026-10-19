@@ -148,7 +148,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache actionlint
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/go/bin/actionlint
           key: actionlint-${{ runner.os }}-${{ env.ACTIONLINT_VERSION }}
@@ -248,7 +248,7 @@ jobs:
           wait $UV_PID1 $UV_PID2 $UV_PID3 $NPM_PID
 
       - name: Cache solc
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.solc-select/artifacts
           key: solc-0.8.28-${{ runner.os }}
