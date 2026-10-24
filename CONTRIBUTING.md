@@ -43,7 +43,9 @@ Several linters and security checkers are run on the PRs.
 
 To install:
 
-- `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+- `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`
+
+Use golangci-lint v2: the repository's `.golangci.yml` uses the v2 configuration format. The installation path without `/v2` installs the incompatible v1 major version.
 
 To run:
 
