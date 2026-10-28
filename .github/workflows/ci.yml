@@ -23,10 +23,10 @@ permissions:
   contents: read
 
 env:
-  # Bounded to a minor line so a new Go release cannot silently change what CI
-  # runs. golangci-lint only supports toolchains up to the Go version it was
+  # Pin the patched compiler required by go.mod instead of a cached older patch.
+  # golangci-lint only supports toolchains up to the Go version it was
   # built with, so raising this may require raising GOLANGCI_LINT_VERSION too.
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.26.10"
   GOLANGCI_LINT_VERSION: v2.12.2
 
 jobs:
