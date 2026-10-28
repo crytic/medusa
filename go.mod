@@ -1,6 +1,6 @@
 module github.com/crytic/medusa
 
-go 1.24.0
+go 1.26.10
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -16,9 +16,9 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	go.etcd.io/bbolt v1.4.3
-	golang.org/x/crypto v0.47.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
-	golang.org/x/sys v0.40.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
@@ -37,7 +37,7 @@ require (
 	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/getsentry/sentry-go v0.28.1 // indirect
+	github.com/getsentry/sentry-go v0.31.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
@@ -46,7 +46,7 @@ require (
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -72,7 +72,16 @@ require (
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
+
+// Security minimums for the full transitive module graph, including packages
+// not imported by Medusa. Retain these constraints when running go mod tidy,
+// which otherwise removes them and reselects vulnerable versions.
+require (
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
+	golang.org/x/mod v0.40.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 )
