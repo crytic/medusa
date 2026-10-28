@@ -15,7 +15,7 @@ If you have any difficulty with installing `medusa`, please [open an issue](http
 
 ### Prerequisites
 
-You need to have Go installed (version 1.20 or later). Installation instructions for Go can be found [here](https://go.dev/doc/install).
+You need to have Go installed (version 1.26.10 or later). Use the latest patch release of a supported Go version. Installation instructions for Go can be found [here](https://go.dev/doc/install).
 
 ### Install `medusa`
 
@@ -112,7 +112,7 @@ This will mount your current directory to `/src` in the container and run the sp
 
 Before building `medusa` from source, you will need:
 
-- Go (version 1.20 or later) - [Installation instructions](https://go.dev/doc/install)
+- Go (version 1.26.10 or later, latest patch release recommended) - [Installation instructions](https://go.dev/doc/install)
 - `crytic-compile` - [Installation instructions](https://github.com/crytic/crytic-compile#installation)
   - Note that `crytic-compile` requires a Python environment - [Python installation instructions](https://www.python.org/downloads/)
 - `slither` (Optional) - For improved value generation we recommend also [installing Slither](https://github.com/crytic/slither?tab=readme-ov-file#how-to-install)
