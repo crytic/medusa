@@ -15,7 +15,8 @@ concurrency:
 jobs:
   nix-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The patched Go compiler may need to build from source on a cold runner.
+    timeout-minutes: 30
     needs:
       - check-vendorhash
     permissions:
@@ -30,11 +31,12 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
 
       - name: Build with Nix
-        run: nix build
+        run: nix build --print-build-logs
 
   check-vendorhash:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Computing the vendor hash also needs the patched Go compiler.
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -58,14 +60,15 @@ jobs:
           # Replace vendorHash with pkgs.lib.fakeHash
           sed -i 's|vendorHash = "[^"]*"|vendorHash = pkgs.lib.fakeHash|g' flake.nix
 
-          # Try to build and capture the error output
+          # Stream build progress while retaining the output for hash extraction.
           set +e
-          BUILD_OUTPUT=$(nix build 2>&1)
-          BUILD_EXIT=$?
+          nix build --print-build-logs 2>&1 | tee "$RUNNER_TEMP/nix-vendorhash.log"
+          BUILD_EXIT=${PIPESTATUS[0]}
           set -e
+          BUILD_OUTPUT=$(cat "$RUNNER_TEMP/nix-vendorhash.log")
 
           # Extract the updated hash from the error message
-          if [ $BUILD_EXIT -ne 0 ]; then
+          if [ "$BUILD_EXIT" -ne 0 ]; then
             UPDATED_HASH=$(echo "$BUILD_OUTPUT" | grep -oP 'got:\s+\K[^\s]+' | head -1)
             if [ -z "$UPDATED_HASH" ]; then
               echo "Error: Could not extract vendorHash from build output"
