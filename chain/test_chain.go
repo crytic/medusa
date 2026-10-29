@@ -250,6 +250,9 @@ func newTestChainWithStateFactory(
 	transactionTracerRouter.addTracerForOpcodes(newTestChainDeploymentsTracer().NativeTracer(), vm.SELFDESTRUCT)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer.NativeTracer(), true, true)
+		// The sole call subscriber is owned by this chain and its hook is fixed.
+		// Dispatch it directly until AddTracer registers a public call observer.
+		callTracerRouter.NativeTracer().OnOpcode = cheatTracer.NativeTracer().OnOpcode
 		cheatTracer.bindToChain(chain)
 	}
 
@@ -340,6 +343,9 @@ func (t *TestChain) AddTracer(tracer *TestChainTracer, txs bool, calls bool) {
 	}
 	if calls {
 		t.callTracerRouter.AddTracer(tracer)
+		// Public hooks remain mutable. Restore live routing, including through
+		// any call-specific wrapper that already holds this native tracer.
+		t.callTracerRouter.NativeTracer().OnOpcode = t.callTracerRouter.OnOpcode
 	}
 }
 
