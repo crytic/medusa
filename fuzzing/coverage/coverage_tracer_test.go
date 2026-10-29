@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"maps"
 	"math/bits"
 	"testing"
 
@@ -55,14 +56,14 @@ func TestCoverageNestedFrames(t *testing.T) {
 				exit = REVERT_MARKER_XOR
 			}
 			expected[bits.RotateLeft64(8, 32)^exit] += 3
-			require.Equal(t, expected, markers.executedMarkers)
+			require.Equal(t, expected, maps.Collect(markers.executedMarkers.all()))
 			// Subsequent transactions must not mutate already published coverage results.
 			tracer.OnTxStart(nil, nil, common.Address{})
 			traceCoverageFrame(tracer, scope, 0)
 			tracer.OnExit(0, nil, 0, nil, true)
 			markers, err = coverage.GetContractCoverageMap(code, false)
 			require.NoError(t, err)
-			require.Equal(t, expected, markers.executedMarkers)
+			require.Equal(t, expected, maps.Collect(markers.executedMarkers.all()))
 		})
 	}
 }
@@ -169,7 +170,7 @@ func TestCoverageNestedFramesAndReverts(t *testing.T) {
 	tracer.CaptureTxEndSetAdditionalResults(results)
 	got := GetCoverageTracerResults(results)
 	markers := got.maps[hash][address]
-	require.Len(t, markers.executedMarkers, 4)
+	require.Equal(t, 4, markers.executedMarkers.count())
 	require.EqualValues(t, 3, markers.HitCount(bits.RotateLeft64(ENTER_MARKER_XOR, 32)))
 	require.EqualValues(t, 3, markers.HitCount(uint64(1)<<32|2))
 	require.EqualValues(t, 2, markers.HitCount(uint64(2)<<32|REVERT_MARKER_XOR))
