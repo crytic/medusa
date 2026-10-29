@@ -6,7 +6,6 @@ import (
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core/tracing"
 	coretypes "github.com/crytic/medusa-geth/core/types"
-	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
 )
@@ -59,16 +58,8 @@ type cheatCodeTracerCallFrame struct {
 	// The hooks are executed as a stack (to support revert operations).
 	onChainRevertRestoreHooks types.GenericHookFuncs
 
-	// vmPc describes the current call frame's program counter.
-	vmPc uint64
-	// vmOp describes the current call frame's last instruction executed.
-	vmOp vm.OpCode
 	// vmScope describes the current call frame's scope context.
 	vmScope tracing.OpContext
-	// vmReturnData describes the current call frame's return data (set on exit).
-	vmReturnData []byte
-	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
-	vmErr error
 
 	// extraData describes additional data to be stored for this call frame.
 	extraData map[string]any
@@ -222,14 +213,14 @@ func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err e
 func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Set our current frame information.
 	currentCallFrame := t.CurrentCallFrame()
-	currentCallFrame.vmPc = pc
-	currentCallFrame.vmOp = vm.OpCode(op)
-	currentCallFrame.vmScope = scope
-	currentCallFrame.vmReturnData = rData
-	currentCallFrame.vmErr = err
+	// ScopeContext remains the same for the lifetime of this interpreter frame.
+	// Its contents (stack, memory, caller) remain live through this reference.
+	if currentCallFrame.vmScope == nil {
+		currentCallFrame.vmScope = scope
+	}
 
 	// We execute our entered next frame hooks here (from our previous call frame), as we now have scope information.
-	if t.callDepth > 0 {
+	if t.callDepth > 0 && len(t.callFrames[t.callDepth-1].onNextFrameEnterHooks) != 0 {
 		t.callFrames[t.callDepth-1].onNextFrameEnterHooks.Execute(true, true)
 	}
 }
