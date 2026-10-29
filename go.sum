@@ -1,5 +1,7 @@
 github.com/DataDog/zstd v1.5.5 h1:oWf5W7GtOLgp6bciQYDmhHHjdhYkALu6S/5Ni9ZgSvQ=
 github.com/DataDog/zstd v1.5.5/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwSAmyw=
+github.com/DicksonWu654/medusa-geth v0.0.0-20261029212740-aa2841a54a34 h1:6NjfNpyj+8D57VzuCbf3vDy8elfAKoIUtI7YQqnoX7U=
+github.com/DicksonWu654/medusa-geth v0.0.0-20261029212740-aa2841a54a34/go.mod h1:Of9UoKsMjqZO047+RArQyB0t9/+YeJAHiKHM5vGPUU8=
 github.com/Masterminds/semver v1.5.0 h1:H65muMkzWKEuNDnfl9d70GUjFniHKHRbFPGBuZ3QEww=
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=

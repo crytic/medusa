@@ -85,3 +85,5 @@ require (
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 )
+
+replace github.com/crytic/medusa-geth => github.com/DicksonWu654/medusa-geth v0.0.0-20261029212740-aa2841a54a34
