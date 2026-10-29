@@ -44,11 +44,12 @@ func NewTestChainTracerRouter() *TestChainTracerRouter {
 	}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: tracer.OnTxStart,
-			OnTxEnd:   tracer.OnTxEnd,
-			OnEnter:   tracer.OnEnter,
-			OnExit:    tracer.OnExit,
-			OnOpcode:  tracer.OnOpcode,
+			OnTxStart:        tracer.OnTxStart,
+			OnTxEnd:          tracer.OnTxEnd,
+			OnEnter:          tracer.OnEnter,
+			OnExit:           tracer.OnExit,
+			OnOpcode:         tracer.OnOpcode,
+			OnOpcodeForScope: tracer.OnOpcodeForScope,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -86,6 +87,43 @@ func (t *TestChainTracerRouter) addTracerForOpcodes(tracer *TestChainTracer, opc
 		if !seen[op] {
 			t.opcodeTracers[op] = append(t.opcodeTracers[op], tracer)
 			seen[op] = true
+		}
+	}
+}
+
+// OnOpcodeForScope chooses opt-in callbacks once for each registered tracer in
+// this frame. Ordinary OnOpcode callbacks remain live, including replacements
+// and tracers registered after this frame starts.
+func (t *TestChainTracerRouter) OnOpcodeForScope(scope tracing.OpContext) tracing.OpcodeHook {
+	// A selected nil hook suppresses this frame's events; an ordinary hook must
+	// be read again on every opcode to preserve callback mutation semantics.
+	type selection struct {
+		scoped bool
+		hook   tracing.OpcodeHook
+	}
+	selected := make([]selection, 0, len(t.tracers))
+	selectHook := func(tracer *TestChainTracer) selection {
+		if tracer.OnOpcodeForScope != nil {
+			return selection{scoped: true, hook: tracer.OnOpcodeForScope(scope)}
+		}
+		return selection{}
+	}
+	for _, tracer := range t.tracers {
+		selected = append(selected, selectHook(tracer))
+	}
+	// Keep a dispatcher even for an empty frame so late registrations are seen.
+	return func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
+		for i, tracer := range t.tracers {
+			if i == len(selected) {
+				selected = append(selected, selectHook(tracer))
+			}
+			hook := tracer.OnOpcode
+			if selected[i].scoped {
+				hook = selected[i].hook
+			}
+			if hook != nil {
+				hook(pc, op, gas, cost, current, data, depth, err)
+			}
 		}
 	}
 }
