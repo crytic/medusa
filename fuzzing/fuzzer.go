@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/crytic/medusa-geth/crypto"
@@ -962,12 +963,40 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		}
 	}
 
-	// Define a flag that indicates whether we have cancelled fuzzing or not
-	working := !utils.CheckContextDone(f.ctx)
+	// Define a flag that indicates whether we have cancelled fuzzing or not. Worker goroutines clear it when their
+	// context is cancelled while this loop reads it, so it is accessed atomically.
+	var working atomic.Bool
+	working.Store(!utils.CheckContextDone(f.ctx))
+
+	// Define the error to return and the lock protecting it. Worker goroutines record errors while this loop checks
+	// for them, so every access goes through workerError or recordError.
+	var err error
+	var errLock sync.Mutex
+
+	// workerError returns the error recorded so far, if any.
+	workerError := func() error {
+		errLock.Lock()
+		defer errLock.Unlock()
+		return err
+	}
+
+	// recordError stores workerErr if it is not nil. An earlier error takes precedence unless overwrite is set.
+	recordError := func(workerErr error, overwrite bool) {
+		if workerErr != nil {
+			errLock.Lock()
+			if err == nil || overwrite {
+				err = workerErr
+			}
+			errLock.Unlock()
+		}
+	}
+
+	// Track every worker goroutine, so we only return once all of them, including their WorkerDestroyed callbacks,
+	// have finished.
+	var workerWait sync.WaitGroup
 
 	// Create workers and start fuzzing.
-	var err error
-	for err == nil && working {
+	for workerError() == nil && working.Load() {
 		// Send an item into our channel to queue up a spot. This will block us if we hit capacity until a worker
 		// slot is freed up.
 		threadReserveChannel <- struct{}{}
@@ -981,45 +1010,39 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 		// Run our goroutine. This should take our queued struct out of the channel once it's done,
 		// keeping us at our desired thread capacity. If we encounter an error, we store it and continue
 		// processing the cleanup logic to exit gracefully.
+		workerWait.Add(1)
 		go func(workerSlotInfo availableWorkerSlot) {
+			defer workerWait.Done()
 			// Create a new worker for this fuzzing.
 			worker, workerCreatedErr := newFuzzerWorker(f, workerSlotInfo.index, workerSlotInfo.randomProvider)
 			f.workers[workerSlotInfo.index] = worker
-			if err == nil && workerCreatedErr != nil {
-				err = workerCreatedErr
-			}
+			recordError(workerCreatedErr, false)
 
-			if err == nil {
+			if workerError() == nil {
 				// Publish an event indicating we created a worker.
 				workerCreatedErr = f.Events.WorkerCreated.Publish(FuzzerWorkerCreatedEvent{Worker: worker})
-				if err == nil && workerCreatedErr != nil {
-					err = workerCreatedErr
-				}
+				recordError(workerCreatedErr, false)
 			}
 
 			// Run the worker and check if we received a cancelled signal, or we encountered an error.
-			if err == nil {
+			if workerError() == nil {
 				ctxCancelled, workerErr := worker.run(baseTestChain)
-				if workerErr != nil {
-					err = workerErr
-				}
+				recordError(workerErr, true)
 
 				// If we received a cancelled signal, signal our exit from the working loop.
-				if working && ctxCancelled {
-					working = false
+				if ctxCancelled {
+					working.Store(false)
 				}
 			}
-
-			// Free our worker id before unblocking our channel, as a free one will be expected.
-			availableWorkerIndexedLock.Lock()
-			availableWorkerSlotQueue = append(availableWorkerSlotQueue, workerSlotInfo)
-			availableWorkerIndexedLock.Unlock()
 
 			// Publish an event indicating we destroyed a worker.
 			workerDestroyedErr := f.Events.WorkerDestroyed.Publish(FuzzerWorkerDestroyedEvent{Worker: worker})
-			if err == nil && workerDestroyedErr != nil {
-				err = workerDestroyedErr
-			}
+			recordError(workerDestroyedErr, false)
+
+			// Reuse the index only after its teardown callbacks have completed.
+			availableWorkerIndexedLock.Lock()
+			availableWorkerSlotQueue = append(availableWorkerSlotQueue, workerSlotInfo)
+			availableWorkerIndexedLock.Unlock()
 
 			// Unblock our channel by freeing our capacity of another item, making way for another worker.
 			<-threadReserveChannel
@@ -1027,26 +1050,14 @@ func (f *Fuzzer) spawnWorkersLoop(baseTestChain *chain.TestChain) error {
 	}
 
 	// Explicitly call cancel on our emergency context to ensure all threads exit if we encountered an error.
-	if err != nil {
+	if workerError() != nil {
 		f.Terminate()
 	}
 
-	// Wait for every worker to be freed, so we don't have a race condition when reporting the order
-	// of events to our test provider.
-	for {
-		// Obtain the count of free workers.
-		availableWorkerIndexedLock.Lock()
-		freeWorkers := len(availableWorkerSlotQueue)
-		availableWorkerIndexedLock.Unlock()
-
-		// We keep waiting until every worker is free
-		if freeWorkers == len(f.workers) {
-			break
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-	return err
+	// Wait for every worker goroutine to exit, so we don't have a race condition when reporting the order of events
+	// to our test provider.
+	workerWait.Wait()
+	return workerError()
 }
 
 // Start begins a fuzzing operation on the provided project configuration. This operation will not return until an error
