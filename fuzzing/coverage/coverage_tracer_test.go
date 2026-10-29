@@ -41,7 +41,7 @@ func TestCoverageNestedFramesAndReverts(t *testing.T) {
 	tracer.CaptureTxEndSetAdditionalResults(results)
 	got := GetCoverageTracerResults(results)
 	markers := got.maps[hash][address]
-	require.Len(t, markers.executedMarkers, 4)
+	require.Equal(t, 4, markers.executedMarkers.count())
 	require.EqualValues(t, 3, markers.HitCount(bits.RotateLeft64(ENTER_MARKER_XOR, 32)))
 	require.EqualValues(t, 3, markers.HitCount(uint64(1)<<32|2))
 	require.EqualValues(t, 2, markers.HitCount(uint64(2)<<32|REVERT_MARKER_XOR))
