@@ -246,7 +246,8 @@ func newTestChainWithStateFactory(
 	}
 
 	// Add our internal tracers to this chain.
-	chain.AddTracer(newTestChainDeploymentsTracer().NativeTracer(), true, false)
+	// The internal deployment tracer only uses opcode events for SELFDESTRUCT.
+	transactionTracerRouter.addTracerForOpcodes(newTestChainDeploymentsTracer().NativeTracer(), vm.SELFDESTRUCT)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
 		chain.AddTracer(cheatTracer.NativeTracer(), true, true)
 		cheatTracer.bindToChain(chain)
