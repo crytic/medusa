@@ -93,11 +93,12 @@ func newCheatCodeTracer() *cheatCodeTracer {
 	tracer := &cheatCodeTracer{}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: tracer.OnTxStart,
-			OnTxEnd:   tracer.OnTxEnd,
-			OnEnter:   tracer.OnEnter,
-			OnExit:    tracer.OnExit,
-			OnOpcode:  tracer.OnOpcode,
+			OnTxStart:        tracer.OnTxStart,
+			OnTxEnd:          tracer.OnTxEnd,
+			OnEnter:          tracer.OnEnter,
+			OnExit:           tracer.OnExit,
+			OnOpcode:         tracer.OnOpcode,
+			OnOpcodeForScope: tracer.OnOpcodeForScope,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -232,6 +233,17 @@ func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope t
 	if t.callDepth > 0 {
 		t.callFrames[t.callDepth-1].onNextFrameEnterHooks.Execute(true, true)
 	}
+}
+
+// OnOpcodeForScope captures the live frame before execution. A frame only
+// needs opcode callbacks when its parent has pending frame-entry hooks; hooks
+// queued by this frame are handled when the next child frame starts.
+func (t *cheatCodeTracer) OnOpcodeForScope(scope tracing.OpContext) tracing.OpcodeHook {
+	t.CurrentCallFrame().vmScope = scope
+	if t.callDepth > 0 && len(t.callFrames[t.callDepth-1].onNextFrameEnterHooks) != 0 {
+		return t.nativeTracer.OnOpcode
+	}
+	return nil
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this
