@@ -179,6 +179,12 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 
 // UpdateAt updates the hit count of a given marker within code coverage data.
 func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, marker uint64) (bool, error) {
+	return cm.updateAtWithCapacity(codeAddress, codeLookupHash, marker, 0)
+}
+
+// updateAtWithCapacity only uses the hint when creating a fresh, owned table.
+// A nonzero hint must be a power of two, as maintained by CoverageTracer.
+func (cm *CoverageMaps) updateAtWithCapacity(codeAddress common.Address, codeLookupHash common.Hash, marker uint64, capacityHint int) (bool, error) {
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
@@ -203,6 +209,9 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 			coverageMap = existingCoverageMap
 		} else {
 			coverageMap = newContractCoverageMap()
+			if capacityHint > 0 {
+				coverageMap.executedMarkers.entries = make([]markerEntry, capacityHint)
+			}
 			cm.maps[codeLookupHash][codeAddress] = coverageMap
 			addedNewMap = true
 		}

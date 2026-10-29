@@ -39,6 +39,9 @@ func RemoveCoverageTracerResults(messageResults *types.MessageResults) {
 // CoverageTracer implements tracers.Tracer to collect information such as coverage maps
 // for fuzzing campaigns from EVM execution traces.
 type CoverageTracer struct {
+	// markerCapacityHints remembers sizes, never published result storage. Hints
+	// are capped and shrink after a small transaction, limiting over-allocation.
+	markerCapacityHints map[common.Hash]int
 	// coverageMaps records all executed branches, including reverted frames.
 	coverageMaps *CoverageMaps
 
@@ -94,9 +97,10 @@ type coverageTracerCallFrameState struct {
 // NewCoverageTracer returns a new CoverageTracer.
 func NewCoverageTracer() *CoverageTracer {
 	tracer := &CoverageTracer{
-		coverageMaps:    NewCoverageMaps(),
-		callFrameStates: make([]coverageTracerCallFrameState, 0),
-		codeHashCache:   [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
+		markerCapacityHints: make(map[common.Hash]int),
+		coverageMaps:        NewCoverageMaps(),
+		callFrameStates:     make([]coverageTracerCallFrameState, 0),
+		codeHashCache:       [2]map[common.Hash]common.Hash{make(map[common.Hash]common.Hash), make(map[common.Hash]common.Hash)},
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -211,7 +215,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		frame.lookupHash = lookupHash
 		marker := bits.RotateLeft64(ENTER_MARKER_XOR, 32) ^ pc
 		frame.coverageAddress = t.addressForCoverage(frame.address)
-		_, _ = t.coverageMaps.UpdateAt(frame.coverageAddress, lookupHash, marker)
+		_, _ = t.coverageMaps.updateAtWithCapacity(frame.coverageAddress, lookupHash, marker, t.markerCapacityHints[lookupHash])
 		frame.coverageMap = t.coverageMaps.cachedMap
 	} else if justJumped {
 		marker := bits.RotateLeft64(lastPC, 32) ^ pc
@@ -224,7 +228,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 func (t *CoverageTracer) updateFrameCoverage(frame *coverageTracerCallFrameState, marker uint64) {
 	address := t.addressForCoverage(frame.address)
 	if address != frame.coverageAddress {
-		_, _ = t.coverageMaps.UpdateAt(address, frame.lookupHash, marker)
+		_, _ = t.coverageMaps.updateAtWithCapacity(address, frame.lookupHash, marker, t.markerCapacityHints[frame.lookupHash])
 		frame.coverageMap = t.coverageMaps.cachedMap
 		frame.coverageAddress = address
 		return
@@ -236,6 +240,19 @@ func (t *CoverageTracer) updateFrameCoverage(frame *coverageTracerCallFrameState
 // tracer is used during transaction execution (block creation), the results can later be queried from the block.
 // This method will only be called on the added tracer if it implements the extended TestChainTracer interface.
 func (t *CoverageTracer) CaptureTxEndSetAdditionalResults(results *types.MessageResults) {
+	// Learn from occupancy rather than allocated capacity so a large transaction
+	// cannot keep subsequent small results over-allocated indefinitely. Use the
+	// largest deployment for each code hash, capped at 512 initial slots. Tables
+	// still grow normally if more markers are recorded.
+	for hash, byAddress := range t.coverageMaps.maps {
+		capacityHint := 16
+		for _, cov := range byAddress {
+			for capacityHint < 512 && cov.executedMarkers.used > capacityHint/4*3 {
+				capacityHint *= 2
+			}
+		}
+		t.markerCapacityHints[hash] = capacityHint
+	}
 	// Publish this transaction's maps without transferring exclusive ownership.
 	// OnTxStart allocates fresh maps even if these results have been removed from
 	// MessageResults: observers may still retain references to them.
