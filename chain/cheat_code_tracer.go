@@ -146,6 +146,7 @@ func (t *cheatCodeTracer) OnTxStart(vm *tracing.VMContext, tx *coretypes.Transac
 }
 
 // OnTxEnd is called upon the end of transaction execution, as defined by tracers.Tracer
+// CallContract may pass nil: this built-in tracer does not consume receipts.
 func (t *cheatCodeTracer) OnTxEnd(*coretypes.Receipt, error) {
 
 }
