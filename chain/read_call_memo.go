@@ -101,6 +101,11 @@ func newReadCallRecorder(chain *TestChain, memo *readCallMemo, base *tracing.Hoo
 	r.hooks.OnEnter = r.onEnter
 	r.hooks.OnExit = r.onExit
 	r.hooks.OnOpcode = r.captureOpcode
+	// The interpreter ignores OnOpcode when OnOpcodeForScope is set, so wrap the
+	// base selection as well. Every opcode must still reach the dependency proof.
+	if base.OnOpcodeForScope != nil {
+		r.hooks.OnOpcodeForScope = r.captureOpcodeForScope
+	}
 	return r
 }
 
@@ -245,6 +250,23 @@ func (r *readCallRecorder) captureOpcode(pc uint64, op byte, gas, cost uint64, s
 	if r.base.OnOpcode != nil {
 		r.base.OnOpcode(pc, op, gas, cost, scope, data, depth, err)
 	}
+	r.recordOpcode(op, scope, err)
+}
+
+// captureOpcodeForScope keeps the base tracer's per-frame hook selection while
+// recording every opcode of the frame.
+func (r *readCallRecorder) captureOpcodeForScope(frame tracing.OpContext) tracing.OpcodeHook {
+	selected := r.base.OnOpcodeForScope(frame)
+	return func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, data []byte, depth int, err error) {
+		if selected != nil {
+			selected(pc, op, gas, cost, scope, data, depth, err)
+		}
+		r.recordOpcode(op, scope, err)
+	}
+}
+
+// recordOpcode records the frame's code on its first opcode and checks the opcode.
+func (r *readCallRecorder) recordOpcode(op byte, scope tracing.OpContext, err error) {
 	if len(r.frames) > 0 && !r.frames[len(r.frames)-1] {
 		r.frames[len(r.frames)-1] = true
 		r.recordCode(scope.Address(), scope.ContractCode())
