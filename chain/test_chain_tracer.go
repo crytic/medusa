@@ -31,10 +31,11 @@ type TestChainTracerRouter struct {
 	tracers      []*TestChainTracer
 	nativeTracer *TestChainTracer
 
-	// opcodeTracers retains live tracer references, including tracers whose
-	// OnOpcode is currently nil. Hooks can be replaced after registration, even
-	// by an earlier callback during the same event.
-	opcodeTracers [256][]*TestChainTracer
+	// opcodeTracers lists, in registration order, the indexes into tracers that
+	// receive each opcode, including tracers whose OnOpcode is currently nil.
+	// Hooks can be replaced after registration, even by an earlier callback
+	// during the same event.
+	opcodeTracers [256][]int
 }
 
 // NewTestChainTracerRouter returns a new TestChainTracerRouter instance with no registered tracers.
@@ -70,9 +71,12 @@ func (t *TestChainTracerRouter) AddTracer(tracer *TestChainTracer) {
 
 // AddTracers adds TestChainTracers to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded.
 func (t *TestChainTracerRouter) AddTracers(tracers ...*TestChainTracer) {
-	t.tracers = append(t.tracers, tracers...)
-	for op := range t.opcodeTracers {
-		t.opcodeTracers[op] = append(t.opcodeTracers[op], tracers...)
+	for _, tracer := range tracers {
+		index := len(t.tracers)
+		t.tracers = append(t.tracers, tracer)
+		for op := range t.opcodeTracers {
+			t.opcodeTracers[op] = append(t.opcodeTracers[op], index)
+		}
 	}
 }
 
@@ -81,11 +85,12 @@ func (t *TestChainTracerRouter) AddTracers(tracers ...*TestChainTracer) {
 // change freely. The caller must own the tracer and its subscription for the
 // lifetime of the router.
 func (t *TestChainTracerRouter) addTracerForOpcodes(tracer *TestChainTracer, opcodes ...vm.OpCode) {
+	index := len(t.tracers)
 	t.tracers = append(t.tracers, tracer)
 	var seen [256]bool
 	for _, op := range opcodes {
 		if !seen[op] {
-			t.opcodeTracers[op] = append(t.opcodeTracers[op], tracer)
+			t.opcodeTracers[op] = append(t.opcodeTracers[op], index)
 			seen[op] = true
 		}
 	}
@@ -112,11 +117,14 @@ func (t *TestChainTracerRouter) OnOpcodeForScope(scope tracing.OpContext) tracin
 		selected = append(selected, selectHook(tracer))
 	}
 	// Keep a dispatcher even for an empty frame so late registrations are seen.
+	// Only the opcode's subscribers run, as in OnOpcode. Tracers skipped below
+	// are private fixed subscriptions, which never select per frame.
 	return func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
-		for i, tracer := range t.tracers {
-			if i == len(selected) {
-				selected = append(selected, selectHook(tracer))
+		for _, i := range t.opcodeTracers[op] {
+			for len(selected) <= i {
+				selected = append(selected, selectHook(t.tracers[len(selected)]))
 			}
+			tracer := t.tracers[i]
 			hook := tracer.OnOpcode
 			if selected[i].scoped {
 				hook = selected[i].hook
@@ -176,8 +184,8 @@ func (t *TestChainTracerRouter) OnExit(depth int, output []byte, gasUsed uint64,
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *TestChainTracerRouter) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Call the underlying method for each registered tracer.
-	for _, tracer := range t.opcodeTracers[op] {
-		if tracer.OnOpcode != nil {
+	for _, i := range t.opcodeTracers[op] {
+		if tracer := t.tracers[i]; tracer.OnOpcode != nil {
 			tracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 		}
 	}

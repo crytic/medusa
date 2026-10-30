@@ -120,14 +120,19 @@ func TestOpcodeRouterSubscriptions(t *testing.T) {
 	router.addTracerForOpcodes(filtered, vm.SELFDESTRUCT, vm.SELFDESTRUCT)
 	router.AddTracer(last)
 	require.Equal(t, []*TestChainTracer{first, filtered, last}, router.Tracers())
+	// The per-frame dispatcher must honor the same subscriptions.
+	frame := router.NativeTracer().OnOpcodeForScope(nil)
 	for op := range 256 {
-		events = nil
-		router.NativeTracer().OnOpcode(0, byte(op), 0, 0, nil, nil, 0, nil)
 		want := []string{"first", "last"}
 		if vm.OpCode(op) == vm.SELFDESTRUCT {
 			want = []string{"first", "filtered", "last"}
 		}
+		events = nil
+		router.NativeTracer().OnOpcode(0, byte(op), 0, 0, nil, nil, 0, nil)
 		require.Equal(t, want, events, "opcode %d", op)
+		events = nil
+		frame(0, byte(op), 0, 0, nil, nil, 0, nil)
+		require.Equal(t, want, events, "scoped opcode %d", op)
 	}
 	events = nil
 	router.OnEnter(0, 0, common.Address{}, common.Address{}, nil, 0, nil)
