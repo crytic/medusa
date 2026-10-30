@@ -104,10 +104,11 @@ func NewCoverageTracer() *CoverageTracer {
 	}
 	nativeTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: tracer.OnTxStart,
-			OnEnter:   tracer.OnEnter,
-			OnExit:    tracer.OnExit,
-			OnOpcode:  tracer.OnOpcode,
+			OnTxStart:        tracer.OnTxStart,
+			OnEnter:          tracer.OnEnter,
+			OnExit:           tracer.OnExit,
+			OnOpcode:         tracer.OnOpcode,
+			OnOpcodeForScope: tracer.OnOpcodeForScope,
 		},
 	}
 	tracer.nativeTracer = &chain.TestChainTracer{Tracer: nativeTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -118,6 +119,12 @@ func NewCoverageTracer() *CoverageTracer {
 // NativeTracer returns the underlying TestChainTracer.
 func (t *CoverageTracer) NativeTracer() *chain.TestChainTracer {
 	return t.nativeTracer
+}
+
+// OnOpcodeForScope selects the current OnOpcode hook for every frame. Coverage
+// needs every frame; selecting per frame lets a router call it directly.
+func (t *CoverageTracer) OnOpcodeForScope(tracing.OpContext) tracing.OpcodeHook {
+	return t.nativeTracer.OnOpcode
 }
 
 // SetInitialContractsSet sets the initialContractsSet value (see above).

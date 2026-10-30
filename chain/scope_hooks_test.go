@@ -105,3 +105,48 @@ func TestScopeRouterLateSelection(t *testing.T) {
 	require.Equal(t, 1, selected)
 	require.Equal(t, 2, calls)
 }
+
+// TestScopeRouterDirectFrames checks the direct path for frames with fixed
+// hooks and its fallback for fixed subscriptions and late registrations.
+func TestScopeRouterDirectFrames(t *testing.T) {
+	router := NewTestChainTracerRouter()
+	var calls []string
+	record := func(name string) tracing.OpcodeHook {
+		return func(_ uint64, op byte, _, _ uint64, _ tracing.OpContext, _ []byte, _ int, _ error) {
+			calls = append(calls, name+":"+vm.OpCode(op).String())
+		}
+	}
+	scoped := func(name string, hook tracing.OpcodeHook) *TestChainTracer {
+		return &TestChainTracer{Tracer: &tracers.Tracer{Hooks: &tracing.Hooks{
+			OnOpcode:         record(name + "-unused"),
+			OnOpcodeForScope: func(tracing.OpContext) tracing.OpcodeHook { return hook },
+		}}}
+	}
+	router.AddTracer(scoped("silent", nil))
+	router.addTracerForOpcodes(&TestChainTracer{Tracer: &tracers.Tracer{Hooks: &tracing.Hooks{
+		OnOpcode: record("fixed"),
+	}}}, vm.SELFDESTRUCT)
+	router.AddTracer(scoped("scoped", record("scoped")))
+	hook := router.OnOpcodeForScope(nil)
+	hook(0, byte(vm.ADD), 0, 0, nil, nil, 0, nil)
+	hook(0, byte(vm.SELFDESTRUCT), 0, 0, nil, nil, 0, nil)
+	require.Equal(t, []string{"scoped:ADD", "fixed:SELFDESTRUCT", "scoped:SELFDESTRUCT"}, calls)
+
+	// A second selected hook needs the ordered dispatcher.
+	router.AddTracer(scoped("second", record("second")))
+	calls = nil
+	hook(0, byte(vm.ADD), 0, 0, nil, nil, 0, nil)
+	require.Equal(t, []string{"scoped:ADD", "second:ADD"}, calls)
+	calls = nil
+	router.OnOpcodeForScope(nil)(0, byte(vm.ADD), 0, 0, nil, nil, 0, nil)
+	require.Equal(t, []string{"scoped:ADD", "second:ADD"}, calls)
+
+	// An ordinary public tracer keeps its live hook.
+	live := &TestChainTracer{Tracer: &tracers.Tracer{Hooks: &tracing.Hooks{}}}
+	router.AddTracer(live)
+	hook = router.OnOpcodeForScope(nil)
+	live.OnOpcode = record("live")
+	calls = nil
+	hook(0, byte(vm.ADD), 0, 0, nil, nil, 0, nil)
+	require.Equal(t, []string{"scoped:ADD", "second:ADD", "live:ADD"}, calls)
+}
