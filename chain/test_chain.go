@@ -35,6 +35,9 @@ var _, MAX_UINT_64 = utils.GetIntegerConstraints(false, 64)
 // TestChain represents a simulated Ethereum chain used for testing. It maintains blocks in-memory and strips away
 // typical consensus/chain objects to allow for more specialized testing closer to the EVM.
 type TestChain struct {
+	// callMemo belongs to this chain; external observers disable reuse.
+	callMemo *readCallMemo
+
 	// blocks represents the blocks created on the current chain. If blocks are sent to the chain which skip some
 	// block numbers, any block in that gap will not be committed here and its block hash and other parameters
 	// will be spoofed when requested through the API, for efficiency.
@@ -86,6 +89,9 @@ type TestChain struct {
 	// callTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for non-state changing calls.
 	callTracerRouter *TestChainTracerRouter
+
+	// builtinCallTracer identifies the internal cheat tracer whose effects the memo accounts for.
+	builtinCallTracer *TestChainTracer
 
 	// transactionTracerRouter forwards tracers.Tracer and TestChainTracer calls to any instances added to it. This
 	// router is used for transaction execution when constructing blocks.
@@ -246,9 +252,11 @@ func newTestChainWithStateFactory(
 	}
 
 	// Add our internal tracers to this chain.
-	chain.AddTracer(newTestChainDeploymentsTracer().NativeTracer(), true, false)
+	// The internal deployment tracer only uses opcode events for SELFDESTRUCT.
+	transactionTracerRouter.addTracerForOpcodes(newTestChainDeploymentsTracer().NativeTracer(), vm.SELFDESTRUCT)
 	if testChainConfig.CheatCodeConfig.CheatCodesEnabled {
-		chain.AddTracer(cheatTracer.NativeTracer(), true, true)
+		chain.builtinCallTracer = cheatTracer.NativeTracer()
+		chain.AddTracer(chain.builtinCallTracer, true, true)
 		cheatTracer.bindToChain(chain)
 	}
 
@@ -506,6 +514,13 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 	return err
 }
 
+// onlyBuiltinCallTracer reports whether calls have no externally supplied observers.
+// Keep this check dynamic: extensions can add tracers while a call is executing.
+func (t *TestChain) onlyBuiltinCallTracer() bool {
+	tracers := t.callTracerRouter.tracers
+	return len(tracers) == 0 || len(tracers) == 1 && tracers[0] == t.builtinCallTracer
+}
+
 // CallContract performs a message call over the current test chain state and obtains a core.ExecutionResult.
 // This is similar to the CallContract method provided by Ethereum for use in calling pure/view functions, as it
 // executes a transaction without committing any changes, instead discarding them.
@@ -513,6 +528,7 @@ func (t *TestChain) RevertToBlockIndex(index uint64) error {
 // current pending state (or committed state if none is pending) will be used instead.
 // The state executed over may be a pending block state.
 func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, additionalTracers ...*TestChainTracer) (*core.ExecutionResult, error) {
+	memoAllowed := msg != nil && state == nil && t.allowReadCallMemo(msg, additionalTracers)
 	// If our provided state is nil, use our current chain state.
 	if state == nil {
 		state = t.state
@@ -532,18 +548,28 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 		blockContext = newTestChainBlockContext(t, t.Head().Header)
 	}
 
-	// Create a new call tracer router that incorporates any additional tracers provided just for this call, while
-	// still calling our internal tracers.
-	extendedTracerRouter := NewTestChainTracerRouter()
-	extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer())
-	extendedTracerRouter.AddTracers(additionalTracers...)
+	// Reuse the call router when there are no call-specific tracers. Otherwise,
+	// wrap it so additional tracers run after the internal tracers for this call
+	// without becoming registered for subsequent calls.
+	extendedTracerRouter := t.callTracerRouter
+	if len(additionalTracers) > 0 {
+		extendedTracerRouter = NewTestChainTracerRouter()
+		extendedTracerRouter.AddTracer(t.callTracerRouter.NativeTracer())
+		extendedTracerRouter.AddTracers(additionalTracers...)
+	}
 
-	// Create our EVM instance.
-	evm := vm.NewEVM(blockContext, state, t.chainConfig, vm.Config{
-		Tracer:           extendedTracerRouter.NativeTracer().Hooks,
-		NoBaseFee:        true,
-		ConfigExtensions: t.vmConfigExtensions,
-	})
+	// Transaction validation and the EVM call still execute. Only the root
+	// interpreter may reuse a result whose complete dependencies are unchanged.
+	vmConfig := vm.Config{Tracer: extendedTracerRouter.NativeTracer().Hooks, NoBaseFee: true, ConfigExtensions: t.vmConfigExtensions}
+	if memoAllowed {
+		if t.callMemo == nil {
+			t.callMemo = newReadCallMemo()
+		}
+		recorder := newReadCallRecorder(t, t.callMemo, vmConfig.Tracer)
+		vmConfig.Tracer = &recorder.hooks
+		vmConfig.ReadOnlyCallMemo = recorder
+	}
+	evm := vm.NewEVM(blockContext, state, t.chainConfig, vmConfig)
 
 	// Set our block context and chain config in order for cheatcodes to override what EVM interpreter sees.
 	t.pendingBlockContext = &evm.Context
@@ -566,15 +592,19 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	// Revert to our state snapshot to undo any changes.
 	state.RevertToSnapshot(snapshot)
 
-	// Gather receipt for OnTxEnd
-	receipt := &gethTypes.Receipt{Type: tx.Type()}
-	if msgResult.Failed() {
-		receipt.Status = gethTypes.ReceiptStatusFailed
-	} else {
-		receipt.Status = gethTypes.ReceiptStatusSuccessful
+	// The built-in cheat tracer does not inspect receipts, so skip building one
+	// (and hashing the transaction) when nothing else observes the call. Check
+	// after execution: a custom precompile may register a tracer during the call.
+	// tx was captured before execution, so a late observer sees the original.
+	var receipt *gethTypes.Receipt
+	if len(additionalTracers) != 0 || !t.onlyBuiltinCallTracer() {
+		receipt = &gethTypes.Receipt{Type: tx.Type(), TxHash: tx.Hash(), GasUsed: msgResult.UsedGas}
+		if msgResult.Failed() {
+			receipt.Status = gethTypes.ReceiptStatusFailed
+		} else {
+			receipt.Status = gethTypes.ReceiptStatusSuccessful
+		}
 	}
-	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = msgResult.UsedGas
 
 	// HACK: use OnTxEnd to store the execution trace.
 	// Need to explicitly call OnTxEnd
