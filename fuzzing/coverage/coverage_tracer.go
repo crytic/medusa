@@ -87,6 +87,9 @@ type coverageTracerCallFrameState struct {
 	lookupHash      common.Hash
 	coverageAddress common.Address
 
+	// contractsSet is the initial contract set coverageAddress was resolved with.
+	contractsSet *map[common.Address]struct{}
+
 	// lastPC is the most recent PC that has been executed. Used for coverage tracking.
 	lastPC uint64
 
@@ -127,7 +130,9 @@ func (t *CoverageTracer) OnOpcodeForScope(tracing.OpContext) tracing.OpcodeHook 
 	return t.nativeTracer.OnOpcode
 }
 
-// SetInitialContractsSet sets the initialContractsSet value (see above).
+// SetInitialContractsSet sets the initialContractsSet value (see above). A new set
+// applies immediately, including to call frames in progress. The tracer reads the
+// set when a frame starts, so edit it in place only between transactions.
 func (t *CoverageTracer) SetInitialContractsSet(initialContractsSet *map[common.Address]struct{}) {
 	t.initialContractsSet = initialContractsSet
 }
@@ -222,6 +227,7 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 		frame.lookupHash = lookupHash
 		marker := bits.RotateLeft64(ENTER_MARKER_XOR, 32) ^ pc
 		frame.coverageAddress = t.addressForCoverage(frame.address)
+		frame.contractsSet = t.initialContractsSet
 		_, _ = t.coverageMaps.updateAtWithCapacity(frame.coverageAddress, lookupHash, marker, t.markerCapacityHints[lookupHash])
 		frame.coverageMap = t.coverageMaps.cachedMap
 	} else if justJumped {
@@ -230,15 +236,17 @@ func (t *CoverageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tr
 	}
 }
 
-// updateFrameCoverage uses the frame's resolved map while preserving changes to
-// the externally supplied initial contract set between tracing callbacks.
+// updateFrameCoverage uses the frame's resolved map. It resolves the address again
+// only if SetInitialContractsSet replaced the set since the frame resolved it.
 func (t *CoverageTracer) updateFrameCoverage(frame *coverageTracerCallFrameState, marker uint64) {
-	address := t.addressForCoverage(frame.address)
-	if address != frame.coverageAddress {
-		_, _ = t.coverageMaps.updateAtWithCapacity(address, frame.lookupHash, marker, t.markerCapacityHints[frame.lookupHash])
-		frame.coverageMap = t.coverageMaps.cachedMap
-		frame.coverageAddress = address
-		return
+	if frame.contractsSet != t.initialContractsSet {
+		frame.contractsSet = t.initialContractsSet
+		if address := t.addressForCoverage(frame.address); address != frame.coverageAddress {
+			_, _ = t.coverageMaps.updateAtWithCapacity(address, frame.lookupHash, marker, t.markerCapacityHints[frame.lookupHash])
+			frame.coverageMap = t.coverageMaps.cachedMap
+			frame.coverageAddress = address
+			return
+		}
 	}
 	_, _ = frame.coverageMap.updateCoveredAt(marker)
 }

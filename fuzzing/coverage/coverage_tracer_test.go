@@ -130,8 +130,9 @@ func TestCoverageRetainedResults(t *testing.T) {
 	require.True(t, <-readDone, "published coverage changed during a later transaction")
 }
 
-// TestCoverageInitialSetChanges preserves address selection when a caller edits
-// the externally supplied initial contract set between tracing callbacks.
+// TestCoverageInitialSetChanges preserves address selection when a caller
+// replaces the initial contract set between tracing callbacks, and applies an
+// in-place edit to frames that start afterwards.
 func TestCoverageInitialSetChanges(t *testing.T) {
 	t.Parallel()
 	tracer := NewCoverageTracer()
@@ -145,7 +146,8 @@ func TestCoverageInitialSetChanges(t *testing.T) {
 	tracer.OnTxStart(nil, nil, address)
 	tracer.OnEnter(0, byte(vm.CALL), address, address, nil, 1000, nil)
 	tracer.OnOpcode(0, byte(vm.JUMP), 0, 0, scope, nil, 1, nil)
-	delete(initial, address)
+	empty := map[common.Address]struct{}{}
+	tracer.SetInitialContractsSet(&empty)
 	tracer.OnOpcode(1, byte(vm.STOP), 0, 0, scope, nil, 1, nil)
 	tracer.SetInitialContractsSet(nil)
 	tracer.OnExit(0, nil, 0, nil, false)
@@ -156,4 +158,17 @@ func TestCoverageInitialSetChanges(t *testing.T) {
 	require.EqualValues(t, 1, maps[address].HitCount(bits.RotateLeft64(ENTER_MARKER_XOR, 32)))
 	require.EqualValues(t, 1, maps[common.Address{}].HitCount(1))
 	require.EqualValues(t, 1, maps[address].HitCount(uint64(1)<<32|RETURN_MARKER_XOR))
+
+	// An in-place edit is read when the next frame starts.
+	tracer.SetInitialContractsSet(&initial)
+	delete(initial, address)
+	tracer.OnTxStart(nil, nil, address)
+	tracer.OnEnter(0, byte(vm.CALL), address, address, nil, 1000, nil)
+	tracer.OnOpcode(0, byte(vm.JUMP), 0, 0, scope, nil, 1, nil)
+	tracer.OnExit(0, nil, 0, nil, false)
+	result = &types.MessageResults{AdditionalResults: make(map[string]any)}
+	tracer.CaptureTxEndSetAdditionalResults(result)
+	maps = GetCoverageTracerResults(result).maps[getContractCoverageMapHash(code, false)]
+	require.Len(t, maps, 1)
+	require.EqualValues(t, 1, maps[common.Address{}].HitCount(bits.RotateLeft64(ENTER_MARKER_XOR, 32)))
 }
