@@ -592,15 +592,19 @@ func (t *TestChain) CallContract(msg *core.Message, state types.MedusaStateDB, a
 	// Revert to our state snapshot to undo any changes.
 	state.RevertToSnapshot(snapshot)
 
-	// Gather receipt for OnTxEnd
-	receipt := &gethTypes.Receipt{Type: tx.Type()}
-	if msgResult.Failed() {
-		receipt.Status = gethTypes.ReceiptStatusFailed
-	} else {
-		receipt.Status = gethTypes.ReceiptStatusSuccessful
+	// The built-in cheat tracer does not inspect receipts, so skip building one
+	// (and hashing the transaction) when nothing else observes the call. Check
+	// after execution: a custom precompile may register a tracer during the call.
+	// tx was captured before execution, so a late observer sees the original.
+	var receipt *gethTypes.Receipt
+	if len(additionalTracers) != 0 || !t.onlyBuiltinCallTracer() {
+		receipt = &gethTypes.Receipt{Type: tx.Type(), TxHash: tx.Hash(), GasUsed: msgResult.UsedGas}
+		if msgResult.Failed() {
+			receipt.Status = gethTypes.ReceiptStatusFailed
+		} else {
+			receipt.Status = gethTypes.ReceiptStatusSuccessful
+		}
 	}
-	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = msgResult.UsedGas
 
 	// HACK: use OnTxEnd to store the execution trace.
 	// Need to explicitly call OnTxEnd
