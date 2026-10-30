@@ -36,6 +36,11 @@ type TestChainTracerRouter struct {
 	// Hooks can be replaced after registration, even by an earlier callback
 	// during the same event.
 	opcodeTracers [256][]int
+
+	// fixedTracers marks the indexes registered by addTracerForOpcodes, and
+	// fixedOpcodes the opcodes they subscribe to.
+	fixedTracers map[int]bool
+	fixedOpcodes [256]bool
 }
 
 // NewTestChainTracerRouter returns a new TestChainTracerRouter instance with no registered tracers.
@@ -87,10 +92,15 @@ func (t *TestChainTracerRouter) AddTracers(tracers ...*TestChainTracer) {
 func (t *TestChainTracerRouter) addTracerForOpcodes(tracer *TestChainTracer, opcodes ...vm.OpCode) {
 	index := len(t.tracers)
 	t.tracers = append(t.tracers, tracer)
+	if t.fixedTracers == nil {
+		t.fixedTracers = make(map[int]bool)
+	}
+	t.fixedTracers[index] = true
 	var seen [256]bool
 	for _, op := range opcodes {
 		if !seen[op] {
 			t.opcodeTracers[op] = append(t.opcodeTracers[op], index)
+			t.fixedOpcodes[op] = true
 			seen[op] = true
 		}
 	}
@@ -113,13 +123,26 @@ func (t *TestChainTracerRouter) OnOpcodeForScope(scope tracing.OpContext) tracin
 		}
 		return selection{}
 	}
-	for _, tracer := range t.tracers {
-		selected = append(selected, selectHook(tracer))
+	// The frame's hooks are fixed if every public tracer selected per frame and
+	// at most one selected a hook. Fixed subscriptions keep their live hooks.
+	var direct tracing.OpcodeHook
+	fixed := true
+	for i, tracer := range t.tracers {
+		selection := selectHook(tracer)
+		selected = append(selected, selection)
+		switch {
+		case selection.scoped && selection.hook == nil:
+		case selection.scoped && direct == nil:
+			direct = selection.hook
+		case !selection.scoped && t.fixedTracers[i]:
+		default:
+			fixed = false
+		}
 	}
 	// Keep a dispatcher even for an empty frame so late registrations are seen.
 	// Only the opcode's subscribers run, as in OnOpcode. Tracers skipped below
 	// are private fixed subscriptions, which never select per frame.
-	return func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
+	dispatch := func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
 		for _, i := range t.opcodeTracers[op] {
 			for len(selected) <= i {
 				selected = append(selected, selectHook(t.tracers[len(selected)]))
@@ -132,6 +155,20 @@ func (t *TestChainTracerRouter) OnOpcodeForScope(scope tracing.OpContext) tracin
 			if hook != nil {
 				hook(pc, op, gas, cost, current, data, depth, err)
 			}
+		}
+	}
+	if !fixed {
+		return dispatch
+	}
+	// Registration only appends, so while the count is unchanged the frame's
+	// selection is complete and dispatch would call only direct, except on a
+	// fixed subscription's opcodes.
+	registered := len(t.tracers)
+	return func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
+		if len(t.tracers) != registered || t.fixedOpcodes[op] {
+			dispatch(pc, op, gas, cost, current, data, depth, err)
+		} else if direct != nil {
+			direct(pc, op, gas, cost, current, data, depth, err)
 		}
 	}
 }
