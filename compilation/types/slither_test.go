@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -65,4 +66,42 @@ func TestSlitherHelperProcess(t *testing.T) {
 		os.Exit(2)
 	}
 	os.Exit(exitCode)
+}
+
+// newCachedSlitherConfig writes cached Slither output to disk and returns a config that reads it back.
+func newCachedSlitherConfig(t *testing.T, contents string) *SlitherConfig {
+	t.Helper()
+	cachePath := filepath.Join(t.TempDir(), "slither_results.json")
+	require.NoError(t, os.WriteFile(cachePath, []byte(contents), 0644))
+	return &SlitherConfig{UseSlither: true, CachePath: cachePath, Args: []string{}}
+}
+
+// TestRunSlitherEmptyPrintersReturnsError verifies cached output carrying no printer results is reported as an
+// error so the fuzzer can fall back to seeding from the AST.
+func TestRunSlitherEmptyPrintersReturnsError(t *testing.T) {
+	config := newCachedSlitherConfig(t, `{"success":true,"error":"","results":{"printers":[]}}`)
+
+	var err error
+	require.NotPanics(t, func() {
+		_, err = config.RunSlither("target", "")
+	})
+	assert.Error(t, err)
+}
+
+// TestRunSlitherEmptyConstantIsSkipped verifies a constant entry with no values is skipped while the remaining
+// constants are still collected.
+func TestRunSlitherEmptyConstantIsSkipped(t *testing.T) {
+	description := `{\"constants_used\":{\"C\":{\"f()\":[[],[{\"type\":\"uint256\",\"value\":\"7\"}]]}}}`
+	config := newCachedSlitherConfig(t, `{"success":true,"error":"","results":{"printers":[{"description":"`+description+`"}]}}`)
+
+	var (
+		results *SlitherResults
+		err     error
+	)
+	require.NotPanics(t, func() {
+		results, err = config.RunSlither("target", "")
+	})
+	require.NoError(t, err)
+	require.NotNil(t, results)
+	assert.Equal(t, []Constant{{Type: "uint256", Value: "7"}}, results.Constants)
 }
