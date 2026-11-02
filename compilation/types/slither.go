@@ -219,6 +219,13 @@ func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 		return err
 	}
 
+	// We expect the echidna printer's output to be the first element. Cached results written by an older medusa, a
+	// different slither invocation, or a partially written file can carry an empty list, so report that as an error
+	// instead of indexing into nothing.
+	if len(printers) == 0 {
+		return errors.New("slither returned no printer results")
+	}
+
 	// Since we are running the echidna printer, we know that the first element is the one we care about
 	var echidnaPrinter map[string]json.RawMessage
 	if err := json.Unmarshal(printers[0], &echidnaPrinter); err != nil {
@@ -259,6 +266,10 @@ func (s *SlitherResults) UnmarshalJSON(d []byte) error {
 			for _, constant := range constants {
 				// Slither outputs the value of a constant as a list
 				// However we know there can be only 1 so we take index 0
+				// An entry can still come back empty, so skip it rather than discarding the constants we did parse.
+				if len(constant) == 0 {
+					continue
+				}
 				s.Constants = append(s.Constants, constant[0])
 			}
 		}
