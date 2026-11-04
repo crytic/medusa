@@ -1,0 +1,51 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing
+cpu: Apple M4 Max
+                                   │ campaign-baseline.txt │       campaign-optimized.txt        │
+                                   │        sec/op         │    sec/op     vs base               │
+Fuzzer/workers=1/coverage=true-16              1.660 ±  3%    1.586 ±  2%  -4.43% (p=0.002 n=10)
+Fuzzer/workers=1/coverage=false-16             1.297 ±  2%    1.258 ±  2%  -3.04% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=true-16             529.1m ±  8%   518.2m ±  6%       ~ (p=0.280 n=10)
+Fuzzer/workers=4/coverage=false-16            407.7m ± 13%   399.5m ± 13%       ~ (p=0.075 n=10)
+geomean                                       825.6m         801.7m        -2.89%
+
+                                   │ campaign-baseline.txt │       campaign-optimized.txt       │
+                                   │        gas/tx         │   gas/tx     vs base               │
+Fuzzer/workers=1/coverage=true-16              44.52k ± 0%   44.39k ± 1%       ~ (p=0.315 n=10)
+Fuzzer/workers=1/coverage=false-16             44.52k ± 0%   44.52k ± 0%       ~ (p=0.810 n=10)
+Fuzzer/workers=4/coverage=true-16              44.40k ± 0%   44.45k ± 0%       ~ (p=0.796 n=10)
+Fuzzer/workers=4/coverage=false-16             44.41k ± 0%   44.36k ± 0%  -0.11% (p=0.002 n=10)
+geomean                                        44.46k        44.43k       -0.07%
+
+                                   │ campaign-baseline.txt │       campaign-optimized.txt        │
+                                   │        sec/tx         │    sec/tx     vs base               │
+Fuzzer/workers=1/coverage=true-16            101.30µ ±  3%   96.81µ ±  2%  -4.43% (p=0.002 n=10)
+Fuzzer/workers=1/coverage=false-16            79.19µ ±  2%   76.79µ ±  2%  -3.04% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=true-16             32.29µ ±  8%   31.62µ ±  6%       ~ (p=0.280 n=10)
+Fuzzer/workers=4/coverage=false-16            24.88µ ± 13%   24.38µ ± 13%       ~ (p=0.075 n=10)
+geomean                                       50.38µ         48.93µ        -2.89%
+
+                                   │ campaign-baseline.txt │        campaign-optimized.txt        │
+                                   │         tx/s          │     tx/s       vs base               │
+Fuzzer/workers=1/coverage=true-16             9.872k ±  3%   10.331k ±  2%  +4.64% (p=0.001 n=10)
+Fuzzer/workers=1/coverage=false-16            12.63k ±  2%    13.02k ±  2%  +3.14% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=true-16             30.97k ±  7%    31.62k ±  5%       ~ (p=0.280 n=10)
+Fuzzer/workers=4/coverage=false-16            40.19k ± 11%    41.02k ± 11%       ~ (p=0.075 n=10)
+geomean                                       19.85k          20.44k        +2.98%
+
+                                   │ campaign-baseline.txt │       campaign-optimized.txt        │
+                                   │         B/op          │     B/op      vs base               │
+Fuzzer/workers=1/coverage=true-16             645.3Mi ± 1%   596.0Mi ± 1%  -7.64% (p=0.000 n=10)
+Fuzzer/workers=1/coverage=false-16            546.5Mi ± 1%   519.9Mi ± 1%  -4.87% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=true-16             647.3Mi ± 1%   595.9Mi ± 2%  -7.95% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=false-16            545.7Mi ± 1%   515.3Mi ± 2%  -5.57% (p=0.000 n=10)
+geomean                                       594.1Mi        555.4Mi       -6.51%
+
+                                   │ campaign-baseline.txt │       campaign-optimized.txt        │
+                                   │       allocs/op       │  allocs/op   vs base                │
+Fuzzer/workers=1/coverage=true-16              7.949M ± 0%   7.097M ± 1%  -10.72% (p=0.000 n=10)
+Fuzzer/workers=1/coverage=false-16             7.477M ± 1%   6.809M ± 1%   -8.93% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=true-16              7.988M ± 1%   7.108M ± 1%  -11.02% (p=0.000 n=10)
+Fuzzer/workers=4/coverage=false-16             7.495M ± 1%   6.785M ± 2%   -9.48% (p=0.000 n=10)
+geomean                                        7.724M        6.948M       -10.04%
