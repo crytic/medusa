@@ -33,6 +33,7 @@
 - [Writing Function-Level Invariants](./testing/writing-function-level-invariants.md)
 - [Writing System-Level Invariants](./testing/writing-system-level-invariants.md)
 - [Fuzzing Pre-Deployed Contracts](./testing/genesis_state.md)
+- [On-Chain Fuzzing](./testing/on_chain_fuzzing.md)
 - [Reporting](./testing/reporting.md)
 
 # API
