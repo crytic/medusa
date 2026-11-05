@@ -139,6 +139,16 @@ The fuzzing configuration defines the parameters for the fuzzing campaign.
   > longer be valid.
 - **Default**: `[0x10000, 0x20000, 0x30000]`
 
+### `useAutolink`
+
+- **Type**: Boolean
+- **Description**: Enables the `--compile-autolink` flag for crytic-compile and deploys contracts to the addresses
+  specified in the `crytic-export/combined_solc.link` file. When enabled, libraries are deployed to deterministic
+  addresses, which allows for consistent library linking across fuzzing campaigns. This is useful when working with
+  contracts that have external library dependencies.
+  > 🚩 This option only works with the crytic-compile platform.
+- **Default**: `false`
+
 ### `blockNumberDelayMax`
 
 - **Type**: Integer

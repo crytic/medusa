@@ -60,6 +60,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 				"0x30000",
 			},
 			DeployerAddress:        "0x30000",
+			UseAutolink:            false,
 			MaxBlockNumberDelay:    60480,
 			MaxBlockTimestampDelay: 604800,
 			TransactionGasLimit:    12_500_000,

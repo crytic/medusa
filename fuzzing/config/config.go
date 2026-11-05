@@ -99,6 +99,12 @@ type FuzzingConfig struct {
 	// campaigns.
 	SenderAddresses []string `json:"senderAddresses"`
 
+	// UseAutolink enables the --compile-autolink flag for crytic-compile and deploys contracts to
+	// the addresses specified in the crytic-export/combined_solc.link file.
+	// When enabled, the fuzzer will read that file and deploy contracts to the addresses specified,
+	// following the deployment order if provided.
+	UseAutolink bool `json:"useAutolink"`
+
 	// MaxBlockNumberDelay describes the maximum distance in block numbers the fuzzer will use when generating blocks
 	// compared to the previous.
 	MaxBlockNumberDelay uint64 `json:"blockNumberDelayMax"`
