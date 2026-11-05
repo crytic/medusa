@@ -46,9 +46,28 @@ func IsPropertyTest(method abi.Method, prefixes []string) (bool, string) {
 	return false, ""
 }
 
-// BinTestByType sorts a contract's methods by whether they are assertion, property, or optimization tests.
+// IsSometimesTest checks whether the method is a sometimes test given potential naming prefixes it must conform to
+// and its underlying input/output arguments.
+// Returns (isValid, warningMessage). If the method has a prefix but invalid signature, warningMessage explains why.
+func IsSometimesTest(method abi.Method, prefixes []string) (bool, string) {
+	// Loop through all enabled prefixes to find a match
+	for _, prefix := range prefixes {
+		// A sometimes test must have the right prefix and take no inputs
+		if strings.HasPrefix(method.Name, prefix) {
+			if len(method.Inputs) == 0 {
+				return true, ""
+			}
+			// Has prefix but invalid signature
+			expectedSig := method.Name + "() " + method.StateMutability
+			return false, fmt.Sprintf("has signature '%s' but sometimes testing provider expects '%s'", method.String(), expectedSig)
+		}
+	}
+	return false, ""
+}
+
+// BinTestByType sorts a contract's methods by whether they are assertion, property, optimization, or sometimes tests.
 // Returns lists of methods for each test type, plus any warnings for methods with test prefixes but invalid signatures.
-func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests []abi.Method, warnings []string) {
+func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPrefixes, optimizationTestPrefixes, sometimesTestPrefixes []string, testViewMethods bool) (assertionTests, propertyTests, optimizationTests, sometimesTests []abi.Method, warnings []string) {
 	warnings = []string{}
 
 	for _, method := range contract.Abi.Methods {
@@ -72,10 +91,20 @@ func BinTestByType(contract *compilationTypes.CompiledContract, propertyTestPref
 			warnings = append(warnings, fmt.Sprintf("method '%s' %s", method.Name, optimizationWarning))
 		}
 
-		// Not a property or optimization test, check if it's an assertion test
+		// Check if it's a sometimes test
+		isSometimesTest, sometimesWarning := IsSometimesTest(method, sometimesTestPrefixes)
+		if isSometimesTest {
+			sometimesTests = append(sometimesTests, method)
+			continue
+		}
+		if sometimesWarning != "" {
+			warnings = append(warnings, fmt.Sprintf("method '%s' %s", method.Name, sometimesWarning))
+		}
+
+		// Not a property, optimization, or sometimes test, check if it's an assertion test
 		if !method.IsConstant() || testViewMethods {
 			assertionTests = append(assertionTests, method)
 		}
 	}
-	return assertionTests, propertyTests, optimizationTests, warnings
+	return assertionTests, propertyTests, optimizationTests, sometimesTests, warnings
 }
