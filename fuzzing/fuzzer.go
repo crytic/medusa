@@ -1114,6 +1114,18 @@ func (f *Fuzzer) Start() error {
 		return err
 	}
 
+	// Prefill corpus from Foundry tests if enabled
+	if f.config.Fuzzing.PrefillCorpus && f.config.Compilation != nil {
+		if len(f.compilations) > 0 {
+			err = f.corpus.PrefillCorpusFromTests(f.contractDefinitions, f.compilations)
+			if err != nil {
+				f.logger.Warn("Corpus prefill encountered an error: " + err.Error())
+			}
+		} else {
+			f.logger.Warn("Cannot prefill corpus: no compilations available")
+		}
+	}
+
 	// Log that we will initialize corpus if there are any call sequences or test results
 	if totalCallSequences, testResults := f.corpus.CallSequenceEntryCount(); totalCallSequences > 0 || testResults > 0 {
 		f.logger.Info("Initializing corpus...")
