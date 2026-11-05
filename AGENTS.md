@@ -23,27 +23,27 @@ Medusa is a cross-platform smart contract fuzzer written in Go, built on go-ethe
 
 ### Lint & Format
 
-- `goimports -w .` - Format imports and code (groups stdlib, external, local)
+- `goimports -w .` - Format imports and code (groups stdlib vs. external; no `-local` grouping is configured)
 - `go fmt ./...` - Format Go code (required before commits)
 - `golangci-lint run --timeout 5m` - Run comprehensive lint checks (mirrors CI)
-- `dprint fmt` - Format markdown, YAML, and JSON files
+- `dprint fmt` - Format markdown, YAML, and JSON files (note: CI enforces `prettier --check` on `**.json`/`**/*.md`/`**/*.yml`, which can disagree with dprint — run prettier before pushing)
 - `actionlint` - Lint GitHub Actions workflow files
 
 ### Run
 
-- `go run . --config path/to/config.yaml` - Compile and run the fuzzer
+- `go run . fuzz --config path/to/medusa.json` - Compile and run the fuzzer (`--config` is a flag of the `fuzz` subcommand; configs are JSON)
 - `nix develop` - Enter the pinned Nix development shell with all dependencies
 
 ### Git Hooks
 
 - `prek install` - Install pre-commit hooks (run once after cloning)
-- `prek run` - Manually run all pre-commit checks (use within `nix develop` shell)
+- `prek run` - Manually run all pre-commit checks (the hook tools are provided by the `nix develop` shell; `prek` itself is installed separately)
 
 ## Architecture & Code Structure
 
 ### Module Responsibilities
 
-- **`cmd/`** - CLI entry point using Cobra framework. Defines `fuzz`, `init`, and `completion` commands.
+- **`cmd/`** - CLI entry point using Cobra framework. Defines `fuzz`, `init`, `corpus` (with a `corpus clean` subcommand), and `completion` commands.
 - **`fuzzing/`** - Core fuzzing orchestration including workers, corpus management, coverage tracking, value generation, and test case providers.
 - **`chain/`** - EVM test harness (TestChain) built on medusa-geth with state management and cheat code support (vm.\* functions).
 - **`compilation/`** - Smart contract compilation abstraction with platform adapters for solc and crytic-compile.
@@ -60,20 +60,20 @@ cmd/fuzz.go (Cobra Command)
   ↓
 fuzzing.NewFuzzer(ProjectConfig)
   ├─→ Compilation (compile contracts via crytic-compile/solc)
-  ├─→ FuzzerWorker pool (N parallel workers)
-  ├─→ TestChain per worker (isolated EVM instance)
   ├─→ Corpus (loads/saves coverage-increasing call sequences)
-  ├─→ Test Case Providers (Assertion, Property, Optimization)
-  └─→ Coverage Tracer (if enabled)
+  └─→ Test Case Providers (Assertion, Property, Optimization)
+
+Fuzzer.Start()
+  ├─→ Deploys target contracts once on a base TestChain (ChainSetupFunc hook)
+  └─→ FuzzerWorker pool (N parallel workers; each clones the base chain into
+      its own isolated TestChain, with a per-worker coverage tracer if enabled)
 
 Worker Loop (per worker, in parallel):
-  1. Deploy contracts via ChainSetupFunc hook
-  2. Generate CallSequence (mutations from corpus)
-  3. Execute sequence on TestChain
-  4. Run CallSequenceTestFuncs (test case providers)
-  5. If test fails → shrink sequence → save to corpus
-  6. Update coverage maps
-  7. Reset chain state to base block → repeat
+  1. Generate CallSequence (mutations from corpus)
+  2. Execute the sequence on TestChain — per call: update coverage maps /
+     corpus, then run CallSequenceTestFuncs (test case providers)
+  3. If test fails → shrink sequence → save to corpus
+  4. Reset chain state to base block (testingBaseBlockIndex) → repeat
 ```
 
 ### Key Architectural Patterns
@@ -85,9 +85,9 @@ Worker Loop (per worker, in parallel):
 - `NewCallSequenceGeneratorConfigFunc` - Customize sequence generation strategy
 - `NewShrinkingValueMutatorFunc` - Customize shrinking heuristics
 - `ChainSetupFunc` - Customize deployment and initialization logic
-- `CallSequenceTestFuncs[]` - Register test functions to run after each sequence
+- `CallSequenceTestFuncs[]` - Register test functions to run after each call in a sequence
 
-**Coverage-Guided Fuzzing**: The corpus stores only call sequences that increase coverage. Sequences are mutated using weighted strategies (corpus head/tail, splice, interleave, new). A corpus pruner periodically removes redundant sequences to keep the corpus lean.
+**Coverage-Guided Fuzzing**: The corpus stores only call sequences that increase coverage. Sequences are mutated using weighted strategies (corpus head, corpus tail, splice, interleave — each in unmodified and mutated variants); entirely new sequences are generated with a separate `NewSequenceProbability`. A corpus pruner periodically removes redundant sequences to keep the corpus lean.
 
 **Worker-Based Parallelization**: Each `FuzzerWorker` has its own isolated `TestChain` instance with no shared state. Workers are periodically destroyed and recreated (`WorkerResetLimit`) to prevent memory bloat from geth's state accumulation.
 
@@ -101,11 +101,11 @@ Worker Loop (per worker, in parallel):
 
 - **`CallSequence`** - Array of `CallSequenceElement` representing a transaction sequence to execute on the test chain.
 - **`CallSequenceElement`** - Single call with target address, method, arguments, block delay, and gas limit.
-- **`TestCase` interface** - Represents a test with Status (NOT_STARTED, RUNNING, PASSED, FAILED), Name, CallSequence, and result Message.
-- **`Corpus`** - Persistent storage of coverage-increasing call sequences with pruning. Stored on disk in `corpus/` directory.
+- **`TestCase` interface** - Represents a test with Status (`NOT STARTED`, `RUNNING`, `PASSED`, `FAILED`), Name, CallSequence, and result Message.
+- **`Corpus`** - Storage of coverage-increasing call sequences with pruning. Persisted to disk only when `corpusDirectory` is set (default is empty → in-memory only, not flushed).
 - **`CoverageMaps`** - Tracks branch coverage per contract (including jumps, returns, reverts, and contract entrance), used to identify coverage-increasing sequences.
 - **`FuzzerWorker`** - Single execution thread with its own TestChain, deployed contracts, and sequence generator.
-- **`ProjectConfig`** - Top-level configuration containing FuzzingConfig, CompilationConfig, LoggingConfig.
+- **`ProjectConfig`** - Top-level configuration containing FuzzingConfig, CompilationConfig, SlitherConfig, LoggingConfig.
 - **`FuzzingConfig`** - Workers count, timeout, test limit, corpus directory, coverage settings, test case configurations.
 
 ### Test Case Providers
@@ -113,8 +113,8 @@ Worker Loop (per worker, in parallel):
 Three built-in test case providers run concurrently:
 
 1. **AssertionTestCaseProvider**: Monitors EVM-level panic conditions for each contract method (e.g., `assert()`, arithmetic underflow/overflow, divide by zero, array access violations). Which panic codes trigger test failures is configured via `PanicCodeConfig` in `FuzzingConfig.Testing.AssertionTesting`.
-2. **PropertyTestCaseProvider**: Calls property test functions (prefix-based naming, must be view functions returning bool). If a property returns false, the test fails.
-3. **OptimizationTestCaseProvider**: Tracks optimization targets (e.g., maximize gas usage) and shrinks sequences to find minimal paths to targets.
+2. **PropertyTestCaseProvider**: Calls property test functions (prefix-based naming, no arguments, returning bool; `view`/`pure` by convention — state mutability is not enforced, calls are made read-only). If a property returns false (or reverts), the test fails.
+3. **OptimizationTestCaseProvider**: Calls prefix-named no-argument functions returning `int256` and searches for call sequences that maximize the returned value, shrinking to find minimal paths to the best value.
 
 ## Testing Guidelines
 
@@ -175,8 +175,21 @@ The following checks run automatically via pre-commit hooks (install with `prek 
 3. `golangci-lint run --timeout 5m` - Run linter
 4. `dprint check` - Verify markdown/YAML/JSON formatting
 5. `actionlint` - Lint GitHub Actions workflows
+6. `docs-check` - Run `python3 scripts/check_docs.py` to verify docs are in sync
 
 Manual checks before submitting PRs:
 
-6. `go test -v ./...` - Run all tests (too slow for pre-commit)
-7. Verify changes work on target platforms
+7. `go test -v ./...` - Run all tests (too slow for pre-commit)
+8. Verify changes work on target platforms
+
+## OpenWiki
+
+This repository has documentation located in the /openwiki directory.
+
+Start here:
+
+- [OpenWiki quickstart](openwiki/quickstart.md)
+
+OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
