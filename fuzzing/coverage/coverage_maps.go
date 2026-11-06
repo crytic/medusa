@@ -168,7 +168,7 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 				}
 			} else {
 				mapsByAddress[codeAddress] = coverageMapToMerge
-				coverageChanged = coverageMapToMerge.executedMarkers != nil
+				coverageChanged = coverageMapToMerge.executedMarkers.entries != nil
 			}
 		}
 	}
@@ -179,6 +179,12 @@ func (cm *CoverageMaps) Update(coverageMaps *CoverageMaps) (bool, error) {
 
 // UpdateAt updates the hit count of a given marker within code coverage data.
 func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash common.Hash, marker uint64) (bool, error) {
+	return cm.updateAtWithCapacity(codeAddress, codeLookupHash, marker, 0)
+}
+
+// updateAtWithCapacity only uses the hint when creating a fresh, owned table.
+// A nonzero hint must be a power of two, as maintained by CoverageTracer.
+func (cm *CoverageMaps) updateAtWithCapacity(codeAddress common.Address, codeLookupHash common.Hash, marker uint64, capacityHint int) (bool, error) {
 	// Define variables used to update coverage maps and track changes.
 	var (
 		addedNewMap  bool
@@ -203,6 +209,9 @@ func (cm *CoverageMaps) UpdateAt(codeAddress common.Address, codeLookupHash comm
 			coverageMap = existingCoverageMap
 		} else {
 			coverageMap = newContractCoverageMap()
+			if capacityHint > 0 {
+				coverageMap.executedMarkers.entries = make([]markerEntry, capacityHint)
+			}
 			cm.maps[codeLookupHash][codeAddress] = coverageMap
 			addedNewMap = true
 		}
@@ -235,7 +244,7 @@ func (cm *CoverageMaps) BranchesHit() uint64 {
 		uniqueMarkersForHash := make(map[uint64]struct{})
 
 		for _, contractCoverageMap := range mapsByAddress {
-			for branch := range contractCoverageMap.executedMarkers {
+			for branch := range contractCoverageMap.executedMarkers.all() {
 				uniqueMarkersForHash[branch] = struct{}{}
 			}
 		}
@@ -252,7 +261,7 @@ type ContractCoverageMap struct {
 	// For markers corresponding to jump instructions, source and dest mean the source and dest of the jump.
 	// For revert and return, the "source" is the PC of the opcode causing the revert/return, and the "destination" is REVERT_MARKER_XOR or RETURN_MARKER_XOR.
 	// For contract entrance, the "source" is ENTER_MARKER_XOR and the "destination" is the first PC executed.
-	executedMarkers map[uint64]uint64
+	executedMarkers markerTable
 }
 
 // Constants used in markers. See comments on ContractCoverageMap.executedMarkers for more details on how these are used.
@@ -271,79 +280,44 @@ func newContractCoverageMap() *ContractCoverageMap {
 // Equal checks whether the provided ContractCoverageMap contains the same data as the current one.
 // Returns a boolean indicating whether the two maps match.
 func (cm *ContractCoverageMap) Equal(b *ContractCoverageMap) bool {
-	// TODO: Currently we are checking equality by making sure the two maps have the same hit counts
-	// It may make sense to just check that both of them are greater than zero
-
-	for marker, hitcount := range cm.executedMarkers {
-		if b.executedMarkers[marker] != hitcount {
+	for marker, count := range cm.executedMarkers.all() {
+		if b.executedMarkers.get(marker) != count {
 			return false
 		}
 	}
-	for marker, hitcount := range b.executedMarkers {
-		if cm.executedMarkers[marker] != hitcount {
+	for marker, count := range b.executedMarkers.all() {
+		if cm.executedMarkers.get(marker) != count {
 			return false
 		}
 	}
 	return true
 }
 
-// update updates the current ContractCoverageMap with the provided one.
-// Returns a boolean indicating whether new coverage was achieved, or an error if one was encountered.
-func (cm *ContractCoverageMap) update(coverageMap *ContractCoverageMap) (bool, error) {
-	// If the coverage map execution data provided is nil, exit early
-	if coverageMap.executedMarkers == nil {
+// update merges exact hit counts, including uint64 wraparound as before.
+func (cm *ContractCoverageMap) update(other *ContractCoverageMap) (bool, error) {
+	if other.executedMarkers.entries == nil {
 		return false, nil
 	}
-
-	// We're going to be adding entries here, so make cm's map non-nil if it isn't already
-	if cm.executedMarkers == nil {
-		cm.executedMarkers = map[uint64]uint64{}
-	}
-
-	// Update each byte which represents a position in the bytecode which was covered.
+	cm.executedMarkers.init()
 	changed := false
-	for marker, hitcount := range coverageMap.executedMarkers {
-		if hitcount != 0 { // It shouldn't be zero, but just to make sure
-			// If we have a hit count where it used to be zero, then coverage increased
-			changed = changed || cm.executedMarkers[marker] == 0
-			cm.executedMarkers[marker] += hitcount
+	for marker, count := range other.executedMarkers.all() {
+		if count != 0 {
+			added := cm.executedMarkers.add(marker, count)
+			changed = changed || added
 		}
 	}
 	return changed, nil
 }
 
-// updateCoveredAt updates the hit count at a marker within a ContractCoverageMap.
-// Returns a boolean indicating whether new coverage was achieved, or an error if one occurred.
+// updateCoveredAt updates one marker with a single hash-table probe.
 func (cm *ContractCoverageMap) updateCoveredAt(marker uint64) (bool, error) {
-	// We could factor this out but doing it this way saves a single map read and this function is called often
-	var previousVal uint64
-
-	// If the execution marker map doesn't exist, create it.
-	if cm.executedMarkers == nil {
-		cm.executedMarkers = map[uint64]uint64{}
-		previousVal = uint64(0)
-	} else {
-		previousVal = cm.executedMarkers[marker]
-	}
-
-	newCoverage := previousVal == 0
-	cm.executedMarkers[marker] = previousVal + 1
-	return newCoverage, nil
+	return cm.executedMarkers.add(marker, 1), nil
 }
 
-// HitCount returns the number of times that the provided marker has been hit. If zero is returned, then
-// the marker has not been hit or the map is nil
+// HitCount returns the number of times a marker was hit, or zero if absent.
 func (cm *ContractCoverageMap) HitCount(marker uint64) uint64 {
-	// If the coverage map bytecode data is nil, this is not covered.
 	if cm == nil {
 		return 0
 	}
-
-	// If this map has no execution data, it is not covered.
-	if cm.executedMarkers == nil {
-		return 0
-	}
-
-	// Otherwise, return the hit count
-	return cm.executedMarkers[marker]
+	return cm.executedMarkers.get(marker)
 }

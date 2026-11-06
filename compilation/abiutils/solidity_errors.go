@@ -26,6 +26,20 @@ const (
 	PanicCodeCallUninitializedVariable     = 0x51
 )
 
+const (
+	solidityPanicSelector = "\x4e\x48\x7b\x71"
+	solidityErrorSelector = "\x08\xc3\x79\xa0"
+)
+
+// The ABI is private and read-only; each unpack still produces independently owned results.
+var solidityErrorArguments = func() abi.Arguments {
+	stringType, err := abi.NewType("string", "", nil)
+	if err != nil {
+		panic(fmt.Sprintf("initialize Solidity Error(string) ABI: %v", err))
+	}
+	return abi.Arguments{{Type: stringType}}
+}()
+
 // GetSolidityPanicCode obtains a panic code from a VM error and return data, if possible.
 // A flag is provided indicating whether assertion failures in older Solidity compilations will be also mapped onto
 // newer Solidity panic code.
@@ -40,20 +54,8 @@ func GetSolidityPanicCode(returnError error, returnData []byte, backwardsCompati
 
 	// Verify we have a revert, and our return data fits exactly the selector + uint256
 	if errors.Is(returnError, vm.ErrExecutionReverted) && len(returnData) == 4+32 {
-		uintType, _ := abi.NewType("uint256", "", nil)
-		panicReturnDataAbi := abi.NewMethod("Panic", "Panic", abi.Function, "", false, false, []abi.Argument{
-			{Name: "", Type: uintType, Indexed: false},
-		}, abi.Arguments{})
-
-		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Equal(returnData[:4], panicReturnDataAbi.ID) {
-			values, err := panicReturnDataAbi.Inputs.Unpack(returnData[4:])
-
-			// If they unpacked without issue, read the panic code.
-			if err == nil && len(values) > 0 {
-				panicCode := values[0].(*big.Int)
-				return panicCode
-			}
+		if string(returnData[:4]) == solidityPanicSelector {
+			return new(big.Int).SetBytes(returnData[4:])
 		}
 	}
 	return nil
@@ -64,14 +66,9 @@ func GetSolidityPanicCode(returnError error, returnData []byte, backwardsCompati
 func GetSolidityRevertErrorString(returnError error, returnData []byte) *string {
 	// Verify we have a revert, and our return data fits the selector + additional data.
 	if errors.Is(returnError, vm.ErrExecutionReverted) && len(returnData) > 4 {
-		stringType, _ := abi.NewType("string", "", nil)
-		errorReturnDataAbi := abi.NewMethod("Error", "Error", abi.Function, "", false, false, []abi.Argument{
-			{Name: "", Type: stringType, Indexed: false},
-		}, abi.Arguments{})
-
 		// Verify the return data starts with the correct selector, then unpack the arguments.
-		if bytes.Equal(returnData[:4], errorReturnDataAbi.ID) {
-			values, err := errorReturnDataAbi.Inputs.Unpack(returnData[4:])
+		if string(returnData[:4]) == solidityErrorSelector {
+			values, err := solidityErrorArguments.Unpack(returnData[4:])
 
 			// If they unpacked without issue, read the error string.
 			if err == nil && len(values) > 0 {

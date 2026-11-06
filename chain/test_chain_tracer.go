@@ -30,6 +30,17 @@ type TestChainTracerRouter struct {
 	// tracers refers to the internally recorded tracers.Tracer instances to route all calls to.
 	tracers      []*TestChainTracer
 	nativeTracer *TestChainTracer
+
+	// opcodeTracers lists, in registration order, the indexes into tracers that
+	// receive each opcode, including tracers whose OnOpcode is currently nil.
+	// Hooks can be replaced after registration, even by an earlier callback
+	// during the same event.
+	opcodeTracers [256][]int
+
+	// fixedTracers marks the indexes registered by addTracerForOpcodes, and
+	// fixedOpcodes the opcodes they subscribe to.
+	fixedTracers map[int]bool
+	fixedOpcodes [256]bool
 }
 
 // NewTestChainTracerRouter returns a new TestChainTracerRouter instance with no registered tracers.
@@ -39,11 +50,12 @@ func NewTestChainTracerRouter() *TestChainTracerRouter {
 	}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: tracer.OnTxStart,
-			OnTxEnd:   tracer.OnTxEnd,
-			OnEnter:   tracer.OnEnter,
-			OnExit:    tracer.OnExit,
-			OnOpcode:  tracer.OnOpcode,
+			OnTxStart:        tracer.OnTxStart,
+			OnTxEnd:          tracer.OnTxEnd,
+			OnEnter:          tracer.OnEnter,
+			OnExit:           tracer.OnExit,
+			OnOpcode:         tracer.OnOpcode,
+			OnOpcodeForScope: tracer.OnOpcodeForScope,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -64,7 +76,101 @@ func (t *TestChainTracerRouter) AddTracer(tracer *TestChainTracer) {
 
 // AddTracers adds TestChainTracers to the TestChainTracerRouter so that all other tracing.Hooks calls are forwarded.
 func (t *TestChainTracerRouter) AddTracers(tracers ...*TestChainTracer) {
-	t.tracers = append(t.tracers, tracers...)
+	for _, tracer := range tracers {
+		index := len(t.tracers)
+		t.tracers = append(t.tracers, tracer)
+		for op := range t.opcodeTracers {
+			t.opcodeTracers[op] = append(t.opcodeTracers[op], index)
+		}
+	}
+}
+
+// addTracerForOpcodes registers a chain-owned tracer with a fixed opcode
+// subscription. Public tracers always receive every opcode so their hooks can
+// change freely. The caller must own the tracer and its subscription for the
+// lifetime of the router.
+func (t *TestChainTracerRouter) addTracerForOpcodes(tracer *TestChainTracer, opcodes ...vm.OpCode) {
+	index := len(t.tracers)
+	t.tracers = append(t.tracers, tracer)
+	if t.fixedTracers == nil {
+		t.fixedTracers = make(map[int]bool)
+	}
+	t.fixedTracers[index] = true
+	var seen [256]bool
+	for _, op := range opcodes {
+		if !seen[op] {
+			t.opcodeTracers[op] = append(t.opcodeTracers[op], index)
+			t.fixedOpcodes[op] = true
+			seen[op] = true
+		}
+	}
+}
+
+// OnOpcodeForScope chooses opt-in callbacks once for each registered tracer in
+// this frame. Ordinary OnOpcode callbacks remain live, including replacements
+// and tracers registered after this frame starts.
+func (t *TestChainTracerRouter) OnOpcodeForScope(scope tracing.OpContext) tracing.OpcodeHook {
+	// A selected nil hook suppresses this frame's events; an ordinary hook must
+	// be read again on every opcode to preserve callback mutation semantics.
+	type selection struct {
+		scoped bool
+		hook   tracing.OpcodeHook
+	}
+	selected := make([]selection, 0, len(t.tracers))
+	selectHook := func(tracer *TestChainTracer) selection {
+		if tracer.OnOpcodeForScope != nil {
+			return selection{scoped: true, hook: tracer.OnOpcodeForScope(scope)}
+		}
+		return selection{}
+	}
+	// The frame's hooks are fixed if every public tracer selected per frame and
+	// at most one selected a hook. Fixed subscriptions keep their live hooks.
+	var direct tracing.OpcodeHook
+	fixed := true
+	for i, tracer := range t.tracers {
+		selection := selectHook(tracer)
+		selected = append(selected, selection)
+		switch {
+		case selection.scoped && selection.hook == nil:
+		case selection.scoped && direct == nil:
+			direct = selection.hook
+		case !selection.scoped && t.fixedTracers[i]:
+		default:
+			fixed = false
+		}
+	}
+	// Keep a dispatcher even for an empty frame so late registrations are seen.
+	// Only the opcode's subscribers run, as in OnOpcode. Tracers skipped below
+	// are private fixed subscriptions, which never select per frame.
+	dispatch := func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
+		for _, i := range t.opcodeTracers[op] {
+			for len(selected) <= i {
+				selected = append(selected, selectHook(t.tracers[len(selected)]))
+			}
+			tracer := t.tracers[i]
+			hook := tracer.OnOpcode
+			if selected[i].scoped {
+				hook = selected[i].hook
+			}
+			if hook != nil {
+				hook(pc, op, gas, cost, current, data, depth, err)
+			}
+		}
+	}
+	if !fixed {
+		return dispatch
+	}
+	// Registration only appends, so while the count is unchanged the frame's
+	// selection is complete and dispatch would call only direct, except on a
+	// fixed subscription's opcodes.
+	registered := len(t.tracers)
+	return func(pc uint64, op byte, gas, cost uint64, current tracing.OpContext, data []byte, depth int, err error) {
+		if len(t.tracers) != registered || t.fixedOpcodes[op] {
+			dispatch(pc, op, gas, cost, current, data, depth, err)
+		} else if direct != nil {
+			direct(pc, op, gas, cost, current, data, depth, err)
+		}
+	}
 }
 
 // Tracers returns the tracers.Tracer instances added to the TestChainTracerRouter.
@@ -115,9 +221,8 @@ func (t *TestChainTracerRouter) OnExit(depth int, output []byte, gasUsed uint64,
 // OnOpcode records data from an EVM state update, as defined by tracers.Tracer.
 func (t *TestChainTracerRouter) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Call the underlying method for each registered tracer.
-	for _, tracer := range t.tracers {
-		if tracer.OnOpcode != nil {
-
+	for _, i := range t.opcodeTracers[op] {
+		if tracer := t.tracers[i]; tracer.OnOpcode != nil {
 			tracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 		}
 	}

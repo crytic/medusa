@@ -6,7 +6,6 @@ import (
 	"github.com/crytic/medusa-geth/common"
 	"github.com/crytic/medusa-geth/core/tracing"
 	coretypes "github.com/crytic/medusa-geth/core/types"
-	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa-geth/eth/tracers"
 	"github.com/crytic/medusa/chain/types"
 )
@@ -59,16 +58,8 @@ type cheatCodeTracerCallFrame struct {
 	// The hooks are executed as a stack (to support revert operations).
 	onChainRevertRestoreHooks types.GenericHookFuncs
 
-	// vmPc describes the current call frame's program counter.
-	vmPc uint64
-	// vmOp describes the current call frame's last instruction executed.
-	vmOp vm.OpCode
 	// vmScope describes the current call frame's scope context.
 	vmScope tracing.OpContext
-	// vmReturnData describes the current call frame's return data (set on exit).
-	vmReturnData []byte
-	// vmErr describes the current call frame's returned error (set on exit), nil if no error.
-	vmErr error
 
 	// extraData describes additional data to be stored for this call frame.
 	extraData map[string]any
@@ -93,11 +84,12 @@ func newCheatCodeTracer() *cheatCodeTracer {
 	tracer := &cheatCodeTracer{}
 	innerTracer := &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: tracer.OnTxStart,
-			OnTxEnd:   tracer.OnTxEnd,
-			OnEnter:   tracer.OnEnter,
-			OnExit:    tracer.OnExit,
-			OnOpcode:  tracer.OnOpcode,
+			OnTxStart:        tracer.OnTxStart,
+			OnTxEnd:          tracer.OnTxEnd,
+			OnEnter:          tracer.OnEnter,
+			OnExit:           tracer.OnExit,
+			OnOpcode:         tracer.OnOpcode,
+			OnOpcodeForScope: tracer.OnOpcodeForScope,
 		},
 	}
 	tracer.nativeTracer = &TestChainTracer{Tracer: innerTracer, CaptureTxEndSetAdditionalResults: tracer.CaptureTxEndSetAdditionalResults}
@@ -222,16 +214,27 @@ func (t *cheatCodeTracer) OnExit(depth int, output []byte, gasUsed uint64, err e
 func (t *cheatCodeTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// Set our current frame information.
 	currentCallFrame := t.CurrentCallFrame()
-	currentCallFrame.vmPc = pc
-	currentCallFrame.vmOp = vm.OpCode(op)
-	currentCallFrame.vmScope = scope
-	currentCallFrame.vmReturnData = rData
-	currentCallFrame.vmErr = err
+	// ScopeContext remains the same for the lifetime of this interpreter frame.
+	// Its contents (stack, memory, caller) remain live through this reference.
+	if currentCallFrame.vmScope == nil {
+		currentCallFrame.vmScope = scope
+	}
 
 	// We execute our entered next frame hooks here (from our previous call frame), as we now have scope information.
-	if t.callDepth > 0 {
+	if t.callDepth > 0 && len(t.callFrames[t.callDepth-1].onNextFrameEnterHooks) != 0 {
 		t.callFrames[t.callDepth-1].onNextFrameEnterHooks.Execute(true, true)
 	}
+}
+
+// OnOpcodeForScope captures the live frame before execution. A frame only
+// needs opcode callbacks when its parent has pending frame-entry hooks; hooks
+// queued by this frame are handled when the next child frame starts.
+func (t *cheatCodeTracer) OnOpcodeForScope(scope tracing.OpContext) tracing.OpcodeHook {
+	t.CurrentCallFrame().vmScope = scope
+	if t.callDepth > 0 && len(t.callFrames[t.callDepth-1].onNextFrameEnterHooks) != 0 {
+		return t.nativeTracer.OnOpcode
+	}
+	return nil
 }
 
 // CaptureTxEndSetAdditionalResults can be used to set additional results captured from execution tracing. If this

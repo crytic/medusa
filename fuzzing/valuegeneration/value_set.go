@@ -80,7 +80,11 @@ func (vs *ValueSet) RemoveAddress(a common.Address) {
 
 // Integers returns a list of integers contained within the set.
 func (vs *ValueSet) Integers() []*big.Int {
-	res := make([]*big.Int, len(vs.integers))
+	return vs.integerSlice(0)
+}
+
+func (vs *ValueSet) integerSlice(extraCapacity int) []*big.Int {
+	res := make([]*big.Int, len(vs.integers), len(vs.integers)+extraCapacity)
 	count := 0
 	for _, v := range vs.integers {
 		res[count] = v
@@ -141,6 +145,18 @@ func (vs *ValueSet) Bytes() [][]byte {
 		count++
 	}
 	return res
+}
+
+// mapEntryAt selects from an arbitrary map iteration order without materializing a slice.
+// A uniformly sampled index yields a uniformly sampled entry regardless of that order.
+func mapEntryAt[K comparable, V any](entries map[K]V, index int) (K, V) {
+	for key, value := range entries {
+		if index == 0 {
+			return key, value
+		}
+		index--
+	}
+	panic("value set index out of range")
 }
 
 // AddBytes adds a byte sequence to the ValueSet.
