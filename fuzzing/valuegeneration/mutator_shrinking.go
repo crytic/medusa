@@ -135,8 +135,7 @@ func (g *ShrinkingValueMutator) MutateInteger(i *big.Int, signed bool, bitLength
 		// Obtain our inputs. We also add our min/max values for this range to the list of inputs.
 		// Note: We exclude min being added if we're requesting an unsigned integer, as zero is already
 		// in our set, and we don't want duplicates.
-		var inputs []*big.Int
-		inputs = append(inputs, g.valueSet.Integers()...)
+		inputs := g.valueSet.integerSlice(2)
 		if signed {
 			inputs = append(inputs, min, max)
 		} else {

@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"maps"
 	"os"
 	"path/filepath"
@@ -485,7 +486,7 @@ func determineLinesCovered(cm *ContractCoverageMap, bytecode []byte, logger *log
 	indexToOffset := getInstructionIndexToOffsetLookup(bytecode)
 
 	// executedMakers as src -> dst -> hit count, and dst -> src -> hit count
-	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(cm.executedMarkers)
+	execMarkersSrcDst, execMarkersDstSrc := getExecMarkersMapping(cm.executedMarkers.all())
 
 	successfulHits := make([]uint64, len(indexToOffset))
 	revertedHits := make([]uint64, len(indexToOffset))
@@ -570,7 +571,7 @@ func getInstructionIndexToOffsetLookup(bytecode []byte) []int {
 
 // getExecMarkersMapping takes a set of executed markers, and sorts it into a map from src -> dst -> hit count, and a map of dst -> src -> hit count.
 // This is a helper function used by determineLinesCovered.
-func getExecMarkersMapping(execMarkers map[uint64]uint64) (map[uint64]map[uint64]uint64, map[uint64]map[uint64]uint64) {
+func getExecMarkersMapping(execMarkers iter.Seq2[uint64, uint64]) (map[uint64]map[uint64]uint64, map[uint64]map[uint64]uint64) {
 	execMarkersSrcDst := make(map[uint64]map[uint64]uint64)
 	execMarkersDstSrc := make(map[uint64]map[uint64]uint64)
 

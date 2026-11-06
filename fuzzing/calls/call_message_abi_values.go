@@ -134,7 +134,16 @@ func (d *CallMessageDataAbiValues) Pack() ([]byte, error) {
 	}
 
 	// Prepend the method ID to the data and return it.
-	callData := append(append([]byte{}, d.Method.ID...), argData...)
+	// ABI packing owns its output; reuse spare capacity before allocating another buffer.
+	if cap(argData)-len(argData) >= len(d.Method.ID) && argData != nil {
+		callData := argData[:len(argData)+len(d.Method.ID)]
+		copy(callData[len(d.Method.ID):], argData)
+		copy(callData, d.Method.ID)
+		return callData, nil
+	}
+	callData := make([]byte, len(d.Method.ID)+len(argData))
+	copy(callData, d.Method.ID)
+	copy(callData[len(d.Method.ID):], argData)
 	return callData, nil
 }
 

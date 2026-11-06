@@ -1,0 +1,25 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/fuzzing/calls
+cpu: Apple M4 Max
+                   │ abi-pack-baseline.txt │       abi-pack-optimized.txt        │
+                   │        sec/op         │   sec/op     vs base                │
+ABIPack/empty-16               15.50n ± 3%   12.63n ± 4%  -18.52% (p=0.000 n=10)
+ABIPack/integer-16             93.32n ± 7%   83.42n ± 4%  -10.62% (p=0.000 n=10)
+ABIPack/dynamic-16             1.265µ ± 7%   1.141µ ± 5%   -9.81% (p=0.000 n=10)
+geomean                        122.3n        106.3n       -13.07%
+
+                   │ abi-pack-baseline.txt │        abi-pack-optimized.txt        │
+                   │         B/op          │     B/op      vs base                │
+ABIPack/empty-16                8.000 ± 0%     4.000 ± 0%  -50.00% (p=0.000 n=10)
+ABIPack/integer-16              128.0 ± 0%     120.0 ± 0%   -6.25% (p=0.000 n=10)
+ABIPack/dynamic-16            7.594Ki ± 0%   6.211Ki ± 0%  -18.21% (p=0.000 n=10)
+geomean                         199.7          145.1       -27.35%
+
+                   │ abi-pack-baseline.txt │        abi-pack-optimized.txt        │
+                   │       allocs/op       │ allocs/op   vs base                  │
+ABIPack/empty-16                1.000 ± 0%   1.000 ± 0%        ~ (p=1.000 n=10) ¹
+ABIPack/integer-16              5.000 ± 0%   4.000 ± 0%  -20.00% (p=0.000 n=10)
+ABIPack/dynamic-16              32.00 ± 0%   30.00 ± 0%   -6.25% (p=0.000 n=10)
+geomean                         5.429        4.932        -9.14%
+¹ all samples are equal

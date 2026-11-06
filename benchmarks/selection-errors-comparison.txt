@@ -1,0 +1,98 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/crytic/medusa/compilation/abiutils
+cpu: Apple M4 Max
+                                          │ selection-errors-baseline.txt │   selection-errors-optimized.txt    │
+                                          │            sec/op             │   sec/op     vs base                │
+SolidityErrors/recognized=true/panic-16                      994.05n ± 1%   33.73n ± 1%  -96.61% (p=0.000 n=10)
+SolidityErrors/recognized=true/string-16                     1048.5n ± 2%   214.1n ± 4%  -79.59% (p=0.000 n=10)
+SolidityErrors/recognized=false/panic-16                    883.550n ± 1%   4.861n ± 1%  -99.45% (p=0.000 n=10)
+SolidityErrors/recognized=false/string-16                   843.900n ± 2%   4.694n ± 3%  -99.44% (p=0.000 n=10)
+geomean                                                       938.9n        20.15n       -97.85%
+
+                                          │ selection-errors-baseline.txt │     selection-errors-optimized.txt      │
+                                          │             B/op              │    B/op     vs base                     │
+SolidityErrors/recognized=true/panic-16                      1032.00 ± 0%   96.00 ± 0%   -90.70% (p=0.000 n=10)
+SolidityErrors/recognized=true/string-16                      1267.5 ± 0%   488.0 ± 0%   -61.50% (p=0.000 n=10)
+SolidityErrors/recognized=false/panic-16                       771.5 ± 0%     0.0 ± 0%  -100.00% (p=0.000 n=10)
+SolidityErrors/recognized=false/string-16                      771.5 ± 0%     0.0 ± 0%  -100.00% (p=0.000 n=10)
+geomean                                                        939.3                    ?                       ¹ ²
+¹ summaries must be >0 to compute geomean
+² ratios must be >0 to compute geomean
+
+                                          │ selection-errors-baseline.txt │     selection-errors-optimized.txt      │
+                                          │           allocs/op           │ allocs/op   vs base                     │
+SolidityErrors/recognized=true/panic-16                       18.000 ± 0%   2.000 ± 0%   -88.89% (p=0.000 n=10)
+SolidityErrors/recognized=true/string-16                       26.00 ± 0%   12.00 ± 0%   -53.85% (p=0.000 n=10)
+SolidityErrors/recognized=false/panic-16                       14.00 ± 0%    0.00 ± 0%  -100.00% (p=0.000 n=10)
+SolidityErrors/recognized=false/string-16                      14.00 ± 0%    0.00 ± 0%  -100.00% (p=0.000 n=10)
+geomean                                                        17.40                    ?                       ¹ ²
+¹ summaries must be >0 to compute geomean
+² ratios must be >0 to compute geomean
+
+pkg: github.com/crytic/medusa/fuzzing/valuegeneration
+                                                │ selection-errors-baseline.txt │   selection-errors-optimized.txt    │
+                                                │            sec/op             │   sec/op     vs base                │
+SeedSelection/seeds=8/mode=seeded/bytes-16                          90.40n ± 5%   48.01n ± 1%  -46.89% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/string-16                         63.83n ± 5%   35.11n ± 1%  -44.99% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/address-16                        68.39n ± 4%   32.38n ± 1%  -52.65% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/bytes-16                         100.80n ± 1%   21.55n ± 1%  -78.62% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/string-16                         85.08n ± 4%   22.29n ± 1%  -73.80% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/address-16                        20.76n ± 2%   21.18n ± 2%   +2.05% (p=0.011 n=10)
+SeedSelection/seeds=8/mode=existing/bytes-16                        93.74n ± 3%   25.34n ± 2%  -72.97% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=existing/string-16                       71.29n ± 4%   15.23n ± 1%  -78.64% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/bytes-16                       2018.5n ± 4%   721.4n ± 2%  -64.26% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/string-16                      1867.5n ± 4%   690.3n ± 3%  -63.04% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/address-16                     1915.5n ± 2%   684.4n ± 1%  -64.27% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/bytes-16                      2046.00n ± 2%   21.65n ± 1%  -98.94% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/string-16                     1814.50n ± 5%   22.59n ± 1%  -98.76% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/address-16                      21.35n ± 1%   21.05n ± 1%   -1.38% (p=0.010 n=10)
+SeedSelection/seeds=256/mode=existing/bytes-16                    2090.00n ± 4%   25.37n ± 1%  -98.79% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=existing/string-16                   1766.00n ± 4%   15.23n ± 1%  -99.14% (p=0.000 n=10)
+geomean                                                             273.7n        45.08n       -83.53%
+
+                                                │ selection-errors-baseline.txt │      selection-errors-optimized.txt       │
+                                                │             B/op              │     B/op      vs base                     │
+SeedSelection/seeds=8/mode=seeded/bytes-16                       200.000 ± 0%       8.000 ± 0%   -96.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/string-16                        128.0 ± 0%         0.0 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/address-16                       160.0 ± 0%         0.0 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/bytes-16                       200.000 ± 0%       8.000 ± 0%   -96.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/string-16                      136.000 ± 0%       8.000 ± 0%   -94.12% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/address-16                       0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=10) ¹
+SeedSelection/seeds=8/mode=existing/bytes-16                     200.000 ± 0%       8.000 ± 0%   -96.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=existing/string-16                      128.0 ± 0%         0.0 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/bytes-16                    6536.000 ± 0%       8.000 ± 0%   -99.88% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/string-16                    4.750Ki ± 0%     0.000Ki ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/address-16                   5.250Ki ± 0%     0.000Ki ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/bytes-16                    6536.000 ± 0%       8.000 ± 0%   -99.88% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/string-16                   4872.000 ± 0%       8.000 ± 0%   -99.84% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/address-16                     0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=10) ¹
+SeedSelection/seeds=256/mode=existing/bytes-16                  6536.000 ± 0%       8.000 ± 0%   -99.88% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=existing/string-16                  4.750Ki ± 0%     0.000Ki ± 0%  -100.00% (p=0.000 n=10)
+geomean                                                                       ²                 ?                       ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean
+
+                                                │ selection-errors-baseline.txt │     selection-errors-optimized.txt      │
+                                                │           allocs/op           │ allocs/op   vs base                     │
+SeedSelection/seeds=8/mode=seeded/bytes-16                         2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/string-16                        1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=seeded/address-16                       1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/bytes-16                         2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/string-16                        2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=random/address-16                       0.000 ± 0%     0.000 ± 0%         ~ (p=1.000 n=10) ¹
+SeedSelection/seeds=8/mode=existing/bytes-16                       2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=8/mode=existing/string-16                      1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/bytes-16                       2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/string-16                      1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=seeded/address-16                     1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/bytes-16                       2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/string-16                      2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=random/address-16                     0.000 ± 0%     0.000 ± 0%         ~ (p=1.000 n=10) ¹
+SeedSelection/seeds=256/mode=existing/bytes-16                     2.000 ± 0%     1.000 ± 0%   -50.00% (p=0.000 n=10)
+SeedSelection/seeds=256/mode=existing/string-16                    1.000 ± 0%     0.000 ± 0%  -100.00% (p=0.000 n=10)
+geomean                                                                       ²               ?                       ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean
