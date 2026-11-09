@@ -52,7 +52,7 @@ type SourceMapElement struct {
 	JumpType SourceMapJumpType
 
 	// ModifierDepth refers to the depth in which code has executed a modifier function. This is used to assist
-	// debuggers, e.g. understanding if the same modifier is re-used multiple times in a call.
+	// debuggers, e.g. understanding if the same modifier is reused multiple times in a call.
 	ModifierDepth int
 }
 
