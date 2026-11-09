@@ -13,7 +13,7 @@ import (
 )
 
 // The following directives will be picked up by the `go generate` command to generate JSON marshaling code from
-// templates defined below. They should be preserved for re-use in case we change our structures.
+// templates defined below. They should be preserved for reuse in case we change our structures.
 //go:generate go get github.com/fjl/gencodec
 //go:generate go run github.com/fjl/gencodec -type CallMessage -field-override callMessageMarshaling -out gen_call_message_json.go
 
@@ -188,7 +188,7 @@ func (m *CallMessage) Clone() (*CallMessage, error) {
 	// Create a message with the same data copied over.
 	clone := &CallMessage{
 		From:             m.From,
-		To:               m.To, // this value should be read-only, so we re-use it rather than cloning.
+		To:               m.To, // this value should be read-only, so we reuse it rather than cloning.
 		Nonce:            m.Nonce,
 		Value:            new(big.Int).Set(m.Value),
 		GasLimit:         m.GasLimit,
