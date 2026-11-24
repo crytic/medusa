@@ -206,6 +206,65 @@ func TestAssertionsNotRequire(t *testing.T) {
 	})
 }
 
+// TestAssertionsCustomErrors runs tests to ensure that reverting with a custom error is treated as an assertion
+// failure only if the custom error was configured to be treated as a failing case. The custom error may be configured
+// using either its signature (with or without type aliases) or its 4-byte selector.
+func TestAssertionsCustomErrors(t *testing.T) {
+	// Insolvent(uint256) has the selector 0x70cb15f5.
+	customErrorConfigs := [][]string{
+		{"Insolvent(uint256)"},
+		{"Insolvent(uint)"},
+		{"0x70cb15f5"},
+	}
+	for _, customErrors := range customErrorConfigs {
+		runFuzzerTest(t, &fuzzerSolcFileTest{
+			filePath: "testdata/contracts/assertions/assert_custom_error.sol",
+			configUpdates: func(config *config.ProjectConfig) {
+				config.Fuzzing.TargetContracts = []string{"TestContract"}
+				config.Fuzzing.TestLimit = 500
+				config.Fuzzing.Testing.StopOnFailedTest = false
+				config.Fuzzing.Testing.AssertionTesting.FailOnCustomErrors = customErrors
+				config.Fuzzing.Testing.PropertyTesting.Enabled = false
+				config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+				config.Slither.UseSlither = false
+			},
+			method: func(f *fuzzerTestContext) {
+				// Start the fuzzer
+				err := f.fuzzer.Start()
+				assert.NoError(t, err)
+
+				// Check that only the method reverting with the configured custom error failed.
+				failedTests := f.fuzzer.TestCasesWithStatus(TestCaseStatusFailed)
+				require.Len(t, failedTests, 1, "Expected only the configured custom error to be treated as a failure")
+				assert.EqualValues(t, "Assertion Test: TestContract.failCustomError(uint256)", failedTests[0].Name())
+			},
+		})
+	}
+}
+
+// TestAssertionsCustomErrorsNotConfigured runs a test to ensure custom errors are not treated as assertion failures
+// when no custom errors were configured to be treated as failing cases.
+func TestAssertionsCustomErrorsNotConfigured(t *testing.T) {
+	runFuzzerTest(t, &fuzzerSolcFileTest{
+		filePath: "testdata/contracts/assertions/assert_custom_error.sol",
+		configUpdates: func(config *config.ProjectConfig) {
+			config.Fuzzing.TargetContracts = []string{"TestContract"}
+			config.Fuzzing.TestLimit = 500
+			config.Fuzzing.Testing.PropertyTesting.Enabled = false
+			config.Fuzzing.Testing.OptimizationTesting.Enabled = false
+			config.Slither.UseSlither = false
+		},
+		method: func(f *fuzzerTestContext) {
+			// Start the fuzzer
+			err := f.fuzzer.Start()
+			assert.NoError(t, err)
+
+			// Check for failed assertion tests. We expect none.
+			assertFailedTestsExpected(f, false)
+		},
+	})
+}
+
 // TestAssertionsAndProperties runs a test to property testing and assertion testing can both run in parallel.
 // This test does not stop on first failure and expects a failure from each after timeout.
 func TestAssertionsAndProperties(t *testing.T) {

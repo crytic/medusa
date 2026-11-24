@@ -78,6 +78,7 @@ func GetDefaultProjectConfig(platform string) (*ProjectConfig, error) {
 					PanicCodeConfig: PanicCodeConfig{
 						FailOnAssertion: true,
 					},
+					FailOnCustomErrors: []string{},
 				},
 				PropertyTesting: PropertyTestingConfig{
 					Enabled: true,

@@ -40,7 +40,8 @@
           "failOnOutOfBoundsArrayAccess": false,
           "failOnAllocateTooMuchMemory": false,
           "failOnCallUninitializedVariable": false
-        }
+        },
+        "failOnCustomErrors": []
       },
       "propertyTesting": {
         "enabled": true,

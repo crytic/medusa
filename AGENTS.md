@@ -112,7 +112,7 @@ Worker Loop (per worker, in parallel):
 
 Three built-in test case providers run concurrently:
 
-1. **AssertionTestCaseProvider**: Monitors EVM-level panic conditions for each contract method (e.g., `assert()`, arithmetic underflow/overflow, divide by zero, array access violations). Which panic codes trigger test failures is configured via `PanicCodeConfig` in `FuzzingConfig.Testing.AssertionTesting`.
+1. **AssertionTestCaseProvider**: Monitors EVM-level panic conditions for each contract method (e.g., `assert()`, arithmetic underflow/overflow, divide by zero, array access violations). Which panic codes trigger test failures is configured via `PanicCodeConfig` in `FuzzingConfig.Testing.AssertionTesting`. Custom errors can also be treated as failures via `FailOnCustomErrors` (error signatures or 4-byte selectors).
 2. **PropertyTestCaseProvider**: Calls property test functions (prefix-based naming, must be view functions returning bool). If a property returns false, the test fails.
 3. **OptimizationTestCaseProvider**: Tracks optimization targets (e.g., maximize gas usage) and shrinks sequences to find minimal paths to targets.
 

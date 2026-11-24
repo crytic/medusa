@@ -1,10 +1,12 @@
 package fuzzing
 
 import (
+	"errors"
 	"math/big"
 	"slices"
 	"sync"
 
+	"github.com/crytic/medusa-geth/core/vm"
 	"github.com/crytic/medusa/compilation/abiutils"
 	"github.com/crytic/medusa/fuzzing/calls"
 	"github.com/crytic/medusa/fuzzing/config"
@@ -23,6 +25,11 @@ type AssertionTestCaseProvider struct {
 
 	// testCasesLock is used for thread-synchronization when updating testCases
 	testCasesLock sync.Mutex
+
+	// customErrorSelectors is the set of 4-byte custom error selectors which should be treated as assertion failures
+	// if a tested method reverts with one of them. It is computed from the project configuration when the fuzzer
+	// starts and is only read afterward, so it does not require synchronization.
+	customErrorSelectors map[[4]byte]struct{}
 }
 
 // attachAssertionTestCaseProvider attaches a new AssertionTestCaseProvider to the Fuzzer and returns it.
@@ -68,6 +75,10 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 	failure := false
 	if panicCode != nil {
 		failure = encounteredAssertionFailure(panicCode.Uint64(), t.fuzzer.config.Fuzzing.Testing.AssertionTesting.PanicCodeConfig)
+	} else {
+		// If we did not encounter a panic, check if the call reverted with a custom error that the user configured to
+		// be treated as an assertion failure.
+		failure = t.encounteredCustomErrorFailure(lastExecutionResult.Err, lastExecutionResult.ReturnData)
 	}
 
 	return &methodId, failure, nil
@@ -78,6 +89,13 @@ func (t *AssertionTestCaseProvider) checkAssertionFailures(callSequence calls.Ca
 func (t *AssertionTestCaseProvider) onFuzzerStarting(event FuzzerStartingEvent) error {
 	// Reset our state
 	t.testCases = make(map[contracts.ContractMethodID]*AssertionTestCase)
+
+	// Compute the set of custom error selectors which should be treated as assertion failures.
+	customErrorSelectors, err := t.fuzzer.config.Fuzzing.Testing.AssertionTesting.CustomErrorSelectors()
+	if err != nil {
+		return err
+	}
+	t.customErrorSelectors = customErrorSelectors
 
 	// Create a test case for every test method.
 	for _, contract := range t.fuzzer.ContractDefinitions() {
@@ -226,6 +244,20 @@ func (t *AssertionTestCaseProvider) callSequencePostCallTest(worker *FuzzerWorke
 	}
 
 	return shrinkRequests, nil
+}
+
+// encounteredCustomErrorFailure takes in the error and return data of a call and determines whether the call reverted
+// with a custom error whose selector was configured to be treated as a failing case.
+func (t *AssertionTestCaseProvider) encounteredCustomErrorFailure(returnError error, returnData []byte) bool {
+	// If no custom errors were configured, or the call did not revert with at least a 4-byte selector, there is no
+	// custom error to match.
+	if len(t.customErrorSelectors) == 0 || !errors.Is(returnError, vm.ErrExecutionReverted) || len(returnData) < 4 {
+		return false
+	}
+
+	// Check whether the leading 4 bytes of the return data match a configured custom error selector.
+	_, matched := t.customErrorSelectors[[4]byte(returnData[:4])]
+	return matched
 }
 
 // encounteredAssertionFailure takes in a panic code and a config.AssertionModesConfig and will determine whether the
