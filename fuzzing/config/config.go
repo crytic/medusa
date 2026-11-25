@@ -262,6 +262,11 @@ func (testCfg *TestingConfig) Validate() error {
 		}
 	}
 
+	// Verify that any custom errors to be treated as assertion failures are well-formed.
+	if _, err := testCfg.AssertionTesting.CustomErrorSelectors(); err != nil {
+		return fmt.Errorf("project configuration has an invalid assertion testing custom error: %w", err)
+	}
+
 	return nil
 }
 
@@ -272,6 +277,26 @@ type AssertionTestingConfig struct {
 
 	// PanicCodeConfig describes the various panic codes that can be enabled and be treated as a "failing case"
 	PanicCodeConfig PanicCodeConfig `json:"panicCodeConfig"`
+
+	// FailOnCustomErrors describes a list of Solidity custom errors which should be treated as a "failing case" if a
+	// tested method reverts with one of them. Each entry may either be an error signature without parameter names
+	// (e.g. `InsufficientBalance(uint256,uint256)`) or a 4-byte error selector encoded as hex (e.g. `0xcf479181`).
+	// Type aliases in signatures (e.g. `uint`) are canonicalized before the selector is computed.
+	FailOnCustomErrors []string `json:"failOnCustomErrors"`
+}
+
+// CustomErrorSelectors parses every entry in FailOnCustomErrors and returns the set of 4-byte error selectors which
+// should be treated as a failing case. Returns an error if any entry is malformed.
+func (assertionCfg *AssertionTestingConfig) CustomErrorSelectors() (map[[4]byte]struct{}, error) {
+	selectors := make(map[[4]byte]struct{}, len(assertionCfg.FailOnCustomErrors))
+	for _, customError := range assertionCfg.FailOnCustomErrors {
+		selector, err := ParseCustomErrorSelector(customError)
+		if err != nil {
+			return nil, err
+		}
+		selectors[selector] = struct{}{}
+	}
+	return selectors, nil
 }
 
 // PanicCodeConfig describes the various panic codes that can be enabled and be treated as a failing assertion test

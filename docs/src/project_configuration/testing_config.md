@@ -161,6 +161,22 @@ contract MyContract {
 - **Description**: Calling an uninitialized variable should be treated as a failing case
 - **Default**: `false`
 
+### `failOnCustomErrors`
+
+- **Type**: [String]
+- **Description**: A list of Solidity [custom errors](https://docs.soliditylang.org/en/latest/contracts.html#errors-and-the-revert-statement)
+  that should be treated as a failing case. If a tested method reverts with one of these errors, an assertion failure is
+  reported (and the call sequence is shrunk and saved as a reproducer), just as it would be for an `assert(false)`.
+  Each entry may either be an error signature (e.g. `InsufficientBalance(uint256,uint256)`) or a 4-byte error selector
+  in hex (e.g. `0xcf479181`). Signatures must not contain parameter names or whitespace. Type aliases such as `uint`,
+  `int` and `byte` are canonicalized (including within arrays and tuples), so `InsufficientBalance(uint,uint)` is
+  equivalent to the example above. User-defined types must be written as their ABI types: a tuple for a struct
+  (e.g. `(address,uint256)`), `uint8` for an enum, and `address` for a contract or interface. Invalid signatures are
+  rejected when the configuration is loaded.
+  > **Note**: Only the revert data returned by the tested method is checked. A custom error raised in a nested call is
+  > only detected if it is bubbled up (re-thrown) by the tested method.
+- **Default**: `[]`
+
 ## Property Testing Configuration
 
 ### `enabled`
